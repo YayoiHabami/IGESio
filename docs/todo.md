@@ -1,0 +1,50 @@
+
+- [ ] IDによる管理への移行 (PD/DEポインターによる管理を行わないようにするため)
+  - [ ] `RawEntityPD`クラスと`RawEntityDE`クラスをファイル読み込み結果の[中間生成物にする](./class_reference_ja.md#中間生成物)
+    - [x] `EntityParameterData`と`RawEntityDE`の名称を`RawEntityPD`と`RawEntityDE`に変更
+    - [x] `IGESParameterVector`クラスを追加
+      - [x] ~~`RawParameterData`のデータ型を`IGESParameterVector`に変更~~しない⇒パース処理がかなり複雑になるため、その変換は`EntityBase`の責任とする
+      - [x] `formats_`メンバを作成する。IGESからの読み込みの際に使用し、ファイル上での元の値が何であったか（デフォルト値か否か、doubleかfloatかなど、さらに言えば数値は元の表記がどうであったか（頭に+-あるか、整数部はあるか、小数部はあるか、基数部はあるか）なども）を記録する
+      - [ ] `std::vector<std::string>` (Stringが'5HHello'の形式のままのもの) から、`IGESParameterVector` (Stringが'Hello'の形式のもの) に変換する関数を追加
+        - [x] `utils`下の`FromIgesXxx`関数を`common/serialization.h/cpp`に移動
+        - [x] `iges_string_utils.cpp`の`IsDigitOrSign`、`AssertStrConvertibility`、`ConvertDToE`を同ファイルに移動
+        - [x] `common/serialization.h/cpp`に、`CppParameterType`、`IGESParameterType`、`ValueFormat`、`DefaultValueFormat`を追加
+        - [x] 変換後の数値と`ValueFormat`を返す（`std::pair<double, ValueFormat>`など）`FromIgesXxxWithFormat`関数を追加
+        - [ ] `common/iges_parameter_vector.h/cpp`に、`IGESParameterVector`クラスを追加
+      - [ ] その逆変換関数も追加
+        - [x] グローバルパラメータのうち、文字列化に必要な情報を保持する`SerializationConfig`クラスを追加
+        - [x] `GlobalParam`クラスに、`SerializationConfig`を返す関数を追加
+        - [x] データ`T`と`ValueFormat`、`SerializationConfig`を受け取り、文字列化する`ToIgesXxx`関数を追加
+        - [x] `std::vector<std::string>` (パラメータ) と`SerializationConfig`、および1行あたりの最大文字数`max_line_length`を受け取り、IGESの自由形式表現の文字列`std::vector<std::string>`を返す`ToFreeFormattedLines`関数を追加 (グローバル、PD、および恐らくデータセクションに使用可能)
+          - [x] パラメータを`IgesParameterVector`で表現したバージョンを作成
+          - [x] `GlobalParam`クラス~~から~~を引数として、`IgesParameterVector`を返す関数を追加
+      - [ ] `IgesParameterVector`関連部分のテストコードを変更
+    - [x] `IgesData`クラスを`IntermediateIgesData`クラスに変更
+      - [x] ターミネートセクションのデータを読み込むようにする
+    - [ ] `EntityBase`継承クラスを作成する
+      - [x] `id`を生成・保持するクラスを`EntityBase`クラスに変更
+      - [x] `std::weak_ptr<const IEntity>`を持つ`PointerContainer`クラスを作成
+    - [ ] `IgesData`クラスのコンストラクタに中間生成物を与えた場合に、ポインターを`id`に置き換える処理を追加する
+      - [ ] まず、全てのDEポインターをリスト化する
+      - [ ] リストの冒頭から、DEポインターを基準に（`RawRawEntityDE.sequence_number`と`RawRawEntityPD.de_pointer`を基準に）、同じエンティティの`RawRawEntityDE`と`RawRawEntityPD`を探す。
+      - [ ] `IDGenerator`を用いて、`IGESData`とPDポインタによるIDの予約を行う
+        - [ ] `IGESData`クラスに`id_`メンバを追加し、コンストラクタで初期化する
+        - [ ] `IDGenerator::Reserve`メソッドで各PDポインタを予約する
+        - [ ] `EntityBase`クラスに`iges_id`引数を持つコンストラクタを追加し、`IGESData`の内部ではそちらを呼び出すようにする
+      - [ ] 全てのエンティティを`IgesData.AddEntity`で登録したら、すべてのポインターは有効になっているはず。そのテストコードを記述する
+    - [ ] `EntityBase`継承クラスにパラメータ1, 3~9, 12~13, 15, 18~19を展開・保持させる
+      - [ ] パラメータ3,7,8は、ポインタ or 未指定 (0) ⇒
+      - [ ] パラメータ4,13は、特定値 (正) or 未指定 (0) or ポインタ (負) ⇒
+      - [ ] パラメータ5,6は、単一ポインタ (正) or 未指定 (0) or 複数ポインタ (負) ⇒
+      - [ ] パラメータ9は、さらにこれを展開して直接保持する
+      - [ ] パラメータ12は、グローバルパラメータとの演算を行った結果をdouble型で保持する
+      - [ ] パラメータ15,18,19は、直接保持する
+- [ ] クラス内部における単位表現を変更するためのメソッドを`IgesData`クラスに追加する
+- [x] エクスポートのため、自由形式の最後のデータをシリアル化した際に、行の末尾 (グローバルセクションでは72文字目、その他では64文字目) にちょうどフィールド区切り文字が収まらない場合は、それよりも前に改行する必要がある。数値フィールドの場合は、そのフィールド終了区切り文字が同じ行に表示されるように、少なくとも最後のデータ列の1列前で終了する必要がある (Section 2.2.3)。
+- [ ] C++内部および出力での数値表現においては、C++側の数値上限等を利用する
+  - [ ] `SerializationConfig`のデフォルト値`constexpr`を設定する。C++側の制約があるのだから、それを適用してよいだろう
+  - [ ] `ToIgesXxx`関数において、`SerializationConfig`のデフォルト値を使用する
+
+方針:
+
+まずは入出力ができるようにしたいので、`ICurve`などのインターフェースには何のメソッドも定義しない（TODOコメントは一応書いておく）

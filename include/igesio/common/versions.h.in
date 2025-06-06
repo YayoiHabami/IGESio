@@ -1,0 +1,47 @@
+/**
+ * @file common/versions.h
+ * @brief 本ライブラリのバージョン情報を定義するヘッダファイル
+ * @author Yayoi Habami
+ * @date 2025-05-31
+ * @copyright 2025 Yayoi Habami
+ */
+#ifndef IGESIO_COMMON_VERSIONS_H_
+#define IGESIO_COMMON_VERSIONS_H_
+
+#include <string>
+
+#define IGESIO_VERSION_MAJOR @IGESio_VERSION_MAJOR@
+#define IGESIO_VERSION_MINOR @IGESio_VERSION_MINOR@
+#define IGESIO_VERSION_PATCH @IGESio_VERSION_PATCH@
+#define IGESIO_VERSION_STRING "@IGESio_VERSION@"
+
+namespace igesio {
+
+/// @brief ライブラリのメジャーバージョン
+constexpr int kVersionMajor = IGESIO_VERSION_MAJOR;
+
+/// @brief ライブラリのマイナーバージョン
+constexpr int kVersionMinor = IGESIO_VERSION_MINOR;
+
+/// @brief ライブラリのパッチバージョン
+constexpr int kVersionPatch = IGESIO_VERSION_PATCH;
+
+/// @brief ライブラリのバージョン文字列
+constexpr const char* kVersionString = IGESIO_VERSION_STRING;
+
+
+
+/// @brief バージョン番号を数値として取得する関数
+/// @return バージョン番号 (major * 10000 + minor * 100 + patch)
+int GetVersionNumber();
+
+/// @brief バージョン情報の文字列
+/// @note 形式は "major.minor.patch"
+std::string GetVersion();
+
+/// @brief ライブラリ名
+std::string GetLibraryName();
+
+}  // namespace igesio
+
+#endif  // IGESIO_COMMON_VERSIONS_H_

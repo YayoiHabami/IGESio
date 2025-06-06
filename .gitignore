@@ -1,0 +1,10 @@
+# VSCode settings
+.vscode/
+.crossnote/
+docs/blueprint.cpp
+
+# Build directories
+build/
+
+# Output from unit tests
+tests/test_data/output/
