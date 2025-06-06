@@ -9,7 +9,41 @@ else()
     set(DOWNLOAD_EXTRACT_TIMESTAMP_OPTION "")
 endif()
 
-project(IGESio VERSION 0.1.0 LANGUAGES CXX)
+# Get version from Git tag
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_TAG
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE GIT_RESULT
+        ERROR_VARIABLE GIT_ERROR
+    )
+
+    if(GIT_RESULT EQUAL 0 AND GIT_TAG MATCHES "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+        set(VERSION_MAJOR ${CMAKE_MATCH_1})
+        set(VERSION_MINOR ${CMAKE_MATCH_2})
+        set(VERSION_PATCH ${CMAKE_MATCH_3})
+        set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+    else()
+        # Fallback to default version if no tag or invalid format
+        set(VERSION_MAJOR 0)
+        set(VERSION_MINOR 1)
+        set(VERSION_PATCH 0)
+        set(PROJECT_VERSION "0.1.0")
+        message(WARNING "No valid Git tag found (${GIT_ERROR}), using default version ${PROJECT_VERSION}")
+    endif()
+else()
+    # Fallback when Git is not available
+    set(VERSION_MAJOR 0)
+    set(VERSION_MINOR 1)
+    set(VERSION_PATCH 0)
+    set(PROJECT_VERSION "0.1.0")
+    message(WARNING "Git not found, using default version ${PROJECT_VERSION}")
+endif()
+
+project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
