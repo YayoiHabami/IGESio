@@ -213,7 +213,7 @@ Detailed project documentation is organized in the `docs` directory:
 - **[policy (ja)](docs/policy_ja.md)**: Library design principles and IGES specification interpretations
 - **[class-reference (ja)](docs/class_reference_ja.md)**: Reference for classes used in this library
 - **[flow/reader (ja)](docs/flow/reader_ja.md)**: Documentation about the reading process flow
-- **[entity-parameters (en)](docs/entity_parameter_count_en.md)**: Analysis of entity classifications and parameters in IGES 5.3
+- **[entity-analysis (en)](docs/entity_analysis.md)**: Analysis of entity classifications and parameters in IGES 5.3
 - **[additional-notes (ja)](docs/additional_notes_ja.md)**: Additional notes and supplementary information
 - **[todo (ja)](docs/todo.md)**: TODO list
 

@@ -1,32 +1,32 @@
 # 方針
 
-　以下の方針は、IGES 5.3の仕様書に基づくものである。実装に際して、以下に示す方針に従うようにする。
+　以下の方針は、IGES 5.3の仕様書に基づくものです。本ライブラリの実装に際して、以下に示す方針に従うようにします。
 
-　すべてのセクションにおいて、末尾の`(Section X.Y.Z)`は、その記述のソースとなるIGES 5.3の仕様書のセクション番号を示す。
+　すべてのセクションにおいて、末尾の`(Section X.Y.Z)`は、その記述のソースとなるIGES 5.3の仕様書のセクション番号を示します。
 
 ## 目次
 
 - [目次](#目次)
-- [ライブラリ全体](#ライブラリ全体)
-  - [データ型](#データ型)
+- [ライブラリ全体に関するTODO](#ライブラリ全体に関するtodo)
+- [データ型](#データ型)
 - [エンティティ](#エンティティ)
   - [モデルの情報構造の概念](#モデルの情報構造の概念)
     - [従属状態 (Subordinate Entity Switch)](#従属状態-subordinate-entity-switch)
     - [ディレクトリエントリセクションにおける指定](#ディレクトリエントリセクションにおける指定)
   - [座標系と変換行列](#座標系と変換行列)
+    - [座標系](#座標系)
     - [変換行列の適用](#変換行列の適用)
-- [Appendix](#appendix)
-  - [エンティティタイプと分類](#エンティティタイプと分類)
-    - [エンティティタイプと分類の一覧](#エンティティタイプと分類の一覧)
 
-## ライブラリ全体
+## ライブラリ全体に関するTODO
+
+　以下のTODOは、本ライブラリをIGES 5.3に準拠させるために必要な事項（の一部）です。現時点では、以下のTODOは未実装/未対応です。
 
 - [ ] 不正なレコード構造を持つか、本仕様書で定義されたデータを含まないために処理出来ない場合、エラーメッセージを発効する必要がある (Section 1.4.7)。
 - [ ] ライブラリは、ユーザが編集しなかったエンティティに影響を与えてはならない (Section 1.4.7.1)。ただし、これはポインタ、行番号、エンティティ数などの、他のエンティティを編集した際に更新される情報を除く。
 
-### データ型
+## データ型
 
-　IGES 5.3では、フィールド値に対して6種類のデータ型が定義されている (Section Section 2.2.2)。
+　IGES 5.3では、フィールド値に対して6種類のデータ型が定義されています (Section 2.2.2)。
 
 | データ型 | 説明 |
 | :---: | :--- |
@@ -37,23 +37,23 @@
 | 言語<br>ステートメント | `<文字数>H`を含まない、制御文字 (`\x00`～`\x1F`) を除くASCII文字の並び。|
 | 論理データ | 論理データ型は「TRUE」と「FALSE」の2つの値のみを持つ。符号なし整数0はFALSEを表し、符号なし整数1はTRUEを表す。|
 
-そのほか以下の指令に従う。
+そのほか以下の指令に従います。
 
 - 空白は文字列と言語ステートメントにおいてのみ値となり、それ以外のデータ型ではデフォルト値として扱われる。
 - 数値フィールドの先頭の空白は無視する。また、グローバルセクション1に関わらず、数値内に`,`を含めてはならない。
 
 ## エンティティ
 
-　ファイル内で、データの基本単位はエンティティであり、**幾何学的エンティティ**と**非幾何学的エンティティ**に分類される (Section 1.5)。
+　ファイル内で、データの基本単位はエンティティであり、**幾何学的エンティティ**と**非幾何学的エンティティ**に分類されます (Section 1.5)。
 
-- 幾何学的エンティティ：製品の物理的形状を定義する。
-- 非幾何学的エンティティ：注釈、定義、構造の指定など、主に表示メカニズムに関連する情報を定義する。
+- 幾何学的エンティティ：製品の物理的形状を定義
+- 非幾何学的エンティティ：注釈、定義、構造の指定など、主に表示メカニズムに関連する情報を定義
 
 ### モデルの情報構造の概念
 
-　製品の幾何学的モデルは、一般的に互いに独立して定義されるため、以下に示すエンティティがそれらの関係を補強する (Section 1.6)。
+　製品の幾何学的モデルは、一般的に互いに独立して定義されるため、以下に示すエンティティがそれらの関係を補強します (Section 1.6)。
 
-**表**. 情報構造を定義するエンティティ. "エンティティ番号"列の名前は、全て"Entity"を省略している (e.g. "Property Entity (Type 406)" -> "Property (406)")。
+**表**. 情報構造を定義するエンティティ. "エンティティ番号"列の名前は、全て"Entity"を省略しています (e.g. "Property Entity (Type 406)" -> "Property (406)")。
 
 | タイプ | エンティティ番号 | 説明 |
 |:---:|:---:|:---|
@@ -66,11 +66,11 @@
 
 > レベル番号による関連付け：
 >
-> プロパティエンティティが指定されていない場合には、プロパティエンティティのレベル番号を共有するすべてのエンティティが、そのプロパティを参照する。
+> プロパティエンティティが指定されていない場合には、プロパティエンティティのレベル番号を共有するすべてのエンティティが、そのプロパティを参照します (Section 1.6.1)。
 
 #### 従属状態 (Subordinate Entity Switch)
 
-　IGES 5.3では、エンティティの従属状態 (ファイル内の他のエンティティにより参照されるかどうか) を、ディレクトリエントリセクションの9番目のフィールド（1行目、67～68文字目）で指定する。エンティティの従属状態は以下の4つの値のいずれかである (Section 2.2.4.4)。
+　IGES 5.3では、エンティティの従属状態 (ファイル内の他のエンティティにより参照されるかどうか) を、ディレクトリエントリセクションの9番目のフィールド（1行目、67～68文字目）で指定します。エンティティの従属状態は以下の4つの値のいずれかです (Section 2.2.4.4)。
 
 | 値 | タイプ | 説明 |
 |:---:|:---:|:---|
@@ -79,13 +79,13 @@
 | `02` | Logically<br>Dependent | エンティティは単独で存在できるが、他のエンティティと合わせてグループ化される。 |
 | `03` | Both<br>Dependencies | Physically DependentとLogically Dependentの両方の状態を持つ。 |
 
-　エンティティAがエンティティBに従属するのは、エンティティBのパラメータデータエントリにおいて、エンティティAを参照する場合のみである。各エンティティのエントリの後に付加される追加ポインタ（バックポインタ; Section 2.2.4.5.2）は、この定義の目的では無視される。
+　エンティティAがエンティティBに従属するのは、エンティティBのパラメータデータエントリにおいて、エンティティAを参照する場合のみとなります。各エンティティのエントリの後に付加される追加ポインタ（バックポインタ; Section 2.2.4.5.2）は、この定義の目的では無視されます。
 
 #### ディレクトリエントリセクションにおける指定
 
-　ディレクトリエントリセクションにおいては、以下のポインタが定義される (Section 2.2.4.4)。
+　ディレクトリエントリセクションにおいては、以下のポインタが定義されます (Section 2.2.4.4)。
 
-**表**. ディレクトリエントリセクションにおいて定義されるポインタ. `L1C3`は、そのエンティティに関する1行目の17～24文字目の数値を指す。
+**表**. ディレクトリエントリセクションにおいて定義されるポインタ. `L1C3`は、そのエンティティに関する1行目の17～24文字目の数値を指します。
 
 | 位置 | フィールド名 | 説明 |
 |:---:|:---:|:---|
@@ -123,7 +123,9 @@
 
 ### 座標系と変換行列
 
-　IGES 5.3では、座標系としてモデル空間と定義空間の2つが存在する (Section 3.2.2)。定義空間からモデル空間への変換において、Transformation Matrix (124)エンティティが使用される。
+#### 座標系
+
+　IGES 5.3においては、2種類の座標系が定義されています (Section 3.2.2)。一つ目が、ファイル毎に1つのみ定義される**モデル空間** (model space) $(X,Y,Z)$ であり、もう一つは、エンティティごとに定義される（または定義されうる）**定義空間** (definition space) $(X_T, Y_T, Z_T)$ です。
 
 | 座標系 | 説明 |
 | --- | --- |
@@ -132,12 +134,11 @@
 
 #### 変換行列の適用
 
-　エンティティは、基本的にディレクトリエントリセクションのフィールド7で指定される変換エンティティによって、モデル空間に配置される。複数の変換エンティティによって操作されるケースは以下の2つのケースのみである (Section 3.2.3)。以下、エンティティXXXを構成する点の集合の要素を $\bm{p}_i = [x_i\; y_i\; z_i\; 1]^\top$、(同時) 変換行列 $j$ を $M_j$ とする。
+　子は自身の定義空間で形状を定義するため、親の定義空間と子の定義空間が異なる場合、親の定義空間での表現を得るために回転・平行移動を行う必要があります。この変換を行う回転行列・平行移動ベクトルを定義する目的で、各エンティティはDEフィールド7でTransformation Matrix (Type 124)を参照することができます。
 
-| ケース | 説明 |
-| --- | --- |
-| 明示的なケース | エンティティXXXがDEフィールド7で指定する変換行列1が、同様にDEフィールドで別の変換行列2を指定する場合。このとき、変換は以下の式で定義される:<br> $$\bm{p}_i' = M_2 M_1 \bm{p}_i$$|
-| 親子の暗黙的なケース | エンティティXXXが、エンティティYYYに物理的に従属していて、それぞれDEフィールド7で変換行列2,1を指定する場合。このとき、変換は以下の式で定義される:<br> $$\bm{p}_i' = M_1 M_2 \bm{p}_i$$ |
+　エンティティが変換行列を参照する場合、そのエンティティの実際の位置（もしくは親の定義空間における位置）は、子の定義空間における位置に同時変換行列を掛けたものになります。また、以下のように、参照する変換行列 ($M_1$) が同様に別の変換行列 ($M_2$) を参照することもあります。それぞれ同時変換行列とし、エンティティXXXを構成する点を $\bm{p}_i = [x_i, y_i, z_i, 1]^\top$ とすると、以下の式で変換後の座標を得ることができます。
+
+$$\bm{p}_i' = M_2 M_1 \bm{p}_i$$
 
 ```mermaid
 flowchart TD
@@ -145,135 +146,25 @@ flowchart TD
         direction LR
         C1["Child Entity<br>(Entity XXX)"] -->|DE Field 7| M1["Transformation<br>Matrix 1<br>(Form 124)"] -->|DE Field 7| M2["Transformation<br>Matrix 2<br>(Form 124)"]
     end
+```
+
+**Figure** Explicit Case (See Section 3.2.3)
+
+　一方で、一部のケース (**implicit case**) では、親の変換行列が子に伝播されることがあります (Section 3.2.3)。以下の図のように、エンティティXXXが、エンティティYYYに物理的に従属していて、それぞれDEフィールド7で変換行列 $M_2$, $M_1$ を参照している場合を考えます。この場合、エンティティXXXを構成する点を $\bm{p}_i = [x_i, y_i, z_i, 1]^\top$ とすると、以下の式で変換後の座標を得ることができます。
+
+$$\bm{p}_i' = M_1 M_2 \bm{p}_i$$
+
+```mermaid
+flowchart TD
     subgraph Case2["Parent-Child Implicit Case"]
         direction LR
         P1["Parent Entity<br>(Entity YYY)"] -->|DE Field 7| M3["Transformation<br>Matrix 1<br>(Form 124)"]
         P1 -->|Physically<br>Dependent| C2["Child Entity<br>(Entity XXX)"] -->|DE Field 7| M4["Transformation<br>Matrix 2<br>(Form 124)"]
     end
-
-Case1 ~~~ Case2
 ```
 
-## Appendix
+**Figure** Parent-Child Implicit Case (See Section 3.2.3)
 
-　本節では、本文に記述するには長いために省略した内容を補足する。
+　したがって、あるエンティティの位置を考える上で、その親との関係がimplicit caseであるかそうでないかを考慮する必要があります。
 
-### エンティティタイプと分類
-
-　IGES 5.3では、エンティティは以下の5つのエンティティクラスに分類される (Section 3.1)。
-
-| クラス | 説明 |
-| --- | --- |
-| Curve and<br>Surface<br>Geometry | 曲線と曲面の幾何学的エンティティ |
-| Constructive<br>Solid<br>Geometry<br>(CSG) | CSGのプリミティブエンティティであり、ソリッドモデラで使用される基本構成要素 |
-| Boundary<br>Representation<br>Solid<br>(B-Rep) | 境界表現ソリッドエンティティには、ソリッドモデル用に面や辺など、いくつかのトポロジーエンティティが定義される。面のデータなどは一部のCurve and Surface Geometryエンティティで定義される。 |
-| Annotation | 他のエンティティを使用して構成される注釈エンティティ。注釈は、図面やビューの情報を提供するために使用される。 |
-| Structure | グルーピングしたり、オブジェクト間の論理的接続性を定義するなどの、エンティティの構造を定義するためのエンティティ |
-
-#### エンティティタイプと分類の一覧
-
-**表**. エンティティタイプと分類. "C&S"はCurve and Surface Geometryを示す。また、表中の"#20-40"はForms 20～40を指す
-
-| No. | Type | Class | Pointer | Implicit<sup>[4]</sup> |
-|:---:|------|-------|:---:|:---:|
-|   0 | Null | Structure | - | - |
-| 100 | Circular Arc | C&S | ^ | ^ |
-| 102 | Composite Curve | ^ | ✅<sup>[3a]</sup> | ✅<br>all constituents |
-| 104 | Conic Arc | ^ | - | - |
-| 106 | Copious Data | Annotation<br>　(#20-40)<br>C&S<br>　(Others) | ^ | ^ |
-| 108 | Plane | C&S | ✅<sup>[3a]</sup><br>(#-1,#1) | ✅<br>bounding curve |
-| 110 | Line | ^ | - | - |
-| 112 | Parametric Spline Curve | ^ | ^ | ^ |
-| 114 | Parametric Spline Surface | ^ | ^ | ^ |
-| 116 | Point | ^ | ✅<sup>[3b]</sup> | ✅<br>display symbol|
-| 118 | Ruled Surface | ^ | ✅<sup>[3a]</sup> | ✅<br>rail curves |
-| 120 | Surface Of Revolution | ^ | ^ | ✅<br>axis, generatrix |
-| 122 | Tabulated Cylinder | ^ | ^ | ✅<br>directrix |
-| 123 | Direction | <sup>[2]</sup> | - | - |
-| 124 | Transformation Matrix | C&S | ^ | ^ |
-| 125 | Flash | ^ | ✅<sup>[3b]</sup> | ✅<br>defining entity |
-| 126 | Rational B Spline Curve | ^ | - | - |
-| 128 | Rational B Spline Surface | ^ | ^ | ^ |
-| 130 | Offset Curve | ^ | ✅<sup>[3a]</sup><br>✅<sup>[3b]</sup> | ✅<br>base curve |
-| 132 | Connect Point | Structure | ✅<sup>[3c]</sup> | ✅<br>display symbol<br>Text Display Templates |
-| 134 | Node | ^ | ✅<sup>[3b]</sup> | - |
-| 136 | Finite Element | ^ | ✅<sup>[3a]</sup> | ^ |
-| 138 | Nodal Displacement<br>and Rotation | ^ | ^ | ^ |
-| 140 | Offset Surface | C&S | ^ | ✅<br>surface |
-| 141 | Boundary | ^ | ^ | - |
-| 142 | Curve on a<br>Parametric Surface | ^ | ^ | ^ |
-| 143 | Bounded Surface | ^ | ^ | ^ |
-| 144 | Trimmed Surface | ^ | ✅<sup>[3a]</sup><br>✅<sup>[3b]</sup> | ✅<br>surface |
-| 146 | Nodal Results | Structure | ✅<sup>[3a]</sup> | - |
-| 148 | Element Results | ^ | ✅<sup>[3a]</sup> | ^ |
-| 150 | Block | CSG | - | ^ |
-| 152 | Right Angular Wedge | ^ | ^ | ^ |
-| 154 | Right Circular Cylinder | ^ | ^ | ^ |
-| 156 | Right Circular Cone | ^ | ^ | ^ |
-| 158 | Sphere | ^ | ^ | ^ |
-| 160 | Torus | ^ | ^ | ^ |
-| 162 | Solid Of Revolution | ^ | ✅<sup>[3a]</sup> | ^ |
-| 164 | Solid Of Linear Extrusion | ^ | ^ | ^ |
-| 168 | Ellipsoid | ^ | - | ^ |
-| 180 | Boolean Tree | CSG<sup>[1]</sup> | ✅<sup>[3d]</sup> | ^ |
-| 182 | Selected Component | ^ | ✅<sup>[3a]</sup> | ^ |
-| 184 | Solid Assembly | ^ | ^ | ^ |
-| 186 | Manifold Solid<br>B-Rep Object | B-Rep | ^ | ^ |
-| 190 | Plane Surface | C&S<sup>[2]</sup> | ^ | ^ |
-| 192 | Right Circular<br>Cylinder Surface | ^ | ^ | ^ |
-| 194 | Right Circular<br>Conical Surface | ^ | ^ | ^ |
-| 196 | Spherical Surface | ^ | ^ | ^ |
-| 198 | Toroidal Surface | ^ | ^ | ^ |
-| 202 | Angular Dimension | Annotation | ✅<sup>[3a]</sup><br>✅<sup>[3b]</sup> | ✅<br>all subordinate entities |
-| 204 | Curve Dimension | ^ | ^ | - |
-| 206 | Diameter Dimension | ^ | ^ | ✅<br>all subordinate entities |
-| 208 | Flag Note | ^ | ✅<sup>[3a]</sup> | ^ |
-| 210 | General Label | ^ | ^ | ^ |
-| 212 | General Note | ^ | ✅<sup>[3d]</sup> | - |
-| 213 | New General Note | ^ | ^ | ^ |
-| 214 | Leader Arrow | ^ | - | ^ |
-| 216 | Linear Dimension | ^ | ✅<sup>[3a]</sup><br>✅<sup>[3b]</sup> | ✅<br>all subordinate entities |
-| 218 | Ordinate Dimension | ^ | ✅<sup>[3a]</sup> | ^ |
-| 220 | Point Dimension | ^ | ^ | ^ |
-| 222 | Radius Dimension | ^ | ✅<sup>[3a]</sup><br>✅<sup>[3b]</sup> | ^ |
-| 228 | General Symbol | ^ | ✅<sup>[3a]</sup> | ^ |
-| 230 | Sectioned Area | ^ | ^ | ^ |
-| 302 | Associativity Definition | Structure | - | - |
-| 304 | Line Font Definition | ^ | ✅<sup>[3a]</sup><br>(#1) | ^ |
-| 306 | Macro Definition | ^ | - | ^ |
-| 308 | Subfigure Definition | ^ | ✅<sup>[3a]</sup> | ✅<br>all associated entities |
-| 310 | Text Font | ^ | ✅<sup>[3d]</sup> | - |
-| 312 | Text Display Template | ^ | ^ | ^ |
-| 314 | Color Definition | ^ | - | ^ |
-| 316 | Units Data | ^ | ^ | ^ |
-| 320 | Network Subfigure Definition | ^ | ✅<sup>[3a]</sup><br>✅<sup>[3b]</sup> | ✅<br>all associated entities<br>Text Display Templates<br>and Connect Points |
-| 322 | Attribute Table Definition | ^ | ✅<sup>[3a]</sup><br>(#2) | - |
-| 402 | Associativity Instance | ^ | ✅<sup>[3a]</sup> | ^ |
-| 404 | Drawing | ^ | ✅<sup>[3a]</sup> | ✅<br>all annotation entities |
-| 406 | Property | ^ | - | - |
-| 408 | Singular Subfigure Instance | ^ | ✅<sup>[3a]</sup> | ^ |
-| 410 | View | ^ | ✅<sup>[3b]</sup><br>(#0) | ^ |
-| 412 | Rectangular Array<br>Subfigure Instance | ^ | ✅<sup>[3a]</sup> | ^ |
-| 414 | Circular Array<br>Subfigure Instance | ^ | ^ | ^ |
-| 416 | External Reference | ^ | - | ^ |
-| 418 | Nodal Load Constraint | ^ | ✅<sup>[3a]</sup> | ^ |
-| 420 | Network Subfigure Instance | ^ | ✅<sup>[3a]</sup><br>✅<sup>[3b]</sup><br>✅<sup>[3c]</sup> | ^ |
-| 422 | Attribute Table Instance | ^ | - | ^ |
-| 430 | Solid Instance | CSG<sup>[1]</sup> | ✅<sup>[3a]</sup> | ^ |
-| 502 | Vertex | B-Rep | - | ^ |
-| 504 | Edge | ^ | ✅<sup>[3a]</sup> | ^ |
-| 508 | Loop | ^ | ^ | ^ |
-| 510 | Face | ^ | ^ | ^ |
-| 514 | Shell | ^ | ^ | ^ |
-
-> Note [1]: プリミティブエンティティ (これ以外のCSGエンティティ) またはB-Repオブジェクトを統合し、より複雑なCSGエンティティに結合するために使用される。
-
-> Note [2]: B-Repソリッドモデル用の、解析的面エンティティとしても使用される。
-
-> Note [3]: "Pointer"列の"✅"は、パラメータデータセクションにおいて、エンティティが他のエンティティを参照することを示す。ただし、追加ポインタは除く。ただし、[3b]から[3d]については、パラメータの値により、ポインターであるかどうかが異なる。
-> - [3a] 数値に関わらず、常にポインタである。
-> - [3b] 数値が0の場合はポインタでない。
-> - [3c] 数値がnullの場合はポインタでない。
-> - [3d] 数値が負の場合、その絶対値がポインタである。
-
-> Note [4]: "Implicit"列は、パラメータデータセクションにおいてポインターの指定がある場合に、その指定先と[親子の暗黙的なケース](#変換行列の適用)を満たすかどうかを示す (Section 3.2.3)。
+　implicit caseの具体的な例については、[Entity Classification Table](./entity_analysis.md/#entity-classification-table)を参照してください。

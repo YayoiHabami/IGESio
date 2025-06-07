@@ -1,11 +1,14 @@
-# Entity Parameter Count for PD Section
+# Entity Analysis
 
 <!-- omit in toc -->
 ## TOC
 
 - [Fields in Parameters Data Section](#fields-in-parameters-data-section)
 - [Directory Entry Parameters](#directory-entry-parameters)
-- [Types of Physically Dependent Child Entities](#types-of-physically-dependent-child-entities)
+- [Class-Based Entity Classification](#class-based-entity-classification)
+  - [Classes of Entities](#classes-of-entities)
+  - [Dependency Types](#dependency-types)
+  - [Entity Classification Table](#entity-classification-table)
 
 ## Fields in Parameters Data Section
 
@@ -296,7 +299,23 @@ The table below shows the allowable values for the remaining Directory Entry par
 
 > **Note [2]**: Also used as analytical surface entities for B-Rep solid models.
 
-## Types of Physically Dependent Child Entities
+## Class-Based Entity Classification
+
+### Classes of Entities
+
+In IGES 5.3, entities are classified into five classes (Section 3.1). While each entity typically belongs to a single class, some entities may change classification based on their form number (such as Copious Data Entity (Type 106)), and others have no explicit classification (such as Direction Entity (Type 123)). In this library, the former are implemented as separate C++ classes for each classification, while the latter are implemented using our own classification scheme. For detailed information, refer to the [Entity Classification Table](#entity-classification-table).
+
+**Curve and Surface Geometry Entities** form the foundation of geometric representation, including basic shapes like circular arcs, lines, points, and complex surfaces. These entities support both 2D and 3D representations, with specialized forms for parametric splines, B-splines, and various surface types including planes, cylinders, cones, spheres, and tori.
+
+**Constructive Solid Geometry (CSG) Entities** provide primitive solid modeling constructs including blocks, wedges, cylinders, spheres, and boolean operations. These entities can be combined using Boolean Tree Entity (Type 180) to create complex solid models through union, intersection, and difference operations.
+
+**Boundary Representation (B-Rep) Solid Entities** define solid models through topological relationships between vertices, edges, loops, faces, and shells. This approach represents solids by describing their boundary surfaces and the topological connections between geometric elements.
+
+**Annotation Entities** handle dimensioning, notes, labels, and other drawing annotations. These entities support various dimension types (linear, angular, radial, etc.), general notes, symbols, and drawing markup elements essential for technical documentation.
+
+**Structure Entities** provide organizational and definitional capabilities including transformation matrices, subfigures, views, drawings, properties, and various associativity relationships that bind other entities together.
+
+### Dependency Types
 
 In IGES 5.3, entities can reference (point to) other entities, creating dependency relationships. These relationships are primarily categorized as physical or logical (refer to IGES 5.3 Standard, Section 2.2.4.4.9.2). The table below defines these dependency types in the context of an entity P referencing an entity C.
 
@@ -308,6 +327,8 @@ In IGES 5.3, entities can reference (point to) other entities, creating dependen
 | Physically and Logically Dependent | Fulfills the criteria for both Physical and Logical Dependency. |
 
 When Entity C is physically dependent on Entity P, it cannot exist independently. Therefore, identifying physical dependencies and retrieving an entity's physically dependent child elements is important. The table that follows (with columns such as "Name", "Type", "Implicit") summarizes for each entity type whether it has child elements and if those children are physically dependent.
+
+### Entity Classification Table
 
 - Abbreviations used as column headers:
   - Name: Name of the Entity (abbreviated)

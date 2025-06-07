@@ -213,7 +213,7 @@ IGESio/
 - **[policy (ja)](docs/policy_ja.md)**: ライブラリの設計方針やIGES仕様の解釈について
 - **[class-reference (ja)](docs/class_reference_ja.md)**: 本ライブラリで使用されているクラスのリファレンス
 - **[flow/reader (ja)](docs/flow/reader_ja.md)**: 読み込み処理のフローについて
-- **[entity-parameters (en)](docs/entity_parameter_count_en.md)**: IGES 5.3における、各エンティティの分類やパラメータについての分析
+- **[entity-analysis (en)](docs/entity_analysis.md)**: IGES 5.3における、各エンティティの分類やパラメータについての分析
 - **[additional-notes (ja)](docs/additional_notes_ja.md)**: その他の補足事項
 - **[todo](docs/todo.md)**: TODOリスト
 
