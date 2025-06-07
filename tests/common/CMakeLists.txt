@@ -1,5 +1,6 @@
 set(TEST_SOURCES
     test_versions.cpp
+    test_matrix.cpp
     test_id_generator.cpp
     test_iges_metadata.cpp
     test_serialization_FromIgesXxx.cpp
