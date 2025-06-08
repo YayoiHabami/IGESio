@@ -66,7 +66,7 @@ class IDGenerator {
     /// @param iges_id 親のIGESDataのID
     /// @param pd_pointer エンティティのPDレコードのシーケンス番号
     /// @return 予約されたID
-    /// @throw std::out_of_range 予約されていない場合
+    /// @throw std::invalid_argument 予約されていない場合
     static uint64_t GetReservedID(const uint64_t, const unsigned int);
 };
 

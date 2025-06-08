@@ -42,7 +42,7 @@ uint64_t igesio::IDGenerator::GetReservedID(
     auto key = std::make_pair(iges_id, pd_pointer);
     auto it = reserved_ids_.find(key);
     if (it == reserved_ids_.end()) {
-        throw std::out_of_range(
+        throw std::invalid_argument(
             "ID not reserved for the given IGES ID (" + std::to_string(iges_id) +
             ") and PD pointer (" + std::to_string(pd_pointer) + ")");
     }
