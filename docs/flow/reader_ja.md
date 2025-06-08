@@ -6,9 +6,9 @@
 
 ## `IgesReader`クラス
 
-### `IgesReader.GetLine`メソッド
+### `IgesReader.GetLine`メンバ関数
 
-　読み込むセクションの種類 (`section`) と、そのセクションの一つ前のセクションの種類 (`prev_sections`) を指定して、次の行を取得するメソッドです。`section`では、表1に示す`SectionType`のいずれかを指定します。
+　読み込むセクションの種類 (`section`) と、そのセクションの一つ前のセクションの種類 (`prev_sections`) を指定して、次の行を取得するメンバ関数です。`section`では、表1に示す`SectionType`のいずれかを指定します。
 
 **表1**. `SectionType`の一覧
 

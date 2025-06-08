@@ -114,8 +114,8 @@ class IgesReader {
     /// @brief 次の行の情報
     /// @note [次の行の文字列, セクションの種類, シーケンス番号]、
     ///       デフォルト値は `{"", SectionType::kTerminate, 0}`
-    /// @note ここの値が空でない場合、`GetLine`メソッドでは`IgesBinaryReader`の
-    ///       `GetLine`メソッドは呼び出さず、この値をそのまま返す
+    /// @note ここの値が空でない場合、`GetLine`メンバ関数では`IgesBinaryReader`の
+    ///       `GetLine`メンバ関数は呼び出さず、この値をそのまま返す
     std::tuple<std::string, SectionType, unsigned int> next_line_ = default_next_line_;
 
     /// @brief next_line_が空か

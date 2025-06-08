@@ -62,7 +62,7 @@ std::string TrimTwoParamsFromFirstGlobalSectionLine(
 
 
 /**
- * IgesReaderクラスのメソッド
+ * IgesReaderクラスのメンバ関数
  */
 
 iio::IgesReader::IgesReader(const std::string& file_path) : reader_(file_path) {

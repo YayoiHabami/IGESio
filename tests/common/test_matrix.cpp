@@ -117,7 +117,7 @@ void ValidateColVectorElements(
 
 
 /**
- * 静的メソッドのテスト
+ * 静的メンバ関数のテスト
  */
 
 TEST(MatrixStaticMethodsTest, Constant) {
@@ -258,7 +258,7 @@ TEST(MatrixConstructorTest, InitializerListConstructor) {
 
 
 /**
- * 基本的なメソッド（演算子オーバーロードを除く）のテスト
+ * 基本的なメンバ関数（演算子オーバーロードを除く）のテスト
  */
 
 // rows, cols, sizeのテスト

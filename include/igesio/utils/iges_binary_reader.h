@@ -116,7 +116,7 @@ class IgesBinaryReader {
     /// @brief 改行文字（またはその列）
     std::vector<char> line_break_;
 
-    /// @brief 改行文字を検出するメソッド
+    /// @brief 改行文字を検出するメンバ関数
     /// @throw igesio::LineFormatError 規定位置に改行文字が見つからなかった場合
     void DetectLineBreak();
 
@@ -129,7 +129,7 @@ class IgesBinaryReader {
     /// @note データ部についても常に0 (圧縮形式のデータ部はシーケンス番号を持たないため)
     unsigned int prev_sequence_number_ = 0;
 
-    /// @brief セクションとシーケンス番号を更新するメソッド
+    /// @brief セクションとシーケンス番号を更新するメンバ関数
     /// @param type 現在の行のセクションの種類
     /// @param number 現在の行のシーケンス番号
     /// @throw igesio::SectionFormatError セクションの順序やシーケンス番号が不正な場合

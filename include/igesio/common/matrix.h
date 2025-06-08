@@ -94,7 +94,7 @@ class Matrix {
     /// @brief デフォルトコンストラクタ
     /// @note 固定列数の場合は指定された列数で初期化、動的列数の場合は空で初期化
     /// @note 各要素の値は未設定となることに注意。値が設定された状態で初期化したい場合は、
-    ///       Matrix::Zero()などの静的メソッドを使用すること。
+    ///       Matrix::Zero()などの静的メンバ関数を使用すること。
     Matrix() {
         if constexpr (M != Dynamic) {
             data_.resize(M);
@@ -107,7 +107,7 @@ class Matrix {
     /// @note M == Dynamicの場合のみ使用可能
     /// @note 本実装ではrowsを無視する
     /// @note 各要素の値は未設定となることに注意。値が設定された状態で初期化したい場合は、
-    ///       Matrix::Zero()などの静的メソッドを使用すること。
+    ///       Matrix::Zero()などの静的メンバ関数を使用すること。
     template<int M_ = M, typename std::enable_if_t<M_ == Dynamic, int> = 0>
     explicit Matrix([[maybe_unused]]int rows, int cols) {
         data_.resize(cols);
@@ -438,7 +438,7 @@ class Matrix {
 
 
     /**
-     * 静的メソッド
+     * 静的メンバ関数
      */
     /// @brief 全ての要素が指定された値で初期化された行列を生成 (動的サイズ版)
     /// @param rows 行数 (Nに等しい値を指定すること)
