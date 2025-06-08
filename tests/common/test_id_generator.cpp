@@ -66,7 +66,7 @@ TEST(IDGeneratorTest, GetUnreservedIDThrowsException) {
     unsigned int pd_pointer = 600;
 
     EXPECT_THROW(IDGenerator::GetReservedID(iges_id, pd_pointer),
-                 std::out_of_range);
+                 std::invalid_argument);
 }
 
 // 異なるキーで異なるIDが予約されることをテスト
