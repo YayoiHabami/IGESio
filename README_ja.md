@@ -17,6 +17,9 @@ IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォー
 - [主な機能](#主な機能)
 - [使用例](#使用例)
   - [基本的な読み込み・書き出し](#基本的な読み込み書き出し)
+    - [中間データ構造を使用した読み込み・書き出し](#中間データ構造を使用した読み込み書き出し)
+    - [なぜ中間データ構造を使用するのか？](#なぜ中間データ構造を使用するのか)
+    - [重要な注意事項](#重要な注意事項)
 - [必要システム](#必要システム)
   - [動作確認環境](#動作確認環境)
   - [環境セットアップ](#環境セットアップ)
@@ -45,16 +48,59 @@ IGESioライブラリは以下の主要機能を提供します：
 
 ### 基本的な読み込み・書き出し
 
+IGESioライブラリでは、IGESファイルの読み込みに2段階の変換プロセスを採用しています：
+
+1. **IGESファイル → 中間データ構造** （`IntermediateIgesData`）
+2. **中間データ構造 → データクラス** （`IGESData`クラス - 開発中）
+
+#### 中間データ構造を使用した読み込み・書き出し
+
+　現在利用可能な方法として、中間データ構造（`IntermediateIgesData`）を使用してIGESファイルの読み込みと書き出しができます。詳細については、[中間データ構造のドキュメント](docs/intermediate_data_structure_ja.md)を参照してください。
+
 ```cpp
 #include <igesio/reader.h>
+#include <igesio/writer.h>
 
 int main() {
-    std::string file_name = "example.igs";
-    // TODO: IGESDataクラスを定義後、ここの実装を更新
+    try {
+        // IGESファイルを中間データ構造に読み込み
+        auto data = igesio::ReadIgesIntermediate("input.igs");
 
-    return 0;
+        // 必要に応じてデータを修正
+        // ...
+
+        // 修正したデータを新しいファイルに書き込み
+        igesio::WriteIgesIntermediate(data, "output.igs");
+    } catch (const std::exception& e) {
+        std::cerr << "エラー: " << e.what() << std::endl;
+        return 1;
+    }
+
+  return 0;
 }
 ```
+
+#### なぜ中間データ構造を使用するのか？
+
+　2段階アプローチを採用する理由：
+
+- **IGESフォーマットの複雑性**: IGESファイル内の生データと実用的なデータモデル間の変換を段階的に処理
+- **エラー処理の分離**: ファイル解析エラーとデータ構造変換エラーを明確に区別
+- **開発段階での柔軟性**: 最終的な`IGESData`クラスの設計変更に対する影響を最小化
+
+#### 重要な注意事項
+
+> **警告**: 中間データ構造（`IntermediateIgesData`）は内部実装の詳細であり、将来のバージョンで変更される可能性があります。
+>
+> 本格的な用途では、完成予定の`IGESData`クラスの使用を強く推奨します：
+>
+> ```cpp
+> // 将来のAPI（開発中）
+> auto iges_data = igesio::ReadIges("example.igs");  // IGESDataクラスを返す
+> igesio::WriteIges(iges_data, "output.igs");
+> ```
+>
+> 中間データ構造は、開発・デバッグ目的や、`IGESData`クラス完成までの一時的な利用にとどめてください。
 
 ## 必要システム
 
