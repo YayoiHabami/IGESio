@@ -17,6 +17,9 @@ For design principles and IGES specification interpretations, please refer to th
 - [Key Features](#key-features)
 - [Usage Examples](#usage-examples)
   - [Basic Read/Write Operations](#basic-readwrite-operations)
+    - [Reading and Writing with Intermediate Data Structure](#reading-and-writing-with-intermediate-data-structure)
+    - [Why Use an Intermediate Data Structure?](#why-use-an-intermediate-data-structure)
+    - [Important Notes](#important-notes)
 - [System Requirements](#system-requirements)
   - [Tested Environments](#tested-environments)
   - [Environment Setup](#environment-setup)
@@ -45,16 +48,59 @@ The IGESio library provides the following core functionality:
 
 ### Basic Read/Write Operations
 
+The IGESio library employs a two-stage conversion process for reading IGES files:
+
+1. **IGES File → Intermediate Data Structure** (`IntermediateIgesData`)
+2. **Intermediate Data Structure → Data Class** (`IGESData` class - under development)
+
+#### Reading and Writing with Intermediate Data Structure
+
+Currently available method allows reading and writing IGES files using the intermediate data structure (`IntermediateIgesData`). For detailed information, please refer to the [intermediate data structure documentation](docs/intermediate_data_structure.md).
+
 ```cpp
 #include <igesio/reader.h>
+#include <igesio/writer.h>
 
 int main() {
-    std::string file_name = "example.igs";
-    // TODO: Update this implementation after defining IGESData class
+  try {
+    // Read IGES file into intermediate data structure
+    auto data = igesio::ReadIgesIntermediate("input.igs");
 
-    return 0;
+    // Modify data as needed
+    // ...
+
+    // Write modified data to a new file
+    igesio::WriteIgesIntermediate(data, "output.igs");
+  } catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+    return 1;
+  }
+
+  return 0;
 }
 ```
+
+#### Why Use an Intermediate Data Structure?
+
+Reasons for adopting the two-stage approach:
+
+- **IGES Format Complexity**: Processes conversion between raw data in IGES files and practical data models in stages
+- **Error Handling Separation**: Clearly distinguishes between file parsing errors and data structure conversion errors
+- **Development Flexibility**: Minimizes impact of design changes to the final `IGESData` class
+
+#### Important Notes
+
+> **Warning**: The intermediate data structure (`IntermediateIgesData`) is an internal implementation detail and may change in future versions.
+>
+> For production use, we strongly recommend using the planned `IGESData` class once completed:
+>
+> ```cpp
+> // Future API (under development)
+> auto iges_data = igesio::ReadIges("example.igs");  // Returns IGESData class
+> igesio::WriteIges(iges_data, "output.igs");
+> ```
+>
+> Please limit the use of intermediate data structure to development/debugging purposes or temporary usage until the `IGESData` class is completed.
 
 ## System Requirements
 
