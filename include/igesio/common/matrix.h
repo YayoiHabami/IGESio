@@ -20,6 +20,7 @@
  */
 
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 
 namespace igesio {
 
@@ -50,6 +51,7 @@ using Eigen::Vector3d;
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -62,6 +64,7 @@ constexpr int Dynamic = -1;
 /// @brief 行数・列数の変更なしを表す定数
 /// @brief Matrix::conservativeResize()で行数を変更しない場合に使用
 constexpr size_t NoChange = 0;
+
 
 namespace detail {
 
@@ -89,6 +92,13 @@ class Matrix {
     static_assert(N == 2 || N == 3, "N must be 2 or 3");
     /// @brief Mは-1(Dynamic)または1～3のみを許可
     static_assert(M == Dynamic || (M >= 1 && M <= 3), "M must be Dynamic or between 1 and 3");
+
+    /// @brief 別の行列との演算に対する戻り値の型を定義する
+    /// @tparam N2 行数
+    /// @tparam M2 列数
+    template<int N2, int M2>
+    using ReturnType = std::conditional_t<M == Dynamic || M2 == Dynamic,
+            Matrix<N, Dynamic>, Matrix<N, M>>;
 
  public:
     /// @brief デフォルトコンストラクタ
@@ -231,6 +241,24 @@ class Matrix {
         return data_[0][i];
     }
 
+    /// @brief ベクトルの要素アクセス (非const版)
+    /// @param i インデックス
+    /// @return 要素への参照
+    template<int M_ = M, typename std::enable_if_t<M_ == 1, int> = 0>
+    double& operator[](size_t i) {
+        assert(i < N);
+        return data_[0][i];
+    }
+
+    /// @brief ベクトルの要素アクセス (const版)
+    /// @param i インデックス
+    /// @return 要素への参照
+    template<int M_ = M, typename std::enable_if_t<M_ == 1, int> = 0>
+    const double& operator[](size_t i) const {
+        assert(i < N);
+        return data_[0][i];
+    }
+
     /// @brief サイズ変更（データ保持）
     /// @param rows 新しい行数（NoChangeのみ許可）
     /// @param cols 新しい列数
@@ -254,6 +282,29 @@ class Matrix {
             data_.resize(cols);
         }
     }
+
+    /// @brief i列目のベクトルを取得
+    /// @param i 取得する列のインデックス
+    /// @return i列目のベクトル
+    /// @throw std::out_of_range 列インデックスが範囲外の場合
+    Matrix<N, 1> col(size_t i) const {
+        if (i >= cols()) {
+            throw std::out_of_range("Column index out of range");
+        }
+
+        Matrix<N, 1> result;
+        for (size_t row = 0; row < N; ++row) {
+            result(row) = (*this)(row, i);
+        }
+
+        return result;
+    }
+
+
+
+    /**
+     * 演算子オーバーロード
+     */
 
     /// @brief 行列加算
     /// @param other 加算する行列
@@ -432,6 +483,207 @@ class Matrix {
                 result(i, j) = sum;
             }
         }
+        return result;
+    }
+
+
+
+    /**
+     * ベクトル専用演算
+     */
+
+    /// @brief 内積 (ベクトル専用)
+    /// @param other 内積を計算する相手のベクトル
+    /// @return 内積の結果
+    template<int M_ = M, typename std::enable_if_t<M_ == 1, int> = 0>
+    double dot(const Matrix<N, 1>& other) const {
+        double result = 0.0;
+        for (size_t i = 0; i < N; ++i) {
+            result += data_[0][i] * other.data_[0][i];
+        }
+        return result;
+    }
+
+    /// @brief 外積 (3次元ベクトル専用)
+    /// @param other 外積を計算する相手のベクトル
+    /// @return 外積の結果
+    template<int M_ = M, int N_ = N,
+             typename std::enable_if_t<M_ == 1 && N_ == 3, int> = 0>
+    Matrix<3, 1> cross(const Matrix<3, 1>& other) const {
+        Matrix<3, 1> result;
+        result(0) = data_[0][1] * other.data_[0][2] - data_[0][2] * other.data_[0][1];
+        result(1) = data_[0][2] * other.data_[0][0] - data_[0][0] * other.data_[0][2];
+        result(2) = data_[0][0] * other.data_[0][1] - data_[0][1] * other.data_[0][0];
+        return result;
+    }
+
+
+
+    /**
+     * 要素ごとの演算
+     */
+
+    /// @brief 要素ごとの積 (アダマール積)
+    /// @param other 要素ごとの積を計算する相手の行列
+    /// @return 要素ごとの積の結果
+    /// @throw std::invalid_argument 動的列数で列数が一致しない場合
+    template<int M2> ReturnType<N, M2>
+    cwiseProduct(const Matrix<N, M2>& other) const {
+        // 動的サイズの場合のチェック
+        if constexpr (M == Dynamic || M2 == Dynamic) {
+            if (cols() != other.cols()) {
+                throw std::invalid_argument("Matrix dimensions must match for cwiseProduct");
+            }
+        }
+
+        ReturnType<N, M2> result;
+
+        if constexpr (M == Dynamic || M2 == Dynamic) {
+            result.conservativeResize(NoChange, cols());
+        }
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result(i, j) = (*this)(i, j) * other(i, j);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 要素ごとの除算
+    /// @param other 要素ごとの除算を計算する相手の行列
+    /// @return 要素ごとの除算の結果
+    /// @throw std::invalid_argument 動的列数で列数が一致しない場合
+    template<int M2> ReturnType<N, M2>
+    cwiseQuotient(const Matrix<N, M2>& other) const {
+        // 動的サイズの場合のチェック
+        if constexpr (M == Dynamic || M2 == Dynamic) {
+            if (cols() != other.cols()) {
+                throw std::invalid_argument("Matrix dimensions must match for cwiseQuotient");
+            }
+        }
+
+        ReturnType<N, M2> result;
+
+        if constexpr (M == Dynamic || M2 == Dynamic) {
+            result.conservativeResize(NoChange, cols());
+        }
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result(i, j) = (*this)(i, j) / other(i, j);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 要素ごとの逆数
+    /// @return 要素ごとの逆数を計算した結果
+    Matrix<N, M> cwiseInverse() const {
+        Matrix<N, M> result;
+
+        if constexpr (M == Dynamic) {
+            result = Matrix<N, Dynamic>(N, cols());
+        }
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result(i, j) = 1.0 / (*this)(i, j);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 要素ごとの平方根
+    /// @return 要素ごとの平方根を計算した結果
+    Matrix<N, M> cwiseSqrt() const {
+        Matrix<N, M> result;
+
+        if constexpr (M == Dynamic) {
+            result = Matrix<N, Dynamic>(N, cols());
+        }
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result(i, j) = std::sqrt((*this)(i, j));
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 要素ごとの絶対値
+    /// @return 要素ごとの絶対値を計算した結果
+    Matrix<N, M> cwiseAbs() const {
+        Matrix<N, M> result;
+
+        if constexpr (M == Dynamic) {
+            result = Matrix<N, Dynamic>(N, cols());
+        }
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result(i, j) = std::abs((*this)(i, j));
+            }
+        }
+
+        return result;
+    }
+
+
+
+    /**
+     * Reduction operations
+     */
+
+    /// @brief 要素の二乗和
+    /// @return 全要素の二乗和
+    double squaredNorm() const {
+        double result = 0.0;
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result += (*this)(i, j) * (*this)(i, j);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief ノルム（要素の二乗和の平方根）
+    /// @return ノルム
+    double norm() const {
+        return std::sqrt(squaredNorm());
+    }
+
+    /// @brief 全要素の和
+    /// @return 全要素の和
+    double sum() const {
+        double result = 0.0;
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result += (*this)(i, j);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 全要素の積
+    /// @return 全要素の積
+    double prod() const {
+        double result = 1.0;
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < N; ++i) {
+                result *= (*this)(i, j);
+            }
+        }
+
         return result;
     }
 
