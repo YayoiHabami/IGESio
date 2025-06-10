@@ -33,6 +33,7 @@ IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォー
   - [テストの実行方法](#テストの実行方法)
 - [ディレクトリ構造](#ディレクトリ構造)
 - [ドキュメント](#ドキュメント)
+  - [ファイル別ドキュメント](#ファイル別ドキュメント)
 - [著作権・ライセンス](#著作権ライセンス)
 
 ## 主な機能
@@ -262,6 +263,22 @@ IGESio/
 - **[entity-analysis (en)](docs/entity_analysis.md)**: IGES 5.3における、各エンティティの分類やパラメータについての分析
 - **[additional-notes (ja)](docs/additional_notes_ja.md)**: その他の補足事項
 - **[todo](docs/todo.md)**: TODOリスト
+
+### ファイル別ドキュメント
+
+以下は、ソースファイルごとのドキュメントです。記載されていないファイルについては、ソースコード内のコメントを参照してください。
+
+**commonモジュール**
+- **[Matrix](docs/common/matrix_ja.md)**: 固定/動的サイズの行列クラス
+
+**entitiesモジュール**
+- **[IEntity and derived classes](docs/entities/entity_base_class_architecture_ja.md)**: `IEntity`クラスとその派生クラスの設計
+- **[RawEntityDE and RawEntityPD](docs/intermediate_data_structure_ja.md)**: IGESファイルのDirectory EntryセクションとParameter Dataセクションの中間データ構造
+
+**modelsモジュール**
+- **[Intermediate](docs/intermediate_data_structure_ja.md)**: IGESファイル入出力時の中間データ構造
+
+**utilsモジュール**
 
 ## 著作権・ライセンス
 

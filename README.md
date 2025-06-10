@@ -33,6 +33,7 @@ For design principles and IGES specification interpretations, please refer to th
   - [How to Run Tests](#how-to-run-tests)
 - [Directory Structure](#directory-structure)
 - [Documentation](#documentation)
+  - [File-Specific Documentation](#file-specific-documentation)
 - [Copyright \& License](#copyright--license)
 
 ## Key Features
@@ -262,6 +263,25 @@ Detailed project documentation is organized in the `docs` directory:
 - **[entity-analysis (en)](docs/entity_analysis.md)**: Analysis of entity classifications and parameters in IGES 5.3
 - **[additional-notes (ja)](docs/additional_notes_ja.md)**: Additional notes and supplementary information
 - **[todo (ja)](docs/todo.md)**: TODO list
+
+### File-Specific Documentation
+
+The following documentation is available for individual source files. For files not listed below, please refer to the comments within the source code as documentation has not been created yet.
+
+**common module**
+
+- [Matrix](docs/common/matrix_ja.md): Fixed and dynamic size matrix classes
+
+**entities module**
+
+- [IEntity and derived classes](docs/entities/entity_base_class_architecture_ja.md): Design of `IEntity` class and its derived classes
+- [RawEntityDE and RawEntityPD](docs/intermediate_data_structure_ja.md): Intermediate data structures for IGES file Directory Entry and Parameter Data sections
+
+**models module**
+
+[Intermediate](docs/intermediate_data_structure_ja.md): Intermediate data structures for IGES file input/output operations
+
+**utils module**
 
 ## Copyright & License
 
