@@ -3,6 +3,9 @@
 ## 目次
 
 - [目次](#目次)
+- [概要](#概要)
+  - [Class Diagram](#class-diagram)
+- [`IEntityIdentifier`](#ientityidentifier)
 - [`IEntity`](#ientity)
   - [メンバ関数 (`IEntity`)](#メンバ関数-ientity)
     - [抽象基底クラスが備えるべきメンバ関数 (`IEntity`)](#抽象基底クラスが備えるべきメンバ関数-ientity)
@@ -12,6 +15,85 @@
     - [その他細かいメンバ関数 (`IEntity`)](#その他細かいメンバ関数-ientity)
 - [`EntityBase`](#entitybase)
 
+## 概要
+
+### Class Diagram
+
+　以下に、現時点でのデータ構造（の案）のクラス図を示します。実際には100を越える具体的なエンティティクラスが存在しますが、ここでは、円弧を表す`CircularArc`クラス、平面を表す`Plane`クラス、変換行列を表す`TransformationMatrix`クラスと、そらの基底クラスのみを示しています。
+
+```mermaid
+classDiagram
+    class IEntityIdentifier {
+        <<interface>>
+        +GetID()* uint64_t
+        +GetType()* EntityType
+        +GetFormNumber()* unsigned int
+    }
+
+    class IEntity {
+        <<interface>>
+    }
+
+    class ITransformation {
+        <<interface>>
+    }
+
+    class ICurve {
+        <<interface>>
+    }
+
+    class ISurface {
+        <<interface>>
+    }
+
+    class EntityBase {
+        <<abstract>>
+    }
+
+    class CircularArc
+    class Plane
+    class TransformationMatrix
+
+    IEntityIdentifier <|-- IEntity
+    IEntityIdentifier <|-- ITransformation
+    IEntityIdentifier <|-- ICurve
+    IEntityIdentifier <|-- ISurface
+
+    IEntity <|-- EntityBase
+    EntityBase <|-- CircularArc
+    EntityBase <|-- Plane
+    EntityBase <|-- TransformationMatrix
+
+    ITransformation <|-- TransformationMatrix
+    ICurve <|-- CircularArc
+    ISurface <|-- Plane
+```
+
+　上記のクラス図で示したエンティティの役割を以下に整理します。基本的にエンティティの保持は`IEntity`のポインタ（`std::shared_ptr<IEntity>`等）で行いますが、特定の参照では専用の型を使用します。
+
+　`IEntityIdentifier`および`IEntity`を除くインターフェース（`ICurve`、`ISurface`、`ITransformation`等）は、特定の機能のみを対象とした参照の保持のために定義されています。
+
+　例えば、`IEntity`のDEフィールド7（Transformation Matrix）では、`std::shared_ptr<const ITransformation>`を使用してTransformation Matrix（Type 124）への参照を保持します。
+
+| クラス名 | 役割 |
+| --- | --- |
+| `IEntityIdentifier` | 全てのエンティティが共通して持つ識別情報（ID、タイプ、フォーム番号）を定義 |
+| `IEntity` | 複数種類のエンティティを一つのポインタで統一的に扱うための抽象基底クラス（型消去の役割） |
+| `ICurve`<br>`ISurface`<br>`ITransformation`<br>その他 | エンティティの特定の機能のみを対象としたインターフェース<br>（特定の役割に特化した参照の保持に使用） |
+| `EntityBase` | 全てのエンティティが共通して持つ機能を実装するCRTP基底クラス |
+| `CircularArc`<br>`Plane`<br>`TransformationMatrix`<br>その他 | IGESエンティティの具体的な実装クラス |
+
+## `IEntityIdentifier`
+
+　`IEntityIdentifier`クラスは、IGESファイルの各エンティティを識別するためのインターフェースです。このクラスは、全てのエンティティが共通して持つ識別情報を定義し、全ての具体的/抽象的なエンティティクラスはこのクラスを継承して実装されます。
+
+　`IEntityIdentifier`クラスには、以下３つの純粋仮想関数のみが定義されています。いずれも実装は`EntityBase`クラスで行われます。
+
+| メンバ関数 | 説明 |
+| --- | --- |
+| `GetID()` | プログラム上における、エンティティの一意な識別子 (`uint64_t`型) を取得します。 |
+| `GetType()` | エンティティタイプ (`EntityType`型) を取得します。 |
+| `GetFormNumber()` | エンティティのフォーム番号 (`unsigned int`型) を取得します。 |
 
 ## `IEntity`
 
@@ -70,6 +152,8 @@
   - [ ] `DEView GetView() const;` (6th field)
 
 > 抽象化の原則を考えると、抽象クラス (`IEntity`) が具体的なクラス (例えば`TransformationMatrix`) を戻り値とするメンバ関数を持つことは好ましくありません。したがって、例えば変換行列であれば、`const Matrix3d`と`const Vector3d`、および参照先のID (`const uint64_t`) を持つ`DETransformationMatrix`クラスを定義し、これを戻り値とするメンバ関数を定義する方が適切かと思います。この方向での実装を進めます。
+>
+> `IEntity`を継承していない、例えば`ITransformation`クラスを定義して、`TransformationMatrix`クラスが`EntityBase`と`ITransformation`を継承する形にすると、上手く行くケースもあるかもしれません。仕様書を軽く確認した限りでは、DEで参照するTransformation Matrixは、自身のデータ (回転行列と平行移動ベクトル) と、他のTransformation Matrixへの参照を持てば良いようです。ですので、idと`std::shared_ptr<const ITransformation>`、および`Matrix3d`と`Vector3d`を持つ`ITransformation`クラスを定義し、`TransformationMatrix`クラスがこれを継承する形にすると良いかもしれません。このように、`IEntity`を継承しないクラスが定義可能な構造であれば、抽象化の原則に従いつつ、ポインタを持つことができるかと思います。この場合、`GetID`、`GetType`、`GetFormNumber`メンバ関数のみを持つ`IEntityIdentifier`クラスを定義し、`IEntity`クラスと`ITransformation`クラスがこれを継承する形にすると良いかもしれません。
 
 `IEntity`**クラスのインスタンス上で意味を持たないもの**
 
@@ -170,3 +254,5 @@
   - デバッグ/表示サポート用
 
 ## `EntityBase`
+
+　`igesio::entities::EntityBase`クラスは、`IEntity`クラスをCRTP (Curiously Recurring Template Pattern) を使用して実装した抽象基底クラスです。このクラスは、全てのエンティティが共通して持つ機能を提供し、具体的なエンティティクラスはこのクラスを継承して実装されます。
