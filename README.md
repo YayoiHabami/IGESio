@@ -27,10 +27,11 @@ For design principles and IGES specification interpretations, please refer to th
     - [Ubuntu Environment](#ubuntu-environment)
   - [Third-Party Dependencies](#third-party-dependencies)
 - [Building](#building)
-  - [Platform-Specific Alternatives](#platform-specific-alternatives)
-- [Running Tests](#running-tests)
-  - [Test Build Configuration](#test-build-configuration)
-  - [How to Run Tests](#how-to-run-tests)
+  - [CMake Project Integration](#cmake-project-integration)
+    - [Component Names for CMake Linking](#component-names-for-cmake-linking)
+  - [Standalone Building](#standalone-building)
+    - [Platform-Specific Alternatives](#platform-specific-alternatives)
+    - [Running Tests](#running-tests)
 - [Directory Structure](#directory-structure)
 - [Documentation](#documentation)
   - [File-Specific Documentation](#file-specific-documentation)
@@ -162,11 +163,59 @@ This library includes optional dependencies with compatible licenses:
 - Google Test is only used for development and not distributed with the library
 - You can build this library without any third-party dependencies
 
-For more details, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Building
 
-Follow these steps to build the IGESio library:
+### CMake Project Integration
+
+The IGESio library can be easily integrated into other projects using CMake's `FetchContent` feature. Here's an example CMake configuration for integrating the IGESio library into `my_project`, which builds a `main.cpp` file as an executable:
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(my_project)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Enable FetchContent
+include(FetchContent)
+
+# Fetch IGESio library
+FetchContent_Declare(
+  igesio
+  GIT_REPOSITORY https://github.com/YayoiHabami/IGESio
+  GIT_TAG main  # You can also specify a specific tag or commit hash
+)
+
+# Make IGESio available
+FetchContent_MakeAvailable(igesio)
+
+# Create executable
+add_executable(my_app main.cpp)
+
+# Link IGESio library
+target_link_libraries(my_app PRIVATE IGESio::IGESio)
+```
+
+**Note**: When using FetchContent, IGESio tests are not built by default. This reduces build time for user projects.
+
+#### Component Names for CMake Linking
+
+The IGESio library can be linked using the following component names. Choose the appropriate component based on your needs:
+
+| Component Name | Description | Use Case |
+|----------------|-------------|----------|
+| `IGESio::IGESio` | Main library containing all IGESio functionality | General use (recommended) |
+| `IGESio::common` | Common modules (metadata, error handling, etc.) | When only basic functionality is needed |
+| `IGESio::utils` | Utilities like data type conversion | When only utility functions are needed |
+| `IGESio::entities` | IGES entity-related functionality | When only entity processing is needed |
+| `IGESio::models` | Intermediate data structures and overall IGES data management | When only data model functionality is needed |
+
+**Note**: We generally recommend linking with `IGESio::IGESio`. Individual components should only be considered when you need specific functionality only or want to minimize dependencies.
+
+### Standalone Building
+
+For development or testing purposes, you can build the IGESio library individually by following these steps:
 
 **1. Clone the repository**:
 ```bash
@@ -186,7 +235,7 @@ cmake ..
 cmake --build .
 ```
 
-### Platform-Specific Alternatives
+#### Platform-Specific Alternatives
 
 **Windows Environment**: You can also use the `build.bat` script. However, this requires Ninja to be installed and added to your PATH in addition to CMake. You can specify either `debug` or `release` options during build. Additionally, specifying `doc` as the second argument will generate documentation, which requires Doxygen and Graphviz to be installed.
 
@@ -204,11 +253,9 @@ chmod +x build.sh
 ./build.sh debug
 ```
 
-## Running Tests
+#### Running Tests
 
-### Test Build Configuration
-
-Tests are not built by default. Use the `IGESIO_BUILD_TESTING` option to control this:
+Even when building standalone, tests are not built by default. Use the `IGESIO_BUILD_TESTING` option to control this:
 
 ```bash
 # Build with tests
@@ -217,8 +264,6 @@ cmake -DIGESIO_BUILD_TESTING=ON ..
 # Build without tests (default)
 cmake ..
 ```
-
-### How to Run Tests
 
 After building, you can run tests using the following methods. Navigate to the build output directory first (`build\debug_win` for Windows, `build/debug_linux` for Linux).
 
@@ -279,7 +324,7 @@ The following documentation is available for individual source files. For files 
 
 **models module**
 
-[Intermediate](docs/intermediate_data_structure_ja.md): Intermediate data structures for IGES file input/output operations
+- [Intermediate](docs/intermediate_data_structure_ja.md): Intermediate data structures for IGES file input/output operations
 
 **utils module**
 

@@ -27,10 +27,11 @@ IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォー
     - [Ubuntu環境](#ubuntu環境)
   - [Third-Party Dependencies](#third-party-dependencies)
 - [ビルド方法](#ビルド方法)
-  - [プラットフォーム別の代替手段](#プラットフォーム別の代替手段)
-- [テストの実行](#テストの実行)
-  - [テストのビルド設定](#テストのビルド設定)
-  - [テストの実行方法](#テストの実行方法)
+  - [CMakeプロジェクトへの統合](#cmakeプロジェクトへの統合)
+    - [CMakeによるリンク時のコンポーネント名](#cmakeによるリンク時のコンポーネント名)
+  - [スタンドアロンでのビルド](#スタンドアロンでのビルド)
+    - [プラットフォーム別の代替手段](#プラットフォーム別の代替手段)
+    - [テストの実行](#テストの実行)
 - [ディレクトリ構造](#ディレクトリ構造)
 - [ドキュメント](#ドキュメント)
   - [ファイル別ドキュメント](#ファイル別ドキュメント)
@@ -166,7 +167,56 @@ ninja --version
 
 ## ビルド方法
 
-以下の手順に従ってIGESioライブラリをビルドしてください：
+### CMakeプロジェクトへの統合
+
+IGESioライブラリは、CMakeの`FetchContent`機能を使用して他のプロジェクトに簡単に統合できます。以下は、`main.cpp`ファイルを実行可能ファイルとしてビルドする`my_project`において、IGESioライブラリを統合するためのCMake設定の例です：
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(my_project)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# FetchContentを有効化
+include(FetchContent)
+
+# IGESioライブラリを取得
+FetchContent_Declare(
+    igesio
+    GIT_REPOSITORY https://github.com/YayoiHabami/IGESio
+    GIT_TAG main  # 特定のタグやコミットハッシュを指定することも可能
+)
+
+# IGESioを利用可能にする
+FetchContent_MakeAvailable(igesio)
+
+# 実行可能ファイルを作成
+add_executable(my_app main.cpp)
+
+# IGESioライブラリをリンク
+target_link_libraries(my_app PRIVATE IGESio::IGESio)
+```
+
+**Note**: FetchContentを使用する場合、IGESioのテストはデフォルトでビルドされません。これにより、ユーザープロジェクトのビルド時間が短縮されます。
+
+#### CMakeによるリンク時のコンポーネント名
+
+IGESioライブラリは、以下のコンポーネント名でリンクできます。用途に応じて適切なコンポーネントを選択してください：
+
+| コンポーネント名 | 説明 | 使用場面 |
+|------------------|------|----------|
+| `IGESio::IGESio` | 全てのIGESio機能を含むメインライブラリ | 一般的な用途（推奨） |
+| `IGESio::common` | 共通モジュール（メタデータ、エラー処理等） | 基本機能のみ必要な場合 |
+| `IGESio::utils` | データ型変換などのユーティリティ | ユーティリティ機能のみ必要な場合 |
+| `IGESio::entities` | IGESエンティティ関連の機能 | エンティティ処理のみ必要な場合 |
+| `IGESio::models` | 中間データ構造やIGESデータ全体の管理 | データモデル機能のみ必要な場合 |
+
+**注意**: 通常は `IGESio::IGESio` をリンクすることを推奨します。個別コンポーネントの使用は、特定の機能のみが必要な場合や、依存関係を最小化したい場合にのみ検討してください。
+
+### スタンドアロンでのビルド
+
+開発やテスト目的でIGESioライブラリを個別にビルドする場合は、以下の手順に従ってください：
 
 **1. リポジトリのクローン**:
 ```bash
@@ -186,7 +236,7 @@ cmake ..
 cmake --build .
 ```
 
-### プラットフォーム別の代替手段
+#### プラットフォーム別の代替手段
 
 **Windows環境**: `build.bat` スクリプトを使用することも可能です。ただし、CMakeに加えてNinjaのインストールが必要です。事前にインストールし、パスを通しておいてください。ビルド時には、`debug`または`release`オプションを指定できます。また、第二引数に`doc`を指定すると、ドキュメントも生成されます。この際、DoxygenおよびGraphvizが必要です。
 
@@ -204,11 +254,9 @@ chmod +x build.sh
 ./build.sh debug
 ```
 
-## テストの実行
+#### テストの実行
 
-### テストのビルド設定
-
-テストは既定ではビルドされません。`IGESIO_BUILD_TESTING` オプションで制御します：
+スタンドアロンでビルドする場合でも、テストは既定ではビルドされません。`IGESIO_BUILD_TESTING` オプションで制御します：
 
 ```bash
 # テストを含めてビルド
@@ -217,8 +265,6 @@ cmake -DIGESIO_BUILD_TESTING=ON ..
 # テストを除外してビルド (既定)
 cmake ..
 ```
-
-### テストの実行方法
 
 ビルド完了後、以下の方法でテストを実行できます。ビルド成果物のディレクトリ (windowsの場合は`build\debug_win`、Linuxの場合は`build/debug_linux`) に移動してから実行してください。
 

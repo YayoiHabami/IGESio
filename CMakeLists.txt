@@ -14,7 +14,7 @@ find_package(Git QUIET)
 if(GIT_FOUND)
     execute_process(
         COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_TAG
         OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE GIT_RESULT
@@ -53,6 +53,14 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
+# Variables for source and include directories
+set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
+set(IGESIO_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/include")
+
+# Create the binary include directory
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/igesio/common")
+
 # Generate version header file
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/igesio/common/versions.h.in"
@@ -60,12 +68,7 @@ configure_file(
     @ONLY
 )
 
-# Variables for source and include directories
-set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-# Set include directories
-include_directories(${INCLUDE_DIR})
 
 # Option to enable Eigen support
 option(IGESIO_ENABLE_EIGEN "Enable Eigen support" OFF)
@@ -144,4 +147,51 @@ if (IGESIO_BUILD_DOCS)
     )
     message(STATUS "Doxygen documentation will be generated in ${DOXYGEN_OUTPUT_DIR}")
   endif()
+endif()
+
+
+# Install targets and configuration files
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
+
+    install(TARGETS igesio igesio_common igesio_utils igesio_entities igesio_models
+        EXPORT IGESioTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+
+    install(DIRECTORY include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    )
+
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/igesio/common/versions.h"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/igesio/common
+    )
+
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/IGESioConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/IGESioConfig.cmake"
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/IGESio
+    )
+
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/IGESioConfigVersion.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+
+    install(EXPORT IGESioTargets
+        FILE IGESioTargets.cmake
+        NAMESPACE IGESio::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/IGESio
+    )
+
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/IGESioConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/IGESioConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/IGESio
+    )
 endif()

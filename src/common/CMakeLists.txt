@@ -1,25 +1,28 @@
-# common library for IGESio
-add_library(igesio_common STATIC
-    versions.cpp
-    id_generator.cpp
-    iges_metadata.cpp
-    serialization.cpp
-    iges_parameter_vector.cpp
-)
+# common library source files
+file(GLOB_RECURSE COMMON_SOURCES "*.cpp")
+
+add_library(igesio_common STATIC ${COMMON_SOURCES})
 
 # Set the source and include directories
 target_include_directories(igesio_common PUBLIC
-    ${SRC_DIR}
-    ${INCLUDE_DIR}
-
-    # Generated include directory for version header
-    ${CMAKE_BINARY_DIR}/include
+    $<BUILD_INTERFACE:${SRC_DIR}>
+    $<BUILD_INTERFACE:${INCLUDE_DIR}>
+    $<BUILD_INTERFACE:${IGESIO_BINARY_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-if (IGESIO_ENABLE_EIGEN)
-    # Add Eigen include directories if enabled
+# Handle Eigen dependency if enabled
+if(IGESIO_ENABLE_EIGEN)
     target_link_libraries(igesio_common PUBLIC Eigen3::Eigen)
+    target_compile_definitions(igesio_common PUBLIC IGESIO_ENABLE_EIGEN)
 endif()
 
 # Create an alias for the common library
 add_library(IGESio::common ALIAS igesio_common)
+
+# Set target properties for export
+set_target_properties(igesio_common PROPERTIES
+    EXPORT_NAME common
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${VERSION_MAJOR}
+)

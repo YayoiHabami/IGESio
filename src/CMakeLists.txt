@@ -4,8 +4,6 @@ add_subdirectory(utils)
 add_subdirectory(entities)
 add_subdirectory(models)
 
-
-
 # Create the igesio library
 add_library(igesio STATIC
     reader.cpp
@@ -14,10 +12,11 @@ add_library(igesio STATIC
 
 # Specify the source and include directories
 target_include_directories(igesio PUBLIC
-    ${SRC_DIR}
-    ${INCLUDE_DIR}
+    $<BUILD_INTERFACE:${SRC_DIR}>
+    $<BUILD_INTERFACE:${INCLUDE_DIR}>
+    $<BUILD_INTERFACE:${IGESIO_BINARY_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-
 
 target_link_libraries(igesio PUBLIC
     IGESio::common
@@ -27,4 +26,11 @@ target_link_libraries(igesio PUBLIC
 )
 
 # Create an alias for the igesio library
-add_library(IGESio ALIAS igesio)
+add_library(IGESio::IGESio ALIAS igesio)
+
+# Set target properties for export
+set_target_properties(igesio PROPERTIES
+    EXPORT_NAME IGESio
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${VERSION_MAJOR}
+)
