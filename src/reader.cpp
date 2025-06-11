@@ -8,6 +8,7 @@
 #include "igesio/reader.h"
 
 #include <array>
+#include <filesystem>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -262,7 +263,15 @@ std::optional<iio::SectionType> iio::IgesReader::GetNextSectionType() {
 i_model::IntermediateIgesData igesio::ReadIgesIntermediate(
         const std::string& file_path, const bool validate_strictly) {
     // IGESファイルを読み込む
-    IgesReader reader(file_path);
+    auto absolute_path = std::filesystem::absolute(file_path);
+    if (!std::filesystem::exists(absolute_path)) {
+        throw iio::FileOpenError(
+                "The file does not exist: " + absolute_path.string());
+    } else if (!std::filesystem::is_regular_file(absolute_path)) {
+        throw iio::FileOpenError(
+                "The path is not a regular file: " + absolute_path.string());
+    }
+    IgesReader reader(absolute_path.string());
 
     i_model::IntermediateIgesData data;
 

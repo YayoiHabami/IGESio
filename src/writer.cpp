@@ -247,7 +247,7 @@ std::string SerializeTerminateSection(int start_lines, int global_lines,
 
 /// @brief 指定されたファイルパスの親ディレクトリが存在するか確認し、
 ///        存在しない場合は再帰的に作成する
-/// @param filePath ファイルパス
+/// @param filePath ファイルパス (絶対パス)
 /// @throw igesio::FileOpenError 親ディレクトリの作成に失敗した場合
 void EnsureParentDirectoryExists(const std::string& filePath) {
     std::filesystem::path path(filePath);
@@ -288,7 +288,11 @@ bool igesio::WriteIgesIntermediate(
     auto start_lines = SerializeStartSection(data.start_section);
 
     // ファイル名を取得
-    std::string file_name = std::filesystem::path(file_path).filename().string();
+    auto absolute_path = std::filesystem::absolute(file_path).string();
+    if (absolute_path.empty()) {
+        throw igesio::FileOpenError("File path is empty.");
+    }
+    std::string file_name = std::filesystem::path(absolute_path).filename().string();
 
     // グローバルセクションの文字列化
     auto global_lines = SerializeGlobalSEction(
@@ -301,10 +305,10 @@ bool igesio::WriteIgesIntermediate(
         de_lines.size(), pd_lines.size());
 
     // 親ディレクトリの存在確認・作成
-    EnsureParentDirectoryExists(file_path);
+    EnsureParentDirectoryExists(absolute_path);
 
     // ファイルに書き込む
-    std::ofstream ofs(file_path);
+    std::ofstream ofs(absolute_path);
     if (!ofs) {
         throw igesio::FileOpenError("Failed to open file for writing: " + file_path);
     }
