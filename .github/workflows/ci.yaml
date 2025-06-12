@@ -38,12 +38,12 @@ jobs:
     - name: Install dependencies (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        choco install cmake ninja
+        choco install -y cmake ninja
         if ("${{ matrix.compiler }}" -eq "gcc") {
-          choco install mingw
+          choco install -y mingw
         }
         if ("${{ matrix.compiler }}" -eq "clang") {
-          choco install llvm
+          choco install -y llvm
         }
 
     - name: Install dependencies (macOS)
