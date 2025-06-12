@@ -254,6 +254,17 @@ std::pair<double, igesio::ValueFormat> igesio::FromIgesRealWithFormat(
             throw igesio::TypeConversionError(
                     "Invalid real value: '" + str + "'");
         }
+
+        // アンダーフローの明示的なチェック
+        // Windows&Clangでは、std::stodが2.225...e-309のような値を与えられても
+        // 0.0を返すことがあるため、明示的にチェックする
+        if (std::isfinite(value) && value != 0.0) {
+            if (std::abs(value) < std::numeric_limits<double>::min()) {
+                throw igesio::TypeConversionError(
+                        "Real value underflow: '" + str + "'");
+            }
+        }
+
         return {value, ValueFormat::Real(
                 false, has_plus_sign, has_integer, has_fraction,
                 has_exponent, is_single_precision)};
