@@ -296,10 +296,15 @@ namespace {
 std::string GetCurrentTimeString() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto tm = *std::localtime(&time_t);
+    std::tm tm;
+#ifdef _WIN32
+    localtime_s(&tm, &time_t);
+#else
+    tm = *std::localtime(&time_t);
+#endif
 
     std::ostringstream oss;
-    oss << std::setfill('0') 
+    oss << std::setfill('0')
         << std::setw(4) << (tm.tm_year + 1900)
         << std::setw(2) << (tm.tm_mon + 1)
         << std::setw(2) << tm.tm_mday

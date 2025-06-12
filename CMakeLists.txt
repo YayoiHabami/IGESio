@@ -117,6 +117,11 @@ option(IGESIO_BUILD_TESTING "Build the tests" OFF)
 if(IGESIO_BUILD_TESTING)
   include(FetchContent)
 
+  # Unify Google Test Runtime Library (for WIN32 & MSVC)
+  if (WIN32 AND MSVC)
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  endif()
+
   # Fetch Google Test
   FetchContent_Declare(
     googletest
