@@ -48,6 +48,20 @@ project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Option to enable coverage
+option(IGESIO_ENABLE_COVERAGE "Enable coverage reporting" OFF)
+
+# Coverage configuration
+if(IGESIO_ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        add_compile_options(--coverage)
+        add_link_options(--coverage)
+        message(STATUS "Coverage reporting enabled")
+    else()
+        message(WARNING "Coverage reporting is only supported with GCC")
+    endif()
+endif()
+
 # Set the build type if not specified
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")

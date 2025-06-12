@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        compiler: [gcc, clang, msvc]
+        exclude:
+          - os: ubuntu-latest
+            compiler: msvc
+          - os: macos-latest
+            compiler: msvc
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install dependencies (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          sudo apt-get install -y clang
+        fi
+
+    - name: Install dependencies (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install cmake ninja
+        if ("${{ matrix.compiler }}" -eq "gcc") {
+          choco install mingw
+        }
+        if ("${{ matrix.compiler }}" -eq "clang") {
+          choco install llvm
+        }
+
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install cmake ninja
+        if [ "${{ matrix.compiler }}" = "gcc" ]; then
+          brew install gcc
+        fi
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          brew install llvm
+        fi
+
+    - name: Set up compiler environment
+      shell: bash
+      run: |
+        case "${{ matrix.os }}-${{ matrix.compiler }}" in
+          ubuntu-latest-gcc)
+            echo "CC=gcc" >> $GITHUB_ENV
+            echo "CXX=g++" >> $GITHUB_ENV
+            ;;
+          ubuntu-latest-clang)
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+            ;;
+          windows-latest-gcc)
+            echo "CC=gcc" >> $GITHUB_ENV
+            echo "CXX=g++" >> $GITHUB_ENV
+            ;;
+          windows-latest-clang)
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+            ;;
+          windows-latest-msvc)
+            # MSVC is default on Windows
+            ;;
+          macos-latest-gcc)
+            echo "CC=gcc-13" >> $GITHUB_ENV
+            echo "CXX=g++-13" >> $GITHUB_ENV
+            ;;
+          macos-latest-clang)
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+            ;;
+        esac
+
+    - name: Configure CMake
+      shell: bash
+      run: |
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DIGESIO_BUILD_TESTING=ON
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Test
+      working-directory: build
+      run: ctest --output-on-failure
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build lcov
+
+    - name: Set up compiler environment
+      run: |
+        echo "CC=gcc" >> $GITHUB_ENV
+        echo "CXX=g++" >> $GITHUB_ENV
+
+    - name: Configure CMake for coverage
+      run: |
+        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DIGESIO_BUILD_TESTING=ON -DIGESIO_ENABLE_COVERAGE=ON
+
+    - name: Build
+      run: cmake --build build --config Debug
+
+    - name: Test
+      working-directory: build
+      run: ctest --output-on-failure
+
+    - name: Generate coverage report
+      run: |
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        lcov --remove coverage.info '*/tests/*' --output-file coverage.info
+        lcov --remove coverage.info '*/build/*' --output-file coverage.info
+        lcov --list coverage.info
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: true
