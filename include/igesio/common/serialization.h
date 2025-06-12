@@ -8,10 +8,12 @@
 #ifndef IGESIO_COMMON_SERIALIZATION_H_
 #define IGESIO_COMMON_SERIALIZATION_H_
 
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <typeinfo>
 #include <utility>
 
 #include "igesio/common/errors.h"
