@@ -10,7 +10,7 @@
 
 IGESio is a modern, cross-platform C++ library for handling IGES (Initial Graphics Exchange Specification) files. It provides comprehensive functionality for reading, writing, and manipulating IGES files in accordance with the IGES 5.3 specification.
 
-The current version can be checked using [`igesio::GetVersion()`](src/common/versions.cpp) (e.g., 0.1.0).
+The current version can be checked using [`igesio::GetVersion()`](src/common/versions.cpp) (e.g., 0.3.1).
 
 For design principles and IGES specification interpretations, please refer to the [policy documentation (Japanese)](docs/policy_ja.md).
 
@@ -125,11 +125,10 @@ This library has been built and tested on the following environments:
 | ![Windows](https://img.shields.io/badge/Windows-latest-blue?logo=windows) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) ![MSVC](https://img.shields.io/badge/MSVC-✓-green) |
 | ![macOS](https://img.shields.io/badge/macOS-latest-lightgrey?logo=apple) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
 
-> **Cross-platform Support**: This library has been verified to work on Windows and Ubuntu.
+> **Cross-platform Support**: This library has been verified to work on Windows, Ubuntu, and macOS.
 >
 > - **Other Linux environments**: Should work on similar environments (Linux distributions with GCC and CMake available), though not explicitly tested
-> - **Version compatibility**: Newer versions than those listed should generally work, but older versions may have compatibility issues
-> - **macOS**: Should work but may require adjustments depending on your environment
+> - **Compilers**: Verified to work with GCC, Clang, and MSVC (Windows)
 
 ### Environment Setup
 
