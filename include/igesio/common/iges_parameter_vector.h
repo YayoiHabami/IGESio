@@ -8,6 +8,7 @@
 #ifndef IGESIO_COMMON_IGES_PARAMETER_VECTOR_H_
 #define IGESIO_COMMON_IGES_PARAMETER_VECTOR_H_
 
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <type_traits>

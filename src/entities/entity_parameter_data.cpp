@@ -193,6 +193,9 @@ std::vector<unsigned int> GetPhysicallyDependentChildDEPointer(
         const i_ent::RawEntityPD& data) {
     switch (data.type) {
         case i_ent::EntityType::kNull: return E000Children(data);
+        // TODO: 他のエンティティタイプの処理を追加
+        default:
+            break;
     }
     // 上記以外は未実装
     throw iio::NotImplementedError(

@@ -7,6 +7,8 @@
  */
 #include "igesio/common/id_generator.h"
 
+#include <stdexcept>
+#include <string>
 #include <utility>
 
 

@@ -1,5 +1,9 @@
 # IGESio C++ Library
 
+[![CI](https://github.com/YayoiHabami/IGESio/workflows/CI/badge.svg)](https://github.com/YayoiHabami/IGESio/actions)
+[![codecov](https://codecov.io/github/YayoiHabami/IGESio/graph/badge.svg)](https://codecov.io/github/YayoiHabami/IGESio)
+[![License](https://img.shields.io/github/license/YayoiHabami/IGESio)](LICENSE)
+
 For English documentation, see [README.md](README.md).
 
 ## 概要
@@ -115,10 +119,11 @@ IGESioライブラリをビルドするには以下の環境が必要です：
 
 このライブラリは以下の環境でビルドとテストを確認しています：
 
-| 環境 | OS | コンパイラ | CMake | Ninja |
-|:-----------------:|----|-----------:|------:|------:|
-|      Windows      | Windows 11 | GCC 11.2.0 | 3.27.0-rc2 | 1.10.2 |
-| Linux<br>(Ubuntu) | Ubuntu 22.04 LTS <br> (WSL2環境を含む) | GCC 11.4.0 | 3.22.1 | 1.10.1 |
+| OS | Compilers |
+|----|----|
+| ![Ubuntu](https://img.shields.io/badge/Ubuntu-latest-orange?logo=ubuntu) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
+| ![Windows](https://img.shields.io/badge/Windows-latest-blue?logo=windows) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) ![MSVC](https://img.shields.io/badge/MSVC-✓-green) |
+| ![macOS](https://img.shields.io/badge/macOS-latest-lightgrey?logo=apple) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
 
 > **プラットフォーム対応**: このライブラリはWindowsとUbuntuで動作確認済みです。
 >
