@@ -10,7 +10,7 @@ For English documentation, see [README.md](README.md).
 
 IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォーマットを扱うためのモダンなC++ライブラリです。本ライブラリは、IGES 5.3 仕様に基づいてIGESファイルの読み込み、書き出し、および関連データの操作機能を包括的に提供します。
 
-現在のバージョンは [`igesio::GetVersion()`](src/common/versions.cpp) で確認できます (例: 0.1.0)。
+現在のバージョンは [`igesio::GetVersion()`](src/common/versions.cpp) で確認できます (例: 0.3.1)。
 
 ライブラリの設計方針やIGES仕様の解釈については、[docs/policy_ja.md](docs/policy_ja.md) を参照してください。
 
@@ -125,11 +125,10 @@ IGESioライブラリをビルドするには以下の環境が必要です：
 | ![Windows](https://img.shields.io/badge/Windows-latest-blue?logo=windows) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) ![MSVC](https://img.shields.io/badge/MSVC-✓-green) |
 | ![macOS](https://img.shields.io/badge/macOS-latest-lightgrey?logo=apple) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
 
-> **プラットフォーム対応**: このライブラリはWindowsとUbuntuで動作確認済みです。
+> **クロスプラットフォーム対応**: このライブラリはWindows、Ubuntu、macOSで動作確認済みです。
 >
 > - **他のLinux環境**: 類似の環境（GCC、CMakeが利用可能なLinuxディストリビューション）では動作する可能性が高いですが、未検証です
-> - **バージョン差異**: 記載されたバージョンより新しいものであれば動作する可能性が高いですが、古いバージョンでは互換性の問題が生じる場合があります
-> - **macOS**: 動作するはずですが、環境によっては調整が必要な場合があります
+> - **コンパイラ**: GCC、Clang、MSVC（Windows）での動作を確認済みです
 
 ### 環境セットアップ
 
