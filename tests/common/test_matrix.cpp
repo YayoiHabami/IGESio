@@ -4,6 +4,7 @@
  * @author Yayoi Habami
  * @date 2025-06-07
  * @copyright 2025 Yayoi Habami
+ * @note このファイルでは、double型の行列に対してテストを行います。
  */
 #include <gtest/gtest.h>
 
@@ -17,6 +18,9 @@ namespace {
 
 using InitMatrix = std::initializer_list<std::initializer_list<double>>;
 using InitVector = std::initializer_list<double>;
+
+template<int N, int M>
+using Matrixd = igesio::Matrix<double, N, M>;
 
 /// @brief 1次元の初期化子リストを文字列に変換するヘルパー関数
 /// @param init_list 1次元の初期化子リスト
@@ -62,7 +66,7 @@ std::string ToString(const InitMatrix& init_list) {
 /// @param ref 比較対象の初期化リスト
 template<int N, int M>
 void ValidateMatrixElements(
-        const igesio::detail::Matrix<N, M>& mat, const InitMatrix& ref) {
+        const Matrixd<N, M>& mat, const InitMatrix& ref) {
     // サイズの事前検証
     ASSERT_EQ(mat.rows(), static_cast<int>(ref.size()))
         << "Matrix row count does not match initializer list size"
@@ -92,7 +96,7 @@ void ValidateMatrixElements(
 /// @param ref 比較対象の初期化リスト
 template<int N, int M>
 void ValidateColVectorElements(
-        const igesio::detail::Matrix<N, M>& vec, const InitVector& ref) {
+        const Matrixd<N, M>& vec, const InitVector& ref) {
     if (vec.cols() != 1) {
         FAIL() << "Expected a column vector (single column), but got " << vec.cols() << " columns."
                << " (expected: " << ToString(ref) << ", actual: " << vec << ")";
