@@ -36,6 +36,9 @@ namespace igesio {
 using Eigen::Dynamic;
 using Eigen::NoChange;
 
+template<typename T, int N, int M>
+using Matrix = Eigen::Matrix<T, N, M>;
+
 template<typename T, int N>
 using Vector = Eigen::Matrix<T, N, 1>;
 template<typename T, int M>

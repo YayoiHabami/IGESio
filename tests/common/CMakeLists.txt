@@ -5,6 +5,9 @@ set(TEST_SOURCES
     test_iges_metadata.cpp
     test_serialization_FromIgesXxx.cpp
     test_serialization_ToIgesXxx.cpp
+    test_iges_parameter_vector.cpp
+    test_tolerance.cpp
+    test_validation_result.cpp
 )
 
 add_executable(test_common ${TEST_SOURCES})

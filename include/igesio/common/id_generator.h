@@ -4,6 +4,9 @@
  * @author Yayoi Habami
  * @date 2025-06-02
  * @copyright 2025 Yayoi Habami
+ *
+ * @todo プログラム中でintへのキャストを行う箇所があるため、
+ *       IDの型をintに変更するか、独自の型を定義する
  */
 #ifndef IGESIO_COMMON_ID_GENERATOR_H_
 #define IGESIO_COMMON_ID_GENERATOR_H_

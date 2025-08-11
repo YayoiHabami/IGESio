@@ -7,6 +7,7 @@
  * @details 各エラーは、`IGESioError`を継承し、以下のように階層化されている.
  * IGESioError (基底; std::runtime_errorを継承)
  * ├── NotImplementedError      (未実装)
+ * ├── ImplementationError      (実装エラー)
  * │
  * ├── ParseError               (解析・変換エラー)
  * |   └── TypeConversionError      (型変換エラー)

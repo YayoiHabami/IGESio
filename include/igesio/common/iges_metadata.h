@@ -139,6 +139,20 @@ enum class IGESParameterType {
 /// @return セクションの種類を表す文字列
 std::string SectionTypeToString(const SectionType&);
 
+/// @brief CppParameterTypeとIGESParameterTypeが互換性を持つかを確認する
+/// @param cpp_type CppParameterType
+/// @param iges_type IGESParameterType
+/// @return 互換性がある場合はtrue, それ以外はfalse
+/// @note kBoolとkLogicalは互換性があるが、kBoolとkIntegerは互換性がない、など
+bool IsCompatibleParameterType(const CppParameterType, const IGESParameterType);
+
+/// @brief CppParameterTypeとIGESParameterTypeが互換性を持つかを確認する
+/// @param iges_type IGESParameterType
+/// @param cpp_type CppParameterType
+/// @return 互換性がある場合はtrue, それ以外はfalse
+/// @note kBoolとkLogicalは互換性があるが、kBoolとkIntegerは互換性がない、など
+bool IsCompatibleParameterType(const IGESParameterType, const CppParameterType);
+
 }  // namespace igesio
 
 #endif  // IGESIO_COMMON_IGES_METADATA_H_

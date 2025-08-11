@@ -1,7 +1,13 @@
 # common library source files
-file(GLOB_RECURSE COMMON_SOURCES "*.cpp")
-
-add_library(igesio_common STATIC ${COMMON_SOURCES})
+add_library(igesio_common STATIC
+    versions.cpp
+    iges_metadata.cpp
+    validation_result.cpp
+    tolerance.cpp
+    id_generator.cpp
+    serialization.cpp
+    iges_parameter_vector.cpp
+)
 
 # Set the source and include directories
 target_include_directories(igesio_common PUBLIC
