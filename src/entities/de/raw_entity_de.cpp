@@ -1,11 +1,11 @@
 /**
- * @file entities/directory_entry_param.cpp
+ * @file entities/de/raw_entity_de.cpp
  * @brief ディレクトリエントリセクションのパラメータを保持する構造体
  * @author Yayoi Habami
  * @date 2025-04-10
  * @copyright 2025 Yayoi Habami
  */
-#include "igesio/entities/directory_entry_param.h"
+#include "igesio/entities/de/raw_entity_de.h"
 
 #include <array>
 #include <iomanip>
@@ -62,7 +62,7 @@ bool IsValidValue(const int value, const DEValueType expected,
                   const int range_max = -1) {
     switch (expected) {
         case DEValueType::kNA:
-            return true;
+            return value == 0;  // N.A.は未定義 (デフォルト値の0のみを許容)
         case DEValueType::kInt:
             return (range_max > 0) ? (value >= 0 && value <= range_max) : (value >= 0);
         case DEValueType::kPtr:
@@ -199,6 +199,148 @@ bool IsInRange(const int number,
 /// @return min <= number <= max の場合にtrueを返す
 bool IsInRange(const int number, const int range_min, const int range_max) {
     return (number >= range_min && number <= range_max);
+}
+
+/// @brief "****01??"のような8桁の文字列をEntityStatusに変換する
+/// @param status 8桁の文字列
+/// @return EntityStatus
+/// @throw igesio::ImplementationError statusが無効な場合
+/// @note `??`と`**`は0に設定される. `01`等の数字はその数字を設定する.
+igesio::entities::EntityStatus
+DefaultEntityStatus(const std::string& status) {
+    if (status.size() != 8) {
+        throw igesio::ImplementationError("Invalid EntityStatus string length");
+    }
+    igesio::entities::EntityStatus entity_status;
+
+    try {
+        // 1-2桁目: 表示状態
+        auto bs = status.substr(0, 2);
+        if (bs == "??" || bs == "**") {
+            entity_status.blank_status = true;
+        } else {
+            entity_status.blank_status = igesio::entities::ToBlankStatus(bs);
+        }
+        // 3-4桁目: 従属エンティティスイッチ
+        auto ses = status.substr(2, 2);
+        if (ses == "??" || ses == "**") {
+            entity_status.subordinate_entity_switch
+                    = igesio::entities::SubordinateEntitySwitch::kIndependent;
+        } else {
+            entity_status.subordinate_entity_switch
+                    = igesio::entities::ToSubordinateEntitySwitch(ses);
+        }
+        // 5-6桁目: エンティティ用途フラグ
+        auto euf = status.substr(4, 2);
+        if (euf == "??" || euf == "**") {
+            entity_status.entity_use_flag = igesio::entities::EntityUseFlag::kGeometry;
+        } else {
+            entity_status.entity_use_flag
+                    = igesio::entities::ToEntityUseFlag(euf);
+        }
+        // 7-8桁目: 階層の種類
+        auto ht = status.substr(6, 2);
+        if (ht == "??" || ht == "**") {
+            entity_status.hierarchy = igesio::entities::HierarchyType::kGlobalTopDown;
+        } else {
+            entity_status.hierarchy = igesio::entities::ToHierarchyType(ht);
+        }
+    } catch (const igesio::ParseError&) {
+        throw igesio::ImplementationError("Invalid status string: " + status);
+    }
+
+    return entity_status;
+}
+
+/// @brief DEValueTypeをintに変換する
+/// @param type DEValueType or int値
+/// @return int値
+int DefaultValue(const std::variant<int, DEValueType>& type) {
+    if (std::holds_alternative<int>(type)) {
+        return std::get<int>(type);
+    }
+    switch (std::get<DEValueType>(type)) {
+        case DEValueType::kNA:
+        case DEValueType::kInt:
+        case DEValueType::kPtr:
+        case DEValueType::kIPtr:
+        case DEValueType::kZPtr:
+        case DEValueType::kZero:
+            return 0;
+        case DEValueType::kOne:
+            return 1;
+        case DEValueType::kPositive:
+            return 1;  // 1以上の値を期待するが、ここでは1を返す
+        default:
+            return 0;
+    }
+}
+
+/// @brief RawEntityDEをデフォルト値で初期化する
+/// @param entity_type エンティティタイプ
+/// @param form_number フォーム番号
+/// @param params ディレクトリエントリパラメータの配列.
+///        パラメータ `{3, 4, 5, 6, 7, 8, 12, 13, 14}`
+/// @param stat パラメータ9 (Status Number) 用のデフォルト文字列.
+///        "**??01**"のような、8桁の文字列
+/// @throw iio::DataFormatError エンティティタイプとFormが指定するパラメータの条件に
+///        合致しない場合
+/// @throw iio::ImplementationError 期待されるステータス文字列が無効な場合
+/// @note paramについて、特定の値を指定する必要がある場合 (例えば
+///       type106form20~40のパラメータ4や、type125のパラメータ4など）は、
+///       DEValueTypeの代わりにint値を指定すること.
+igesio::entities::RawEntityDE
+DefaultDE(const igesio::entities::EntityType entity_type,
+          const int form_number,
+          const std::array<std::variant<int, DEValueType>, 9>& params,
+          const std::string& stat) {
+    auto de = igesio::entities::RawEntityDE();
+
+    // 1 - Entity Type Number
+    de.entity_type = entity_type;
+    // 2 - Parameter Data (PD部は未定のため0)
+    de.parameter_data_pointer = 0;
+    // 3 - Structure
+    de.structure = DefaultValue(params[0]);
+    // 4 - Line Font Pattern
+    de.line_font_pattern = DefaultValue(params[1]);
+    // 5 - Entity Level
+    de.level = DefaultValue(params[2]);
+    // 6 - View
+    de.view = DefaultValue(params[3]);
+    // 7 - Transformation Matrix
+    de.transformation_matrix = DefaultValue(params[4]);
+    // 8 - Label Display Associativity
+    de.label_display_associativity = DefaultValue(params[5]);
+    // 9 - Status
+    de.status = DefaultEntityStatus(stat);
+    // 10 - Sequence Number
+    de.sequence_number = 0;  // シーケンス番号は未定のため0
+
+    // 11 - Entity Type Number (same as 1)
+    // 12 - Line Weight Number
+    de.line_weight_number = DefaultValue(params[6]);
+    // 13 - Color Number
+    de.color_number = DefaultValue(params[7]);
+    // 14 - Parameter Line Count
+    de.parameter_line_count = DefaultValue(params[8]);
+    // 15 - Form Number
+    de.form_number = form_number;
+    // 16 - Reserved
+    // 17 - Reserved
+    // 18 - Entity Label
+    de.entity_label = "";  // デフォルトは空文字列
+    // 19 - Entity Subscript Number
+    de.entity_subscript_number = 0;  // デフォルトは0
+    // 20 - Sequence Number (same as 10)
+
+    // is_default_の初期化
+    std::array<size_t, 10> default_params = {3, 4, 5, 6, 7, 8, 12, 13, 15, 18};
+    for (const auto& idx : default_params) {
+        de.SetIsDefault(idx, true);
+    }
+
+    return de;
 }
 
 }  // namespace
@@ -382,7 +524,6 @@ std::string GetRawEntityDEName(
 }
 
 }  // namespace
-#include <iostream>
 
 i_ent::RawEntityDE
 i_ent::ToRawEntityDE(const std::string& first, const std::string& second) {
@@ -650,11 +791,10 @@ void i_ent::IsValid(const i_ent::RawEntityDE& de) {
             break;
         case EntityType::kLine:
             if (IsInRange(form, {0})) {
-            ::IsValid(de, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+                ::IsValid(de, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
             } else if (IsInRange(form, 1, 2)) {
-            ::IsValid(de, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????06**");
-            } else {
-            is_form_valid = false;
+                ::IsValid(de, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????06**");
+                is_form_valid = true;
             }
             break;
         case EntityType::kParametricSplineCurve:  // fallthrough Type 112~114
@@ -770,6 +910,7 @@ void i_ent::IsValid(const i_ent::RawEntityDE& de) {
             break;
         case EntityType::kGeneralNote:  // fallthrough Type 212~213
             is_form_valid = IsInRange(form, 0, 8) || IsInRange(form, {100, 101, 102, 105});
+            [[fallthrough]];
         case EntityType::kNewGeneralNote:
             ::IsValid(de, {Na, O, IP, ZP, ZP, ZP, I, IP, I}, "????01**");
             break;
@@ -940,4 +1081,287 @@ void i_ent::IsValid(const i_ent::RawEntityDE& de) {
             " for " + ToString(de.entity_type) + " entity (Type " +
             std::to_string(static_cast<int>(de.entity_type)) + ")");
     }
+}
+
+
+
+igesio::entities::RawEntityDE igesio::entities::RawEntityDE::ByDefault(
+        const EntityType entity_type, const int form_number) {
+    constexpr auto Na = DEValueType::kNA;
+    constexpr auto I = DEValueType::kInt;
+    constexpr auto P = DEValueType::kPtr;
+    constexpr auto IP = DEValueType::kIPtr;
+    constexpr auto ZP = DEValueType::kZPtr;
+    const auto et = entity_type;
+    auto fn = form_number;
+    const auto error = igesio::DataFormatError(
+            "Invalid form number for entity type: " + std::to_string(static_cast<int>(et))
+            + ", form number: " + std::to_string(fn));
+
+    // デフォルト値のパラメータを設定
+    switch (entity_type) {
+        case EntityType::kNull:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, Na}, "********");
+        case EntityType::kCircularArc:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kCompositeCurve:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+        case EntityType::kConicArc:
+            if (!IsInRange(fn, 1, 3)) {
+                if (fn != 0) throw error;
+                fn = 1;  // デフォルト値の場合は暗黙的に1に変更
+            }
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kCopiousData:
+            if (IsInRange(fn, 1, 3)) {
+                return DefaultDE(et, fn, {Na, Na, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+            } else if (IsInRange(fn, 11, 13) || IsInRange(fn, {63})) {
+                return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+            } else if (IsInRange(fn, {20, 21, 40}) || IsInRange(fn, 31, 38)) {
+                return DefaultDE(et, fn, {Na, 1, IP, ZP, ZP, ZP, I, IP, I}, "????01**");
+            } else if (fn == 0) {
+                // デフォルト値の場合は暗黙的に1に変更
+                return DefaultDE(et, 1, {Na, Na, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+            }
+            throw error;
+        case EntityType::kPlane:
+            if (!IsInRange(fn, -1, 1)) throw error;
+            return DefaultDE(et, fn, {Na, Na, IP, ZP, ZP, ZP, Na, IP, I}, "??????**");
+        case EntityType::kLine:
+            if (IsInRange(fn, {0})) {
+                return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+            } else if (IsInRange(fn, 1, 2)) {
+                return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????06**");
+            }
+            throw error;
+        case EntityType::kParametricSplineCurve:  // fallthrough Type 112~114
+        case EntityType::kParametricSplineSurface:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kPoint:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+        case EntityType::kRuledSurface:  // fallthrough Type 113~115
+            if (!IsInRange(fn, 0, 1)) throw error;  // Type 118のみformsが異なる
+            [[fallthrough]];
+        case EntityType::kSurfaceOfRevolution:
+        case EntityType::kTabulatedCylinder:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kDirection:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0102**");
+        case EntityType::kTransformationMatrix:
+            if (!IsInRange(fn, {0, 1}) && !IsInRange(fn, 10, 12)) throw error;
+            return DefaultDE(et, fn, {Na, Na, Na, Na, ZP, Na, Na, Na, I}, "****??**");
+        case EntityType::kFlash:
+            if (!IsInRange(fn, 0, 4)) throw error;
+            return DefaultDE(et, fn, {Na, 1, IP, ZP, ZP, ZP, I, IP, I}, "??????00");
+        case EntityType::kRationalBSplineCurve:
+            if (!IsInRange(fn, 0, 5)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kRationalBSplineSurface:
+            if (!IsInRange(fn, 0, 9)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kOffsetCurve:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kConnectPoint:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????04??");
+        case EntityType::kNode:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, P, Na, Na, IP, I}, "????04??");
+        case EntityType::kFiniteElement:
+            return DefaultDE(et, fn, {Na, IP, Na, Na, Na, ZP, Na, IP, I}, "********");
+        case EntityType::kNodalDisplacementAndRotation:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, ZP, Na, Na, I}, "??????**");
+        case EntityType::kOffsetSurface:  // fallthrough Type 140~141
+        case EntityType::kBoundary:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "??????**");
+        case EntityType::kCurveOnAParametricSurface:  // fallthrough Type 142~144
+        case EntityType::kBoundedSurface:
+        case EntityType::kTrimmedSurface:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????00**");
+        case EntityType::kNodalResults:  // fallthrough Type 146~148
+        case EntityType::kElementResults:
+            if (!IsInRange(fn, 0, 34)) throw error;
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, ZP, Na, IP, I}, "**??03**");
+        case EntityType::kBlock:  // fallthrough Type 150~158
+        case EntityType::kRightAngularWedge:
+        case EntityType::kRightCircularCylinder:
+        case EntityType::kRightCircularCone:
+        case EntityType::kSphere:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????00**");
+        case EntityType::kTorus:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "00000000");
+        case EntityType::kSolidOfRevolution:  // fallthrough Type 162~168
+            if (!IsInRange(fn, 0, 1)) throw error;  // Type 162のみformsが異なる
+            [[fallthrough]];
+        case EntityType::kSolidOfLinearExtrusion:
+        case EntityType::kEllipsoid:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????00**");
+        case EntityType::kBooleanTree:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????00??");
+        case EntityType::kSelectedComponent:
+            return DefaultDE(et, fn, {Na, Na, IP, ZP, ZP, ZP, Na, IP, I}, "**??03**");
+        case EntityType::kSolidAssembly:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????02??");
+        case EntityType::kManifoldSolidBRepObject:
+            return DefaultDE(et, fn, {Na, Na, IP, Na, ZP, ZP, Na, Na, I}, "????????");
+        case EntityType::kPlaneSurface:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "**????**");
+        case EntityType::kRightCircularCylinderSurface:  // fallthrough Type 192~198
+        case EntityType::kRightCircularConicalSurface:
+        case EntityType::kSphericalSurface:
+        case EntityType::kToroidalSurface:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "**01??**");
+        case EntityType::kAngularDimension:  // fallthrough Type 202~210
+        case EntityType::kCurveDimension:
+        case EntityType::kDiameterDimension:
+        case EntityType::kFlagNote:
+        case EntityType::kGeneralLabel:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01??");
+        case EntityType::kGeneralNote:  // fallthrough Type 212~213
+            if (!IsInRange(fn, 0, 8) && !IsInRange(fn, {100, 101, 102, 105})) throw error;
+            [[fallthrough]];
+        case EntityType::kNewGeneralNote:
+            return DefaultDE(et, fn, {Na, 1, IP, ZP, ZP, ZP, I, IP, I}, "????01**");
+        case EntityType::kLeaderArrow:
+            if (!IsInRange(fn, 1, 12)) {
+                if (fn != 0) throw error;
+                fn = 1;  // デフォルト値の場合は暗黙的に1に変更
+            }
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01**");
+        case EntityType::kLinearDimension:
+            if (!IsInRange(fn, 0, 2)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01??");
+        case EntityType::kOrdinateDimension:
+            if (!IsInRange(fn, {0, 1})) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01??");
+        case EntityType::kPointDimension:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01??");
+        case EntityType::kRadiusDimension:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01??");
+        case EntityType::kGeneralSymbol:
+            if (!IsInRange(fn, 0, 3) && !IsInRange(fn, 5001, 9999)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01??");
+        case EntityType::kSectionedArea:
+            if (!IsInRange(fn, {0, 1})) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????01??");
+        case EntityType::kAssociativityDefinition:
+            if (!IsInRange(fn, 5001, 9999)) {
+                if (fn != 0) throw error;
+                fn = 5001;  // デフォルト値の場合は暗黙的に5001に変更
+            }
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0002**");
+        case EntityType::kLineFontDefinition:
+            if (!IsInRange(fn, 1, 2)) {
+                if (fn != 0) throw error;
+                fn = 1;  // デフォルト値の場合は暗黙的に1に変更
+            }
+            return DefaultDE(et, fn, {Na, 1, Na, Na, ZP, Na, Na, Na, I}, "**0002**");
+        case EntityType::kMacroDefinition:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0002**");
+        case EntityType::kSubfigureDefinition:
+            return DefaultDE(et, fn, {Na, IP, IP, Na, ZP, ZP, I, IP, I}, "**??02??");
+        case EntityType::kTextFont:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0002**");
+        case EntityType::kTextDisplayTemplate:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, Na, IP, ZP, ZP, ZP, Na, IP, I}, "??000200");
+        case EntityType::kColorDefinition:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, 1, I}, "**0002**");
+        case EntityType::kUnitsData:
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0002**");
+        case EntityType::kNetworkSubfigureDefinition:
+            return DefaultDE(et, fn, {Na, IP, IP, Na, ZP, ZP, I, IP, I}, "**??02??");
+        case EntityType::kAttributeTableDefinition:
+            if (!IsInRange(fn, 0, 2)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, Na, ZP, ZP, I, IP, I}, "**??02??");
+        case EntityType::kAssociativityInstance:
+            if (IsInRange(fn, {1, 5, 7, 9}) || IsInRange(fn, 12, 15)) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**????**");
+            } else if (IsInRange(fn, {3, 4, 19})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0001**");
+            } else if (IsInRange(fn, {16})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**??05**");
+            } else if (IsInRange(fn, {18, 20})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**??03**");
+            } else if (IsInRange(fn, {21})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0102**");
+            } else if (fn == 0) {
+                // デフォルト値の場合は暗黙的に1に変更
+                return DefaultDE(et, 1, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**????**");
+            }
+            throw error;
+        case EntityType::kDrawing:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0001**");
+        case EntityType::kProperty:
+            if (IsInRange(fn, 1, 2) || IsInRange(fn, 5, 17) || IsInRange(fn, 18, 25)) {
+                return DefaultDE(et, fn, {Na, Na, IP, Na, Na, Na, Na, Na, I}, "**??****");
+            } else if (IsInRange(fn, {3})) {
+                return DefaultDE(et, fn, {Na, Na, IP, Na, Na, Na, Na, Na, I}, "**00****");
+            } else if (IsInRange(fn, {26})) {
+                return DefaultDE(et, fn, {Na, Na, P, Na, Na, Na, Na, Na, I}, "**??****");
+            } else if (IsInRange(fn, {27, 31})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0102**");
+            } else if (IsInRange(fn, 28, 30)) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0202**");
+            } else if (IsInRange(fn, 32, 35)) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**0101**");
+            } else if (IsInRange(fn, {36})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "00010300");
+            } else if (fn == 0) {
+                // デフォルト値の場合は暗黙的に1に変更
+                return DefaultDE(et, 1, {Na, Na, IP, Na, Na, Na, Na, Na, I}, "**??****");
+            }
+            throw error;
+        case EntityType::kSingularSubfigureInstance:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+        case EntityType::kView:
+            if (IsInRange(fn, {0})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, ZP, Na, Na, Na, I}, "????01**");
+            } else if (IsInRange(fn, {1})) {
+                return DefaultDE(et, fn, {Na, Na, Na, Na, 0, Na, Na, Na, I}, "????01**");
+            }
+            throw error;
+        case EntityType::kRectangularArraySubfigureInstance:  // fallthrough Type 412~414
+        case EntityType::kCircularArraySubfigureInstance:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+        case EntityType::kExternalReference:
+            if (!IsInRange(fn, 0, 4)) throw error;
+            return DefaultDE(et, fn, {Na, Na, Na, Na, Na, Na, Na, Na, I}, "**????**");
+        case EntityType::kNodalLoadConstraint:
+            return DefaultDE(et, fn, {Na, Na, Na, ZP, ZP, ZP, Na, Na, I}, "??????**");
+        case EntityType::kNetworkSubfigureInstance:
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+        case EntityType::kAttributeTableInstance:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {P, Na, Na, Na, Na, Na, Na, Na, I}, "**????**");
+        case EntityType::kSolidInstance:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+        case EntityType::kVertex:
+            if (!IsInRange(fn, {1}) && fn != 0) throw error;
+            return DefaultDE(et, 1, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "??01??**");
+        case EntityType::kEdge:
+            if (!IsInRange(fn, {1}) && fn != 0) throw error;
+            return DefaultDE(et, 1, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "??01??01");
+        case EntityType::kLoop:
+            if (!IsInRange(fn, 0, 1)) throw error;
+            return DefaultDE(et, fn, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "??01????");
+        case EntityType::kFace:
+            if (!IsInRange(fn, {1}) && fn != 0) throw error;
+            return DefaultDE(et, 1, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "??01????");
+        case EntityType::kShell:
+            if (!IsInRange(fn, 1, 2)) {
+                if (fn != 0) throw error;
+                fn = 1;  // デフォルト値の場合は暗黙的に1に変更
+            }
+            return DefaultDE(et, fn, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "????????");
+    }
+
+    // エンティティタイプが無効な場合
+    throw DataFormatError("Invalid entity type: " +
+            std::to_string(static_cast<int>(entity_type)));
 }

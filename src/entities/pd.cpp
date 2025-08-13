@@ -1,11 +1,11 @@
 /**
- * @file entities/entity_parameter_data.cpp
+ * @file entities/pd.cpp
  * @brief IGESのパラメータデータセクションを保持する構造体
  * @author Yayoi Habami
  * @date 2025-04-23
  * @copyright 2025 Yayoi Habami
  */
-#include "igesio/entities/entity_parameter_data.h"
+#include "igesio/entities/pd.h"
 
 #include <atomic>
 #include <string>
@@ -253,4 +253,40 @@ std::vector<unsigned int> i_ent::GetChildDEPointer(
         physical.insert(physical.end(), logical.begin(), logical.end());
         return physical;
     }
+}
+
+igesio::IGESParameterVector
+i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
+    IGESParameterVector params;
+    for (const auto& str : pd.data) {
+        if (str.empty()) {
+            // 空のパラメータの場合は、とりあえずStringのデフォルト値を追加
+            // 後で`access_as`で、適切な型に変換することができる
+            params.push_back(std::string{}, ValueFormat::String(true));
+            continue;
+        }
+
+        try {  // 整数型への変換を試みる
+            auto [value, format] = igesio::FromIgesIntegerWithFormat(str, std::nullopt);
+            params.push_back(value, format);
+            continue;
+        } catch (const igesio::TypeConversionError&) {}
+
+        try {  // 実数型への変換を試みる
+            auto [value, format] = igesio::FromIgesRealWithFormat(str, std::nullopt);
+            params.push_back(value, format);
+            continue;
+        } catch (const igesio::TypeConversionError&) {}
+
+        try {  // 文字列型への変換を試みる
+            auto [value, format] = igesio::FromIgesStringWithFormat(str, std::nullopt);
+            params.push_back(value, format);
+            continue;
+        } catch (const igesio::TypeConversionError&) {}
+
+        auto [value, format] = igesio::FromIgesLanguageWithFormat(str, std::nullopt);
+        params.push_back(value, format);
+    }
+
+    return params;
 }

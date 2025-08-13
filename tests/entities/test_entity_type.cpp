@@ -133,3 +133,107 @@ TEST(EntityTypeTest, ToEntityTypeInvalid) {
     EXPECT_FALSE(ie::ToEntityType(500).has_value());
     EXPECT_FALSE(ie::ToEntityType(515).has_value());
 }
+
+
+
+// ToStringのテスト
+TEST(EntityTypeTest, ToString) {
+    // すべてのEnum値に対して、先頭のkを除き、大文字の前にスペースを入れた
+    // 文字列が返されることを確認する。ただし、以下のルールに従う
+    //   - "Of", "On", "And"は小文字にする
+    //   - "B Rep"は"B-Rep"に、"B Spline"は"B-Spline"に変換する
+    auto TS = [](const ie::EntityType type) {
+        return ie::ToString(type);
+    };
+    using ET = ie::EntityType;
+
+    EXPECT_EQ(TS(ET::kNull), "Null");
+    EXPECT_EQ(TS(ET::kCircularArc), "Circular Arc");
+    EXPECT_EQ(TS(ET::kCompositeCurve), "Composite Curve");
+    EXPECT_EQ(TS(ET::kConicArc), "Conic Arc");
+    EXPECT_EQ(TS(ET::kCopiousData), "Copious Data");
+    EXPECT_EQ(TS(ET::kPlane), "Plane");
+    EXPECT_EQ(TS(ET::kLine), "Line");
+    EXPECT_EQ(TS(ET::kParametricSplineCurve), "Parametric Spline Curve");
+    EXPECT_EQ(TS(ET::kParametricSplineSurface), "Parametric Spline Surface");
+    EXPECT_EQ(TS(ET::kPoint), "Point");
+    EXPECT_EQ(TS(ET::kRuledSurface), "Ruled Surface");
+    EXPECT_EQ(TS(ET::kSurfaceOfRevolution), "Surface of Revolution");
+    EXPECT_EQ(TS(ET::kTabulatedCylinder), "Tabulated Cylinder");
+    EXPECT_EQ(TS(ET::kDirection), "Direction");
+    EXPECT_EQ(TS(ET::kTransformationMatrix), "Transformation Matrix");
+    EXPECT_EQ(TS(ET::kFlash), "Flash");
+    EXPECT_EQ(TS(ET::kRationalBSplineCurve), "Rational B-Spline Curve");
+    EXPECT_EQ(TS(ET::kRationalBSplineSurface), "Rational B-Spline Surface");
+    EXPECT_EQ(TS(ET::kOffsetCurve), "Offset Curve");
+    EXPECT_EQ(TS(ET::kConnectPoint), "Connect Point");
+    EXPECT_EQ(TS(ET::kNode), "Node");
+    EXPECT_EQ(TS(ET::kFiniteElement), "Finite Element");
+    EXPECT_EQ(TS(ET::kNodalDisplacementAndRotation), "Nodal Displacement and Rotation");
+    EXPECT_EQ(TS(ET::kOffsetSurface), "Offset Surface");
+    EXPECT_EQ(TS(ET::kBoundary), "Boundary");
+    EXPECT_EQ(TS(ET::kCurveOnAParametricSurface), "Curve on a Parametric Surface");
+    EXPECT_EQ(TS(ET::kBoundedSurface), "Bounded Surface");
+    EXPECT_EQ(TS(ET::kTrimmedSurface), "Trimmed Surface");
+    EXPECT_EQ(TS(ET::kNodalResults), "Nodal Results");
+    EXPECT_EQ(TS(ET::kElementResults), "Element Results");
+    EXPECT_EQ(TS(ET::kBlock), "Block");
+    EXPECT_EQ(TS(ET::kRightAngularWedge), "Right Angular Wedge");
+    EXPECT_EQ(TS(ET::kRightCircularCylinder), "Right Circular Cylinder");
+    EXPECT_EQ(TS(ET::kRightCircularCone), "Right Circular Cone");
+    EXPECT_EQ(TS(ET::kSphere), "Sphere");
+    EXPECT_EQ(TS(ET::kTorus), "Torus");
+    EXPECT_EQ(TS(ET::kSolidOfRevolution), "Solid of Revolution");
+    EXPECT_EQ(TS(ET::kSolidOfLinearExtrusion), "Solid of Linear Extrusion");
+    EXPECT_EQ(TS(ET::kEllipsoid), "Ellipsoid");
+    EXPECT_EQ(TS(ET::kBooleanTree), "Boolean Tree");
+    EXPECT_EQ(TS(ET::kSelectedComponent), "Selected Component");
+    EXPECT_EQ(TS(ET::kSolidAssembly), "Solid Assembly");
+    EXPECT_EQ(TS(ET::kManifoldSolidBRepObject), "Manifold Solid B-Rep Object");
+    EXPECT_EQ(TS(ET::kPlaneSurface), "Plane Surface");
+    EXPECT_EQ(TS(ET::kRightCircularCylinderSurface), "Right Circular Cylinder Surface");
+    EXPECT_EQ(TS(ET::kRightCircularConicalSurface), "Right Circular Conical Surface");
+    EXPECT_EQ(TS(ET::kSphericalSurface), "Spherical Surface");
+    EXPECT_EQ(TS(ET::kToroidalSurface), "Toroidal Surface");
+    EXPECT_EQ(TS(ET::kAngularDimension), "Angular Dimension");
+    EXPECT_EQ(TS(ET::kCurveDimension), "Curve Dimension");
+    EXPECT_EQ(TS(ET::kDiameterDimension), "Diameter Dimension");
+    EXPECT_EQ(TS(ET::kFlagNote), "Flag Note");
+    EXPECT_EQ(TS(ET::kGeneralLabel), "General Label");
+    EXPECT_EQ(TS(ET::kGeneralNote), "General Note");
+    EXPECT_EQ(TS(ET::kNewGeneralNote), "New General Note");
+    EXPECT_EQ(TS(ET::kLeaderArrow), "Leader Arrow");
+    EXPECT_EQ(TS(ET::kLinearDimension), "Linear Dimension");
+    EXPECT_EQ(TS(ET::kOrdinateDimension), "Ordinate Dimension");
+    EXPECT_EQ(TS(ET::kPointDimension), "Point Dimension");
+    EXPECT_EQ(TS(ET::kRadiusDimension), "Radius Dimension");
+    EXPECT_EQ(TS(ET::kGeneralSymbol), "General Symbol");
+    EXPECT_EQ(TS(ET::kSectionedArea), "Sectioned Area");
+    EXPECT_EQ(TS(ET::kAssociativityDefinition), "Associativity Definition");
+    EXPECT_EQ(TS(ET::kLineFontDefinition), "Line Font Definition");
+    EXPECT_EQ(TS(ET::kMacroDefinition), "Macro Definition");
+    EXPECT_EQ(TS(ET::kSubfigureDefinition), "Subfigure Definition");
+    EXPECT_EQ(TS(ET::kTextFont), "Text Font");
+    EXPECT_EQ(TS(ET::kTextDisplayTemplate), "Text Display Template");
+    EXPECT_EQ(TS(ET::kColorDefinition), "Color Definition");
+    EXPECT_EQ(TS(ET::kUnitsData), "Units Data");
+    EXPECT_EQ(TS(ET::kNetworkSubfigureDefinition), "Network Subfigure Definition");
+    EXPECT_EQ(TS(ET::kAttributeTableDefinition), "Attribute Table Definition");
+    EXPECT_EQ(TS(ET::kAssociativityInstance), "Associativity Instance");
+    EXPECT_EQ(TS(ET::kDrawing), "Drawing");
+    EXPECT_EQ(TS(ET::kProperty), "Property");
+    EXPECT_EQ(TS(ET::kSingularSubfigureInstance), "Singular Subfigure Instance");
+    EXPECT_EQ(TS(ET::kView), "View");
+    EXPECT_EQ(TS(ET::kRectangularArraySubfigureInstance), "Rectangular Array Subfigure Instance");
+    EXPECT_EQ(TS(ET::kCircularArraySubfigureInstance), "Circular Array Subfigure Instance");
+    EXPECT_EQ(TS(ET::kExternalReference), "External Reference");
+    EXPECT_EQ(TS(ET::kNodalLoadConstraint), "Nodal Load Constraint");
+    EXPECT_EQ(TS(ET::kNetworkSubfigureInstance), "Network Subfigure Instance");
+    EXPECT_EQ(TS(ET::kAttributeTableInstance), "Attribute Table Instance");
+    EXPECT_EQ(TS(ET::kSolidInstance), "Solid Instance");
+    EXPECT_EQ(TS(ET::kVertex), "Vertex");
+    EXPECT_EQ(TS(ET::kEdge), "Edge");
+    EXPECT_EQ(TS(ET::kLoop), "Loop");
+    EXPECT_EQ(TS(ET::kFace), "Face");
+    EXPECT_EQ(TS(ET::kShell), "Shell");
+}

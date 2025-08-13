@@ -1,8 +1,20 @@
 # entities library
 add_library(igesio_entities STATIC
+    # General
     entity_type.cpp
-    directory_entry_param.cpp
-    entity_parameter_data.cpp
+
+    # Directory Entry section related
+    de/de_structure.cpp
+    de/de_line_font_pattern.cpp
+    de/de_level.cpp
+    de/de_view.cpp
+    de/de_transformation_matrix.cpp
+    de/de_label_display_associativity.cpp
+    de/de_color.cpp
+    de/raw_entity_de.cpp
+
+    # Parameter Data section related
+    pd.cpp
 )
 
 # Set the source and include directories

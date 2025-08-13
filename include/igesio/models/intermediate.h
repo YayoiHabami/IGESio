@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "igesio/entities/directory_entry_param.h"
+#include "igesio/entities/de/raw_entity_de.h"
 #include "igesio/entities/entity_parameter_data.h"
 #include "igesio/models/global_param.h"
 

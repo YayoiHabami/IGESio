@@ -166,6 +166,7 @@ class IGESParameterVector {
     ///       ③ T = double ⇒ 他の型からの変換は許可しない;
     ///       ④ T = std::string ⇒ 他の型からの変換は許可しない;
     ///       ⑤ T = uint64_t ⇒ data_[index]の型がint
+    ///       ただし、format_[index].is_defaultがtrueの場合は、どの型からも変換可能とする
     template<typename T> std::enable_if_t<is_allowed_type_v<T>, T>
     access_as(size_t index) {
         if (index >= data_.size()) {
@@ -175,6 +176,13 @@ class IGESParameterVector {
         if (std::holds_alternative<T>(data_[index])) {
             return std::get<T>(data_[index]);
         }
+        // 例外: フォーマットがデフォルト値 (空白など) の場合は全ての型から変換可能
+        if (formats_[index].is_default) {
+            formats_[index] = DefaultValueFormat<T>();  // formatも更新
+            data_[index] = T{};  // デフォルト値を設定
+            return std::get<T>(data_[index]);
+        }
+
         // ②/③ 指定した要素の型がT以外の場合
         if constexpr (std::is_same_v<T, bool>) {
             // bool型の場合、値が 0 or 1 のint型からは変更可能

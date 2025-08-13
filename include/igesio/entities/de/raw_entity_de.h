@@ -1,5 +1,5 @@
 /**
- * @file entities/directory_entry_param.h
+ * @file entities/de/raw_entity_de.h
  * @brief ディレクトリエントリセクションのパラメータを保持する構造体
  * @author Yayoi Habami
  * @date 2025-04-10
@@ -262,6 +262,24 @@ struct RawEntityDE {
     ///       値が必ず指定される
     /// @return true: 成功, false: 失敗 (無効なindex)
     bool SetIsDefault(const size_t, const bool);
+
+    /// @brief デフォルト値で初期化されたインスタンスを作成する
+    /// @param entity_type エンティティタイプ
+    /// @param form_number フォーム番号
+    /// @return そのエンティティタイプとフォーム番号に対応する
+    ///         デフォルト値で初期化されたRawEntityDEのインスタンス
+    /// @throw igesio::DataFormatError 0以外の、無効なフォーム番号が指定された場合;
+    ///        entity_typeがform_number (!= 0) のフォーム番号を持たない場合にはこの例外を投げる.
+    ///        0のフォーム番号を持たない場合、可能な最小のフォーム番号を指定する
+    /// @throw igesio::DataFormatError entity_typeが無効な場合
+    /// @note Node (Type 134) のDEパラメータ7 (Transformation Matrix)、
+    ///       Lep Drilled Hole Property (Type 406, Form 26) のDEパラメータ5 (Level)、
+    ///       Attribute Table Instance (Type 422) のDEパラメータ3 (Structure) は、
+    ///       ポインター (0未満or0より大きい値) のみを指定可能である。しかし、デフォルト値で
+    ///       初期化する際にそれらのポインターを知ることはできないため、仮の値として0を設定する。
+    ///       そのため、これらタイプに対する戻り値を修正せずに`IsValid`に与えた場合、
+    ///       `igesio::DataFormatError`例外が投げられることに注意する。
+    static RawEntityDE ByDefault(const EntityType, const int = 0);
 
  private:
     /// @brief インスタンス作成時 (基本的に文字列からの変換時) に、

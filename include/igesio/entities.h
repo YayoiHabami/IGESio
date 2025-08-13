@@ -12,11 +12,10 @@
 #include "entities/entity_type.h"
 
 // 中間生成物
-#include "entities/directory_entry_param.h"
-#include "entities/entity_parameter_data.h"
+#include "entities/de.h"
+#include "entities/pd.h"
 
 // 抽象クラス
-#include "entities/ientity.h"
 #include "entities/entity_base.h"
 
 #endif  // IGESIO_ENTITIES_H_

@@ -1,6 +1,6 @@
 /**
  * @file entities/test_entity_parameter_data.cpp
- * @brief entities/entity_parameter_data.hのテスト
+ * @brief entities/pd.hのテスト
  * @author Yayoi Habami
  * @date 2025-04-23
  * @copyright 2025 Yayoi Habami
@@ -10,7 +10,7 @@
 #include <string>
 
 #include "igesio/common/errors.h"
-#include "igesio/entities/entity_parameter_data.h"
+#include "igesio/entities/pd.h"
 
 namespace {
 
