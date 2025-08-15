@@ -22,9 +22,9 @@ std::size_t igesio::PairHash::operator()(
 
 uint64_t igesio::IDGenerator::Reserve(
         const uint64_t iges_id,
-        const unsigned int pd_pointer) {
+        const unsigned int de_pointer) {
     std::lock_guard<std::mutex> lock(reserved_ids_mutex_);
-    auto key = std::make_pair(iges_id, pd_pointer);
+    auto key = std::make_pair(iges_id, de_pointer);
     auto it = reserved_ids_.find(key);
     if (it != reserved_ids_.end()) {
         // すでに予約されている場合は、そのIDを返す
@@ -39,14 +39,15 @@ uint64_t igesio::IDGenerator::Reserve(
 
 uint64_t igesio::IDGenerator::GetReservedID(
         const uint64_t iges_id,
-        const unsigned int pd_pointer) {
+        const unsigned int de_pointer) {
     std::lock_guard<std::mutex> lock(reserved_ids_mutex_);
-    auto key = std::make_pair(iges_id, pd_pointer);
+    auto key = std::make_pair(iges_id, de_pointer);
     auto it = reserved_ids_.find(key);
     if (it == reserved_ids_.end()) {
         throw std::invalid_argument(
-            "ID not reserved for the given IGES ID (" + std::to_string(iges_id) +
-            ") and PD pointer (" + std::to_string(pd_pointer) + ")");
+            "ID not reserved for the given IGES ID (" +
+            std::to_string(iges_id) + ") and DE pointer "
+            "(sequence number of DE record; " + std::to_string(de_pointer) + ")");
     }
     return it->second;
 }

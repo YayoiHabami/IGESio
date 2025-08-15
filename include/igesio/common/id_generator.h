@@ -44,7 +44,7 @@ class IDGenerator {
     /// @note スレッドセーフなアクセスを保証するために使用
     inline static std::mutex reserved_ids_mutex_;
     /// @brief 予約されたIDを保持するためのマップ
-    /// @note keyは親のIGESDataのIDとエンティティのPDレコードのシーケンス番号,
+    /// @note keyは親のIGESDataのIDとエンティティのDEレコードのシーケンス番号,
     ///       valueは予約されたID
     inline static std::unordered_map<std::pair<uint64_t, unsigned int>,
                                      uint64_t, PairHash> reserved_ids_;
@@ -61,13 +61,13 @@ class IDGenerator {
 
     /// @brief IDを予約する
     /// @param iges_id 親のIGESDataのID
-    /// @param pd_pointer エンティティのPDレコードのシーケンス番号
+    /// @param de_pointer エンティティのDEレコードのシーケンス番号
     /// @return 予約されたID
     static uint64_t Reserve(const uint64_t, const unsigned int);
 
     /// @brief 予約されたIDを取得する
     /// @param iges_id 親のIGESDataのID
-    /// @param pd_pointer エンティティのPDレコードのシーケンス番号
+    /// @param de_pointer エンティティのDEレコードのシーケンス番号
     /// @return 予約されたID
     /// @throw std::invalid_argument 予約されていない場合
     static uint64_t GetReservedID(const uint64_t, const unsigned int);

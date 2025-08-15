@@ -34,6 +34,11 @@ class IEntityIdentifier {
     /// @brief エンティティのフォーム番号を取得する
     /// @return エンティティのフォーム番号
     virtual int GetFormNumber() const = 0;
+
+    /// @brief 本ライブラリでサポートされているエンティティタイプか
+    /// @return UnsupportedEntityのインスタンスを除き`true`を返す
+    /// @note UnsupportedEntityを除き、オーバーライドは不要
+    virtual bool IsSupported() const { return true; }
 };
 
 }  // namespace igesio::entities

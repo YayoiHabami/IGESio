@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "igesio/entities/de/raw_entity_de.h"
-#include "igesio/entities/entity_parameter_data.h"
+#include "igesio/entities/pd.h"
 #include "igesio/models/global_param.h"
 
 

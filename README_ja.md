@@ -56,12 +56,12 @@ IGESioライブラリは以下の主要機能を提供します：
 
 IGESioライブラリでは、IGESファイルの読み込みに2段階の変換プロセスを採用しています：
 
-1. **IGESファイル → 中間データ構造** （`IntermediateIgesData`）
+1. **IGESファイル → 中間データ構造** （[`IntermediateIgesData`](docs/intermediate_data_structure_ja.md#1-intermediateigesdata構造体)）
 2. **中間データ構造 → データクラス** （`IGESData`クラス - 開発中）
 
 #### 中間データ構造を使用した読み込み・書き出し
 
-　現在利用可能な方法として、中間データ構造（`IntermediateIgesData`）を使用してIGESファイルの読み込みと書き出しができます。詳細については、[中間データ構造のドキュメント](docs/intermediate_data_structure_ja.md)を参照してください。
+　現在利用可能な方法として、中間データ構造（[`IntermediateIgesData`](docs/intermediate_data_structure_ja.md#1-intermediateigesdata構造体)）を使用してIGESファイルの読み込みと書き出しができます。詳細については、[中間データ構造のドキュメント](docs/intermediate_data_structure_ja.md)を参照してください。
 
 ```cpp
 #include <igesio/reader.h>
@@ -322,7 +322,12 @@ IGESio/
 - **[Matrix](docs/common/matrix_ja.md)**: 固定/動的サイズの行列クラス
 
 **entitiesモジュール**
-- **[IEntity and derived classes](docs/entities/entity_base_class_architecture_ja.md)**: `IEntity`クラスとその派生クラスの設計
+- **[Entity class architecture](docs/entities/entity_base_class_architecture_ja.md)**
+  - エンティティ関連クラスの継承構造の説明
+  - 個別のエンティティクラスが継承する`EntityBase`クラスの説明
+- **[Interfaces and derived classes](docs/entities/entities_ja.md)**
+  -  `IEntityIdentifier`クラスとインターフェースクラスの説明
+  -  個別のエンティティクラスの説明
 - **[RawEntityDE and RawEntityPD](docs/intermediate_data_structure_ja.md)**: IGESファイルのDirectory EntryセクションとParameter Dataセクションの中間データ構造
 
 **modelsモジュール**

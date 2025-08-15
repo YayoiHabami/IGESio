@@ -3,6 +3,9 @@ add_library(igesio_entities STATIC
     # General
     entity_type.cpp
 
+    # Interfaces
+    interfaces/i_curve.cpp
+
     # Directory Entry section related
     de/de_structure.cpp
     de/de_line_font_pattern.cpp
@@ -15,6 +18,17 @@ add_library(igesio_entities STATIC
 
     # Parameter Data section related
     pd.cpp
+
+    # Entity Base class
+    entity_base.cpp
+    structures/unsupported_entity.cpp
+
+    # Entities
+    structures/null_entity.cpp                 # 000
+    curves/circular_arc.cpp                    # 100
+
+    # Factory
+    factory.cpp
 )
 
 # Set the source and include directories

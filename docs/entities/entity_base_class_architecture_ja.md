@@ -7,11 +7,6 @@
   - [Class Diagram](#class-diagram)
 - [`IEntityIdentifier`](#ientityidentifier)
 - [Specific Entity Interfaces](#specific-entity-interfaces)
-  - [`ITransformation`](#itransformation)
-  - [`ICurve`](#icurve)
-  - [`ICurve2D`](#icurve2d)
-  - [`ICurve3D`](#icurve3d)
-  - [`ISurface`](#isurface)
 - [Directory Entry Parameter Classes](#directory-entry-parameter-classes)
 - [`EntityBase`](#entitybase)
   - [メンバ関数 (`EntityBase`)](#メンバ関数-entitybase)
@@ -19,11 +14,9 @@
       - [列挙体やプリミティブ型を返すもの](#列挙体やプリミティブ型を返すもの)
       - [個別のクラスを作成する必要のあるもの](#個別のクラスを作成する必要のあるもの)
       - [`EntityBase`継承クラスにおいて意味を持たないもの](#entitybase継承クラスにおいて意味を持たないもの)
-    - [Parameter Dataセクションでの参照に関連したメンバ関数 (`EntityBase`)](#parameter-dataセクションでの参照に関連したメンバ関数-entitybase)
+    - [Parameter Dataセクションに関連したメンバ関数 (`EntityBase`)](#parameter-dataセクションに関連したメンバ関数-entitybase)
     - [その他細かいメンバ関数 (`EntityBase`)](#その他細かいメンバ関数-entitybase)
 - [Specific Entity Classes](#specific-entity-classes)
-  - [`CircularArc`](#circulararc)
-  - [`TransformationMatrix`](#transformationmatrix)
 
 ## 概要
 
@@ -96,7 +89,6 @@ classDiagram
 > Defined at [i_entity_identifier.h](../../include/igesio/entities/i_entity_identifier.h)
 
 > Ancestor class: None
-> [Dependent class](#dependent-classes): None
 
 　`IEntityIdentifier`クラスは、IGESファイルの各エンティティを識別するためのインターフェースです。このクラスは、全てのエンティティが共通して持つ識別情報を定義し、全ての具体的/抽象的なエンティティクラスはこのクラスを継承して実装されます。
 
@@ -109,55 +101,16 @@ classDiagram
 - [x] `unsigned int GetFormNumber() const;` (15th DE field)
   - エンティティのフォーム番号を取得します。
 
+**本ライブラリでサポートされているかを確認するメンバ関数**
+
+　本ライブラリには、未実装のエンティティクラスが多数存在します。また、読み込んだIGESファイルにユーザー定義のエンティティタイプが存在する可能性もあります。そのようなエンティティは、[`UnsupportedEntity`](entities_ja.md#unsupportedentity)クラスのインスタンスとして扱われます。以下のメンバ関数は、そのクラスが`UnsupportedEntity`ではないかを確認するためのものです。
+
+- [x] `bool IsSupported() const;`
+  - `UnsupportedEntity`のインスタンスを除き、常に`true`を返します。
+
 ## Specific Entity Interfaces
 
-### `ITransformation`
-
-> Defined at [i_transformation.h](../../include/igesio/entities/i_transformation.h)
-
-> Ancestor class:
-> ```plaintext
-> IEntityIdentifier <─── ITransformation
-> ```
-> [Dependent class](#dependent-classes): None
-
-　`ITransformation`クラスは、Transformation Matrix (Type 124) エンティティのインターフェースです。このクラスを継承するのは`TransformationMatrix`クラスのみですが、`DETransformationMatrix`クラス内においてTransformation Matrixエンティティへの参照を保持するために使用されます。`TransformationMatrix`クラスの前方定義を用いる設計では、抽象化の原則に反するため、このようなインターフェースを定義しています。
-
-### `ICurve`
-
-> Defined at [i_curve.h](../../include/igesio/entities/interfaces/i_curve.h)
-
-> Ancestor class:
-> ```plaintext
-> IEntityIdentifier <─── ICurve
-> ```
-
-### `ICurve2D`
-
-> Defined at [i_curve.h](../../include/igesio/entities/interfaces/i_curve.h)
-
-> Ancestor classes:
-> ```plaintext
-> IEntityIdentifier <─── ICurve <─── ICurve2D
-> ```
-
-### `ICurve3D`
-
-> Defined at [i_curve.h](../../include/igesio/entities/interfaces/i_curve.h)
-
-> Ancestor classes:
-> ```plaintext
-> IEntityIdentifier <─── ICurve <─── ICurve3D
-> ```
-
-### `ISurface`
-
-> Defined at [i_surface.h](../../include/igesio/entities/interfaces/i_surface.h)
-
-> Ancestor class:
-> ```plaintext
-> IEntityIdentifier <─── ISurface
-> ```
+　インターフェースクラスについては、[entities/interfaces](entities_ja.md#interfaces)を参照してください。
 
 ## Directory Entry Parameter Classes
 
@@ -262,9 +215,15 @@ classDiagram
 
 > Note: `RawEntityDE`クラスなどの中間生成物クラスでは、これらのフィールドを保持するメンバ変数を定義しています。
 
-#### Parameter Dataセクションでの参照に関連したメンバ関数 (`EntityBase`)
+#### Parameter Dataセクションに関連したメンバ関数 (`EntityBase`)
 
-　IGESファイルのParameter Dataセクションでは、エンティティが他のエンティティを参照することがあります。この参照関係を取得・設定するためのメンバ関数を定義します。
+　Parameter Data (PD) セクションは、エンティティのパラメータを定義するセクションです。`EntityBase`クラスでは、すべてのエンティティが共通して持つ、PDセクション関連の以下のメンバ関数を定義します。
+
+| 関数 | 説明 |
+| --- | --- |
+| `GetParameters()` | 追加ポインタも含め、エンティティのすべてのパラメータを `IGESParameterVector` として取得します。 |
+
+　また、IGESファイルのParameter Dataセクションでは、エンティティが他のエンティティを参照することがあります。この参照関係を取得・設定するためのメンバ関数を定義します。
 
 **子要素（物理的に従属するエンティティ）の取得**
 
@@ -350,24 +309,11 @@ classDiagram
 
 ## Specific Entity Classes
 
-　`EntityBase`クラスを継承した具体的なエンティティクラスは、IGESファイルの各エンティティを表現します。以下に、いくつかの具体的なエンティティクラスの例を示します。
+　特定のエンティティを表現する個別のクラスは、`EntityBase`クラスと、必要に応じて他のインターフェースを継承して実装されます。詳細については、以下のリンクを参照してください。
 
-### `CircularArc`
-
-> Defined at [circular_arc.h](../../include/igesio/entities/curves/circular_arc.h)
-
-> Ancestor class:
-> ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ CircularArc
->                     └─ ICurve  <── ICurve2D <─┘
-> ```
-
-### `TransformationMatrix`
-
-> Defined at [transformation_matrix.h](../../include/igesio/entities/transformations/transformation_matrix.h)
-
-> Ancestor class:
-> ```plaintext
-> IEntityIdentifier <─┬────── EntityBase <─┬─ TransformationMatrix
->                     └─ ITransformation <─┘
-> ```
+| 種別 | 説明 |
+| --- | --- |
+| [Structure](entities_ja.md#structure) | IGESファイルの構造を表現するクラス<br>＋未実装のエンティティを表現するクラス（`UnsupportedEntity`） |
+| [Curves](entities_ja.md#curves) | 曲線を表現するクラス |
+| [Surfaces](entities_ja.md#surfaces) | 曲面を表現するクラス |
+| [Transformations](entities_ja.md#transformations) | 変換行列を表現するクラス<br>(`TransformationMatrix`クラス) |
