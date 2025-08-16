@@ -1,6 +1,6 @@
 /**
- * @file entities/test_directory_entry_param.cpp
- * @brief entities/directory_entry_param.hのテスト
+ * @file entities/de/test_raw_entity_de.cpp
+ * @brief entities/de/raw_entity_de.hのテスト
  * @author Yayoi Habami
  * @date 2025-04-19
  * @copyright 2025 Yayoi Habami
@@ -10,7 +10,7 @@
 #include <string>
 
 #include "igesio/common/errors.h"
-#include "igesio/entities/directory_entry_param.h"
+#include "igesio/entities/de/raw_entity_de.h"
 
 namespace {
 

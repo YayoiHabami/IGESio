@@ -24,9 +24,12 @@
   - [コンストラクタ](#コンストラクタ)
   - [演算機能](#演算機能)
     - [要素アクセスなど](#要素アクセスなど)
+    - [サイズの変更・変換](#サイズの変更変換)
     - [四則演算など](#四則演算など)
     - [その他の計算](#その他の計算)
     - [出力機能](#出力機能)
+  - [その他の補助機能](#その他の補助機能)
+    - [回転行列の計算](#回転行列の計算)
 - [使用例](#使用例)
   - [Matrixクラスを使用した処理の例](#matrixクラスを使用した処理の例)
   - [コンストラクタ・初期化](#コンストラクタ初期化)
@@ -79,8 +82,8 @@ igesio::Vector3d result = mat * v1;  // 行列・ベクトル積
 
 | 機能 | Eigen | IGESio独自実装 |
 |------|-------|----------------|
-| 行数 | 任意 | 2または3のみ |
-| 列数 | 任意 | 1～3または動的 |
+| 行数 | 任意 | 1～4または動的 |
+| 列数 | 任意 | 1～4または動的 |
 | 四則演算 | ✅ | ✅ |
 | [その他簡単な線形代数演算](#その他の計算) | ✅ | ✅ |
 | LU分解 | ✅ | ❌ |
@@ -94,10 +97,9 @@ igesio::Vector3d result = mat * v1;  // 行列・ベクトル積
 
 ## IGESio Matrixクラスの詳細仕様
 
-　本ライブラリでは、行数が2または3の行列を扱うための`igesio::detail::Matrix`クラスを定義しています。このクラスは、Eigenの行列クラスと同様のインターフェースを（いくつか）持ち、行列演算やベクトル演算をサポートします。**本クラスは**`Eigen::Matrix`**とのAPI互換性がないため、使用しないでください**。代わりに、以下の[型エイリアス](#型エイリアス)を使用してください。
+　本ライブラリでは、行数が2または3の行列を扱うための`igesio::Matrix`クラスを定義しています。このクラスは、Eigenの行列クラスと同様のインターフェースを（いくつか）持ち、行列演算やベクトル演算をサポートします。
 
-- **行数**: 2 または 3 (テンプレートパラメータ `N` で指定)
-- **列数**: 固定 (1～3) または動的 (テンプレートパラメータ `M` で指定)
+- **行数** `N`、**列数** `M`: 固定 (1～4) または動的
 - **内部データ**: column-major 形式で格納
 - **サポートされる演算**
   - 要素アクセス
@@ -109,62 +111,69 @@ igesio::Vector3d result = mat * v1;  // 行列・ベクトル積
 
 ### テンプレートパラメータ
 
-- `N`: 行数（2または3）
-- `M`: 列数 (以下のいずれか)
+- `T`: 行列の値の型 (`double` or `float`)
+- `N`: 行数; `M`: 列数 (以下のいずれか)
   - `igesio::Dynamic` (-1): 動的な列数
-  - 1～3: 固定の列数
-
-```cpp
-namespace igesio::detail {
-
-template<int N, int M>
-class Matrix
-
-}  // namespace igesio::detail
-```
-
-### 型エイリアス
-
-　よく使用される型のエイリアスを提供しています。基本的に`igesio::detail::Matrix`クラスは使用せず、**以下の型エイリアスを使用してください**。
+  - 1～4: 固定の列数
 
 ```cpp
 namespace igesio {
 
-using Matrix2d  = detail::Matrix<2, 2>;       // 2x2行列
-using Matrix23d = detail::Matrix<2, 3>;       // 2x3行列
-using Matrix32d = detail::Matrix<3, 2>;       // 3x2行列
-using Matrix3d  = detail::Matrix<3, 3>;       // 3x3行列
-using Matrix2Xd = detail::Matrix<2, Dynamic>; // 2行×動的列数行列
-using Matrix3Xd = detail::Matrix<3, Dynamic>; // 3行×動的列数行列
-using Vector2d  = detail::Matrix<2, 1>;       // 2次元ベクトル
-using Vector3d  = detail::Matrix<3, 1>;       // 3次元ベクトル
-
-}  // namespace igesio
+template<typename T, int N, int M>
+class Matrix {
+// ...
 ```
+
+### 型エイリアス
+
+　よく使用される型には、以下のエイリアスが提供されています。`igesio::Matrix`クラスを直接使用せず、**これらの型エイリアスを使用することを推奨します**。
+
+　行列の型エイリアスは、`Matrix` + `<サイズ>` + `d/f` の形式で命名されています（例：`Matrix2d`、`Matrix3Xf`）。ここで、`d` は `double` 型、`f` は `float` 型を表します。`<サイズ>` の部分は以下の通りです。
+
+| 種類 | `<サイズ>` | 例 | 説明 |
+|:---|:---|:---|:---|
+| 固定行数・列数（正方行列） | `2`, `3`, `4` | `Matrix2d` | 2行2列の行列 (double型) |
+| 固定行数・動的列数 | `2X`, `3X`, `4X` | `Matrix3Xf` | 3行の動的列数行列 (float型) |
+| 動的行数・固定列数 | `X2`, `X3`, `X4` | `MatrixX4d` | 動的行数の4列行列 (double型) |
+| 動的行数・動的列数 | `X` | `MatrixXd` | 動的行数・列数行列 (double型) |
+
+　ベクトルの型エイリアスは、`Vector/RowVector` + `<サイズ>` + `d/f` の形式で命名されています（例：`Vector2d`、`RowVector3f`）。ここでも、`d` は `double` 型、`f` は `float` 型を表します。`<サイズ>` の部分は以下の通りです。
+
+| 種類 | `<サイズ>` | 例 | 説明 |
+|:---|:---|:---|:---|
+| 固定サイズ | `2`, `3`, `4` | `Vector2d` | 2次元縦ベクトル (double型) |
+| 動的サイズ | `X` | `RowVectorXd` | 動的サイズの横ベクトル (double型) |
+
+> `Vector` は `Matrix<T, N, 1>` のエイリアスで、縦ベクトルを表します。`RowVector` は `Matrix<T, 1, M>` のエイリアスで、横ベクトルを表します。
 
 ## メンバ関数
 
 ### コンストラクタ
 
-　本ライブラリの独自実装である`igesio::Matrix`クラスのコンストラクタは、以下の4種類が使用可能です。以下の表において、`M`は行列
+　本ライブラリの独自実装である`igesio::Matrix`クラスのコンストラクタは、以下のものが使用可能です。
 
 | コンストラクタ | 説明 |
 |---|---|
-| `Matrix()` | デフォルトコンストラクタです。<br>固定列数の場合は指定された列数で初期化され、動的列数の場合は0列の行列が作成されます。要素の値は未定義です。 |
-| `Matrix(rows, cols)` | 動的列数の行列の場合に使用可能です。<br>`rows`は行列の行数`N`（`Matrix2d`なら2）に一致する必要があります。 |
-| `Matrix2d m = {{1, 2}, {3, 4}}` | 初期化子リストを使用した行列の初期化です。<br>動的サイズ行列の場合、列数は初期化子リストの要素数に基づいて決定されます。 |
-| `Vector2d v = {1.0, 2.0}` | 初期化子リストを使用したベクトルの初期化です。<br>初期化子リストの要素数は、ベクトルの行数`N`に一致する必要があります。 |
+| `Matrix()` | デフォルトコンストラクタです。固定行数・固定列数の場合は指定されたサイズで初期化され、行数または列数のどちらかが動的な場合は空で初期化されます。要素の値は未定義です。値が設定された状態で初期化したい場合は、`Matrix::Zero()`などの静的メンバ関数を使用してください。 |
+| `Matrix(rows, cols)` | 動的行数または動的列数の行列の場合に使用可能です。`rows`は行数、`cols`は列数を指定します。要素の値は未定義です。値が設定された状態で初期化したい場合は、`Matrix::Zero()`などの静的メンバ関数を使用してください。 |
+| `Matrix{args...}` | 可変長引数を使用したコンストラクタです。`Vector3d vec(1.0, 2.0, 3.0);`や`RowVector3d row_vec(1.0, 2.0, 3.0);`のように使用します。指定する引数の数は、行数または列数のどちらかに一致する必要があります。 |
+| `Matrix{init_list}` | 初期化子リストを使用したコンストラクタ (ベクトル用) です。`Vector2d v = {1.0, 2.0}`のように使用します。初期化子リストの要素数は、ベクトルの行数`N`に一致する必要があります。 |
+| `Matrix{init_list}` | 初期化リストを使用したコンストラクタです。`Matrix2d m = {{1, 2}, {3, 4}}`のように使用します。行数はNに、列数は固定列数の場合はMに一致する必要があります。 |
 
 　また、以下の静的メンバ関数により、ゼロ行列や単位行列を簡単に作成できます。
 
 | メンバ関数 | 説明 |
 |---|---|
-| `Matrix Zero()` | ゼロ行列を作成します（固定サイズ版）。<br>全ての要素が0.0で初期化された行列を返します。 |
-| `Matrix Zero(int rows, int cols)` | ゼロ行列を作成します（動的サイズ版）。<br>`rows`は行数（`N`と一致する必要）、`cols`は列数を指定します。 |
-| `Matrix Identity()` | 単位行列を作成します（固定サイズ版）。<br>対角要素が1.0、その他が0.0の正方行列を返します。<br>**正方行列の場合のみ使用可能です**。 |
-| `Matrix Identity(int rows, int cols)` | 単位行列を作成します（動的サイズ版）。<br>`rows`は行数（`N`と一致する必要）、`cols`は列数を指定します。<br>**正方行列の場合のみ使用可能です**。 |
-| `Matrix Constant(double value)` | 定数行列を作成します（固定サイズ版）。<br>全ての要素が`value`で初期化された行列を返します。 |
-| `Matrix Constant(int rows, int cols, double value)` | 定数行列を作成します（動的サイズ版）。<br>`rows`は行数（`N`と一致する必要）、`cols`は列数、`value`は初期値を指定します。 |
+| `Matrix::Zero()` | ゼロ行列を作成します（固定サイズ版）。<br>全ての要素が0.0で初期化された行列を返します。 |
+| `Matrix::Zero(int rows, int cols)` | ゼロ行列を作成します（動的サイズ版）。<br>`rows`は行数（`N`と一致する必要）、`cols`は列数を指定します。 |
+| `Matrix::Identity()` | 単位行列を作成します（固定サイズ版）。<br>対角要素が1.0、その他が0.0の正方行列を返します。<br>**正方行列の場合のみ使用可能です**。 |
+| `Matrix::Identity(int rows, int cols)` | 単位行列を作成します（動的サイズ版）。<br>`rows`は行数（`N`と一致する必要）、`cols`は列数を指定します。<br>**正方行列の場合のみ使用可能です**。 |
+| `Matrix::Constant(double value)` | 定数行列を作成します（固定サイズ版）。<br>全ての要素が`value`で初期化された行列を返します。 |
+| `Matrix::Constant(int rows, int cols, double value)` | 定数行列を作成します（動的サイズ版）。<br>`rows`は行数（`N`と一致する必要）、`cols`は列数、`value`は初期値を指定します。 |
+| `Vector::Unit(size_t i)` | 同一サイズの単位ベクトルを作成します。引数`i`は非ゼロ要素のインデックスを指定します。 |
+| `Vector::UnitX()` | 単位ベクトル $[1\; 0\; 0]^\top$ を作成します。 |
+| `Vector::UnitY()` | 単位ベクトル $[0\; 1\; 0]^\top$ を作成します。 |
+| `Vector::UnitZ()` | 単位ベクトル $[0\; 0\; 1]^\top$ を作成します。 |
 
 ### 演算機能
 
@@ -187,19 +196,70 @@ using Vector3d  = detail::Matrix<3, 1>;       // 3次元ベクトル
 | `m.cols()` | `size_t` | 列数を返します。動的列数の場合は、現在の列数を返します。 |
 | `m.size()` | `size_t` | 行列の要素数（行数 × 列数）を返します。 |
 | `m(i, j)` | `double&`<br>`const double&` | 行列の要素にアクセスします。 `i`は行インデックス、`j`は列インデックスです。 |
-| `m(i)`<br>`m[i]` | `double&`<br>`const double&` | ベクトルの要素にアクセスします。 `i`はインデックスです。<br>**ベクトル (1列行列) の場合のみ使用可能です**。 |
-| `m.col(j)` | `Vector2d`<br>or<br>`Vector3d` | `j`列目の要素を持つベクトルを返します。 |
+| `v(i)`<br>`v[i]` | `double&`<br>`const double&` | ベクトルの要素にアクセスします。 `i`はインデックスです。<br>**ベクトル (1列または1行の行列) の場合のみ使用可能です**。 |
+| `m.col(j)` | Vector | `j`列目の要素を持つベクトルを返します。 |
+| `m.row(i)` | RowVector | `i`行目の要素を持つベクトルを返します。 |
+| `v.x()`<br>`v.y()`<br>`v.z()`<br>`v.w()` | `double&`<br>`const double&` | ベクトルのx,y,z,w座標の要素にアクセスします。<br>**ベクトル (1列または1行の行列) の場合のみ使用可能です**。 |
+| `m.data()` | `double*`<br>`const double*` |  行列の全要素をcolumn-major順で格納した配列へのポインタを返します。 |
+| `m.block(i, j, rows, cols)`<br>`m.block<rows, cols>(i, j)` | `Matrix`<br>`const Matrix` | 行列の部分行列を取得します。`i`は開始行、`j`は開始列、`rows`と`cols`は部分行列のサイズです。要素の取得・設定が可能です。以下に例を示します。 |
 
-　また、以下のメンバ関数により行列のサイズを変更できます。独自実装でサポートするのは固定行数の行列のみであるため、第一引数には常に`igesio::NoChange`を指定し、第二引数で列数を指定します。
+```cpp
+// 固定サイズの部分行列の取得
+igesio::Matrix3d mat = igesio::Matrix3d::Identity();
+auto block = mat.block<2, 2>(0, 0);
 
-- `m.conservativeResize(igesio::NoChange, new_cols)`
+// 動的サイズの部分行列の取得
+igesio::MatrixXd dyn_mat = igesio::MatrixXd::Identity(4, 4);
+auto dyn_block = dyn_mat.block(1, 1, 2, 2);
+
+// 要素の設定
+mat.block<2, 2>(0, 0) = igesio::Matrix2d::Zero();
+dyn_mat.block(1, 1, 2, 2) = igesio::MatrixXd::Zero(2, 2);
+```
+
+#### サイズの変更・変換
+
+　以下のメンバ関数により行列のサイズを変更できます。
+
+- `m.resize(new_rows, new_cols)`: サイズを変更し、必要に応じて要素を0で初期化します。固定サイズの行列に対してサイズ変更を試みると、エラーが発生します。
+- `m.conservativeResize(new_rows, new_cols)`: サイズを変更し、可能な限りデータを保持します。固定サイズの行列に対してサイズ変更を試みると、エラーが発生します。
+- `m.reshaped(new_rows, new_cols)`: サイズを変更した新しい行列を返します。元の行列のデータはコピーされます。
+- `m.transpose()`: 転置行列を返します。
+- `m.transposeInPlace()`: 自身を転置します（正方行列または動的サイズの場合のみ）。
+- `m.cast<NewType>()`: 要素の型を`NewType`に変換した行列を返します。
+
+```cpp
+// 3行×動的列数行列の作成
+igesio::Matrix3Xd mat3xN(3, 5);  // 3行5列
+mat3xN = {{ 1.0,  2.0,  3.0,  4.0,  5.0},
+          { 6.0,  7.0,  8.0,  9.0, 10.0},
+          {11.0, 12.0, 13.0, 14.0, 15.0}};
+
+// 3行8列にリサイズ（データ保持）
+// [ 1  2  3  4  5  0  0  0]
+// [ 6  7  8  9 10  0  0  0]
+// [11 12 13 14 15  0  0  0]
+mat3xN.conservativeResize(3, 8);
+
+// 3行4列にリサイズ（データ保持）
+// [ 1  2  3  4]
+// [ 6  7  8  9]
+// [11 12 13 14]
+mat3xN.conservativeResize(3, 4);
+
+// 2行4列にリサイズ（データ破棄）
+// [0 0 0 0]
+// [0 0 0 0]
+mat3xN.resize(2, 4);
+```
 
 #### 四則演算など
 
-　以下は、本ライブラリの独自実装である`igesio::Matrix`クラスでサポートされている四則演算の一覧です。加算・減算については、固定列数と動的列数を混在して使用することはできません。
+　以下は、本ライブラリの独自実装である`igesio::Matrix`クラスでサポートされている四則演算の一覧です。行列同士の演算については、固定サイズと動的サイズの行列を混在して使用する事は可能ですが、行列のサイズが一致している必要があります。
 
 | 演算 | 計算式 | 説明・コード例 |
 |:--:|:--:|---|
+| 符号反転 | $-M$ |  `m = -m;` |
 | 加算 | $M_1 + M_2$ | $M_1$ と $M_2$ のサイズが同じ場合に使用可能<br>`m1 + m2`<br>`m1 += m2` |
 | 減算 | $M_1 - M_2$ | $M_1$ と $M_2$ のサイズが同じ場合に使用可能<br>`m1 - m2`<br>`m1 -= m2` |
 | スカラー乗算 | $s \cdot M$ <br> $M \cdot s$ | `s * m`<br>`m * s`<br>`m *= s` |
@@ -220,10 +280,12 @@ using Vector3d  = detail::Matrix<3, 1>;       // 3次元ベクトル
 | `Matrix` | $1 / m_{i,j}$ | 要素ごとの逆数を計算します。<br>`m.cwiseInverse()` |
 | `Matrix` | $\sqrt{m_{i,j}}$ | 要素ごとの平方根を計算します。<br>`m.cwiseSqrt()` |
 | `Matrix` | $\|m_{i,j}\|$ | 要素ごとの絶対値を計算します。<br>`m.cwiseAbs()` |
+| `Matrix` |  | ベクトルの正規化 (単位ベクトル化) を行います。<br>`m.normalized()` |
 | `double` | $\sum m_{i,j}^2$ | 行列の要素の二乗和を計算します。<br>`m.squaredNorm()` |
 | `double` | $\sqrt{\sum m_{i,j}^2}$ | 行列の要素のノルム（ユークリッド距離）を計算します。<br>`m.norm()` |
 | `double` | $\sum m_{i,j}$ | 行列の要素の総和を計算します。<br>`m.sum()` |
 | `double` | $\prod m_{i,j}$ | 行列の要素の積を計算します。<br>`m.prod()` |
+| `double` |  | 行列式を計算します (2x2, 3x3, 4x4行列のみ)。<br>`m.determinant()` |
 
 #### 出力機能
 
@@ -239,6 +301,33 @@ dynMat = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
 std::cout << dynMat << std::endl;
 // 出力: ((1, 2, 3), (4, 5, 6))
 ```
+
+### その他の補助機能
+
+#### 回転行列の計算
+
+　`AngleAxis`関数を使用すると、回転角度と回転軸から回転行列を生成できます。
+
+```cpp
+#include "igesio/common/matrix.h"
+
+// 回転角度と回転軸から回転行列を生成
+auto axis = igesio::Vector3d::UnitY();  // Y軸を回転軸とする
+double angle = M_PI / 2.0;                // 90度回転
+auto rotation_matrix = igesio::AngleAxisd(angle, axis);
+
+std::cout << rotation_matrix << std::endl;
+```
+
+　Eigenライブラリの`Eigen::AngleAxis`クラスと異なり、`AngleAxis`は関数として提供されていることに注意してください。また、回転軸は単位ベクトルである必要があります。
+
+```cpp
+/// @brief 回転角度と回転軸から回転行列を生成する関数
+template<typename T>
+Matrix<T, 3, 3> AngleAxis(const T angle, const Vector<T, 3>& axis);
+```
+
+　以下のヘルパー関数として、`double`型の`AngleAxisd`と`float`型の`AngleAxisf`も提供されています。
 
 ## 使用例
 
@@ -481,6 +570,7 @@ igesio::Matrix3Xd   // Eigen::Matrix3Xd
 #include "igesio/common/matrix.h"
 
 // 独自のMatrixクラスが使用される
-igesio::Matrix2d    // igesio::detail::Matrix<2, 2>
-igesio::Vector3d    // igesio::detail::Matrix<3, 1>
+igesio::Matrix2d    // igesio::Matrix<double, 2, 2>
+igesio::Vector3d    // igesio::Matrix<double, 3, 1>
+igesio::Matrix3Xd   // igesio::Matrix<double, 3, igesio::Dynamic>
 ```

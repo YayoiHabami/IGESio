@@ -1,20 +1,21 @@
 /**
- * @file entities/entity_parameter_data.h
+ * @file entities/pd.h
  * @brief IGESのパラメータデータセクションを保持する構造体
  * @author Yayoi Habami
  * @date 2025-04-10
  * @copyright 2025 Yayoi Habami
  */
-#ifndef IGESIO_ENTITIES_ENTITY_PARAMETER_DATA_H_
-#define IGESIO_ENTITIES_ENTITY_PARAMETER_DATA_H_
+#ifndef IGESIO_ENTITIES_PD_H_
+#define IGESIO_ENTITIES_PD_H_
 
 #include <string>
 #include <tuple>
 #include <vector>
 
 #include "igesio/common/iges_metadata.h"
+#include "igesio/common/iges_parameter_vector.h"
 #include "igesio/entities/entity_type.h"
-#include "igesio/entities/directory_entry_param.h"
+#include "igesio/entities/de/raw_entity_de.h"
 
 
 
@@ -130,6 +131,19 @@ GetEntityParameterCount(const EntityType, const std::vector<std::string>&);
 std::vector<unsigned int>
 GetChildDEPointer(const RawEntityPD&, const SubordinateEntitySwitch);
 
+/// @brief RawEntityPDからIGESParameterVectorを作成する
+/// @param pd パラメータデータ
+/// @return IGESParameterVector
+/// @note 各パラメータは、以下の基準に従って自動的に型変換される
+///       (1) `[\+\-]?[0-9]+`: 整数型
+///       (2) `[\+\-]?([0-9]+\.([0-9]*)?|\.[0-9]+)?([DE][+-]?[0-9]+)?`: 実数型
+///       (3) `[0-9]+H[文字列]`: 文字列型 (`[文字列]`の長さと数字が同じ場合)
+///       (4) それ以外: 言語ステートメント型
+///       ただし、空文字列 (デフォルト値) の場合は、常に文字列型のデフォルト値として
+///       扱う。要素の取得の際は、`IGESParameterVector::access_as<T>(index)`で
+///       正しい型で上書きしてから使用すること
+IGESParameterVector ToIGESParameterVector(const RawEntityPD&);
+
 }  // namespace igesio::entities
 
-#endif  // IGESIO_ENTITIES_ENTITY_PARAMETER_DATA_H_
+#endif  // IGESIO_ENTITIES_PD_H_

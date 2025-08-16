@@ -56,12 +56,12 @@ The IGESio library provides the following core functionality:
 
 The IGESio library employs a two-stage conversion process for reading IGES files:
 
-1. **IGES File → Intermediate Data Structure** (`IntermediateIgesData`)
+1. **IGES File → Intermediate Data Structure** ([`IntermediateIgesData`](docs/intermediate_data_structure.md#1-intermediateigesdata-structure))
 2. **Intermediate Data Structure → Data Class** (`IGESData` class - under development)
 
 #### Reading and Writing with Intermediate Data Structure
 
-Currently available method allows reading and writing IGES files using the intermediate data structure (`IntermediateIgesData`). For detailed information, please refer to the [intermediate data structure documentation](docs/intermediate_data_structure.md).
+Currently available method allows reading and writing IGES files using the intermediate data structure ([`IntermediateIgesData`](docs/intermediate_data_structure.md#1-intermediateigesdata-structure)). For detailed information, please refer to the [intermediate data structure documentation](docs/intermediate_data_structure.md).
 
 ```cpp
 #include <igesio/reader.h>
@@ -319,16 +319,19 @@ The following documentation is available for individual source files. For files 
 
 **common module**
 
-- [Matrix](docs/common/matrix_ja.md): Fixed and dynamic size matrix classes
+- **[Matrix](docs/common/matrix_ja.md)**: Fixed/dynamic size matrix classes
 
 **entities module**
-
-- [IEntity and derived classes](docs/entities/entity_base_class_architecture_ja.md): Design of `IEntity` class and its derived classes
-- [RawEntityDE and RawEntityPD](docs/intermediate_data_structure_ja.md): Intermediate data structures for IGES file Directory Entry and Parameter Data sections
+- **[Entity class architecture](docs/entities/entity_base_class_architecture_ja.md)**
+  - Explanation of the inheritance structure of entity-related classes
+  - Explanation of the `EntityBase` class inherited by individual entity classes
+- **[Interfaces and derived classes](docs/entities/entities_ja.md)**
+  -  Explanation of the `IEntityIdentifier` class and interface classes
+  -  Explanation of individual entity classes
+- **[RawEntityDE and RawEntityPD](docs/intermediate_data_structure_ja.md)**: Intermediate data structures for IGES file Directory Entry and Parameter Data sections
 
 **models module**
-
-- [Intermediate](docs/intermediate_data_structure_ja.md): Intermediate data structures for IGES file input/output operations
+- **[Intermediate](docs/intermediate_data_structure_ja.md)**: Intermediate data structures for IGES file input/output operations
 
 **utils module**
 

@@ -37,12 +37,19 @@ jobs:
 
     - name: Install dependencies (Windows)
       if: matrix.os == 'windows-latest'
+      shell: powershell
       run: |
-        choco install -y cmake ninja
-        if ("${{ matrix.compiler }}" -eq "gcc") {
+        # Check and install only if needed
+        if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+          choco install -y cmake
+        }
+        if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+          choco install -y ninja
+        }
+        if ("${{ matrix.compiler }}" -eq "gcc" -and -not (Get-Command gcc -ErrorAction SilentlyContinue)) {
           choco install -y mingw
         }
-        if ("${{ matrix.compiler }}" -eq "clang") {
+        if ("${{ matrix.compiler }}" -eq "clang" -and -not (Get-Command clang -ErrorAction SilentlyContinue)) {
           choco install -y llvm
         }
 

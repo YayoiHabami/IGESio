@@ -18,8 +18,8 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/utils/iges_binary_reader.h"
-#include "igesio/entities/directory_entry_param.h"
-#include "igesio/entities/entity_parameter_data.h"
+#include "igesio/entities/de/raw_entity_de.h"
+#include "igesio/entities/pd.h"
 #include "igesio/models/intermediate.h"
 
 
