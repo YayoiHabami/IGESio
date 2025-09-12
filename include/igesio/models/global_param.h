@@ -252,6 +252,47 @@ struct GlobalParam {
     SerializationConfig GetSerializationConfig() const;
 };
 
+/// @brief 描画に関連するグローバルパラメータ
+struct GraphicsGlobalParam {
+    /// @brief モデル空間のスケール
+    /// @note グローバルパラメータ13
+    double model_space_scale;
+    /// @brief 線の太さの最大数
+    /// @note グローバルパラメータ16
+    int line_weight_gradations;
+    /// @brief 最大線の太さの幅
+    /// @note グローバルパラメータ17
+    double max_line_weight;
+
+    /// @brief コンストラクタ
+    /// @param model_space_scale モデル空間のスケール
+    /// @param line_weight_gradations 線の太さの最大数
+    /// @param max_line_weight 最大線の太さの幅
+    GraphicsGlobalParam(const double model_space_scale,
+                        const int line_weight_gradations,
+                        const double max_line_weight)
+        : model_space_scale(model_space_scale),
+          line_weight_gradations(line_weight_gradations),
+          max_line_weight(max_line_weight) {}
+
+    /// @brief コンストラクタ
+    /// @param global_param グローバルパラメータ
+    explicit GraphicsGlobalParam(const GlobalParam& global_param)
+        : model_space_scale(global_param.model_space_scale),
+          line_weight_gradations(global_param.line_weight_gradations),
+          max_line_weight(global_param.max_line_weight) {}
+
+    /// @brief 線の表示太さを計算する
+    /// @param line_weight_number 線の表示太さの番号 (12th DEパラメータ)
+    /// @return 線の表示太さ
+    /// @note 線の表示太さは、`line_weight_number` (12th DEパラメータ)
+    ///       を用いて、line_weight_number * max_line_weight /
+    ///       line_weight_gradations で計算される.
+    double GetLineWeight(const int line_weight_number) const {
+        return line_weight_number * max_line_weight / line_weight_gradations;
+    }
+};
+
 
 
 /**

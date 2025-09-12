@@ -23,7 +23,4 @@
 // ICurve
 #include "igesio/entities/interfaces/i_curve.h"
 
-// ISurface
-#include "igesio/entities/interfaces/i_surface.h"
-
 #endif  // IGESIO_ENTITIES_INTERFACES_H_

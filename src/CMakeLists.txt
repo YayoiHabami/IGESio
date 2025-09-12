@@ -3,6 +3,9 @@ add_subdirectory(common)
 add_subdirectory(utils)
 add_subdirectory(entities)
 add_subdirectory(models)
+if(IGESIO_ENABLE_GRAPHICS)
+    add_subdirectory(graphics)
+endif()
 
 # Create the igesio library
 add_library(igesio STATIC
@@ -24,6 +27,9 @@ target_link_libraries(igesio PUBLIC
     IGESio::entities
     IGESio::models
 )
+if(IGESIO_ENABLE_GRAPHICS)
+    target_link_libraries(igesio PUBLIC IGESio::graphics)
+endif()
 
 # Create an alias for the igesio library
 add_library(IGESio::IGESio ALIAS igesio)
