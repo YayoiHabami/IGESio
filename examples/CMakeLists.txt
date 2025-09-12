@@ -17,4 +17,7 @@ foreach(EXAMPLE_SOURCE ${EXAMPLE_SOURCES})
     target_link_libraries(${EXAMPLE_NAME} igesio)
 endforeach()
 
+# Add subdirectory
+add_subdirectory(gui)
+
 message(STATUS "Examples built successfully.")
