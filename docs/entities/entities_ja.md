@@ -12,6 +12,7 @@
   - [`ISurface`](#isurface)
   - [`ITransformation`](#itransformation)
   - [`IColorDefinition`](#icolordefinition)
+- [Annotations](#annotations)
 - [Structures](#structures)
   - [`UnsupportedEntity`](#unsupportedentity)
   - [`NullEntity` (type 0)](#nullentity-type-0)
@@ -20,6 +21,10 @@
   - [`CircularArc` (type 100)](#circulararc-type-100)
   - [`CompositeCurve` (type 102)](#compositecurve-type-102)
   - [`ConicArc` (type 104)](#conicarc-type-104)
+  - [Copious Data (type 106)](#copious-data-type-106)
+    - [`CopiousDataBase` (type 106)](#copiousdatabase-type-106)
+    - [`CopiousData` (type 106, forms 1-3)](#copiousdata-type-106-forms-1-3)
+    - [`LinearPath` (type 106, forms 11-13)](#linearpath-type-106-forms-11-13)
   - [`Line` (type 110)](#line-type-110)
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
 - [Surfaces](#surfaces)
@@ -87,6 +92,10 @@
 > ```plaintext
 > IEntityIdentifier <─── IColorDefinition
 > ```
+
+## Annotations
+
+　本節では、IGESファイルにおける注釈エンティティについて解説します。注釈エンティティは、寸法、注記、記号など、モデルに追加情報を提供するために使用されます。
 
 ## Structures
 
@@ -178,6 +187,41 @@ if (entity->IsSupported()) {
 > ```plaintext
 > IEntityIdentifier <─┬─────────── EntityBase <─┬─ ConicArc
 >                     └─ ICurve  <── ICurve2D <─┘
+> ```
+
+### Copious Data (type 106)
+
+#### `CopiousDataBase` (type 106)
+
+> Defined at [copious_data_base.h](../../include/igesio/entities/curves/copious_data_base.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <── CopiousDataBase
+> ```
+
+　すべてのCopious Data関連クラスの基底クラスです。`ICurve`等のインターフェースは実装していません。本ライブラリで未実装のフォーム番号に対しては、このクラスのインスタンスが生成されます。
+
+> 一部のCopious Dataエンティティ（Form 20～40）は、[Curve](#curves) and [Surface](#surfaces) Geometryエンティティではなく、[Annotation](#annotation)エンティティに分類されます。
+
+#### `CopiousData` (type 106, forms 1-3)
+
+> Defined at [copious_data.h](../../include/igesio/entities/curves/copious_data.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ CopiousData
+>                                    └─ ICurve  <── ICurve3D <─┘
+> ```
+
+#### `LinearPath` (type 106, forms 11-13)
+
+> Defined at [linear_path.h](../../include/igesio/entities/curves/linear_path.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ LinearPath
+>                                    └─ ICurve  <── ICurve3D <─┘
 > ```
 
 ### `Line` (type 110)

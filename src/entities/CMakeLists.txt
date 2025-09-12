@@ -26,6 +26,18 @@ add_library(igesio_entities STATIC
     # Entities
     structures/null_entity.cpp                 # 000
     curves/circular_arc.cpp                    # 100
+curves/composite_curve.cpp                 # 102
+    curves/conic_arc.cpp                       # 104
+    curves/copious_data_base.cpp               # 106
+    curves/copious_data.cpp                    # 106
+    curves/linear_path.cpp                     # 106
+
+    curves/line.cpp                            # 110
+
+    transformations/transformation_matrix.cpp  # 124
+    curves/rational_b_spline_curve.cpp         # 126
+
+    structures/color_definition.cpp            # 314
 
     # Factory
     factory.cpp

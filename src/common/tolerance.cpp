@@ -20,3 +20,11 @@ bool igesio::IsApproxOne(const double value, const double tolerance) {
 bool igesio::IsApproxEqual(const double a, const double b, const double tolerance) {
     return std::abs(a - b) <= tolerance;
 }
+
+bool igesio::IsApproxLessThan(const double a, const double b, const double tolerance) {
+    return (b - a) > tolerance;  // b - a が許容誤差より大きい場合はtrue
+}
+
+bool igesio::IsApproxGreaterThan(const double a, const double b, const double tolerance) {
+    return (a - b) > tolerance;  // a - b が許容誤差より大きい場合はtrue
+}

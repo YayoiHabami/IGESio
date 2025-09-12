@@ -12,6 +12,7 @@ This document covers the interfaces for specific entities and individual entity 
   - [`ISurface`](#isurface)
   - [`ITransformation`](#itransformation)
   - [`IColorDefinition`](#icolordefinition)
+- [Annotations](#annotations)
 - [Structures](#structures)
   - [`UnsupportedEntity`](#unsupportedentity)
   - [`NullEntity` (type 0)](#nullentity-type-0)
@@ -20,6 +21,10 @@ This document covers the interfaces for specific entities and individual entity 
   - [`CircularArc` (type 100)](#circulararc-type-100)
   - [`CompositeCurve` (type 102)](#compositecurve-type-102)
   - [`ConicArc` (type 104)](#conicarc-type-104)
+  - [`Copious Data` (type 106)](#copious-data-type-106)
+    - [`CopiousDataBase` (type 106)](#copiousdatabase-type-106)
+    - [`CopiousData` (type 106, forms 1-3)](#copiousdata-type-106-forms-1-3)
+    - [`LinearPath` (type 106, forms 11-13)](#linearpath-type-106-forms-11-13)
   - [`Line` (type 110)](#line-type-110)
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
 - [Surfaces](#surfaces)
@@ -87,6 +92,10 @@ The `ITransformation` class is the interface for the Transformation Matrix (Type
 > ```plaintext
 > IEntityIdentifier <─── IColorDefinition
 > ```
+
+## Annotations
+
+This section describes the annotation entities in IGES files. Annotation entities are used to add information to the model, such as dimensions, notes, and symbols.
 
 ## Structures
 
@@ -178,6 +187,41 @@ This section describes the curve entities in IGES files. Curve entities are used
 > ```plaintext
 > IEntityIdentifier <─┬─────────── EntityBase <─┬─ ConicArc
 >                     └─ ICurve  <── ICurve2D <─┘
+> ```
+
+### `Copious Data` (type 106)
+
+#### `CopiousDataBase` (type 106)
+
+> Defined at [copious_data_base.h](../../include/igesio/entities/curves/copious_data_base.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <── CopiousDataBase
+> ```
+
+This is the base class for all Copious Data related classes. It does not implement interfaces such as `ICurve`. An instance of this class is generated for form numbers not implemented in this library.
+
+> Some Copious Data entities (Forms 20-40) are classified as [Annotation](#annotation) entities, not [Curve](#curves) and [Surface](#surfaces) Geometry entities.
+
+#### `CopiousData` (type 106, forms 1-3)
+
+> Defined at [copious_data.h](../../include/igesio/entities/curves/copious_data.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ CopiousData
+>                                    └─ ICurve  <── ICurve3D <─┘
+> ```
+
+#### `LinearPath` (type 106, forms 11-13)
+
+> Defined at [linear_path.h](../../include/igesio/entities/curves/linear_path.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ LinearPath
+>                                    └─ ICurve  <── ICurve3D <─┘
 > ```
 
 ### `Line` (type 110)
