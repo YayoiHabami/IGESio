@@ -10,7 +10,6 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <iostream>
 
 #include "./shaders.h"
 
@@ -180,6 +179,12 @@ void EntityRenderer::SetBackgroundColor(
 void EntityRenderer::Draw() {
     // 描画対象のサイズが0なら何もしない
     if (display_width_ <= 0 || display_height_ <= 0) return;
+
+    // 背景色と深度バッファをクリア
+    gl_->ClearColor(background_color_[0], background_color_[1],
+                 background_color_[2], background_color_[3]);
+    gl_->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     // 描画するエンティティが1つもない場合は何もしない
     if (IsEmpty()) return;
 
@@ -187,11 +192,6 @@ void EntityRenderer::Draw() {
         gl_->Viewport(0, 0, display_width_, display_height_);
         is_resized_ = false;  // リサイズフラグをリセット
     }
-
-    // 背景色を設定
-    gl_->ClearColor(background_color_[0], background_color_[1],
-                 background_color_[2], background_color_[3]);
-    gl_->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // ビュー行列と投影行列を取得
     auto view_matrix = camera_.GetViewMatrix();

@@ -17,8 +17,6 @@
 #include "igesio/entities/entity_base.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
 
-#include <iostream>
-
 
 
 namespace igesio::graphics {

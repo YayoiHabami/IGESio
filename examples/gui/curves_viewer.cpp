@@ -53,12 +53,8 @@ class CurvesViewerGUI : public IgesViewerGUI {
         for (auto& p : show_entity_) {
             i_ent::EntityType type = p.first;
             bool show = p.second;
-            std::cout << ToString(type) << ": " << (show ? "Show" : "Hide") << std::endl;
             if (show) {
                 for (auto& entity : entities_[type]) {
-                    if (auto ptr = std::dynamic_pointer_cast<i_ent::CompositeCurve>(entity)) {
-                        std::cout << "  CompositeCurve with " << ptr->GetCurveCount() << " curves." << std::endl;
-                    }
                     Renderer().AddEntity(entity);
                 }
             } else {

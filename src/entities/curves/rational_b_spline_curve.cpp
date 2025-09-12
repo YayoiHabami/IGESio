@@ -105,8 +105,6 @@ igesio::IGESParameterVector RationalBSplineCurve::GetMainPDParameters() const {
     return params;
 }
 
-#include <iostream>
-
 size_t RationalBSplineCurve::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
     // パラメータの数を確認
