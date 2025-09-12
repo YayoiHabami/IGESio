@@ -26,7 +26,7 @@ namespace igesio::entities {
 class CompositeCurve : public EntityBase, public virtual ICurve3D {
  protected:
     /// @brief 複合曲線を構成する曲線のリスト
-    std::vector<PointerContainer<ICurve>> curves_;
+    std::vector<PointerContainer<false, ICurve>> curves_;
 
     /// @brief Parameter Dataセクションの、追加ポインタを除いたデータを取得する
     /// @return パラメータデータのベクトル

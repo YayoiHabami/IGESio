@@ -92,11 +92,11 @@ class EntityBase : public virtual IEntityIdentifier {
     ///       Associativity Instance Entity (Type 402), General Note Entity
     ///       (Type 212), Text Template Entity (Type 312) へのポインタ用
     ///       パラメータグループ
-    std::vector<PointerContainer<EntityBase>> former_additional_pointers_;
+    std::vector<PointerContainer<true, EntityBase>> former_additional_pointers_;
     /// @brief 追加のポインタ2 (Parameter Data Section)
     /// @note 追加のポインタ1に続く (場合のある)、プロパティまたは属性テーブルへの
     ///       ポインタ用パラメータグループ
-    std::vector<PointerContainer<EntityBase>> latter_additional_pointers_;
+    std::vector<PointerContainer<true, EntityBase>> latter_additional_pointers_;
 
     /// @brief Parameter Dataセクションの、追加ポインタを除いたデータを取得する
     /// @return パラメータデータのベクトル
