@@ -169,6 +169,7 @@ option(IGESIO_BUILD_TESTING "Build the tests" OFF)
 
 # Add the tests subdirectory if IGESIO_BUILD_TESTING is ON
 if(IGESIO_BUILD_TESTING)
+  message(STATUS "Building tests...")
   include(FetchContent)
 
   # Unify Google Test Runtime Library (for WIN32)
@@ -188,6 +189,16 @@ if(IGESIO_BUILD_TESTING)
   enable_testing()
 
   add_subdirectory(tests)
+endif()
+
+
+
+# Option to build examples
+option(IGESIO_BUILD_EXAMPLE "Build the examples" OFF)
+
+if(IGESIO_BUILD_EXAMPLE)
+  message(STATUS "Building examples...")
+  add_subdirectory(examples)
 endif()
 
 
