@@ -81,8 +81,8 @@ igesio::IGESParameterVector TransMatrix::GetMainPDParameters() const {
 size_t TransMatrix::SetMainPDParameters(const pointer2ID& de2id) {
     // パラメータの数が12であることを確認
     auto& pd = pd_parameters_;
-    if (pd.size() != 12) {
-        throw igesio::DataFormatError("TransformationMatrix requires exactly 12 parameters");
+    if (pd.size() < 12) {
+        throw igesio::DataFormatError("TransformationMatrix requires at least 12 parameters");
     }
     auto form_number = GetFormNumber();
     // フォーム番号が0, 1, 10, 11, 12のいずれかであることを確認

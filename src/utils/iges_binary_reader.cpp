@@ -105,6 +105,9 @@ ReadToNextLineBreak(std::ifstream& fs, const std::vector<char>& line_break) {
     }
 
     if (!line_break_found) {
+        // EOFに達している場合はエラーを出さない
+        if (fs.eof()) return line;
+
         // kMaxColumn+1文字目までに改行文字が見つからなかった場合
         // 末尾に\0を追加してエラー
         line.push_back('\0');

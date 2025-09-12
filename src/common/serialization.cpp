@@ -34,7 +34,7 @@ bool AssertStrConvertibility(const std::string& str, const bool is_default_set) 
     // デフォルト値が設定されていない場合はエラー
     throw igesio::TypeConversionError(
             "A value must always be provided for any field"
-            "that is required and has no default value");
+            " that is required and has no default value");
 }
 
 /// @brief 文字が0-9の数字であるかを確認する
