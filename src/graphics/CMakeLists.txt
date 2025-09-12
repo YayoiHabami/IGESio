@@ -1,6 +1,16 @@
 # Graphics module
 add_library(igesio_graphics STATIC
     core/i_entity_graphics.cpp
+    curves/i_curve_graphics.cpp
+
+    curves/circular_arc_graphics.cpp     # 100
+    curves/composite_curve_graphics.cpp  # 102
+    curves/conic_arc_graphics.cpp        # 104
+    curves/copious_data_graphics.cpp     # 106
+    curves/line_graphics.cpp             # 110
+    curves/rational_b_spline_curve_graphics.cpp  # 126
+
+    factory.cpp
 )
 
 # Set the source and include directories
