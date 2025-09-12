@@ -1,5 +1,6 @@
 # Graphics module
 add_library(igesio_graphics STATIC
+    core/camera.cpp
     core/i_entity_graphics.cpp
     curves/i_curve_graphics.cpp
 
@@ -11,6 +12,8 @@ add_library(igesio_graphics STATIC
     curves/rational_b_spline_curve_graphics.cpp  # 126
 
     factory.cpp
+
+    renderer.cpp
 )
 
 # Set the source and include directories
