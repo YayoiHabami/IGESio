@@ -71,15 +71,16 @@ ReadIgesIntermediate(const char* path = nullptr) {
     // The IGES file "input.igs" located in the "examples/data" directory.
     // If a path is provided via command line argument, use it instead.
     std::filesystem::path iges_path;
-    auto source_dir = std::filesystem::absolute(__FILE__).parent_path();
     if (path) {
         // Use the provided path
         iges_path = std::filesystem::path(path);
         if (!iges_path.is_absolute()) {
-            iges_path = source_dir / iges_path;
+            auto current_dir = std::filesystem::current_path();
+            iges_path = current_dir / iges_path;
         }
     } else {
         // Use the default path
+        auto source_dir = std::filesystem::absolute(__FILE__).parent_path();
         iges_path = source_dir / "data" / "input.igs";
     }
 

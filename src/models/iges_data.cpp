@@ -47,20 +47,6 @@ void IgesData::SetPointerIfUnset(std::shared_ptr<entities::EntityBase> entity) {
     }
 }
 
-std::shared_ptr<igesio::entities::EntityBase>
-IgesData::AddEntity(const entities::RawEntityDE& de,
-                    const IGESParameterVector& pd,
-                    const entities::pointer2ID& de2id) {
-    // エンティティを作成
-    auto entity = entities::EntityFactory::CreateEntity(de, pd, de2id);
-
-    // エンティティを追加
-    AddEntity(entity);
-
-    // 追加したエンティティのポインタを返す
-    return entity;
-}
-
 bool IgesData::AreAllReferencesSet() const {
     auto unresolved = GetUnresolvedReferences();
     return unresolved.empty();

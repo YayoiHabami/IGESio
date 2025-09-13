@@ -2,6 +2,7 @@
 set(EXAMPLE_SOURCES
     iges_data_from_scratch.cpp
     intermediate_data_io.cpp
+    iges_data_io.cpp
 )
 
 

@@ -21,11 +21,18 @@
 #include "igesio/entities/de/raw_entity_de.h"
 #include "igesio/entities/pd.h"
 #include "igesio/models/intermediate.h"
+#include "igesio/models/iges_data.h"
 
 
 
 namespace igesio {
 
+/// @brief IGESファイルを読み込むためのクラス
+/// @note このクラスでは、IGESファイルを読み込み中間データ構造
+///       (models::IntermediateIgesData) の各要素を作成する.
+///       実際のデータ操作に使用するIgesDataクラス (および
+///       個別のエンティティクラス) の作成は行わない. それらの作成は
+///       以下のReadIges関数で行う.
 class IgesReader {
     /// @brief リーダー
     utils::IgesBinaryReader reader_;
@@ -182,6 +189,28 @@ class IgesReader {
 ///       validate_strictlyをtrueにする際は注意が必要.
 models::IntermediateIgesData
 ReadIgesIntermediate(const std::string&, const bool = false);
+
+/// @brief 中間データ構造からIgesDataクラスを生成する
+/// @param intermediate 中間データ構造
+/// @return 生成されたIgesDataクラス
+/// @throw igesio::DataFormatError パラメータの数や形式が不正な場合や、
+///        参照されているエンティティが存在しない場合など
+models::IgesData
+ConvertFromIntermediate(const models::IntermediateIgesData&);
+
+/// @brief IGESファイルを読み込み、IgesDataクラスを返す
+/// @param file_path 読み込むIGESファイルのパス
+/// @param validate_strictly 仕様にのっとった厳密な検証を行うかどうか.
+///        現状はDEセクションのデータ形式の検証のみを行う.
+/// @return 生成されたIgesDataクラス
+/// @throw igesio::FileOpenError ファイルが開けなかった場合
+/// @throw igesio::LineFormatError 行の長さが規定値以外の場合
+/// @throw igesio::DataFormatError 読み込んだファイルのデータの形式が
+///        仕様に合致しない場合. validate_strictlyがfalseの場合は、
+///        エンティティのPDパラメータが不正な場合や、参照が未解決の場合に発生する.
+/// @note 仕様に厳密には従っていないIGESファイルも存在するため、
+///       validate_strictlyをtrueにする際は注意が必要.
+models::IgesData ReadIges(const std::string&, const bool = false);
 
 }  // namespace igesio
 

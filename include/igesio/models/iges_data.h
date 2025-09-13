@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "igesio/common/id_generator.h"
 #include "igesio/entities/entity_base.h"
 
 
@@ -22,6 +23,9 @@ namespace igesio::models {
 /// @note 一つのIGESファイルに対応するデータ構造を表す.
 class IgesData {
  private:
+    /// @brief IGESデータのID
+    uint64_t id_ = igesio::IDGenerator::Generate();
+
     /// @brief エンティティのIDとポインタのマッピング
     std::unordered_map<uint64_t, std::shared_ptr<entities::EntityBase>> entities_;
 
@@ -34,6 +38,10 @@ class IgesData {
 
 
  public:
+    /// @brief IgesDataのIDを取得する
+    /// @return IgesDataのID
+    uint64_t GetID() const { return id_; }
+
     /// @brief エンティティを追加する
     /// @param entity 追加するエンティティ
     /// @return 追加に成功した場合は、そのエンティティのIDを返す.
@@ -53,18 +61,6 @@ class IgesData {
 
         return id;
     }
-
-    /// @brief エンティティを追加する
-    /// @param de DEレコードのパラメータ
-    /// @param pd PDレコードのパラメータ
-    /// @param de2id DEポインターとIDのマッピング
-    /// @return 追加されたエンティティのポインタ
-    /// @throw igesio::DataFormatError 未知のエンティティタイプの場合
-    /// @throw igesio::DataFormatError parametersの数が正しくない場合
-    /// @throw std::bad_variant_access parametersの型が不正な場合
-    std::shared_ptr<entities::EntityBase>
-    AddEntity(const entities::RawEntityDE&, const IGESParameterVector&,
-              const entities::pointer2ID& = {});
 
     /// @brief エンティティが参照する全てのエンティティのポインタが設定済みか
     /// @return 一つでも未設定のポインタがある場合は`false`
@@ -86,6 +82,10 @@ class IgesData {
     /// @return エンティティのポインタのマップ
     const std::unordered_map<uint64_t, std::shared_ptr<entities::EntityBase>>&
     GetEntities() const { return entities_; }
+
+    /// @brief エンティティの数を取得する
+    /// @return エンティティの数
+    size_t GetEntityCount() const { return entities_.size(); }
 
 
 
