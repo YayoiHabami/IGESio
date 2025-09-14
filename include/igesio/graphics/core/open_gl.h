@@ -161,6 +161,9 @@ class OpenGL : public IOpenGL {
     void EnableVertexAttribArray(GLuint index) override {
         glEnableVertexAttribArray(index);
     }
+    void DisableVertexAttribArray(GLuint index) override {
+        glDisableVertexAttribArray(index);
+    }
     void VertexAttribPointer(GLuint index, GLint size, GLenum type,
                                                 GLboolean normalized, GLsizei stride,
                                                 const void *pointer) override {

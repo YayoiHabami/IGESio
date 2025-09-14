@@ -80,6 +80,10 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
         return std::make_unique<i_graph::CopiousDataGraphics>(copious_data, gl);
     } else if (auto line = std::dynamic_pointer_cast<const i_ent::Line>(entity)) {
         // Type 110: Lineの描画オブジェクトを作成
+        if (line->GetLineType() == i_ent::LineType::kSegment ||
+            line->GetLineType() == i_ent::LineType::kRay) {
+            return std::make_unique<i_graph::SegmentGraphics>(line, gl);
+        }
         return std::make_unique<i_graph::LineGraphics>(line, gl);
     } else if (auto r_bspline = std::dynamic_pointer_cast<
                const i_ent::RationalBSplineCurve>(entity)) {

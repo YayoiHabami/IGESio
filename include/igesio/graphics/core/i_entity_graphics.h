@@ -45,7 +45,9 @@ enum class ShaderType {
     ///        (Type: 106, Forms: 1-3, 11-13; Copious Data)
     kCopiousData,
 
-    /// @brief 線分/半直線/直線シェーダー (Type: 110; Line)
+    /// @brief 線分シェーダー (Type: 110, Form 0; Line)
+    kSegment,
+    /// @brief 半直線/直線シェーダー (Type: 110, Forms 1-2; Line)
     kLine,
     /// @brief NURBS曲線シェーダー (Type: 126; Rational B-Spline Curve)
     kRationalBSplineCurve,

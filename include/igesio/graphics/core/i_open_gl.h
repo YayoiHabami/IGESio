@@ -104,6 +104,7 @@ class IOpenGL {
 
     virtual void DrawArrays(GLenum mode, GLint first, GLsizei count) = 0;
     virtual void EnableVertexAttribArray(GLuint index) = 0;
+    virtual void DisableVertexAttribArray(GLuint index) = 0;
     virtual void VertexAttribPointer(GLuint index, GLint size, GLenum type,
                                      GLboolean normalized, GLsizei stride,
                                      const void *pointer) = 0;

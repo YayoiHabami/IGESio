@@ -8,8 +8,9 @@
  */
 #include "igesio/entities/curves/conic_arc.h"
 
-#include <vector>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "igesio/common/tolerance.h"
 
@@ -46,6 +47,23 @@ static std::array<double, 2> calculate_parameter_range(
 }
 
 }  // namespace
+
+
+
+
+std::string
+i_ent::ToString(const ConicType type) {
+    switch (type) {
+        case ConicType::kEllipse:
+            return "Ellipse";
+        case ConicType::kHyperbola:
+            return "Hyperbola";
+        case ConicType::kParabola:
+            return "Parabola";
+        default:
+            return "Unknown";
+    }
+}
 
 
 
@@ -89,7 +107,7 @@ ConicArc::ConicArc(const std::pair<double, double>& radius,
     auto rx2 = rx * rx, ry2 = ry * ry;
 
     pd_parameters_ = IGESParameterVector{
-            ry2, 0.0, rx2, 0.0,                // A, B, C, D, E
+            ry2, 0.0, rx2, 0.0,                // A, B, C, D
             0.0, - rx2 * ry2, z_t,             // E, F, z_t
             0.0 + rx * std::cos(start_angle),  // 始点 x
             0.0 + ry * std::sin(start_angle),  // 始点 y
@@ -162,7 +180,9 @@ igesio::ValidationResult ConicArc::ValidatePD() const {
     if (!calculated_type.has_value() || GetConicType() != *calculated_type) {
         errors.emplace_back(
             "Form number in Directory Entry does not match the conic type "
-            "derived from coefficients.");
+            "derived from coefficients. Expected: " + ToString(*calculated_type) +
+            " (" + std::to_string(static_cast<int>(*calculated_type)) + "), Actual: " +
+            ToString(GetConicType()) + " (" + std::to_string(form_number_) + ").");
     }
 
     // 3. 縮退形式でないか検証 (Q1=0)
@@ -397,22 +417,20 @@ double ConicArc::EllipseEndAngle() const {
 std::optional<i_ent::ConicType> ConicArc::CalculateConicType() const {
     auto [A, B, C, D, E, F] = coeffs_;
 
-    const double q2 = A * C - B * B / 4.0;
-    const double q3 = A + C;
+    // 規格書の式だと正しく判定できないことがあるため、q2の式のみを使用
+    auto q2 = A * C - (B * B) / 4.0;
 
-    if (IsApproxZero(q2, kGeometryTolerance)) {
-        return ConicType::kParabola;
+    if (IsApproxZero(q2)) {
+        // parabola
+        return i_ent::ConicType::kParabola;
+    } else if (IsApproxGreaterThan(q2, 0.0)) {
+        // ellipse
+        return i_ent::ConicType::kEllipse;
+    } else if (IsApproxLessThan(q2, 0.0)) {
+        // hyperbola
+        return i_ent::ConicType::kHyperbola;
     }
-    if (q2 > 0) {
-        // 楕円の条件: Q2 > 0 and Q1*Q3 < 0.
-        // TODO: 詳細なQ1の計算を行う
-        if (q3 * q2 < 0) {
-            return ConicType::kEllipse;
-        }
-        return std::nullopt;  // 楕円の条件を満たさない
-    }
-    // q2 < 0
-    return ConicType::kHyperbola;
+    return std::nullopt;  // 不正な円錐曲線
 }
 
 bool ConicArc::IsOnConic(const double x, const double y) const {

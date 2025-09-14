@@ -102,15 +102,16 @@ class EntityRenderer {
     /// @brief エンティティの描画オブジェクトを作成する
     /// @param entity 描画するエンティティのポインタ (const)
     /// @param global_param 描画に関するグローバルパラメータ
+    /// @return エンティティの描画オブジェクトを作成できた場合はtrue
     /// @note すでに同じIDのエンティティが存在する場合は何もしない
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
-    void AddEntity(std::shared_ptr<const T> entity,
+    bool AddEntity(std::shared_ptr<const T> entity,
                    const std::shared_ptr<const models::GraphicsGlobalParam>
-                            global_param = nullptr) {
-        if (!entity) return;
+                   global_param = nullptr) {
+        if (!entity) return false;
 
-        if (HasEntity(entity->GetID())) return;
+        if (HasEntity(entity->GetID())) return false;
 
         // 新しいエンティティを追加
         auto ptr = std::static_pointer_cast<const entities::IEntityIdentifier>(entity);
@@ -123,22 +124,24 @@ class EntityRenderer {
             }
 
             AddGraphicsObject(std::move(graphics));
+            return true;
         }
+        return false;
     }
 
     /// @brief エンティティの描画オブジェクトを作成する
     /// @param entity 描画するエンティティのポインタ (非const)
     /// @param global_param 描画に関するグローバルパラメータ
-    /// @return エンティティの描画オブジェクト (const)
+    /// @return エンティティの描画オブジェクトを作成できた場合はtrue
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
-    void AddEntity(std::shared_ptr<T> entity,
+    bool AddEntity(std::shared_ptr<T> entity,
                    const std::shared_ptr<const models::GraphicsGlobalParam>
-                            global_param = nullptr) {
-        if (!entity) return;
+                   global_param = nullptr) {
+        if (!entity) return false;
 
         // constポインタに変換してAddEntityを呼び出す
-        AddEntity(std::const_pointer_cast<const T>(entity), global_param);
+        return AddEntity(std::const_pointer_cast<const T>(entity), global_param);
     }
 
     /// @brief 指定されたIDのエンティティの描画オブジェクトを削除する

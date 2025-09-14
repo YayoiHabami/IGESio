@@ -163,14 +163,16 @@ igesio::IGESParameterVector
 CopiousDataBase::GetMainPDParameters() const {
     // データをIGESParameterVectorに変換
     IGESParameterVector params;
-    auto vec_size = 1 + GetCount() * GetIP();
-    if (GetIP() == 1) vec_size += 1;
+    size_t vec_size;
+    if (GetIP() == 1) vec_size = 2 + 2 * GetCount();
+    if (GetIP() == 2) vec_size = 1 + 3 * GetCount();
+    if (GetIP() == 3) vec_size = 1 + 6 * GetCount();
     params.reserve(vec_size);
 
     // IP
     params.push_back(GetIP());
     // 座標値の数
-    params.push_back(GetCount());
+    params.push_back(static_cast<int>(GetCount()));
     // Z座標値 (IP=1の場合)
     if (GetIP() == 1) params.push_back(coordinates_(2, 0));
 

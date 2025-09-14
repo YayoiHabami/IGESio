@@ -9,7 +9,9 @@
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include <igesio/entities/curves/circular_arc.h>
 #include <igesio/entities/curves/composite_curve.h>
@@ -20,6 +22,7 @@
 #include <igesio/entities/curves/rational_b_spline_curve.h>
 #include <igesio/entities/structures/color_definition.h>
 #include <igesio/entities/transformations/transformation_matrix.h>
+#include <igesio/reader.h>
 
 // Include this file before other OpenGL/GLFW headers
 // (This file includes 'glad/glad.h' and 'GLFW/glfw3.h')
@@ -33,6 +36,8 @@ using Matrix3d = igesio::Matrix3d;
 using Vector3d = igesio::Vector3d;
 using Vector2d = igesio::Vector2d;
 namespace i_ent = igesio::entities;
+namespace i_mod = igesio::models;
+namespace i_graph = igesio::graphics;
 using igesio::graphics::IgesViewerGUI;
 
 }  // namespace
@@ -47,6 +52,8 @@ class CurvesViewerGUI : public IgesViewerGUI {
     std::map<i_ent::EntityType, bool> show_entity_;
     // 全てのエンティティを表示するフラグ
     bool show_all_ = true;
+    // IGESデータ
+    i_mod::IgesData iges_data_;
 
     // エンティティの表示を更新する関数
     void UpdateEntities() {
@@ -66,6 +73,34 @@ class CurvesViewerGUI : public IgesViewerGUI {
         needs_redraw_ = true;
     }
 
+    // IGESファイルを読み込む関数
+    void LoadIgesFile(const std::string& filename) {
+        try {
+            iges_data_ = igesio::ReadIges(filename);
+
+            // 既存のエンティティをクリア
+            for (auto& p : entities_) {
+                for (auto& entity : p.second) {
+                    Renderer().RemoveEntity(entity->GetID());
+                }
+            }
+            entities_.clear();
+            show_entity_.clear();
+
+            // IGESファイルからエンティティを取得して追加
+            const auto& iges_entities = iges_data_.GetEntities();
+            for (const auto& pair : iges_entities) {
+                AddEntity(pair.second);
+            }
+
+            // カメラをリセット
+            Renderer().Camera().Reset();
+            needs_redraw_ = true;
+        } catch (const std::exception& e) {
+            std::cerr << "Error loading IGES file: " << e.what() << std::endl;
+        }
+    }
+
  public:
     // コンストラクタ
     explicit CurvesViewerGUI(int width = 1280, int height = 720)
@@ -78,10 +113,35 @@ class CurvesViewerGUI : public IgesViewerGUI {
 
     // エンティティを追加する関数 (SetupViewerで使用)
     void AddEntity(std::shared_ptr<i_ent::EntityBase> entity) {
+        if (!entity->IsSupported()) {
+            std::cerr << "Entity type " << ToString(entity->GetType())
+                      << " is not supported." << std::endl;
+            return;
+        } else if (auto result = entity->Validate(); !result.is_valid) {
+            std::cerr << "Entity " << entity->GetID() << " is invalid: "
+                      << result.Message() << std::endl;
+            return;
+        }
+
+        if (entity->GetSubordinateEntitySwitch() ==
+            i_ent::SubordinateEntitySwitch::kPhysicallyDependent) {
+            // すでに親エンティティに追加されている可能性があるのでスキップ
+            return;
+        } else if (entity->GetType() == i_ent::EntityType::kTransformationMatrix ||
+                   entity->GetType() == i_ent::EntityType::kColorDefinition) {
+            return;
+        }
+
         i_ent::EntityType type = entity->GetType();
+        if (!Renderer().AddEntity(entity)) {
+            std::cerr << "Failed to add entity " << entity->GetID()
+                      << " (type " << ToString(type)
+                      << ") to renderer." << std::endl;
+            return;
+        }
+
         entities_[type].push_back(entity);
         show_entity_[type] = true;  // 初期で表示
-        Renderer().AddEntity(entity);
     }
 
     // RenderControlsをオーバーライド
@@ -101,6 +161,21 @@ class CurvesViewerGUI : public IgesViewerGUI {
         ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)",
                     cam_target[0], cam_target[1], cam_target[2]);
 
+        // カメラの投影モード切り替え
+        ImGui::Text("Projection Mode");
+        int current_mode = static_cast<int>(renderer_.Camera().GetProjectionMode());
+        if (ImGui::RadioButton("Perspective", &current_mode,
+                static_cast<int>(i_graph::ProjectionMode::kPerspective))) {
+            renderer_.Camera().SetProjectionMode(i_graph::ProjectionMode::kPerspective);
+            needs_redraw_ = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Orthographic", &current_mode,
+                static_cast<int>(i_graph::ProjectionMode::kOrthographic))) {
+            renderer_.Camera().SetProjectionMode(i_graph::ProjectionMode::kOrthographic);
+            needs_redraw_ = true;
+        }
+
         // カメラの操作
         if (ImGui::Button("Reset Camera")) {
             renderer_.Camera().Reset();
@@ -111,6 +186,14 @@ class CurvesViewerGUI : public IgesViewerGUI {
         if (ImGui::ColorEdit3("Background",
                               renderer_.GetBackgroundColorRef().data())) {
             needs_redraw_ = true;
+        }
+        ImGui::Separator();
+
+        // IGESファイル読み込みボタン
+        static char filename_buf[256] = "";  // ファイル名入力バッファ
+        ImGui::InputText("IGES File", filename_buf, IM_ARRAYSIZE(filename_buf));
+        if (ImGui::Button("Load IGES File")) {
+            LoadIgesFile(filename_buf);
         }
         ImGui::Separator();
 
@@ -144,105 +227,9 @@ class CurvesViewerGUI : public IgesViewerGUI {
     }
 };
 
-
-
-void SetupViewer(CurvesViewerGUI& viewer) {
-    // 描画したいエンティティを設定
-    // 例: 半径2.0の円を作成
-    auto my_curve = std::make_shared<i_ent::CircularArc>(
-            Vector2d{0.0, 0.0}, 2.0, 1.0, 2.15);
-    my_curve->OverwriteColor(i_ent::ColorNumber::kBlack);
-    viewer.AddEntity(my_curve);
-
-    auto my_circle = std::make_shared<i_ent::CircularArc>(
-            Vector2d{0.0, 0.0}, 1.2);
-    my_circle->OverwriteColor(i_ent::ColorNumber::kBlue);
-    viewer.AddEntity(my_circle);
-
-    auto trans_circle = std::make_shared<i_ent::CircularArc>(
-            Vector2d{0.0, 0.0}, 1.1);
-    trans_circle->OverwriteColor(i_ent::ColorNumber::kMagenta);
-    auto trans_matrix = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::AngleAxisd(igesio::kPi / 4, Vector3d::UnitX()),
-            Vector3d{0, 0, 0.5});
-    trans_circle->OverwriteTransformationMatrix(trans_matrix);
-    viewer.AddEntity(trans_circle);
-
-    // 複合曲線を作成
-    auto curve1 = std::make_shared<i_ent::CircularArc>(
-            Vector2d{0.0, 0.0}, Vector2d{1.0, 0.0}, Vector2d{0.0, 1.0});
-    auto curve2 = std::make_shared<i_ent::CircularArc>(
-            Vector2d{0.0, 1.5}, Vector2d{0.0, 1.0}, Vector2d{-0.5, 1.5});
-    auto curve3 = std::make_shared<i_ent::CircularArc>(
-            Vector2d{1.5, 1.5}, Vector2d{-0.5, 1.5}, Vector2d{3.5, 1.5});
-    auto composite_curve = std::make_shared<i_ent::CompositeCurve>();
-    composite_curve->AddCurve(curve1);
-    composite_curve->AddCurve(curve2);
-    composite_curve->AddCurve(curve3);
-    viewer.AddEntity(composite_curve);
-
-    // ColorDefinitionエンティティを作成
-    auto color_def = std::make_shared<i_ent::ColorDefinition>(
-            std::array<double, 3>{50.0, 100.0, 30.0}, "hello");
-    composite_curve->OverwriteColor(color_def);
-
-    // ConicArcを作成
-    auto conic_arc = std::make_shared<i_ent::ConicArc>(
-            std::pair<double, double>{1.0, 0.5},
-            0.0, igesio::kPi * 1.25, 2.0);
-    viewer.AddEntity(conic_arc);
-
-    // CopiousDataを作成
-    igesio::Matrix3Xd coords(3, 4);
-    coords << 0.0, 1.0,  1.0,  0.0,
-              0.0, 0.0, -1.0,  2.0,
-              0.0, 3.0,  0.0, -1.0;
-    auto copious_data = std::make_shared<i_ent::CopiousData>(
-            i_ent::CopiousDataType::kPoints3D, coords);
-    viewer.AddEntity(copious_data);
-
-    auto linear_path = std::make_shared<i_ent::LinearPath>(
-            i_ent::CopiousDataType::kPolyline3D, coords);
-    viewer.AddEntity(linear_path);
-
-    // 線分/半直線を作成
-    auto segment = std::make_shared<i_ent::Line>(
-            Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.5, 0.5},
-            i_ent::LineType::kSegment);
-    viewer.AddEntity(segment);
-
-    auto ray = std::make_shared<i_ent::Line>(
-            Vector3d{-1.0, 0.0, 0.0}, Vector3d{2.0, 1.0, 0.5},
-            i_ent::LineType::kRay);
-    segment->OverwriteColor(i_ent::ColorNumber::kRed);
-    viewer.AddEntity(ray);
-
-    // NURBS曲線を作成
-    auto param = igesio::IGESParameterVector{
-        3,  // 次数
-        3,  // 制御点の数-1
-        false, false, false, false,  // 非周期の開NURBS曲線
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // ノットベクトル
-        1.0, 1.0, 1.0, 1.0,  // 重み
-        -4.0, -4.0,  0.0,    // 制御点 P(0)
-        -1.5,  7.0,  3.5,    // 制御点 P(1)
-         4.0, -3.0,  1.0,    // 制御点 P(2)
-         4.0,  4.0,  0.0,    // 制御点 P(3)
-        0.0, 1.0,            // パラメータ範囲 V(0), V(1)
-        0.0, 0.0, 1.0        // 定義平面の法線ベクトル
-    };
-    auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(
-        i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kRationalBSplineCurve),
-        param);
-    nurbs_c->OverwriteColor(i_ent::ColorNumber::kCyan);
-    nurbs_c->SetLineWeightNumber(2);
-    viewer.AddEntity(nurbs_c);
-}
-
 int main() {
     try {
         auto viewer = CurvesViewerGUI(1280, 720);
-        SetupViewer(viewer);
 
         // イベントループを開始
         viewer.Run();

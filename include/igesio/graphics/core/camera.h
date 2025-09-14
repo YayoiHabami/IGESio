@@ -54,7 +54,7 @@ constexpr float kDefaultObliqueFactorY = kDefaultObliqueFactorX;
 class Camera {
  private:
     /// @brief カメラの位置座標 (eye) (x, y, z)
-    igesio::Vector3f position_ = {0.0f, 0.0f, 5.0f};
+    igesio::Vector3f position_ = {0.0f, 0.0f, -5.0f};
     /// @brief カメラのターゲット座標 (x, y, z)
     igesio::Vector3f target_ = {0.0f, 0.0f, 0.0f};
     /// @brief カメラの上方向座標 (x, y, z)

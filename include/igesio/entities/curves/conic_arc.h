@@ -9,6 +9,7 @@
 #ifndef IGESIO_ENTITIES_CURVES_CONIC_ARC_H_
 #define IGESIO_ENTITIES_CURVES_CONIC_ARC_H_
 
+#include <string>
 #include <utility>
 
 #include "igesio/entities/interfaces/i_curve.h"
@@ -29,6 +30,9 @@ enum class ConicType {
     /// @brief 放物線
     kParabola = 3
 };
+
+/// @brief ConicTypeを文字列に変換する
+std::string ToString(const ConicType);
 
 /// @brief 2次曲線弧を表すエンティティクラス (Entity Type 104)
 /// @note 2次方程式 Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0 と、

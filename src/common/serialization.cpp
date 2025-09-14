@@ -476,9 +476,17 @@ std::string igesio::ToIgesReal(
     int exponent = 0;
     if (format.has_exponent && abs_value != 0.0) {
         exponent = static_cast<int>(std::floor(std::log10(abs_value)));
-        // 数値を正規化（例: 1234 -> 1.234）
-        abs_value /= std::pow(10, exponent);
+        // exponentが0の場合は正規化の必要がないためスキップする
+        if (exponent != 0) {
+            // 数値を正規化（例: 1234 -> 1.234）
+            abs_value /= std::pow(10, exponent);
+        }
     }
+
+    // 浮動小数点数の精度問題による誤差を吸収するため、適切な桁数で丸める
+    int precision = std::numeric_limits<double>::digits10;
+    double multiplier = std::pow(10, precision);
+    abs_value = std::round(abs_value * multiplier) / multiplier;
 
     // 数値を整数部と小数部に分解
     double integer_part;
