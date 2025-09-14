@@ -200,13 +200,27 @@ class DEFieldWrapper {
     DEFieldValueType GetValueType() const { return value_type_; }
 
     /// @brief 値を取得する
-    /// @return デフォルト値の場合は0、ポインタの場合は負の値を返す
-    int GetValue() const {
+    /// @param id2de IDとDEポインターのマッピング
+    /// @return デフォルト値の場合は0、ポインタの場合は正の値を返す
+    /// @throw std::out_of_range id2deが空でなく、かつポインタが設定されている場合に
+    ///        id2deに存在しないIDが参照されている場合
+    /// @note id2deを指定した場合、ポインタの値はid2deに基づいて変換される.
+    int GetValue(const id2pointer& id2de = {}) const {
         switch (value_type_) {
             case DEFieldValueType::kDefault:
                 return 0;  // デフォルト値
             case DEFieldValueType::kPointer:
-                return -static_cast<int>(id_);  // ポインタは負の値
+                if (id2de.size() > 0) {
+                    // ポインタの場合、id2deに基づいて変換
+                    if (auto it = id2de.find(id_); it != id2de.end()) {
+                        return static_cast<int>(it->second);
+                    } else {
+                        throw std::out_of_range(
+                            "Entity ID " + std::to_string(id_) +
+                            " in DEFieldWrapper not found in ID mapping.");
+                    }
+                }
+                return static_cast<int>(id_);
             default:
                 throw std::logic_error("Unknown DEFieldValueType");
         }

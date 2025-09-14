@@ -72,12 +72,6 @@ int main() {
               << composite_curve->GetChildEntity(curve2->GetID())->GetID() << std::endl;
 
 
-    // Create a Transformation Matrix entity
-    // (zero rotation and zero translation)
-    auto transformation = std::make_shared<TransMatrix>(
-            igesio::Matrix3d::Identity(), igesio::Vector3d::Zero(), 0);
-    auto trans_params = transformation->GetParameters();
-    std::cout << std::endl << "TransformationMatrix parameters: " << trans_params << std::endl;
 
     // Create Circular Arc entities and demonstrate their normal and tangent calculations
     // - Arc with center (0, 0), start point (2, 0), end point (0, 2)
@@ -94,6 +88,15 @@ int main() {
               << "  Tangent at t=1.5: " << arc_tangent << std::endl
               << "  Dot product: " << dot << std::endl;
 
+    // Create a Transformation Matrix entity
+    // (90-degree rotation around Y-axis and translation (0, 0, 1))
+    auto transformation = std::make_shared<TransMatrix>(
+            igesio::AngleAxisd(igesio::kPi/2, igesio::Vector3d::UnitY()),
+            igesio::Vector3d{0, 0, 1});
+    auto trans_params = transformation->GetParameters();
+    std::cout << std::endl << "TransformationMatrix parameters: " << trans_params << std::endl;
+    // Transform arc
+    arc->OverwriteTransformationMatrix(transformation);
 
 
     // Create an IgesData object and add all entities

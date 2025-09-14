@@ -219,8 +219,13 @@ class EntityBase : public virtual IEntityIdentifier {
     int GetFormNumber() const override { return form_number_; }
 
     /// @brief DEセクションのパラメータを取得する
+    /// @param id2de IDとDEポインターのマッピング
     /// @return DEセクションのパラメータを表すRawEntityDE
-    RawEntityDE GetRawEntityDE() const;
+    /// @throw std::out_of_range id2deが空でなく、かつパラメータ側で指定されている
+    ///        ポインターの値がid2deに存在しない場合
+    /// @note id2deを指定した場合、出力されるRawEntityDEにおける
+    ///       ポインターの値は、id2deに基づいて変換される.
+    RawEntityDE GetRawEntityDE(const id2pointer& = {}) const;
 
 
 

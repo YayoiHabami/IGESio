@@ -186,46 +186,59 @@ EntityBase::EntityBase(const RawEntityDE& de_record,
  * IEntityIdentifier implementation
  */
 
-i_ent::RawEntityDE EntityBase::GetRawEntityDE() const {
+i_ent::RawEntityDE EntityBase::GetRawEntityDE(const id2pointer& id2de) const {
     // DEレコードのパラメータを取得
-    RawEntityDE de_record;
+    RawEntityDE de;
 
-    // 1st field (Entity Type)
-    de_record.entity_type = type_;
-    // 2nd field (Parameter Data) -> Ignored in this context
-    // 3rd field (Structure)
-    de_record.structure = de_structure_.GetValue();
-    // 4th field (Line Font Pattern)
-    de_record.line_font_pattern = de_line_font_pattern_.GetValue();
-    // 5th field (Level)
-    de_record.level = de_level_.GetValue();
-    // 6th field (View)
-    de_record.view = de_view_.GetValue();
-    // 7th field (Transformation Matrix)
-    de_record.transformation_matrix = de_transformation_matrix_.GetValue();
-    // 8th field (Label Display Associativity)
-    de_record.label_display_associativity =
-        de_label_display_associativity_.GetValue();
-    // 9th field (Status Number)
-    de_record.status = de_status_;
-    // 10th field (Sequence Number) -> Ignored in this context
+    std::string field_name;
+    try {
+        // 1st field (Entity Type)
+        de.entity_type = type_;
+        // 2nd field (Parameter Data) -> Ignored in this context
+        // 3rd field (Structure)
+        field_name = "Structure (3rd field)";
+        de.structure = de_structure_.GetValue(id2de);
+        // 4th field (Line Font Pattern)
+        field_name = "Line Font Pattern (4th field)";
+        de.line_font_pattern = de_line_font_pattern_.GetValue(id2de);
+        // 5th field (Level)
+        field_name = "Level (5th field)";
+        de.level = de_level_.GetValue(id2de);
+        // 6th field (View)
+        field_name = "View (6th field)";
+        de.view = de_view_.GetValue(id2de);
+        // 7th field (Transformation Matrix)
+        field_name = "Transformation Matrix (7th field)";
+        de.transformation_matrix = de_transformation_matrix_.GetValue(id2de);
+        // 8th field (Label Display Associativity)
+        field_name = "Label Display Associativity (8th field)";
+        de.label_display_associativity =
+            de_label_display_associativity_.GetValue(id2de);
+        // 9th field (Status Number)
+        de.status = de_status_;
+        // 10th field (Sequence Number) -> Ignored in this context
 
-    // 11th field (Entity Type) -> Already set in 1st field
-    // 12th field (Line Weight)
-    de_record.line_weight_number = de_line_weight_;
-    // 13th field (Color Number)
-    de_record.color_number = de_color_.GetValue();
-    // 14th field (Parameter Line Count) -> Ignored in this context
-    // 15th field (Form Number)
-    de_record.form_number = form_number_;
-    // 16-17th fields (Reserved) -> Ignored in this context
-    // 18th field (Entity Label)
-    de_record.entity_label = de_entity_label_;
-    // 19th field (Entity Subscript Number)
-    de_record.entity_subscript_number = de_entity_subscript_number_;
-    // 20th field (Sequence Number) -> Ignored in this context
+        // 11th field (Entity Type) -> Already set in 1st field
+        // 12th field (Line Weight)
+        de.line_weight_number = de_line_weight_;
+        // 13th field (Color Number)
+        field_name = "Color Number (13th field)";
+        de.color_number = de_color_.GetValue(id2de);
+        // 14th field (Parameter Line Count) -> Ignored in this context
+        // 15th field (Form Number)
+        de.form_number = form_number_;
+        // 16-17th fields (Reserved) -> Ignored in this context
+        // 18th field (Entity Label)
+        de.entity_label = de_entity_label_;
+        // 19th field (Entity Subscript Number)
+        de.entity_subscript_number = de_entity_subscript_number_;
+        // 20th field (Sequence Number) -> Ignored in this context
+    } catch (const std::out_of_range& e) {
+        throw std::out_of_range("Failed to convert ID to pointer in DE field '"
+                                + field_name + "': " + e.what());
+    }
 
-    return de_record;
+    return de;
 }
 
 

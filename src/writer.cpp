@@ -355,7 +355,7 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
 
     // DEセクションとPDセクションを変換する
     for (const auto& [id, entity] : data.GetEntities()) {
-        auto de = entity->GetRawEntityDE();
+        auto de = entity->GetRawEntityDE(id2de);
         de.sequence_number = id2de.at(id);
         intermediate.directory_entry_section.push_back(de);
 

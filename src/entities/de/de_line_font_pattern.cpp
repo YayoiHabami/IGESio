@@ -46,7 +46,7 @@ void DELineFontPattern::SetPattern(const LineFontPattern value) {
     }
 }
 
-int DELineFontPattern::GetValue() const {
+int DELineFontPattern::GetValue(const id2pointer& id2de) const {
     if (GetValueType() == DEFieldValueType::kPositive) {
         return static_cast<int>(pattern_);
     } else if (GetValueType() == DEFieldValueType::kDefault) {
@@ -54,5 +54,7 @@ int DELineFontPattern::GetValue() const {
         // あるため、ここで強制的に0を返す
         return 0;
     }
-    return DEFieldWrapper::GetValue();
+    // 0またはポインタ
+    // field 4ではポインタは負の値で表現されるため、符号反転する
+    return -DEFieldWrapper::GetValue(id2de);
 }
