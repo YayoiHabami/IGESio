@@ -80,6 +80,8 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @brief 曲線を追加する
     /// @param curve 追加する曲線
     /// @return 追加に成功した場合は`true`、失敗した場合は`false`
+    /// @note curveのSubordinateEntitySwitchはkPhysicallyDependent
+    ///       に設定される
     bool AddCurve(const std::shared_ptr<ICurve>&);
 
     // TODO: 曲線を削除するメソッドを追加する

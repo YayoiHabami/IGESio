@@ -13,14 +13,17 @@
  * @date 2025-08-03
  * @copyright 2025 Yayoi Habami
  */
+#include <filesystem>
 #include <iostream>
 #include <memory>
+#include <string>
 
 #include <igesio/entities/curves/circular_arc.h>
 #include <igesio/entities/curves/composite_curve.h>
 #include <igesio/entities/transformations/transformation_matrix.h>
 #include <igesio/entities/structures/color_definition.h>
 #include <igesio/models/iges_data.h>
+#include <igesio/writer.h>
 
 namespace {
 
@@ -77,12 +80,12 @@ int main() {
     std::cout << std::endl << "TransformationMatrix parameters: " << trans_params << std::endl;
 
     // Create Circular Arc entities and demonstrate their normal and tangent calculations
-    // - Arc with center (0, 0), start point (1, 0), end point (0, 1)
-    // - Circle with center (0, 0) and radius 1
+    // - Arc with center (0, 0), start point (2, 0), end point (0, 2)
+    // - Circle with center (1, 0) and radius 1 (z = -1)
     auto arc = std::make_shared<CircularArc>(
-            Vector2d{0.0, 0.0}, Vector2d{1.0, 0.0}, Vector2d{0.0, 1.0}, 0.0);
+            Vector2d{0.0, 0.0}, Vector2d{2.0, 0.0}, Vector2d{0.0, 2.0}, 0.0);
     auto circle = std::make_shared<CircularArc>(
-            Vector2d{0.0, 0.0}, 1.0, 0.0);
+            Vector2d{1.0, 0.0}, 1.0, -1.0);
     auto arc_norm = arc->GetNormalAt(1.5);
     auto arc_tangent = arc->GetTangentAt(1.5);
     auto dot = arc_norm.dot(arc_tangent);
@@ -111,6 +114,13 @@ int main() {
     if (!is_ready) {
         auto result = iges_data.Validate();
         std::cout << "Validation errors: " << result.Message() << std::endl;
+    } else {
+        // Write the IGES data to a file
+        auto cwd = std::filesystem::current_path();
+        auto output_path = cwd / "from_scratch.iges";
+        std::cout << "Writing IGES file to: " << output_path << std::endl;
+        auto success = igesio::WriteIges(iges_data, output_path.string());
+        std::cout << "Write success: " << (success ? "true" : "false") << std::endl;
     }
 
     return 0;

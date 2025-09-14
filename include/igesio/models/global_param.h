@@ -148,7 +148,9 @@ constexpr std::string_view kDefaultAuthor = "";
 /// @note デフォルト値はNULL（ここでは空文字列で表現）であり、「未指定」と解釈される
 constexpr std::string_view kDefaultAuthorOrg = "";
 /// @brief バージョンフラグ (グローバルパラメータ23) のデフォルト値
-constexpr VersionFlag kDefaultSpecificationVersion = VersionFlag::kVersion2_0;
+/// @note 本来のデフォルト値は3 (IGES 2.0) であるが、ここでは
+///       11 (IGES 5.3) をデフォルト値として設定している
+constexpr VersionFlag kDefaultSpecificationVersion = VersionFlag::kVersion5_3;
 /// @brief 製図標準フラグ (グローバルパラメータ24) のデフォルト値
 constexpr DraftingStandardFlag kDefaultDraftingStandardFlag = DraftingStandardFlag::kNone;
 /// @brief モデルが作成または最終更新された日時 (グローバルパラメータ25) のデフォルト値
@@ -169,7 +171,7 @@ struct GlobalParam {
     /// @brief パラメータ区切り文字 (1)
     char param_delim = kDefaultParamDelim;
     /// @brief レコード区切り文字 (2)
-    char record_delim = kDefaultParamDelim;
+    char record_delim = kDefaultRecordDelim;
     /// @brief 送信システムからの製品識別 (3)
     /// @note 送信者がこの製品を参照するために使用する名前または識別子
     std::string product_id;

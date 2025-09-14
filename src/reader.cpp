@@ -323,6 +323,9 @@ i_model::IntermediateIgesData igesio::ReadIgesIntermediate(
 i_model::IgesData igesio::ConvertFromIntermediate(
         const models::IntermediateIgesData& intermediate) {
     i_model::IgesData iges;
+    iges.description = intermediate.start_section;
+    iges.global_section = intermediate.global_section;
+
     auto iges_id = iges.GetID();
 
     // DEとPDの数が一致するか確認

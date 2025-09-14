@@ -97,7 +97,7 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
 igesio::IGESParameterVector CircularArc::GetMainPDParameters() const {
     // データをIGESParameterVectorに変換
     IGESParameterVector params{
-        center_[0], center_[1], start_point_[0], start_point_[1],
+        center_[2], center_[0], center_[1], start_point_[0], start_point_[1],
         terminate_point_[0], terminate_point_[1]};
 
     // pd_parameters_のフォーマットを適用

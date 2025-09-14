@@ -53,7 +53,7 @@ CompositeCurve::GetMainPDParameters() const {
     IGESParameterVector params;
     params.reserve(curves_.size() + 1);
     // 曲線の数
-    params.push_back(static_cast<double>(curves_.size()));
+    params.push_back(static_cast<int>(curves_.size()));
 
     // 各曲線のIDを追加
     for (const auto& curve : curves_) {
@@ -336,6 +336,12 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
             !IsApproxEqual(*last_end_point, *new_start_point, kGeometryTolerance)) {
             return false;  // 終点と始点が一致しない場合は追加できない
         }
+    }
+
+    // SubordinateEntitySwitchをkPhysicallyDependentに設定
+    if (auto entity_base = std::dynamic_pointer_cast<EntityBase>(curve)) {
+        entity_base->SetSubordinateEntitySwitch(
+            SubordinateEntitySwitch::kPhysicallyDependent);
     }
 
     curves_.emplace_back(curve);

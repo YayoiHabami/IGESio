@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "igesio/common/id_generator.h"
+#include "igesio/entities/interfaces/i_entity_identifier.h"
 
 
 
@@ -25,6 +26,8 @@ namespace igesio::entities {
 
 /// @brief DEポインターとエンティティのIDのマッピングを保持する型
 using pointer2ID = std::unordered_map<unsigned int, uint64_t>;
+/// @brief エンティティのIDとDEポインターのマッピングを保持する型
+using id2pointer = std::unordered_map<uint64_t, unsigned int>;
 
 /// @brief DEフィールドの値の種類
 /// @note DEフィールドが保持する値がデフォルト値、ポインタ、正の値の
