@@ -46,6 +46,26 @@ static std::array<double, 2> calculate_parameter_range(
     }
 }
 
+std::optional<i_ent::ConicType>
+CalculateConicType(std::array<double, 6> coeffs) {
+    auto [A, B, C, D, E, F] = coeffs;
+
+    // 規格書の式だと正しく判定できないことがあるため、q2の式のみを使用
+    auto q2 = A * C - (B * B) / 4.0;
+
+    if (igesio::IsApproxZero(q2)) {
+        // parabola
+        return i_ent::ConicType::kParabola;
+    } else if (igesio::IsApproxGreaterThan(q2, 0.0)) {
+        // ellipse
+        return i_ent::ConicType::kEllipse;
+    } else if (igesio::IsApproxLessThan(q2, 0.0)) {
+        // hyperbola
+        return i_ent::ConicType::kHyperbola;
+    }
+    return std::nullopt;  // 不正な円錐曲線
+}
+
 }  // namespace
 
 
@@ -84,13 +104,21 @@ ConicArc::ConicArc(const std::array<double, 6>& coeffs,
                    const Vector2d& start_point, const Vector2d& terminate_point,
                    const double z_t)
         : EntityBase(
-                RawEntityDE::ByDefault(EntityType::kConicArc),
+                RawEntityDE::ByDefault(EntityType::kConicArc,
+                        static_cast<int>((::CalculateConicType(coeffs))
+                                         .value_or(ConicType::kEllipse))),
                 IGESParameterVector{
                     coeffs[0], coeffs[1], coeffs[2],
                     coeffs[3], coeffs[4], coeffs[5], z_t,
                     start_point[0], start_point[1],
                     terminate_point[0], terminate_point[1]}) {
     InitializePD({});
+
+    auto calculated_type = ::CalculateConicType(coeffs);
+    if (!calculated_type.has_value() || GetConicType() != *calculated_type) {
+        throw igesio::DataFormatError(
+            "The provided coefficients do not match the conic type.");
+    }
 }
 
 ConicArc::ConicArc(const std::pair<double, double>& radius,
@@ -178,11 +206,16 @@ igesio::ValidationResult ConicArc::ValidatePD() const {
     // 2. DEのForm Numberと係数から計算した曲線種別が一致するか検証
     auto calculated_type = CalculateConicType();
     if (!calculated_type.has_value() || GetConicType() != *calculated_type) {
+        std::string type_val_str = "undefined";
+        if (calculated_type.has_value()) {
+            type_val_str = std::to_string(static_cast<int>(*calculated_type));
+        }
+
         errors.emplace_back(
             "Form number in Directory Entry does not match the conic type "
             "derived from coefficients. Expected: " + ToString(*calculated_type) +
-            " (" + std::to_string(static_cast<int>(*calculated_type)) + "), Actual: " +
-            ToString(GetConicType()) + " (" + std::to_string(form_number_) + ").");
+            " (" + type_val_str + "), Actual: " + ToString(GetConicType()) +
+            " (" + std::to_string(form_number_) + ").");
     }
 
     // 3. 縮退形式でないか検証 (Q1=0)
@@ -415,22 +448,7 @@ double ConicArc::EllipseEndAngle() const {
  */
 
 std::optional<i_ent::ConicType> ConicArc::CalculateConicType() const {
-    auto [A, B, C, D, E, F] = coeffs_;
-
-    // 規格書の式だと正しく判定できないことがあるため、q2の式のみを使用
-    auto q2 = A * C - (B * B) / 4.0;
-
-    if (IsApproxZero(q2)) {
-        // parabola
-        return i_ent::ConicType::kParabola;
-    } else if (IsApproxGreaterThan(q2, 0.0)) {
-        // ellipse
-        return i_ent::ConicType::kEllipse;
-    } else if (IsApproxLessThan(q2, 0.0)) {
-        // hyperbola
-        return i_ent::ConicType::kHyperbola;
-    }
-    return std::nullopt;  // 不正な円錐曲線
+    return ::CalculateConicType(coeffs_);
 }
 
 bool ConicArc::IsOnConic(const double x, const double y) const {

@@ -102,6 +102,16 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     RationalBSplineCurve(const RawEntityDE&, const IGESParameterVector&,
                          const pointer2ID& = {}, const uint64_t = kUnsetID);
 
+    /// @brief コンストラクタ
+    /// @param parameters PDレコードのパラメータ
+    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::TypeConversionError parametersの型が不正な場合
+    /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
+    ///        ポインターの値がde2idに存在しない場合
+    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    ///        de_record.sequence_numberがReservedされていない場合
+    explicit RationalBSplineCurve(const IGESParameterVector&);
+
     /// @brief 曲線の種類
     /// @return 曲線の種類 (RationalBSplineType)
     RationalBSplineType GetCurveType() const;

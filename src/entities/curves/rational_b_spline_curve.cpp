@@ -33,6 +33,12 @@ RationalBSplineCurve::RationalBSplineCurve(
     InitializePD(de2id);
 }
 
+RationalBSplineCurve::RationalBSplineCurve(
+        const IGESParameterVector& parameters)
+        : RationalBSplineCurve(
+            RawEntityDE::ByDefault(i_ent::EntityType::kRationalBSplineCurve),
+            parameters, {}, kUnsetID) {}
+
 i_ent::RationalBSplineType RationalBSplineCurve::GetCurveType() const {
     return static_cast<RationalBSplineType>(form_number_);
 }

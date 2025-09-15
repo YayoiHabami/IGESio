@@ -40,15 +40,19 @@ using ent_vec = std::vector<std::shared_ptr<igesio::entities::EntityBase>>;
 /// @note 1. Circle: center (-0.75, 0), radius 1
 ///       2. Arc: center (0, 0), radius 1, start angle 4π/3, end angle 5π/2
 ent_vec CreateCircularArc() {
+    double x_diff = 1.25;
     auto circle = std::make_shared<i_ent::CircularArc>(
-            Vector2d{-0.75, 0.0}, 1.0);
+            Vector2d{-x_diff, 0.0}, 1.0);
 
-    auto arc_start = Vector2d{0.75 + cos(4.0 * kPi / 3.0), sin(4.0 * kPi / 3.0)};
-    auto arc_end = Vector2d{0.75 + cos(5.0 * kPi / 2.0), sin(5.0 * kPi / 2.0)};
+    auto arc_start = Vector2d{cos(4.0 * kPi / 3.0), sin(4.0 * kPi / 3.0)};
+    auto arc_end = Vector2d{cos(5.0 * kPi / 2.0), sin(5.0 * kPi / 2.0)};
     auto arc = std::make_shared<i_ent::CircularArc>(
-            Vector2d{0.75, 0.0}, arc_start, arc_end);
+            Vector2d{0.0, 0.0}, arc_start, arc_end);
+    auto arc_trans = std::make_shared<i_ent::TransformationMatrix>(
+            igesio::Matrix3d::Identity(), Vector3d{x_diff, 0.0, 0.0});
+    arc->OverwriteTransformationMatrix(arc_trans);
 
-    return {circle, arc};
+    return {circle, arc_trans, arc};
 }
 
 /// @brief Example for Composite Curve entity (Type 102)
@@ -82,23 +86,29 @@ ent_vec CreateCompositeCurve() {
 }
 
 /// @brief Example for Conic Arc entity (Type 104)
-/// @note 1. Ellipse arc: center (0, 0), axis (x, y) = (3, 2),
+/// @note 1. Ellipse arc: center (0, 3), axis (x, y) = (3, 2),
 ///          start angle 7π/4, end angle 17π/6
 ent_vec CreateConicArc() {
     // 1. ellipse arc
     auto ellipse_arc = std::make_shared<i_ent::ConicArc>(
-            std::pair<double, double>{3.0, 2.0}, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
+            std::pair<double, double>{-3.0, 2.0}, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
 
-    return {ellipse_arc};
+    // Note: Since elliptical arc entities are defined with the origin
+    // as their center, use a transformation matrix entity to move the origin.
+    auto ellipse_trans = std::make_shared<i_ent::TransformationMatrix>(
+            igesio::Matrix3d::Identity(), Vector3d{0.0, 3.0, 0.0});
+    ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
+
+    return {ellipse_trans, ellipse_arc};
 }
 
 /// @brief Example for Copious Data entity (Type 106)
-/// @note 1. Points: (3,0,1), (2,1,-1), (1,2,0), (0,3,1), (-1,2,0)
-///       2. Polyline: (8,0,1), (7,1,-1), (6,2,0), (5,3,1), (4,2,0)
+/// @note 1. Points: (3,0,1), (2,1,-1), (2,2,0), (0,3,1), (-1,2,0)
+///       2. Polyline: (8,0,1), (7,1,-1), (7,2,0), (5,3,1), (4,2,0)
 ent_vec CreateCopiousData() {
     // 1. Points
     igesio::Matrix3Xd copious_coords(3, 5);
-    copious_coords << 3.0,  2.0, 1.0, 0.0, -1.0,
+    copious_coords << 3.0,  2.0, 2.0, 0.0, -1.0,
                       0.0,  1.0, 2.0, 3.0,  2.0,
                       1.0, -1.0, 0.0, 1.0,  0.0;
     auto copious = std::make_shared<i_ent::CopiousData>(
@@ -127,14 +137,14 @@ ent_vec CreateLine() {
 
     // 2. semi-infinite line
     auto ray_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::Matrix3d::Identity(), Vector3d{-2.0, 0, 0.0});
+            igesio::Matrix3d::Identity(), Vector3d{2.0, 0, 0.0});
     auto ray = std::make_shared<i_ent::Line>(
             start, end, i_ent::LineType::kRay);
     ray->OverwriteTransformationMatrix(ray_trans);
 
     // 3. infinite line
     auto line_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::Matrix3d::Identity(), Vector3d{-4.0, 0, 0.0});
+            igesio::Matrix3d::Identity(), Vector3d{4.0, 0, 0.0});
     auto line = std::make_shared<i_ent::Line>(
             start, end, i_ent::LineType::kLine);
     line->OverwriteTransformationMatrix(line_trans);
@@ -159,9 +169,7 @@ ent_vec CreateRationalBSplineCurve() {
         0.0, 1.0,            // parameter range V(0), V(1)
         0.0, 0.0, 1.0        // normal vector of the defining plane
     };
-    auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(
-        i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kRationalBSplineCurve),
-        param);
+    auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(param);
 
     return {nurbs_c};
 }

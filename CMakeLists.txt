@@ -1,7 +1,7 @@
 # CMakeLists.txt for IGESio project
 #
 # Options:
-#   - IGESIO_BUILD_DOCS: Build the documentation (default: ON)
+#   - IGESIO_BUILD_DOCS: Build the documentation (default: OFF)
 #   - IGESIO_BUILD_EXAMPLE: Build the examples (default: OFF)
 #   - IGESIO_BUILD_GUI: Build GUI (with GLFW and ImGui) as examples (default: OFF)
 #     - if IGESIO_BUILD_GUI is ON, IGESIO_ENABLE_GRAPHICS is also set to ON

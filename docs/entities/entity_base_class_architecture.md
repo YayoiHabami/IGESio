@@ -4,6 +4,7 @@
 
 - [Table of Contents](#table-of-contents)
 - [Overview](#overview)
+  - [Design Policy](#design-policy)
   - [Class Diagram](#class-diagram)
 - [`IEntityIdentifier`](#ientityidentifier)
 - [Specific Entity Interfaces](#specific-entity-interfaces)
@@ -19,6 +20,16 @@
 - [Specific Entity Classes](#specific-entity-classes)
 
 ## Overview
+
+### Design Policy
+
+This library defines an abstract class called `IEntityIdentifier` to represent each entity in an IGES file, and implements concrete entity classes that inherit from it. In IGES, the functionality of an entity is determined by its entity type and form number. These pieces of information can be obtained from each entity via the `GetType` and `GetFormNumber` member functions, which are defined in the `IEntityIdentifier` class.
+
+Additionally, in CAD data, entities can have parent-child relationships. In IGES files, entities are uniquely managed using DE pointers<sup>*</sup>, and parent elements express relationships by referencing the DE pointers of child elements. However, since DE pointers depend on the line number where the entity is described in the IGES file, they cannot be directly used in programs where entities may be added or deleted.
+
+Therefore, this library assigns a unique `uint64_t` ID to each entity instance upon creation, allowing entities to be uniquely identified. The assigned value can be obtained via the `GetID` member function. Member functions such as `std::shared_ptr<const EntityBase> GetEntity` and `std::vector<uint64_t> GetChildIDs` are also defined to retrieve parent-child relationship information. These functions use the ID (of type `uint64_t`) to specify or indicate concrete entities, rather than using DE pointers.
+
+> * **DE Pointer**: In IGES files, entity data is stored in the Directory Entry (DE) section and the Parameter Data (PD) section. Each line in an IGES file has a sequence number, and entities are uniquely identified within the file using the sequence number of the DE section data record. A pointer referencing this sequence number is called a DE pointer. DE pointers are used to express parent-child relationships, including both physical and logical relationships.
 
 ### Class Diagram
 

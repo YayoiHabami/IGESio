@@ -196,31 +196,44 @@ class CurvesViewerGUI : public IgesViewerGUI {
             LoadIgesFile(filename_buf);
         }
         ImGui::Separator();
-
         // エンティティ表示のコントロール
         ImGui::Text("Entity Visibility");
-        bool show_all_changed = ImGui::Checkbox("Show All Entities", &show_all_);
-        if (show_all_changed) {
-            for (auto& p : show_entity_) {
-                p.second = show_all_;
-            }
+        if (ImGui::Checkbox("Show All Entities", &show_all_)) {
+            for (auto& p : show_entity_) p.second = show_all_;
             UpdateEntities();
         }
         ImGui::Separator();
 
         // 各エンティティタイプのトグル
+        bool individual_toggle_changed = false;
         for (auto& p : show_entity_) {
             i_ent::EntityType type = p.first;
             bool& show = p.second;
             if (ImGui::Checkbox(ToString(type).c_str(), &show)) {
-                if (!show_all_) {  // show_all_がオフの場合のみ個別制御
-                    UpdateEntities();
-                } else {
-                    // show_all_がオンの場合、個別トグルを変更したらshow_all_をオフに
-                    show_all_ = false;
-                    UpdateEntities();
+                individual_toggle_changed = true;
+                // "Show All"がオンの状態で個別のチェックを外した場合、"Show All"をオフにする
+                if (show_all_ && !show) show_all_ = false;
+            }
+        }
+
+        if (individual_toggle_changed) {
+            // 全ての個別のトグルがオンになっているかチェック
+            bool all_individual_on = true;
+            if (show_entity_.empty()) {
+                all_individual_on = false;
+            } else {
+                for (const auto& p : show_entity_) {
+                    if (!p.second) {
+                        all_individual_on = false;
+                        break;
+                    }
                 }
             }
+
+            // 全てオンなら "Show All" もオンにする
+            if (all_individual_on) show_all_ = true;
+
+            UpdateEntities();
         }
 
         ImGui::End();
