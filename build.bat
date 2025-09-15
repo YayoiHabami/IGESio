@@ -3,26 +3,37 @@
 set ENABLE_DOCUMENTATION=OFF
 set ENABLE_SOURCE_BUILD=ON
 set BUILD_TYPE=debug
+set BUILD_EXAMPLE=OFF
 
 REM Check if the first argument is provided
 if /i "%1"=="debug" (
-    if "%2"=="doc" set ENABLE_DOCUMENTATION=ON
+    if /i "%2"=="doc" set ENABLE_DOCUMENTATION=ON
+    if /i "%2"=="ex" set BUILD_EXAMPLE=ON
+    if /i "%3"=="ex" set BUILD_EXAMPLE=ON
 ) else if /i "%1"=="release" (
     set BUILD_TYPE=release
-    if "%2"=="doc" set ENABLE_DOCUMENTATION=ON
+    if /i "%2"=="doc" set ENABLE_DOCUMENTATION=ON
+    if /i "%2"=="ex" set BUILD_EXAMPLE=ON
+    if /i "%3"=="ex" set BUILD_EXAMPLE=ON
 ) else if /i "%1"=="doc" (
     REM If the first argument is "doc", enable documentation and disable source build
     set ENABLE_SOURCE_BUILD=OFF
 ) else (
-    echo "Usage1: build.bat [debug|release] <doc>"
+    echo "Usage1: build.bat [debug|release] <doc> <ex>"
     echo "If 'doc' is specified, documentation will be built."
+    echo "If 'ex' is specified, example will be built."
     echo "If 'debug' or 'release' is specified, the source will be built."
-    echo "Usage2: build.bat doc"
+    echo "Usage2: build.bat doc <ex>"
     echo "If 'doc' is specified, only documentation will be built without source."
     exit /b 1
 )
 
-set BUILD_DIR=build/%BUILD_TYPE%_win
+if "%BUILD_EXAMPLE%"=="ON" (
+    set EXAMPLE_SUFFIX=_ex
+) else (
+    set EXAMPLE_SUFFIX=
+)
+set BUILD_DIR=build/%BUILD_TYPE%%EXAMPLE_SUFFIX%_win
 
 
 
@@ -32,17 +43,32 @@ if "%ENABLE_SOURCE_BUILD%"=="ON" (
     rem Create a build directory if it doesn't exist
     if not exist "%BUILD_DIR%" (
         mkdir "%BUILD_DIR%"
+
+        set COMPILER_OPTIONS="-DCMAKE_C_COMPILER=gcc" "-DCMAKE_CXX_COMPILER=g++"
+
         if "%BUILD_TYPE%"=="debug" (
-            cmake -S . -B "%BUILD_DIR%" -G "Ninja" -DIGESIO_BUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug
+            set BUILD_TYPE_OPTION="-DCMAKE_BUILD_TYPE=Debug"
+            set BUILD_TESTING_OPTION="-DIGESIO_BUILD_TESTING=ON"
         ) else (
-            cmake -S . -B "%BUILD_DIR%" -G "Ninja" -DIGESIO_BUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+            set BUILD_TYPE_OPTION="-DCMAKE_BUILD_TYPE=Release"
+            set BUILD_TESTING_OPTION="-DIGESIO_BUILD_TESTING=OFF"
         )
+        if "%BUILD_EXAMPLE%"=="ON" (
+            rem If the example is enabled, OpenGL and GUI are also enabled
+            set EXAMPLE_OPTION="-DIGESIO_BUILD_EXAMPLE=ON" "-DIGESIO_ENABLE_GRAPHICS=ON" "-DIGESIO_BUILD_GUI=ON"
+        ) else (
+            set EXAMPLE_OPTION="-DIGESIO_BUILD_EXAMPLE=OFF"
+        )
+
+        echo -S . -B "%BUILD_DIR%" -G "Ninja" %COMPILER_OPTIONS% %BUILD_TESTING_OPTION% %BUILD_TYPE_OPTION% %EXAMPLE_OPTION%
+        cmake -S . -B "%BUILD_DIR%" -G "Ninja" %COMPILER_OPTIONS% %BUILD_TESTING_OPTION% %BUILD_TYPE_OPTION% %EXAMPLE_OPTION%
+    )
+
+    set DOCUMENT_OPTION=
+    if "%ENABLE_DOCUMENTATION%"=="ON" (
+        set DOCUMENT_OPTION="--target doc"
     )
 
     rem Build the project using Ninja
-    if "%ENABLE_DOCUMENTATION%"=="ON" (
-        cmake --build "%BUILD_DIR%" --target doc
-    ) else (
-        cmake --build "%BUILD_DIR%"
-    )
+    cmake --build "%BUILD_DIR%" %DOCUMENT_OPTION%
 )

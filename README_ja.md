@@ -10,7 +10,7 @@ For English documentation, see [README.md](README.md).
 
 IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォーマットを扱うためのモダンなC++ライブラリです。本ライブラリは、IGES 5.3 仕様に基づいてIGESファイルの読み込み、書き出し、および関連データの操作機能を包括的に提供します。
 
-現在のバージョンは [`igesio::GetVersion()`](src/common/versions.cpp) で確認できます (例: 0.3.1)。
+現在のバージョンは [`igesio::GetVersion()`](src/common/versions.cpp) で確認できます (例: 0.5.0)。
 
 ライブラリの設計方針やIGES仕様の解釈については、[docs/policy_ja.md](docs/policy_ja.md) を参照してください。
 
@@ -19,96 +19,112 @@ IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォー
 
 - [概要](#概要)
 - [主な機能](#主な機能)
-- [使用例](#使用例)
-  - [基本的な読み込み・書き出し](#基本的な読み込み書き出し)
-    - [中間データ構造を使用した読み込み・書き出し](#中間データ構造を使用した読み込み書き出し)
-    - [なぜ中間データ構造を使用するのか？](#なぜ中間データ構造を使用するのか)
-    - [重要な注意事項](#重要な注意事項)
-- [必要システム](#必要システム)
+- [使用方法](#使用方法)
+  - [GUIアプリケーションへの組み込み例](#guiアプリケーションへの組み込み例)
+  - [IGESファイルの入出力](#igesファイルの入出力)
+  - [エンティティの作成](#エンティティの作成)
+- [要求システム](#要求システム)
   - [動作確認環境](#動作確認環境)
   - [環境セットアップ](#環境セットアップ)
     - [Windows環境](#windows環境)
     - [Ubuntu環境](#ubuntu環境)
   - [Third-Party Dependencies](#third-party-dependencies)
 - [ビルド方法](#ビルド方法)
-  - [CMakeプロジェクトへの統合](#cmakeプロジェクトへの統合)
-    - [CMakeによるリンク時のコンポーネント名](#cmakeによるリンク時のコンポーネント名)
-  - [スタンドアロンでのビルド](#スタンドアロンでのビルド)
-    - [プラットフォーム別の代替手段](#プラットフォーム別の代替手段)
-    - [テストの実行](#テストの実行)
 - [ディレクトリ構造](#ディレクトリ構造)
 - [ドキュメント](#ドキュメント)
-  - [ファイル別ドキュメント](#ファイル別ドキュメント)
 - [著作権・ライセンス](#著作権ライセンス)
 
 ## 主な機能
 
-IGESioライブラリは以下の主要機能を提供します：
+　IGESioライブラリでは、主に以下のような機能を提供します：
 
 - **IGESファイル読み込み**: [`igesio::ReadIges`](src/reader.cpp) によるIGESファイルの解析と読み込み
-- **IGESファイル書き出し**: [`igesio::WriteIges`](src/writer.cpp) によるIGESファイルの生成と出力
+- **IGESファイル書き出し**: [`igesio::WriteIges`](src/writer.cpp) によるIGESファイルの出力
 - **エンティティデータ管理**: IGESエンティティの効率的な管理と操作
-- **グローバルパラメータ制御**: [`igesio::models::GlobalParam`](include/igesio/models/global_param.h) によるグローバルセクションパラメータの管理
+- **エンティティの描画**: OpenGLを使用したエンティティの視覚化（`IGESIO_ENABLE_GRAPHICS`オプションで有効化可能）
+  - GUIに依存した処理を分離しているため、GUIアプリケーションへの統合が容易
 
-## 使用例
+## 使用方法
 
-### 基本的な読み込み・書き出し
+### GUIアプリケーションへの組み込み例
 
-IGESioライブラリでは、IGESファイルの読み込みに2段階の変換プロセスを採用しています：
+　本ライブラリを使用してIGESファイルを読み込み、OpenGLで描画するシンプルなGUIアプリケーションの例として、[curves viewer](docs/examples_ja.md#gui)を実装しています。このアプリケーションは、ImGuiとGLFWを使用しており、IGESioにより描画機能を提供しています。
 
-1. **IGESファイル → 中間データ構造** （[`IntermediateIgesData`](docs/intermediate_data_structure_ja.md#1-intermediateigesdata構造体)）
-2. **中間データ構造 → データクラス** （`IGESData`クラス - 開発中）
+<img src="docs/images/curves_viewer_window.png" alt="Curves Viewer Example" width="600"/>
 
-#### 中間データ構造を使用した読み込み・書き出し
+### IGESファイルの入出力
 
-　現在利用可能な方法として、中間データ構造（[`IntermediateIgesData`](docs/intermediate_data_structure_ja.md#1-intermediateigesdata構造体)）を使用してIGESファイルの読み込みと書き出しができます。詳細については、[中間データ構造のドキュメント](docs/intermediate_data_structure_ja.md)を参照してください。
+　本ライブラリでは、`igesio::ReadIges`および`igesio::WriteIges`関数を使用して、IGESファイルの読み込みと書き出しを行います。以下は、基本的な使用例です。両関数ともに戻り値/引数は`igesio::models::IgesData`型であり、IGESファイルの全データを保持します。
+
+　本ライブラリで未対応（未実装）のエンティティは`igesio::entities::UnsupportedEntity`クラスとして読み込まれます。このクラスでは、各パラメータはパースされて読み込まれますが、エンティティ固有の機能は提供されません。このクラスの詳細については、[entities/UnsupportedEntity](docs/entities/entities_ja.md#UnsupportedEntity)を参照してください。
 
 ```cpp
+#include <iostream>
+#include <unordered_map>
 #include <igesio/reader.h>
 #include <igesio/writer.h>
 
-int main() {
-    try {
-        // IGESファイルを中間データ構造に読み込み
-        auto data = igesio::ReadIgesIntermediate("input.igs");
+// IGESファイルの読み込み
+auto data = igesio::ReadIges("path/to/file.igs");
 
-        // 必要に応じてデータを修正
-        // ...
+// エンティティタイプごとに数をカウント
+// また、本ライブラリがサポート（実装）しているかどうかも確認
+std::unordered_map<igesio::entities::EntityType, int> type_counts;
+std::unordered_map<igesio::entities::EntityType, bool> is_supported;
+for (const auto& [id, entity] : data.GetEntities()) {
+    type_counts[entity->GetType()]++;
+    is_supported[entity->GetType()] = entity->IsSupported();
+}
 
-        // 修正したデータを新しいファイルに書き込み
-        igesio::WriteIgesIntermediate(data, "output.igs");
-    } catch (const std::exception& e) {
-        std::cerr << "エラー: " << e.what() << std::endl;
-        return 1;
+// IGESファイルの書き出し
+// 未対応のエンティティが含まれている場合DataFormatError例外が投げられる
+try {
+    auto success = igesio::WriteIges(data, "path/to/output.igs");
+    if (!success) {
+        std::cerr << "Failed to write IGES file." << std::endl;
     }
-
-  return 0;
+} catch (const igesio::DataFormatError& e) {
+    std::cerr << "Data format error: " << e.what() << std::endl;
 }
 ```
 
-#### なぜ中間データ構造を使用するのか？
+　本ライブラリのデータ構造については、[クラス構造](docs/class_structure_ja.md)を参照して下さい。また、基本的な使用方法については、[examples](docs/examples_ja.md)および[entities](docs/entities/entities_ja.md)を参照してください。
 
-　2段階アプローチを採用する理由：
+### エンティティの作成
 
-- **IGESフォーマットの複雑性**: IGESファイル内の生データと実用的なデータモデル間の変換を段階的に処理
-- **エラー処理の分離**: ファイル解析エラーとデータ構造変換エラーを明確に区別
-- **開発段階での柔軟性**: 最終的な`IGESData`クラスの設計変更に対する影響を最小化
+　本ライブラリでは、プログラム上でエンティティを作成することも可能です。以下は、中心点が $(3, 0)$、半径が $1$ の円を作成し、色を設定してからIGESファイルに書き出す例です。
 
-#### 重要な注意事項
+```cpp
+#include <memory>
+#include <array>
+#include <iostream>
+#include <igesio/entities/curves/circular_arc.h>
+#include <igesio/entities/structures/color_definition.h>
+#include <igesio/writer.h>
 
-> **警告**: 中間データ構造（`IntermediateIgesData`）は内部実装の詳細であり、将来のバージョンで変更される可能性があります。
->
-> 本格的な用途では、完成予定の`IGESData`クラスの使用を強く推奨します：
->
-> ```cpp
-> // 将来のAPI（開発中）
-> auto iges_data = igesio::ReadIges("example.igs");  // IGESDataクラスを返す
-> igesio::WriteIges(iges_data, "output.igs");
-> ```
->
-> 中間データ構造は、開発・デバッグ目的や、`IGESData`クラス完成までの一時的な利用にとどめてください。
+// Circular Arcエンティティを作成
+// 中心点 (3.0, 0.0)、半径 1.0 の円
+auto circle = std::make_shared<igesio::entities::CircularArc>(
+        igesio::Vector2d{3.0, 0.0}, 1.0);
 
-## 必要システム
+// Color Definitionエンティティを使用して色を設定 (≈ #4C7FFF)
+auto color_def = std::make_shared<igesio::entities::ColorDefinition>(
+        std::array<double, 3>{30.0, 50.0, 100.0}, "Bright Blue");
+circle->OverwriteColor(color_def);
+
+// IgesDataクラスを作成してエンティティを追加
+igesio::models::IgesData iges_data;
+iges_data.AddEntity(color_def);
+iges_data.AddEntity(circle);
+
+// IGESファイルに書き出し
+auto success = igesio::WriteIges(iges_data, "created_circle.igs");
+if (!success) {
+    std::cerr << "Failed to write IGES file." << std::endl;
+}
+```
+
+## 要求システム
 
 IGESioライブラリをビルドするには以下の環境が必要です：
 
@@ -159,128 +175,57 @@ ninja --version
 |-----------|-----------|------|-----------|
 | [Eigen3](https://eigen.tuxfamily.org/) | MPL-2.0 | 線形代数演算 | Yes (`-DIGESIO_ENABLE_EIGEN=OFF` で無効化) |
 | [Google Test](https://github.com/google/googletest) | BSD-3-Clause | 単体テスト | Yes (`IGESIO_BUILD_TESTING` 有効時のみ) |
+| [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0 | OpenGLローダー | Yes (`IGESIO_ENABLE_GRAPHICS` または `IGESIO_BUILD_GUI` 有効時のみ) |
+| [glfw](https://www.glfw.org/) | Zlib | ウィンドウ作成と入力処理 | Yes (`IGESIO_BUILD_GUI` 有効時のみ) |
+| [imgui](https://github.com/ocornut/imgui) | MIT | GUI作成 | Yes (`IGESIO_BUILD_GUI` 有効時のみ) |
 
-**ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストについては [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) を参照してください。
+**ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストについては [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) を参照してください。
 
 **注意**:
 - Eigenはヘッダーオンリーライブラリで、明示的に有効化された場合のみインクルードされます
 - Google Testは開発時のみ使用され、ライブラリと一緒に配布されません
+- gladは`IGESIO_ENABLE_GRAPHICS`または`IGESIO_BUILD_GUI`が有効な場合のみ含まれます。gladのソースコードはMITライセンス、Khronos XML API RegistryはApache License 2.0でライセンスされています
 - このライブラリはサードパーティの依存関係なしでビルドできます
-
-詳細については、[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) を参照してください。
 
 ## ビルド方法
 
-### CMakeプロジェクトへの統合
+IGESioライブラリは、CMakeの`FetchContent`を利用して簡単にプロジェクトに組み込むことができます。例えば、以下のように`CMakeLists.txt`を記述することで、IGESioを依存ライブラリとして利用できます。
 
-IGESioライブラリは、CMakeの`FetchContent`機能を使用して他のプロジェクトに簡単に統合できます。以下は、`main.cpp`ファイルを実行可能ファイルとしてビルドする`my_project`において、IGESioライブラリを統合するためのCMake設定の例です：
-
-```cmake
+````cmake
 cmake_minimum_required(VERSION 3.16)
 project(my_project)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# FetchContentを有効化
+# FetchContentを使用してIGESioを取得
 include(FetchContent)
-
-# IGESioライブラリを取得
 FetchContent_Declare(
     igesio
-    GIT_REPOSITORY https://github.com/YayoiHabami/IGESio
-    GIT_TAG main  # 特定のタグやコミットハッシュを指定することも可能
+    GIT_REPOSITORY https://github.com/YayoiHabami/IGESio.git
+    GIT_TAG main
 )
 
-# IGESioを利用可能にする
+# EigenおよびOpenGLサポートの下でIGESioを有効化
+set(IGESIO_ENABLE_EIGEN ON)
+set(IGESIO_ENABLE_GRAPHICS ON)
 FetchContent_MakeAvailable(igesio)
 
-# 実行可能ファイルを作成
+# 実行ファイルを作成
 add_executable(my_app main.cpp)
-
-# IGESioライブラリをリンク
 target_link_libraries(my_app PRIVATE IGESio::IGESio)
-```
+````
 
-**Note**: FetchContentを使用する場合、IGESioのテストはデフォルトでビルドされません。これにより、ユーザープロジェクトのビルド時間が短縮されます。
+より詳細な情報やCMakeオプションについては、[docs/build_ja.md](docs/build_ja.md)を参照してください。
 
-#### CMakeによるリンク時のコンポーネント名
+また、コード例の実行やテストのために、リポジトリをクローンしてスタンドアロンでビルドすることも可能です。Windows環境では、`build.bat`スクリプトを、Linux環境では`build.sh`スクリプトを使用してビルドできます。
 
-IGESioライブラリは、以下のコンポーネント名でリンクできます。用途に応じて適切なコンポーネントを選択してください：
-
-| コンポーネント名 | 説明 | 使用場面 |
-|------------------|------|----------|
-| `IGESio::IGESio` | 全てのIGESio機能を含むメインライブラリ | 一般的な用途（推奨） |
-| `IGESio::common` | 共通モジュール（メタデータ、エラー処理等） | 基本機能のみ必要な場合 |
-| `IGESio::utils` | データ型変換などのユーティリティ | ユーティリティ機能のみ必要な場合 |
-| `IGESio::entities` | IGESエンティティ関連の機能 | エンティティ処理のみ必要な場合 |
-| `IGESio::models` | 中間データ構造やIGESデータ全体の管理 | データモデル機能のみ必要な場合 |
-
-**注意**: 通常は `IGESio::IGESio` をリンクすることを推奨します。個別コンポーネントの使用は、特定の機能のみが必要な場合や、依存関係を最小化したい場合にのみ検討してください。
-
-### スタンドアロンでのビルド
-
-開発やテスト目的でIGESioライブラリを個別にビルドする場合は、以下の手順に従ってください：
-
-**1. リポジトリのクローン**:
-```bash
-git clone https://github.com/YayoiHabami/IGESio.git
-cd IGESio
-```
-
-**2. ビルドディレクトリの作成**:
-```bash
-mkdir build
-cd build
-```
-
-**3. CMakeの実行とビルド**:
-```bash
-cmake ..
-cmake --build .
-```
-
-#### プラットフォーム別の代替手段
-
-**Windows環境**: `build.bat` スクリプトを使用することも可能です。ただし、CMakeに加えてNinjaのインストールが必要です。事前にインストールし、パスを通しておいてください。ビルド時には、`debug`または`release`オプションを指定できます。また、第二引数に`doc`を指定すると、ドキュメントも生成されます。この際、DoxygenおよびGraphvizが必要です。
-
-```bat
-.\build.bat debug
-```
-
-**Linux環境**: `build.sh` スクリプトを使用することも可能です。CMakeとNinjaが必要です。初回実行時は実行権限を付与してください。その他のオプションはWindowsと同様です。
+````bat
+.\build.bat debug ex
+````
 
 ```bash
-# 実行権限を付与
-chmod +x build.sh
-
-# スクリプト実行
-./build.sh debug
+./build.sh debug ex
 ```
 
-#### テストの実行
-
-スタンドアロンでビルドする場合でも、テストは既定ではビルドされません。`IGESIO_BUILD_TESTING` オプションで制御します：
-
-```bash
-# テストを含めてビルド
-cmake -DIGESIO_BUILD_TESTING=ON ..
-
-# テストを除外してビルド (既定)
-cmake ..
-```
-
-ビルド完了後、以下の方法でテストを実行できます。ビルド成果物のディレクトリ (windowsの場合は`build\debug_win`、Linuxの場合は`build/debug_linux`) に移動してから実行してください。
-
-**CTESTを使用する場合**:
-```bash
-ctest
-```
-
-**個別テスト実行ファイルを使用する場合**:
-各テスト実行ファイルを直接実行します（例: `test_common`, `test_utils`, `test_entities`, `test_models`, `test_igesio`）。
-
-テストの詳細な定義については、各 `tests` サブディレクトリ内の `CMakeLists.txt` を参照してください（例: [tests/CMakeLists.txt](tests/CMakeLists.txt), [tests/common/CMakeLists.txt](tests/common/CMakeLists.txt)）。
+詳細はdocs/build_ja.mdをご覧ください。
 
 ## ディレクトリ構造
 
@@ -288,11 +233,14 @@ ctest
 IGESio/
 ├── build.bat, build.sh     # WindowsおよびLinux用のビルドスクリプト
 ├── CMakeLists.txt          # メインのCMakeビルドスクリプト
+├── examples/               # 使用例
+│   └── gui/                # GUIを追加した例
 ├── include/                # 公開ヘッダファイル
 │   └── igesio/
 ├── src/                    # ソースファイル
 │   ├── common/             # 共通モジュール (メタデータ、エラー処理等)
 │   ├── entities/           # エンティティ関連モジュール
+│   ├── graphics/           # 描画関連モジュール (OpenGL; GUIは含まない)
 │   ├── models/             # データモデル関連モジュール
 │   ├── utils/              # ユーティリティモジュール
 │   ├── reader.cpp          # IGESファイル読み込み実装
@@ -300,40 +248,12 @@ IGESio/
 ├── tests/                  # テストコード
 │   └── test_data/          # テスト用データ (IGESファイル等)
 ├── docs/                   # ドキュメント
-└── build/                  # ビルド成果物 (生成される)
+└── build/                  # ビルド成果物
 ```
 
 ## ドキュメント
 
-プロジェクトに関する詳細なドキュメントは `docs` ディレクトリに整理されています：
-
-- **[policy (ja)](docs/policy_ja.md)**: ライブラリの設計方針やIGES仕様の解釈について
-- **[class-reference (ja)](docs/class_reference_ja.md)**: 本ライブラリで使用されているクラスのリファレンス
-- **[flow/reader (ja)](docs/flow/reader_ja.md)**: 読み込み処理のフローについて
-- **[entity-analysis (en)](docs/entity_analysis.md)**: IGES 5.3における、各エンティティの分類やパラメータについての分析
-- **[additional-notes (ja)](docs/additional_notes_ja.md)**: その他の補足事項
-- **[todo](docs/todo.md)**: TODOリスト
-
-### ファイル別ドキュメント
-
-以下は、ソースファイルごとのドキュメントです。記載されていないファイルについては、ソースコード内のコメントを参照してください。
-
-**commonモジュール**
-- **[Matrix](docs/common/matrix_ja.md)**: 固定/動的サイズの行列クラス
-
-**entitiesモジュール**
-- **[Entity class architecture](docs/entities/entity_base_class_architecture_ja.md)**
-  - エンティティ関連クラスの継承構造の説明
-  - 個別のエンティティクラスが継承する`EntityBase`クラスの説明
-- **[Interfaces and derived classes](docs/entities/entities_ja.md)**
-  -  `IEntityIdentifier`クラスとインターフェースクラスの説明
-  -  個別のエンティティクラスの説明
-- **[RawEntityDE and RawEntityPD](docs/intermediate_data_structure_ja.md)**: IGESファイルのDirectory EntryセクションとParameter Dataセクションの中間データ構造
-
-**modelsモジュール**
-- **[Intermediate](docs/intermediate_data_structure_ja.md)**: IGESファイル入出力時の中間データ構造
-
-**utilsモジュール**
+プロジェクトに関する詳細なドキュメントは `docs`ディレクトリに含まれています。[index](docs/index_ja.md)を参照して下さい。
 
 ## 著作権・ライセンス
 

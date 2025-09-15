@@ -245,7 +245,7 @@ FromIgesPointerWithFormat(const std::string&, const std::optional<int> = 0);
 /// @brief 文字列をLanguage型に変換し、そのフォーマットも返す
 /// @param str 変換する文字列
 /// @param default_value 変換できなかった場合のデフォルト値,
-///        std::nulloptを指定した場合は、変換失敗時に例外を投げる
+///        変換の失敗は生じないため、std::nulloptを指定した場合でも例外は投げない
 /// @return 変換したLanguage型の値、およびそのフォーマット
 std::pair<std::string, ValueFormat>
 FromIgesLanguageWithFormat(const std::string&, const std::optional<std::string> = "");

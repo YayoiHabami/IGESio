@@ -1,3 +1,15 @@
+# CMakeLists.txt for IGESio project
+#
+# Options:
+#   - IGESIO_BUILD_DOCS: Build the documentation (default: OFF)
+#   - IGESIO_BUILD_EXAMPLE: Build the examples (default: OFF)
+#   - IGESIO_BUILD_GUI: Build GUI (with GLFW and ImGui) as examples (default: OFF)
+#     - if IGESIO_BUILD_GUI is ON, IGESIO_ENABLE_GRAPHICS is also set to ON
+#     - this option requires python environment and jinja2 installed
+#   - IGESIO_BUILD_TESTING: Build the tests (default: OFF)
+#   - IGESIO_ENABLE_COVERAGE: Enable coverage reporting (default: OFF)
+#   - IGESIO_ENABLE_EIGEN: Enable Eigen support (default: OFF)
+#   - IGESIO_ENABLE_GRAPHICS: Enable OpenGL (glad) support (default: OFF)
 cmake_minimum_required(VERSION 3.14)
 
 # Set CMP0135 policy to control timestamp handling for FetchContent archive extraction
@@ -43,7 +55,7 @@ else()
     message(WARNING "Git not found, using default version ${PROJECT_VERSION}")
 endif()
 
-project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES CXX)
+project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -105,6 +117,48 @@ if(IGESIO_ENABLE_EIGEN)
   message(STATUS "Eigen support enabled")
 endif()
 
+
+
+# Option to enable OpenGL (glad) support
+option(IGESIO_ENABLE_GRAPHICS "Enable OpenGL (glad) support" OFF)
+
+# Option to build GUI (with GLFW and ImGui)
+option(IGESIO_BUILD_GUI "Build GUI (with GLFW and ImGui)" OFF)
+if(IGESIO_BUILD_GUI)
+  # Enable OpenGL support as well
+  set(IGESIO_ENABLE_GRAPHICS ON)
+  message(STATUS "GUI support enabled, enabling OpenGL (glad) support as well")
+endif()
+
+# Fetch glad if OpenGL support is enabled
+if(IGESIO_ENABLE_GRAPHICS)
+  include(FetchContent)
+
+  # Find OpenGL
+  find_package(OpenGL REQUIRED)
+
+  # Fetch glad
+  FetchContent_Declare(
+    glad
+    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
+    GIT_TAG v2.0.4
+  )
+  FetchContent_MakeAvailable(glad)
+  set(GLAD_GENERATOR_DIR "${glad_BINARY_DIR}")
+
+  # Add glad library
+  add_subdirectory(${glad_SOURCE_DIR}/cmake ${glad_BINARY_DIR})
+  glad_add_library(glad_gl_core_33 REPRODUCIBLE API gl:core=3.3)
+  # Overwrite the INTERFACE_INCLUDE_DIRECTORIES property for glad
+  # to use generator expressions, making it relocatable for both build and install.
+  set_target_properties(glad_gl_core_33 PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/gladsources/glad_gl_core_33/include>;$<INSTALL_INTERFACE:include>"
+  )
+  message(STATUS "OpenGL (glad) support enabled")
+else()
+  message(STATUS "OpenGL (glad) support is disabled")
+endif()
+
 # Add subdirectory for source files
 add_subdirectory(src)
 
@@ -115,6 +169,7 @@ option(IGESIO_BUILD_TESTING "Build the tests" OFF)
 
 # Add the tests subdirectory if IGESIO_BUILD_TESTING is ON
 if(IGESIO_BUILD_TESTING)
+  message(STATUS "Building tests...")
   include(FetchContent)
 
   # Unify Google Test Runtime Library (for WIN32)
@@ -138,8 +193,18 @@ endif()
 
 
 
+# Option to build examples
+option(IGESIO_BUILD_EXAMPLE "Build the examples" OFF)
+
+if(IGESIO_BUILD_EXAMPLE)
+  message(STATUS "Building examples...")
+  add_subdirectory(examples)
+endif()
+
+
+
 # Documentation generation
-option(IGESIO_BUILD_DOCS "Build the documentation" ON)
+option(IGESIO_BUILD_DOCS "Build the documentation" OFF)
 if (IGESIO_BUILD_DOCS)
   # Find Doxygen
   find_package(Doxygen)
@@ -180,6 +245,26 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
+
+    # Install the graphics library if IGESIO_ENABLE_GRAPHICS is ON
+    if(IGESIO_ENABLE_GRAPHICS)
+        install(TARGETS igesio_graphics
+            EXPORT IGESioTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+        # Install glad library and its headers
+        install(TARGETS glad_gl_core_33
+            EXPORT IGESioTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+        install(DIRECTORY ${glad_BINARY_DIR}/include/
+            DESTINATION include
+        )
+    endif()
 
     install(DIRECTORY include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}

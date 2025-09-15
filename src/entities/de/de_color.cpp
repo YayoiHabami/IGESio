@@ -85,7 +85,7 @@ void DEColor::SetColor(const ColorNumber value) {
     }
 }
 
-int DEColor::GetValue() const {
+int DEColor::GetValue(const id2pointer& id2de) const {
     if (GetValueType() == DEFieldValueType::kPositive) {
         return static_cast<int>(color_);
     } else if (GetValueType() == DEFieldValueType::kDefault) {
@@ -93,5 +93,7 @@ int DEColor::GetValue() const {
         // あるため、ここで強制的に0を返す
         return 0;
     }
-    return DEFieldWrapper::GetValue();
+    // 0またはポインタ
+    // field 13ではポインタは負の値で表現されるため、符号反転する
+    return -DEFieldWrapper::GetValue(id2de);
 }

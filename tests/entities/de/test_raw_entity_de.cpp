@@ -151,17 +151,17 @@ TEST(EntityStatusTest, StringConstructor_InvalidInput) {
     }, igesio::ParseError);
 
     // 空白を含むケース
+    EXPECT_NO_THROW({
+        i_ent::EntityStatus status("000000  ");
+    });
+    EXPECT_NO_THROW({
+        i_ent::EntityStatus status("0000 000");
+    });
     EXPECT_THROW({
         i_ent::EntityStatus status(" 00000000 ");
     }, igesio::ParseError);
     EXPECT_THROW({
-        i_ent::EntityStatus status("000000  ");
-    }, igesio::ParseError);
-    EXPECT_THROW({
         i_ent::EntityStatus status(" 000000");
-    }, igesio::ParseError);
-    EXPECT_THROW({
-        i_ent::EntityStatus status("0000 000");
     }, igesio::ParseError);
 }
 

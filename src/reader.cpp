@@ -15,6 +15,7 @@
 
 #include "igesio/utils/iges_string_utils.h"
 #include "igesio/utils/iges_binary_reader.h"
+#include "igesio/entities/factory.h"
 
 
 
@@ -317,4 +318,87 @@ i_model::IntermediateIgesData igesio::ReadIgesIntermediate(
     data.terminate_section = terminate_section.value();
 
     return data;
+}
+
+i_model::IgesData igesio::ConvertFromIntermediate(
+        const models::IntermediateIgesData& intermediate) {
+    i_model::IgesData iges;
+    iges.description = intermediate.start_section;
+    iges.global_section = intermediate.global_section;
+
+    auto iges_id = iges.GetID();
+
+    // DEとPDの数が一致するか確認
+    if (intermediate.directory_entry_section.size() !=
+        intermediate.parameter_data_section.size()) {
+        throw iio::DataFormatError(
+                "The number of directory entry records (" +
+                std::to_string(intermediate.directory_entry_section.size()) +
+                ") does not match the number of parameter data records (" +
+                std::to_string(intermediate.parameter_data_section.size()) +
+                ").");
+    }
+
+    // すべてのエンティティのIDを先に生成・取得する
+    entities::pointer2ID de2id;
+    for (const auto& de : intermediate.directory_entry_section) {
+        auto de_pointer = de.sequence_number;
+        // すでにde2idにde_pointerが存在する場合はエラー
+        if (de2id.find(de_pointer) != de2id.end()) {
+            throw iio::DataFormatError("Duplicate directory entry pointer"
+                    " found: " + std::to_string(de_pointer));
+        }
+        de2id[de_pointer] = IDGenerator::Reserve(iges_id, de_pointer);
+    }
+
+    // DEとPDを組み合わせてエンティティを生成し、IgesDataに追加
+    for (const auto& de : intermediate.directory_entry_section) {
+        // pd_pointerとシーケンス番号が一致するPDを探す
+        auto pd_pointer = de.parameter_data_pointer;
+        auto pd_it = std::find_if(
+                intermediate.parameter_data_section.begin(),
+                intermediate.parameter_data_section.end(),
+                [pd_pointer](const entities::RawEntityPD& pd) {
+                    return pd.sequence_number == pd_pointer;
+                });
+        if (pd_it == intermediate.parameter_data_section.end()) {
+            throw iio::DataFormatError(
+                    "Parameter data record with pointer " +
+                    std::to_string(pd_pointer) +
+                    " not found for directory entry with sequence number " +
+                    std::to_string(de.sequence_number) + ".");
+        }
+        auto pd = *pd_it;
+
+        // DEとPDを組み合わせてエンティティを生成
+        try {
+            auto entity = entities::EntityFactory::CreateEntity(de, pd, de2id, iges_id);
+            iges.AddEntity(entity);
+        } catch (const std::out_of_range& e) {
+            // エンティティがIGESファイル内に存在しないエンティティを参照している場合
+            throw iio::DataFormatError(
+                    "Entity with DE sequence number " +
+                    std::to_string(de.sequence_number) +
+                    " references an entity that does not exist in the IGES file. "
+                    "Details: " + std::string(e.what()));
+        } catch (const std::bad_variant_access& e) {
+            // DEまたはPDのフィールドにおいて、期待される型と異なる型が使用されている場合
+            throw iio::DataFormatError(
+                    "Entity with DE sequence number " +
+                    std::to_string(de.sequence_number) +
+                    " has a field with an unexpected type. "
+                    "Details: " + std::string(e.what()));
+        }
+    }
+
+    return iges;
+}
+
+i_model::IgesData igesio::ReadIges(const std::string& file_path,
+                                   const bool validate_strictly) {
+    // IGESファイルを読み込み、中間データ構造を生成
+    auto intermediate = ReadIgesIntermediate(file_path, validate_strictly);
+
+    // 中間データ構造からIgesDataクラスを生成
+    return ConvertFromIntermediate(intermediate);
 }

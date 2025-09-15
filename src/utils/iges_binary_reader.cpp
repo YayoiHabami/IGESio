@@ -105,6 +105,16 @@ ReadToNextLineBreak(std::ifstream& fs, const std::vector<char>& line_break) {
     }
 
     if (!line_break_found) {
+        if (fs.eof()) {
+            // EOFに達している場合、ターミネートセクションであればエラーを出さない
+            std::string line_s(line.begin(), line.end());
+            try {
+                auto section_type = i_util::GetSectionType(line_s);
+                if (section_type == SType::kTerminate) return line;
+            } catch (...) {}
+            // 何らかのエラーが発生した場合は、以下のエラーを投げる
+        }
+
         // kMaxColumn+1文字目までに改行文字が見つからなかった場合
         // 末尾に\0を追加してエラー
         line.push_back('\0');

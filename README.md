@@ -10,7 +10,7 @@
 
 IGESio is a modern, cross-platform C++ library for handling IGES (Initial Graphics Exchange Specification) files. It provides comprehensive functionality for reading, writing, and manipulating IGES files in accordance with the IGES 5.3 specification.
 
-The current version can be checked using [`igesio::GetVersion()`](src/common/versions.cpp) (e.g., 0.3.1).
+The current version can be checked using [`igesio::GetVersion()`](src/common/versions.cpp) (e.g., 0.5.0).
 
 For design principles and IGES specification interpretations, please refer to the [policy documentation (Japanese)](docs/policy_ja.md).
 
@@ -19,11 +19,10 @@ For design principles and IGES specification interpretations, please refer to th
 
 - [Overview](#overview)
 - [Key Features](#key-features)
-- [Usage Examples](#usage-examples)
-  - [Basic Read/Write Operations](#basic-readwrite-operations)
-    - [Reading and Writing with Intermediate Data Structure](#reading-and-writing-with-intermediate-data-structure)
-    - [Why Use an Intermediate Data Structure?](#why-use-an-intermediate-data-structure)
-    - [Important Notes](#important-notes)
+- [Usage](#usage)
+  - [Example: Integrating with a GUI Application](#example-integrating-with-a-gui-application)
+  - [Reading and Writing IGES Files](#reading-and-writing-iges-files)
+  - [Creating Entities](#creating-entities)
 - [System Requirements](#system-requirements)
   - [Tested Environments](#tested-environments)
   - [Environment Setup](#environment-setup)
@@ -31,14 +30,8 @@ For design principles and IGES specification interpretations, please refer to th
     - [Ubuntu Environment](#ubuntu-environment)
   - [Third-Party Dependencies](#third-party-dependencies)
 - [Building](#building)
-  - [CMake Project Integration](#cmake-project-integration)
-    - [Component Names for CMake Linking](#component-names-for-cmake-linking)
-  - [Standalone Building](#standalone-building)
-    - [Platform-Specific Alternatives](#platform-specific-alternatives)
-    - [Running Tests](#running-tests)
 - [Directory Structure](#directory-structure)
 - [Documentation](#documentation)
-  - [File-Specific Documentation](#file-specific-documentation)
 - [Copyright \& License](#copyright--license)
 
 ## Key Features
@@ -50,63 +43,83 @@ The IGESio library provides the following core functionality:
 - **Entity Data Management**: Efficient management and manipulation of IGES entities
 - **Global Parameter Control**: Manage global section parameters via [`igesio::models::GlobalParam`](include/igesio/models/global_param.h)
 
-## Usage Examples
+## Usage
 
-### Basic Read/Write Operations
+### Example: Integrating with a GUI Application
 
-The IGESio library employs a two-stage conversion process for reading IGES files:
+A simple GUI application example, [curves viewer](docs/examples.md#gui), demonstrates how to use IGESio to read IGES files and render them with OpenGL. This application uses ImGui and GLFW, with IGESio providing the rendering functionality.
 
-1. **IGES File → Intermediate Data Structure** ([`IntermediateIgesData`](docs/intermediate_data_structure.md#1-intermediateigesdata-structure))
-2. **Intermediate Data Structure → Data Class** (`IGESData` class - under development)
+<img src="docs/images/curves_viewer_window.png" alt="Curves Viewer Example" width="600"/>
 
-#### Reading and Writing with Intermediate Data Structure
+### Reading and Writing IGES Files
 
-Currently available method allows reading and writing IGES files using the intermediate data structure ([`IntermediateIgesData`](docs/intermediate_data_structure.md#1-intermediateigesdata-structure)). For detailed information, please refer to the [intermediate data structure documentation](docs/intermediate_data_structure.md).
+IGESio provides `igesio::ReadIges` and `igesio::WriteIges` functions for reading and writing IGES files. Both functions use the `igesio::models::IgesData` type to represent all IGES file data.
+
+Entities not yet supported by IGESio are loaded as `igesio::entities::UnsupportedEntity`. These entities have their parameters parsed, but do not provide entity-specific functionality. For details, see [entities/UnsupportedEntity](docs/entities/entities.md#UnsupportedEntity).
 
 ```cpp
+#include <iostream>
+#include <unordered_map>
 #include <igesio/reader.h>
 #include <igesio/writer.h>
 
-int main() {
-  try {
-    // Read IGES file into intermediate data structure
-    auto data = igesio::ReadIgesIntermediate("input.igs");
+// Read IGES file
+auto data = igesio::ReadIges("path/to/file.igs");
 
-    // Modify data as needed
-    // ...
+// Count entities by type and check support
+std::unordered_map<igesio::entities::EntityType, int> type_counts;
+std::unordered_map<igesio::entities::EntityType, bool> is_supported;
+for (const auto& [id, entity] : data.GetEntities()) {
+  type_counts[entity->GetType()]++;
+  is_supported[entity->GetType()] = entity->IsSupported();
+}
 
-    // Write modified data to a new file
-    igesio::WriteIgesIntermediate(data, "output.igs");
-  } catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
-    return 1;
+// Write IGES file
+// Throws DataFormatError if unsupported entities are present
+try {
+  auto success = igesio::WriteIges(data, "path/to/output.igs");
+  if (!success) {
+    std::cerr << "Failed to write IGES file." << std::endl;
   }
-
-  return 0;
+} catch (const igesio::DataFormatError& e) {
+  std::cerr << "Data format error: " << e.what() << std::endl;
 }
 ```
 
-#### Why Use an Intermediate Data Structure?
+For details on the data structures, see [class structure](docs/class_structure.md). For basic usage, refer to [examples](docs/examples.md) and [entities](docs/entities/entities.md).
 
-Reasons for adopting the two-stage approach:
+### Creating Entities
 
-- **IGES Format Complexity**: Processes conversion between raw data in IGES files and practical data models in stages
-- **Error Handling Separation**: Clearly distinguishes between file parsing errors and data structure conversion errors
-- **Development Flexibility**: Minimizes impact of design changes to the final `IGESData` class
+You can also create entities programmatically. The following example creates a circle with center $(3, 0)$ and radius $1$, sets its color, and writes it to an IGES file.
 
-#### Important Notes
+```cpp
+#include <memory>
+#include <array>
+#include <iostream>
+#include <igesio/entities/curves/circular_arc.h>
+#include <igesio/entities/structures/color_definition.h>
+#include <igesio/writer.h>
 
-> **Warning**: The intermediate data structure (`IntermediateIgesData`) is an internal implementation detail and may change in future versions.
->
-> For production use, we strongly recommend using the planned `IGESData` class once completed:
->
-> ```cpp
-> // Future API (under development)
-> auto iges_data = igesio::ReadIges("example.igs");  // Returns IGESData class
-> igesio::WriteIges(iges_data, "output.igs");
-> ```
->
-> Please limit the use of intermediate data structure to development/debugging purposes or temporary usage until the `IGESData` class is completed.
+// Create a Circular Arc entity (center: (3.0, 0.0), radius: 1.0)
+auto circle = std::make_shared<igesio::entities::CircularArc>(
+    igesio::Vector2d{3.0, 0.0}, 1.0);
+
+// Set color using Color Definition entity (≈ #4C7FFF)
+auto color_def = std::make_shared<igesio::entities::ColorDefinition>(
+    std::array<double, 3>{30.0, 50.0, 100.0}, "Bright Blue");
+circle->OverwriteColor(color_def);
+
+// Create IgesData and add entities
+igesio::models::IgesData iges_data;
+iges_data.AddEntity(color_def);
+iges_data.AddEntity(circle);
+
+// Write to IGES file
+auto success = igesio::WriteIges(iges_data, "created_circle.igs");
+if (!success) {
+  std::cerr << "Failed to write IGES file." << std::endl;
+}
+```
 
 ## System Requirements
 
@@ -157,129 +170,59 @@ This library includes optional dependencies with compatible licenses:
 
 | Library | License | Usage | Optional |
 |---------|---------|-------|----------|
-| [Eigen3](https://eigen.tuxfamily.org/) | MPL-2.0 | Linear algebra operations | Yes (disable with `-DENABLE_EIGEN=OFF`) |
+| [Eigen3](https://eigen.tuxfamily.org/) | MPL-2.0 | Linear algebra operations | Yes (`-DIGESIO_ENABLE_EIGEN=OFF` to disable) |
 | [Google Test](https://github.com/google/googletest) | BSD-3-Clause | Unit testing | Yes (only when `IGESIO_BUILD_TESTING` is enabled) |
+| [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0 | OpenGL loader | Yes (only when `IGESIO_ENABLE_GRAPHICS` or `IGESIO_BUILD_GUI` is enabled) |
+| [glfw](https://www.glfw.org/) | Zlib | Window creation and input handling | Yes (only when `IGESIO_BUILD_GUI` is enabled) |
+| [imgui](https://github.com/ocornut/imgui) | MIT | Graphical user interface | Yes (only when `IGESIO_BUILD_GUI` is enabled) |
 
-**License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) for full license texts.
+**License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) for full license texts.
 
 **Note**:
 - Eigen is header-only and only included when explicitly enabled
 - Google Test is only used for development and not distributed with the library
-- You can build this library without any third-party dependencies
-
+- glad is included only when `IGESIO_ENABLE_GRAPHICS` or `IGESIO_BUILD_GUI` is enabled. glad's source code is licensed under MIT license, and Khronos XML API Registry is licensed under Apache License 2.0
+- This library can be built without any third-party dependencies
 
 ## Building
 
-### CMake Project Integration
+The IGESio library can be easily integrated into your project using CMake's `FetchContent`. For example, you can add IGESio as a dependency by modifying your `CMakeLists.txt` as follows:
 
-The IGESio library can be easily integrated into other projects using CMake's `FetchContent` feature. Here's an example CMake configuration for integrating the IGESio library into `my_project`, which builds a `main.cpp` file as an executable:
-
-```cmake
+````cmake
 cmake_minimum_required(VERSION 3.16)
 project(my_project)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Enable FetchContent
+# Fetch IGESio using FetchContent
 include(FetchContent)
-
-# Fetch IGESio library
 FetchContent_Declare(
   igesio
-  GIT_REPOSITORY https://github.com/YayoiHabami/IGESio
-  GIT_TAG main  # You can also specify a specific tag or commit hash
+  GIT_REPOSITORY https://github.com/YayoiHabami/IGESio.git
+  GIT_TAG main
 )
 
-# Make IGESio available
+# Enable IGESio with Eigen and OpenGL support
+set(IGESIO_ENABLE_EIGEN ON)
+set(IGESIO_ENABLE_GRAPHICS ON)
 FetchContent_MakeAvailable(igesio)
 
-# Create executable
+# Create an executable
 add_executable(my_app main.cpp)
-
-# Link IGESio library
 target_link_libraries(my_app PRIVATE IGESio::IGESio)
-```
+````
 
-**Note**: When using FetchContent, IGESio tests are not built by default. This reduces build time for user projects.
+For more detailed information and CMake options, refer to [docs/build.md](docs/build.md).
 
-#### Component Names for CMake Linking
+You can also clone the repository and build it standalone for running examples or tests. On Windows, use the `build.bat` script, and on Linux, use the `build.sh` script.
 
-The IGESio library can be linked using the following component names. Choose the appropriate component based on your needs:
-
-| Component Name | Description | Use Case |
-|----------------|-------------|----------|
-| `IGESio::IGESio` | Main library containing all IGESio functionality | General use (recommended) |
-| `IGESio::common` | Common modules (metadata, error handling, etc.) | When only basic functionality is needed |
-| `IGESio::utils` | Utilities like data type conversion | When only utility functions are needed |
-| `IGESio::entities` | IGES entity-related functionality | When only entity processing is needed |
-| `IGESio::models` | Intermediate data structures and overall IGES data management | When only data model functionality is needed |
-
-**Note**: We generally recommend linking with `IGESio::IGESio`. Individual components should only be considered when you need specific functionality only or want to minimize dependencies.
-
-### Standalone Building
-
-For development or testing purposes, you can build the IGESio library individually by following these steps:
-
-**1. Clone the repository**:
-```bash
-git clone https://github.com/YayoiHabami/IGESio.git
-cd IGESio
-```
-
-**2. Create build directory**:
-```bash
-mkdir build
-cd build
-```
-
-**3. Run CMake and build**:
-```bash
-cmake ..
-cmake --build .
-```
-
-#### Platform-Specific Alternatives
-
-**Windows Environment**: You can also use the `build.bat` script. However, this requires Ninja to be installed and added to your PATH in addition to CMake. You can specify either `debug` or `release` options during build. Additionally, specifying `doc` as the second argument will generate documentation, which requires Doxygen and Graphviz to be installed.
-
-```bat
-.\build.bat debug
-```
-
-**Linux Environment**: You can also use the `build.sh` script. CMake and Ninja are required. Grant execution permissions before the first run. Other options are the same as Windows.
+````bat
+.\build.bat debug ex
+````
 
 ```bash
-# Grant execution permissions
-chmod +x build.sh
-
-# Run the script
-./build.sh debug
+./build.sh debug ex
 ```
 
-#### Running Tests
-
-Even when building standalone, tests are not built by default. Use the `IGESIO_BUILD_TESTING` option to control this:
-
-```bash
-# Build with tests
-cmake -DIGESIO_BUILD_TESTING=ON ..
-
-# Build without tests (default)
-cmake ..
-```
-
-After building, you can run tests using the following methods. Navigate to the build output directory first (`build\debug_win` for Windows, `build/debug_linux` for Linux).
-
-**Using CTest**:
-```bash
-ctest
-```
-
-**Using individual test executables**:
-Run each test executable directly (e.g., `test_common`, `test_utils`, `test_entities`, `test_models`, `test_igesio`).
-
-For detailed test definitions, refer to the `CMakeLists.txt` files in each `tests` subdirectory (e.g., [tests/CMakeLists.txt](tests/CMakeLists.txt), [tests/common/CMakeLists.txt](tests/common/CMakeLists.txt)).
+See [docs/build.md](docs/build.md) for details.
 
 ## Directory Structure
 
@@ -287,11 +230,14 @@ For detailed test definitions, refer to the `CMakeLists.txt` files in each `test
 IGESio/
 ├── build.bat, build.sh     # Build scripts for Windows and Linux
 ├── CMakeLists.txt          # Main CMake build script
+├── examples/               # Example usage
+│   └── gui/                # Examples with GUI
 ├── include/                # Public header files
 │   └── igesio/
 ├── src/                    # Source files
 │   ├── common/             # Common modules (metadata, error handling, etc.)
 │   ├── entities/           # Entity-related modules
+│   ├── graphics/           # Graphics-related modules (OpenGL; does not include GUI)
 │   ├── models/             # Data model modules
 │   ├── utils/              # Utility modules
 │   ├── reader.cpp          # IGES file reading implementation
@@ -304,36 +250,7 @@ IGESio/
 
 ## Documentation
 
-Detailed project documentation is organized in the `docs` directory:
-
-- **[policy (ja)](docs/policy_ja.md)**: Library design principles and IGES specification interpretations
-- **[class-reference (ja)](docs/class_reference_ja.md)**: Reference for classes used in this library
-- **[flow/reader (ja)](docs/flow/reader_ja.md)**: Documentation about the reading process flow
-- **[entity-analysis (en)](docs/entity_analysis.md)**: Analysis of entity classifications and parameters in IGES 5.3
-- **[additional-notes (ja)](docs/additional_notes_ja.md)**: Additional notes and supplementary information
-- **[todo (ja)](docs/todo.md)**: TODO list
-
-### File-Specific Documentation
-
-The following documentation is available for individual source files. For files not listed below, please refer to the comments within the source code as documentation has not been created yet.
-
-**common module**
-
-- **[Matrix](docs/common/matrix_ja.md)**: Fixed/dynamic size matrix classes
-
-**entities module**
-- **[Entity class architecture](docs/entities/entity_base_class_architecture_ja.md)**
-  - Explanation of the inheritance structure of entity-related classes
-  - Explanation of the `EntityBase` class inherited by individual entity classes
-- **[Interfaces and derived classes](docs/entities/entities_ja.md)**
-  -  Explanation of the `IEntityIdentifier` class and interface classes
-  -  Explanation of individual entity classes
-- **[RawEntityDE and RawEntityPD](docs/intermediate_data_structure_ja.md)**: Intermediate data structures for IGES file Directory Entry and Parameter Data sections
-
-**models module**
-- **[Intermediate](docs/intermediate_data_structure_ja.md)**: Intermediate data structures for IGES file input/output operations
-
-**utils module**
+The documentation is available in the `docs` directory. See [docs/index.md](docs/index.md) for an overview and links to specific documents.
 
 ## Copyright & License
 

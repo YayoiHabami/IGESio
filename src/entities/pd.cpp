@@ -290,3 +290,38 @@ i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
 
     return params;
 }
+
+i_ent::RawEntityPD
+i_ent::ToRawEntityPD(const EntityType type,
+                     const uint64_t id,
+                     const IGESParameterVector& vec,
+                     const i_ent::id2pointer& id2de) {
+    // vecからエンティティデータと型を取得
+    std::vector<std::string> data;
+    std::vector<IGESParameterType> types;
+    data.reserve(vec.size());
+    types.reserve(vec.size());
+    for (size_t i = 0; i < vec.size(); ++i) {
+        if (vec.is_type<uint64_t>(i)) {
+            // IDの場合は、IDをDEポインタに変換して格納
+            if (id2de.find(vec.get<uint64_t>(i)) == id2de.end()) {
+                throw std::out_of_range("The ID " + std::to_string(vec.get<uint64_t>(i)) +
+                        " in Parameter Data section is not found in the id2de mapping.");
+            }
+            data.push_back(std::to_string(id2de.at(vec.get<uint64_t>(i))));
+        } else {
+            auto x = vec.get_as_string(i);
+            data.push_back(x);
+        }
+        types.push_back(vec.get_format(i).type);
+    }
+
+    // DEポインタを取得
+    if (id2de.find(id) == id2de.end()) {
+        throw std::out_of_range("The ID " + std::to_string(id) +
+                " (DE back pointer) is not found in the id2de mapping.");
+    }
+    unsigned int de_pointer = id2de.at(id);
+
+    return RawEntityPD(type, de_pointer, 0, data, types);
+}

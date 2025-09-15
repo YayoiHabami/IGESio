@@ -1,6 +1,8 @@
 # models library
 add_library(igesio_models STATIC
     global_param.cpp
+
+    iges_data.cpp
 )
 
 # Set the source and include directories

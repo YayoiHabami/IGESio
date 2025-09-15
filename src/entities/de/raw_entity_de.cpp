@@ -353,17 +353,22 @@ i_ent::EntityStatus::EntityStatus(const std::string& status) {
             "Invalid entity status string size; expected 8 digits, got '" + status + "'");
     }
 
+    // 0の数値部分を空白として出力するポストプロセッサもあるため、
+    // 半角スペースは0に置換する
+    std::string replaced = status;
+    std::replace(replaced.begin(), replaced.end(), ' ', '0');
+
     // 表示状態の変換
-    blank_status = ToBlankStatus(status.substr(0, 2));
+    blank_status = ToBlankStatus(replaced.substr(0, 2));
 
     // 従属エンティティスイッチの変換
-    subordinate_entity_switch = ToSubordinateEntitySwitch(status.substr(2, 2));
+    subordinate_entity_switch = ToSubordinateEntitySwitch(replaced.substr(2, 2));
 
     // エンティティ使用フラグの変換
-    entity_use_flag = ToEntityUseFlag(status.substr(4, 2));
+    entity_use_flag = ToEntityUseFlag(replaced.substr(4, 2));
 
     // 階層の変換
-    hierarchy = ToHierarchyType(status.substr(6, 2));
+    hierarchy = ToHierarchyType(replaced.substr(6, 2));
 }
 
 bool i_ent::RawEntityDE::SetIsDefault(

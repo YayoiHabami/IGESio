@@ -41,7 +41,7 @@ void DELevel::SetLevelNumber(const int value) {
     }
 }
 
-int DELevel::GetValue() const {
+int DELevel::GetValue(const id2pointer& id2de) const {
     if (GetValueType() == DEFieldValueType::kPositive) {
         return level_number_;
     } else if (GetValueType() == DEFieldValueType::kDefault) {
@@ -49,5 +49,7 @@ int DELevel::GetValue() const {
         // あるため、ここで強制的に0を返す
         return 0;
     }
-    return DEFieldWrapper::GetValue();
+    // 0またはポインタ
+    // field 5ではポインタは負の値で表現されるため、符号反転する
+    return -DEFieldWrapper::GetValue(id2de);
 }

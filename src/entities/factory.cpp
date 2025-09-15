@@ -13,6 +13,15 @@
 
 #include "igesio/entities/structures/null_entity.h"     // type 000
 #include "igesio/entities/curves/circular_arc.h"        // type 100
+#include "igesio/entities/curves/composite_curve.h"     // type 102
+#include "igesio/entities/curves/conic_arc.h"           // type 104
+#include "igesio/entities/curves/copious_data.h"        // type 106, forms  1- 3
+#include "igesio/entities/curves/linear_path.h"         // type 106, forms 11-13
+#include "igesio/entities/curves/line.h"                // type 110
+
+#include "igesio/entities/transformations/transformation_matrix.h"  // type 124
+#include "igesio/entities/curves/rational_b_spline_curve.h"         // type 126
+#include "igesio/entities/structures/color_definition.h"            // type 314
 
 
 
@@ -41,6 +50,52 @@ void i_ent::EntityFactory::Initialize() {
     creators_[ET::kCircularArc] = [](const DE& de, const IVec& p,
                                      const p2I& d2i, const uint64_t iid) {
         return std::make_shared<i_ent::CircularArc>(de, p, d2i, iid);
+    };
+    // 102 - Composite Curve
+    creators_[ET::kCompositeCurve] = [](const DE& de, const IVec& p,
+                                        const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::CompositeCurve>(de, p, d2i, iid);
+    };
+    // 104 - Conic Arc
+    creators_[ET::kConicArc] = [](const DE& de, const IVec& p,
+                                  const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::ConicArc>(de, p, d2i, iid);
+    };
+    // 106 - Copious Data (CopiousDataBaseとして返す)
+    creators_[ET::kCopiousData] = [](const DE& de, const IVec& p,
+                                     const p2I& d2i, const uint64_t iid) {
+        if (de.form_number <= static_cast<int>(i_ent::CopiousDataType::kSextuples)) {
+            return std::static_pointer_cast<i_ent::CopiousDataBase>(
+                std::make_shared<i_ent::CopiousData>(de, p, d2i, iid));
+        } else if (de.form_number <= static_cast<int>(
+                    i_ent::CopiousDataType::kPolylineAndVectors)) {
+            return std::static_pointer_cast<i_ent::CopiousDataBase>(
+                std::make_shared<i_ent::LinearPath>(de, p, d2i, iid));
+        }
+        return std::make_shared<i_ent::CopiousDataBase>(de, p, d2i, iid);
+    };
+
+    // 110 - Line
+    creators_[ET::kLine] = [](const DE& de, const IVec& p,
+                              const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::Line>(de, p, d2i, iid);
+    };
+
+    // 124 - Transformation Matrix
+    creators_[ET::kTransformationMatrix] = [](const DE& de, const IVec& p,
+                                              const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::TransformationMatrix>(de, p, d2i, iid);
+    };
+    // 126 - Rational B-Spline Curve
+    creators_[ET::kRationalBSplineCurve] = [](const DE& de, const IVec& p,
+                                              const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::RationalBSplineCurve>(de, p, d2i, iid);
+    };
+
+    // 314 - Color Definition
+    creators_[ET::kColorDefinition] = [](const DE& de, const IVec& p,
+                                         const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::ColorDefinition>(de, p, d2i, iid);
     };
 
     initialized_ = true;

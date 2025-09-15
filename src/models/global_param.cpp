@@ -84,16 +84,16 @@ i_model::UnitFlag i_model::ToUnitFlagEnum(const std::string& unit_name) {
 
 std::string i_model::ToUnitName(const i_model::UnitFlag unit_flag) {
     switch (unit_flag) {
-        case i_model::UnitFlag::kInch: return "4HINCH";
-        case i_model::UnitFlag::kMillimeter: return "2HMM";
-        case i_model::UnitFlag::kFeet: return "2HFT";
-        case i_model::UnitFlag::kMile: return "2HMI";
-        case i_model::UnitFlag::kMeter: return "1HM";
-        case i_model::UnitFlag::kKilometer: return "2HKM";
-        case i_model::UnitFlag::kMil: return "3HMIL";
-        case i_model::UnitFlag::kMicron: return "2HUM";
-        case i_model::UnitFlag::kCentimeter: return "2HCM";
-        case i_model::UnitFlag::kMicroInch: return "3HUIN";
+        case i_model::UnitFlag::kInch: return "INCH";
+        case i_model::UnitFlag::kMillimeter: return "MM";
+        case i_model::UnitFlag::kFeet: return "FT";
+        case i_model::UnitFlag::kMile: return "MI";
+        case i_model::UnitFlag::kMeter: return "M";
+        case i_model::UnitFlag::kKilometer: return "KM";
+        case i_model::UnitFlag::kMil: return "MIL";
+        case i_model::UnitFlag::kMicron: return "UM";
+        case i_model::UnitFlag::kCentimeter: return "CM";
+        case i_model::UnitFlag::kMicroInch: return "UIN";
         default:
             // 単位フラグが3の場合も含め、無効な場合は例外を投げる
             throw iio::TypeConversionError("Invalid unit flag value: " +
@@ -329,10 +329,12 @@ i_model::ToVector(const GlobalParam& gs, const std::string& file_name) {
     // Parameter 2: Record delimiter character
     prm.push_back(std::string(1, gs.record_delim), VF::String());
     // Parameter 3: Product identification from sender
+    auto product_id = gs.product_id;
     if (file_name.empty()) {
         prm.push_back(gs.product_id, VF::String());
     } else {
         prm.push_back(file_name, VF::String());
+        product_id = file_name;
     }
     // Parameter 4: File name
     if (file_name.empty()) {
@@ -355,7 +357,7 @@ i_model::ToVector(const GlobalParam& gs, const std::string& file_name) {
     // Parameter 11: Double-precision significance
     prm.push_back(iio::kDefaultDoublePrecisionDigits, VF::Integer());
     // Parameter 12: Product identification for the receiver
-    prm.push_back(iio::GetLibraryName(), VF::String());
+    prm.push_back(product_id, VF::String());
     // Parameter 13: Model space scale
     prm.push_back(gs.model_space_scale, VF::Real());
     // Parameter 14: Unit flag

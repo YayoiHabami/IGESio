@@ -149,7 +149,8 @@ class IGESParameterVector {
     /// @param config 変換に使用する設定 (数値用)
     /// @return 指定したインデックスの要素を文字列に変換したもの
     /// @throw std::out_of_range インデックスが範囲外の場合
-    std::string get_as_string(size_t, const SerializationConfig&) const;
+    std::string get_as_string(
+            size_t, const SerializationConfig& = SerializationConfig()) const;
 
     /// @brief 指定した型で指定したインデックスの値を取得
     /// @tparam T 取得する要素の型

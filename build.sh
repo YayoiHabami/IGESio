@@ -5,13 +5,15 @@ set -e
 ENABLE_DOCUMENTATION=OFF
 ENABLE_SOURCE_BUILD=ON
 BUILD_TYPE=debug
+BUILD_EXAMPLE=OFF
 
 # Function to display usage
 show_usage() {
-    echo "Usage1: ./build.sh [debug|release] [doc]"
+    echo "Usage1: ./build.sh [debug|release] <doc> <ex>"
     echo "If 'doc' is specified, documentation will be built."
+    echo "If 'ex' is specified, example will be built."
     echo "If 'debug' or 'release' is specified, the source will be built."
-    echo "Usage2: ./build.sh doc"
+    echo "Usage2: ./build.sh doc <ex>"
     echo "If 'doc' is specified, only documentation will be built without source."
     exit 1
 }
@@ -22,26 +24,35 @@ if [ $# -eq 0 ]; then
 fi
 
 # Parse arguments
-if [ "$1" = "debug" ]; then
-    BUILD_TYPE=debug
-    if [ "$2" = "doc" ]; then
-        ENABLE_DOCUMENTATION=ON
-    fi
-elif [ "$1" = "release" ]; then
-    BUILD_TYPE=release
-    if [ "$2" = "doc" ]; then
-        ENABLE_DOCUMENTATION=ON
-    fi
-elif [ "$1" = "doc" ]; then
-    # If the first argument is "doc", enable documentation and disable source build
-    ENABLE_DOCUMENTATION=ON
-    ENABLE_SOURCE_BUILD=OFF
+if [ "$1" = "debug" ] || [ "$1" = "release" ]; then
+    BUILD_TYPE=$1
 else
-    echo "Error: Invalid argument '$1'"
-    show_usage
+    ENABLE_SOURCE_BUILD=OFF
 fi
 
-BUILD_DIR="build/${BUILD_TYPE}_linux"
+for arg in "$@"; do
+    case "$arg" in
+        doc)
+            ENABLE_DOCUMENTATION=ON
+            ;;
+        ex)
+            BUILD_EXAMPLE=ON
+            ;;
+        debug|release)
+            # Already handled, do nothing
+            ;;
+        *)
+            echo "Error: Invalid argument '$arg'"
+            show_usage
+            ;;
+    esac
+done
+
+EXAMPLE_SUFFIX=""
+if [ "$BUILD_EXAMPLE" = "ON" ]; then
+    EXAMPLE_SUFFIX="_ex"
+fi
+BUILD_DIR="build/${BUILD_TYPE}${EXAMPLE_SUFFIX}_linux"
 
 if [ "$ENABLE_SOURCE_BUILD" = "ON" ]; then
     echo "Starting source build..."
@@ -49,11 +60,13 @@ if [ "$ENABLE_SOURCE_BUILD" = "ON" ]; then
     # Create a build directory if it doesn't exist
     if [ ! -d "$BUILD_DIR" ]; then
         mkdir -p "$BUILD_DIR"
+        CMAKE_ARGS=("-S" "." "-B" "$BUILD_DIR" "-G" "Ninja" "-DIGESIO_BUILD_EXAMPLE=${BUILD_EXAMPLE}")
         if [ "$BUILD_TYPE" = "debug" ]; then
-            cmake -S . -B "$BUILD_DIR" -G "Ninja" -DIGESIO_BUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug
+            CMAKE_ARGS+=("-DIGESIO_BUILD_TESTING=ON" "-DCMAKE_BUILD_TYPE=Debug")
         else
-            cmake -S . -B "$BUILD_DIR" -G "Ninja" -DIGESIO_BUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+            CMAKE_ARGS+=("-DIGESIO_BUILD_TESTING=OFF" "-DCMAKE_BUILD_TYPE=Release")
         fi
+        cmake "${CMAKE_ARGS[@]}"
     fi
 
     # Build the project using Ninja
