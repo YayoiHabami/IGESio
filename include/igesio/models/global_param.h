@@ -148,7 +148,9 @@ constexpr std::string_view kDefaultAuthor = "";
 /// @note デフォルト値はNULL（ここでは空文字列で表現）であり、「未指定」と解釈される
 constexpr std::string_view kDefaultAuthorOrg = "";
 /// @brief バージョンフラグ (グローバルパラメータ23) のデフォルト値
-constexpr VersionFlag kDefaultSpecificationVersion = VersionFlag::kVersion2_0;
+/// @note 本来のデフォルト値は3 (IGES 2.0) であるが、ここでは
+///       11 (IGES 5.3) をデフォルト値として設定している
+constexpr VersionFlag kDefaultSpecificationVersion = VersionFlag::kVersion5_3;
 /// @brief 製図標準フラグ (グローバルパラメータ24) のデフォルト値
 constexpr DraftingStandardFlag kDefaultDraftingStandardFlag = DraftingStandardFlag::kNone;
 /// @brief モデルが作成または最終更新された日時 (グローバルパラメータ25) のデフォルト値
@@ -169,7 +171,7 @@ struct GlobalParam {
     /// @brief パラメータ区切り文字 (1)
     char param_delim = kDefaultParamDelim;
     /// @brief レコード区切り文字 (2)
-    char record_delim = kDefaultParamDelim;
+    char record_delim = kDefaultRecordDelim;
     /// @brief 送信システムからの製品識別 (3)
     /// @note 送信者がこの製品を参照するために使用する名前または識別子
     std::string product_id;
@@ -250,6 +252,47 @@ struct GlobalParam {
     /// @brief シリアライズ (IGES形式の文字列化) に必要なパラメータを取得する
     /// @return シリアライズに必要なパラメータ
     SerializationConfig GetSerializationConfig() const;
+};
+
+/// @brief 描画に関連するグローバルパラメータ
+struct GraphicsGlobalParam {
+    /// @brief モデル空間のスケール
+    /// @note グローバルパラメータ13
+    double model_space_scale;
+    /// @brief 線の太さの最大数
+    /// @note グローバルパラメータ16
+    int line_weight_gradations;
+    /// @brief 最大線の太さの幅
+    /// @note グローバルパラメータ17
+    double max_line_weight;
+
+    /// @brief コンストラクタ
+    /// @param model_space_scale モデル空間のスケール
+    /// @param line_weight_gradations 線の太さの最大数
+    /// @param max_line_weight 最大線の太さの幅
+    GraphicsGlobalParam(const double model_space_scale,
+                        const int line_weight_gradations,
+                        const double max_line_weight)
+        : model_space_scale(model_space_scale),
+          line_weight_gradations(line_weight_gradations),
+          max_line_weight(max_line_weight) {}
+
+    /// @brief コンストラクタ
+    /// @param global_param グローバルパラメータ
+    explicit GraphicsGlobalParam(const GlobalParam& global_param)
+        : model_space_scale(global_param.model_space_scale),
+          line_weight_gradations(global_param.line_weight_gradations),
+          max_line_weight(global_param.max_line_weight) {}
+
+    /// @brief 線の表示太さを計算する
+    /// @param line_weight_number 線の表示太さの番号 (12th DEパラメータ)
+    /// @return 線の表示太さ
+    /// @note 線の表示太さは、`line_weight_number` (12th DEパラメータ)
+    ///       を用いて、line_weight_number * max_line_weight /
+    ///       line_weight_gradations で計算される.
+    double GetLineWeight(const int line_weight_number) const {
+        return line_weight_number * max_line_weight / line_weight_gradations;
+    }
 };
 
 

@@ -585,6 +585,7 @@ class Matrix {
     /// @param i 取得する列のインデックス
     /// @return i列目のベクトル
     /// @throw std::out_of_range 列インデックスが範囲外の場合
+    /// @note `mat.col(i) = vec;`のような代入操作は不可
     Matrix<T, N, 1> col(size_t i) const {
         if (i >= cols()) {
             throw std::out_of_range("Column index out of range");
@@ -602,6 +603,7 @@ class Matrix {
     /// @param j 取得する行のインデックス
     /// @return j行目のベクトル
     /// @throw std::out_of_range 行インデックスが範囲外の場合
+    /// @note `mat.row(i) = row_vec;`のような代入操作は不可
     Matrix<T, 1, M> row(size_t j) const {
         if (j >= rows()) {
             throw std::out_of_range("Row index out of range");

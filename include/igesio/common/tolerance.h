@@ -62,6 +62,18 @@ bool IsApproxEqual(const Matrix<T, N, M>& a, const Matrix<T, N, M>& b,
     return true;  // 全ての要素が許容誤差以下であればtrue
 }
 
+/// @brief a < b かどうかを判定する
+/// @param a 判定する値1
+/// @param b 判定する値2
+/// @param tolerance 許容誤差 (デフォルトはkParameterTolerance)
+bool IsApproxLessThan(const double, const double, const double = kParameterTolerance);
+
+/// @brief a > b かどうかを判定する
+/// @param a 判定する値1
+/// @param b 判定する値2
+/// @param tolerance 許容誤差 (デフォルトはkParameterTolerance)
+bool IsApproxGreaterThan(const double, const double, const double = kParameterTolerance);
+
 }  // namespace igesio
 
 #endif  // IGESIO_COMMON_TOLERANCE_H_

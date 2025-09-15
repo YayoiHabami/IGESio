@@ -18,24 +18,36 @@
 namespace igesio::entities {
 
 /// @brief 複数の型のポインタを保持するためのコンテナクラス
+/// @tparam UseWeakPtr ポインタに`weak_ptr`を使用するか.
+///         循環参照が生じないことが保証されている場合は`false`を指定することで、
+///         `shared_ptr`を使用できる. 例えばCompositeCurveの子要素の格納に使用することで、
+///         子要素のライフタイムのことを気にせずに親要素のみ管理することができる.
+///         (weak_ptrを使用する場合、参照先を別途保持していなければ、親要素が残っていても
+///         参照先が解放されてしまう可能性があることに注意)
 /// @tparam DerivedTypes IEntityIdentifierを継承したクラス群
 /// @note 例えば曲線全般を参照するポインタ（Composite CurveのPDレコードなど）を
 ///       指定する場合は、`PointerContainer<ICurve>`のように指定することができる.
 ///       また、複数の型を同時に指定することも可能.
 /// @note DerivedTypesにおいて、IEntityIdentifierは指定不可能.
 ///       すべてのエンティティのポインタを指定したい場合は、EntityBaseを指定すること.
-template<typename... DerivedTypes>
+template<bool UseWeakPtr, typename... DerivedTypes>
 class PointerContainer {
     // 全ての型がIEntityIdentifierを継承していることを確認
     static_assert((std::is_base_of_v<IEntityIdentifier, DerivedTypes> && ...),
                   "All DerivedTypes must inherit from IEntityIdentifier");
 
+    /// @brief 参照に使用するポインタの型. UseWeakPtrがtrueの場合はweak_ptr,
+    ///        falseの場合はshared_ptrを使用する
+    template<typename T>
+    using PtrType = std::conditional_t<
+            UseWeakPtr, std::weak_ptr<T>, std::shared_ptr<T>>;
+
     /// @brief entity_のID
     /// @note 指し示す先が未設定の場合はkUnsetIDを使用する
     uint64_t id_;
-    /// @brief ポインタを保持するためのvariant of weak_ptr
-    /// @note 循環参照が生じる可能性を否定できないため、`weak_ptr`を使用する
-    std::variant<std::weak_ptr<const DerivedTypes>...> entity_;
+    /// @brief ポインタを保持するためのvariant
+    /// @note 循環参照が生じる可能性を否定できない場合、`weak_ptr`を使用可能にする
+    std::variant<PtrType<const DerivedTypes>...> entity_;
     /// @brief ポインタが設定されているかどうか
     bool is_pointer_set_ = false;
 
@@ -57,7 +69,7 @@ class PointerContainer {
     template<typename T,
              std::enable_if_t<(std::is_same_v<T, DerivedTypes> || ...), int> = 0>
     explicit PointerContainer(const std::shared_ptr<const T>& entity)
-        : id_(entity->GetID()), entity_(std::weak_ptr<const T>(entity)),
+        : id_(entity->GetID()), entity_(PtrType<const T>(entity)),
           is_pointer_set_(true) {}
 
     /// @brief DerivedTypesのいずれかの型のオブジェクトを受け取るコンストラクタ（非const版）
@@ -67,7 +79,7 @@ class PointerContainer {
     template<typename T,
              std::enable_if_t<(std::is_same_v<T, DerivedTypes> || ...), int> = 0>
     explicit PointerContainer(const std::shared_ptr<T>& entity)
-        : id_(entity->GetID()), entity_(std::weak_ptr<const T>(entity)),
+        : id_(entity->GetID()), entity_(PtrType<T>(entity)),
           is_pointer_set_(true) {}
 
     /// @brief IEntityIdentifierからDerivedTypesへの変換コンストラクタ
@@ -84,7 +96,7 @@ class PointerContainer {
         ([&] {
             if (success) return;
             if (auto derived = std::dynamic_pointer_cast<const DerivedTypes>(entity)) {
-                entity_ = std::weak_ptr<const DerivedTypes>(derived);
+                entity_ = PtrType<const DerivedTypes>(derived);
                 success = true;
             }
         }(), ...);
@@ -125,7 +137,13 @@ class PointerContainer {
     /// @return ポインタが設定されており、参照先が有効な場合はtrue、そうでなければfalse
     bool IsPointerSet() const {
         if (!is_pointer_set_) return false;
-        return std::visit([](const auto& weak_ptr) { return !weak_ptr.expired(); }, entity_);
+        return std::visit([](const auto& ptr) {
+            if constexpr (UseWeakPtr) {
+                return !ptr.expired();
+            } else {
+                return static_cast<bool>(ptr);
+            }
+        }, entity_);
     }
 
     /// @brief 参照先エンティティのIDを取得する
@@ -139,7 +157,7 @@ class PointerContainer {
     bool IsHoldingType() const {
         static_assert((std::is_same_v<T, DerivedTypes> || ...),
                       "T must be one of the DerivedTypes");
-        return std::holds_alternative<std::weak_ptr<const T>>(entity_);
+        return std::holds_alternative<PtrType<const T>>(entity_);
     }
 
     /// @brief 参照先エンティティのポインタをvariantとして取得する
@@ -150,8 +168,12 @@ class PointerContainer {
             throw std::runtime_error("Pointer is not set or has expired.");
         }
         return std::visit(
-            [](const auto& weak_ptr) -> std::variant<std::shared_ptr<const DerivedTypes>...> {
-                return weak_ptr.lock();
+            [](const auto& ptr) -> std::variant<std::shared_ptr<const DerivedTypes>...> {
+                if constexpr (UseWeakPtr) {
+                    return ptr.lock();
+                } else {
+                    return ptr;
+                }
             },
             entity_);
     }
@@ -166,15 +188,19 @@ class PointerContainer {
         if (!IsPointerSet()) {
             throw std::runtime_error("Pointer is not set or has expired.");
         }
-        auto* weak_ptr_ptr = std::get_if<std::weak_ptr<const T>>(&entity_);
-        if (!weak_ptr_ptr) {
+        auto* ptr_ptr = std::get_if<PtrType<const T>>(&entity_);
+        if (!ptr_ptr) {
             throw std::runtime_error("Stored pointer is not of the requested type.");
         }
-        auto locked = weak_ptr_ptr->lock();
-        if (!locked) {
-            throw std::runtime_error("Referenced entity has been destroyed.");
+        if constexpr (UseWeakPtr) {
+            auto locked = ptr_ptr->lock();
+            if (!locked) {
+                throw std::runtime_error("Referenced entity has been destroyed.");
+            }
+            return locked;
+        } else {
+            return *ptr_ptr;
         }
-        return locked;
     }
 
     /// @brief 参照先エンティティをIEntityIdentifierとして取得する
@@ -203,12 +229,16 @@ class PointerContainer {
                 // variantが空の場合
                 return std::nullopt;
             } else {
-                // weak_ptrからshared_ptrへの変換を試みる
-                if (auto locked = arg.lock()) {
-                    // Tへのdynamic_pointer_castを試みる
-                    auto ptr = std::dynamic_pointer_cast<const T>(locked);
-                    if (ptr) return ptr;
+                std::shared_ptr<const T> ptr;
+                if constexpr (UseWeakPtr) {
+                    // weak_ptrからshared_ptrへの変換を試みる
+                    auto locked = arg.lock();
+                    if (!locked) return std::nullopt;
+                    ptr = std::dynamic_pointer_cast<const T>(locked);
+                } else {
+                    ptr = std::dynamic_pointer_cast<const T>(arg);
                 }
+                if (ptr) return ptr;
                 // dynamicなキャストに失敗した場合、またはweak_ptrがexpiredの場合
                 return std::nullopt;
             }
@@ -227,7 +257,7 @@ class PointerContainer {
              std::enable_if_t<(std::is_same_v<T, DerivedTypes> || ...), int> = 0>
     bool SetPointer(const std::shared_ptr<const T>& entity) {
         if (entity->GetID() != id_) return false;
-        entity_ = std::weak_ptr<const T>(entity);
+        entity_ = PtrType<const T>(entity);
         is_pointer_set_ = true;
         return true;
     }
@@ -249,7 +279,7 @@ class PointerContainer {
         ([&] {
             if (success) return;
             if (auto derived = std::dynamic_pointer_cast<const DerivedTypes>(entity)) {
-                entity_ = std::weak_ptr<const DerivedTypes>(derived);
+                entity_ = PtrType<const DerivedTypes>(derived);
                 is_pointer_set_ = true;
                 success = true;
             }
@@ -271,7 +301,7 @@ class PointerContainer {
              std::enable_if_t<(std::is_same_v<T, DerivedTypes> || ...), int> = 0>
     bool OverwritePointer(const std::shared_ptr<const T>& entity) {
         id_ = entity->GetID();
-        entity_ = std::weak_ptr<const T>(entity);
+        entity_ = PtrType<const T>(entity);
         is_pointer_set_ = true;
         return true;
     }
@@ -292,7 +322,7 @@ class PointerContainer {
             if (success) return;
             if (auto derived = std::dynamic_pointer_cast<const DerivedTypes>(entity)) {
                 id_ = derived->GetID();
-                entity_ = std::weak_ptr<const DerivedTypes>(derived);
+                entity_ = PtrType<const DerivedTypes>(derived);
                 is_pointer_set_ = true;
                 success = true;
             }

@@ -16,6 +16,7 @@
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/entities/entity_type.h"
 #include "igesio/entities/de/raw_entity_de.h"
+#include "igesio/entities/de/de_field_wrapper.h"
 
 
 
@@ -72,8 +73,8 @@ struct RawEntityPD {
     /// @note IGESファイルから読み込んだエンティティを作成する際にのみ使用する.
     ///       プログラム内でエンティティを作成する際は、2引数のコンストラクタを使用すること
     RawEntityPD(const EntityType, const unsigned int,
-                        const unsigned int, const std::vector<std::string>&,
-                        const std::vector<IGESParameterType>& = {});
+                const unsigned int, const std::vector<std::string>&,
+                const std::vector<IGESParameterType>& = {});
 
     /// @brief コピーコンストラクタ
     /// @param other コピー元のRawEntityPD
@@ -143,6 +144,18 @@ GetChildDEPointer(const RawEntityPD&, const SubordinateEntitySwitch);
 ///       扱う。要素の取得の際は、`IGESParameterVector::access_as<T>(index)`で
 ///       正しい型で上書きしてから使用すること
 IGESParameterVector ToIGESParameterVector(const RawEntityPD&);
+
+/// @brief IGESParameterVectorからRawEntityPDを作成する
+/// @param type エンティティタイプ
+/// @param id エンティティのID
+/// @param vec IGESParameterVector
+/// @param id2de IDからDEポインタへのマッピング
+/// @return RawEntityPD
+/// @note sequence_numberについては、出力時に設定されるため、0を設定する
+/// @throw std::out_of_range idまたはvecで指定されるIDがid2deに存在しない場合
+RawEntityPD
+ToRawEntityPD(const EntityType, const uint64_t,
+              const IGESParameterVector&, const id2pointer&);
 
 }  // namespace igesio::entities
 

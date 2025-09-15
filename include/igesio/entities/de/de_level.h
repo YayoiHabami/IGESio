@@ -49,9 +49,13 @@ class DELevel : public DEFieldWrapper<IDefinitionLevelsProperty> {
     void SetLevelNumber(const int);
 
     /// @brief 値を取得する
+    /// @param id2de IDとDEポインターのマッピング
     /// @return デフォルト値の場合は0、ポインタの場合は負の値、
     ///         正の値の場合はその値を返す
-    int GetValue() const;
+    /// @throw std::out_of_range id2deが空でなく、かつポインタが設定されている場合に
+    ///        id2deに存在しないIDが参照されている場合
+    /// @note id2deを指定した場合、ポインタの値はid2deに基づいて変換される.
+    int GetValue(const id2pointer& = {}) const;
 };
 
 }  // namespace igesio::entities

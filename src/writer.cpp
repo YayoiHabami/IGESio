@@ -13,9 +13,11 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "igesio/common/versions.h"
 #include "igesio/common/errors.h"
 #include "igesio/common/serialization.h"
 #include "igesio/utils/iges_string_utils.h"
@@ -194,6 +196,14 @@ std::vector<std::string>
 SerializeStartSection(const std::string& start_section) {
     // kColIdentify - 1文字ごとに分割する
     std::vector<std::string> start_lines;
+
+    // start_sectionが空文字列の場合は1行だけ空白行を追加する
+    if (start_section.empty()) {
+        start_lines.push_back(std::string(igesio::kColIdentify - 1, ' ')
+                              + SequenceNumberStr('S', 1));
+        return start_lines;
+    }
+
     for (size_t i = 0; i * (igesio::kColIdentify - 1) < start_section.size(); ++i) {
         // kColIdentify - 1文字に満たない場合は、右側を空白で埋める
         auto pos = i * (igesio::kColIdentify - 1);
@@ -208,7 +218,7 @@ SerializeStartSection(const std::string& start_section) {
 }
 
 std::vector<std::string>
-SerializeGlobalSEction(const igesio::models::GlobalParam& global_section,
+SerializeGlobalSection(const igesio::models::GlobalParam& global_section,
                        const char p_delim, const char r_delim,
                        const std::string& file_name) {
     std::vector<std::string> global_lines;
@@ -295,7 +305,7 @@ bool igesio::WriteIgesIntermediate(
     std::string file_name = std::filesystem::path(absolute_path).filename().string();
 
     // グローバルセクションの文字列化
-    auto global_lines = SerializeGlobalSEction(
+    auto global_lines = SerializeGlobalSection(
         data.global_section, data.global_section.param_delim,
         data.global_section.record_delim, file_name);
 
@@ -319,4 +329,54 @@ bool igesio::WriteIgesIntermediate(
     ofs << terminate_line << '\n';
     ofs.close();
     return true;
+}
+
+igesio::models::IntermediateIgesData
+igesio::ConvertToIntermediate(const models::IgesData& data,
+                              const bool save_unsupported) {
+    // id -> de_pointerのマッピングを作成する
+    entities::id2pointer id2de;
+    for (const auto& [id, entity] : data.GetEntities()) {
+        // TODO: 親子関係を考慮してDEポインタを割り当てる
+        id2de[id] = id2de.size() * 2 + 1;
+
+        if (!save_unsupported && !entity->IsSupported()) {
+            // save_unsupportedがfalseの場合、UnsupportedEntityは保存しない
+            throw igesio::TypeConversionError(
+                "IgesData contains UnsupportedEntity. "
+                "Set save_unsupported to true to include them.");
+        }
+    }
+
+    // 出力時にライブラリ名やバージョンは自動的に設定されるため、ここでは操作しない
+    models::IntermediateIgesData intermediate;
+    intermediate.start_section = data.description;
+    intermediate.global_section = data.global_section;
+
+    // DEセクションとPDセクションを変換する
+    for (const auto& [id, entity] : data.GetEntities()) {
+        auto de = entity->GetRawEntityDE(id2de);
+        de.sequence_number = id2de.at(id);
+        intermediate.directory_entry_section.push_back(de);
+
+        try {
+            auto pd = entities::ToRawEntityPD(
+                entity->GetType(), id, entity->GetParameters(), id2de);
+            intermediate.parameter_data_section.push_back(pd);
+        } catch (std::out_of_range& e) {
+            // dataが持たないエンティティへの参照を含む場合
+            throw igesio::DataFormatError(
+                "Entity with ID " + std::to_string(id) +
+                " contains reference to unknown entity. " + e.what());
+        }
+    }
+
+    return intermediate;
+}
+
+bool igesio::WriteIges(const models::IgesData& data,
+                       const std::string& file_path,
+                       const bool save_unsupported) {
+    auto intermediate = ConvertToIntermediate(data, save_unsupported);
+    return WriteIgesIntermediate(intermediate, file_path);
 }
