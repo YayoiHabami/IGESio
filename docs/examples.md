@@ -47,6 +47,9 @@ If the file loads successfully, curve entities are automatically added and displ
 - Projection mode: Choose between two modes:
     - Perspective: Shows objects with depth (default).
     - Orthographic: Parallel projection, commonly used in CAD.
+- Screenshot:
+  - Click the "Capture Screenshot" button to save the current view as a PNG image.
+  - The file is named in the format "screenshot YYYY-MM-DD HH-MM-SS.png" and saved to the execution directory.
 - Background color: Change the background color using the color picker.
 - Entity display controls:
     - "Show All Entities" checkbox toggles visibility of all entities.

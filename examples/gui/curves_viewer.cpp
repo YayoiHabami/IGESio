@@ -5,6 +5,8 @@
  * @date 2025-09-12
  * @copyright 2025 Yayoi Habami
  */
+#include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -39,6 +41,20 @@ namespace i_ent = igesio::entities;
 namespace i_mod = igesio::models;
 namespace i_graph = igesio::graphics;
 using igesio::graphics::IgesViewerGUI;
+
+/// @brief 現在時刻を文字列で取得する関数
+/// @param フォーマット (デフォルト: yyyy-mm-dd hhmmss)
+/// @return フォーマットに従った現在時刻の文字列
+std::string CurrentTimeString(const std::string& format = "%Y-%m-%d %H%M%S") {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+    std::tm local_time = *std::localtime(&now_c);
+
+    // フォーマットに従って文字列を生成
+    std::stringstream ss;
+    ss << std::put_time(&local_time, format.c_str());
+    return ss.str();
+}
 
 }  // namespace
 
@@ -174,6 +190,11 @@ class CurvesViewerGUI : public IgesViewerGUI {
                 static_cast<int>(i_graph::ProjectionMode::kOrthographic))) {
             renderer_.Camera().SetProjectionMode(i_graph::ProjectionMode::kOrthographic);
             needs_redraw_ = true;
+        }
+
+        // スクリーンショットボタン
+        if (ImGui::Button("Capture Screenshot")) {
+            CaptureScreenshot("screenshot " + CurrentTimeString() + ".png");
         }
 
         // カメラの操作

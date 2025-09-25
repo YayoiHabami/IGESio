@@ -50,9 +50,10 @@ class EntityRenderer {
             uint64_t, std::unique_ptr<IEntityGraphics>>> draw_objects_;
 
     /// @brief 描画対象のサイズ [px]
-    int display_width_ = kDefaultDisplayWidth, display_height_ = kDefaultDisplayHeight;
-    /// @brief 描画対象のサイズがリサイズされたか
-    bool is_resized_ = true;
+    /// @note 次回の描画時に反映される (すなわち、glGetIntegrevで取得できるサイズ
+    ///       とは異なる場合は、次回のDraw呼び出し時に以下のサイズに更新される)
+    int display_width_ = kDefaultDisplayWidth,
+        display_height_ = kDefaultDisplayHeight;
 
     /// @brief 背景色
     std::array<float, 4> background_color_ = {1.0f, 1.0f, 1.0f, 1.0f};  // 白色
@@ -168,6 +169,9 @@ class EntityRenderer {
 
     /// @brief 描画対象のサイズを取得する
     /// @return 描画対象のサイズ (幅, 高さ) [px]
+    /// @note この値とOpenGLのviewportのサイズは異なる場合がある.
+    ///       その場合、次回描画時 (Draw呼び出し時) にOpenGLのviewportの
+    ///       サイズがここで設定されたサイズに更新される
     std::pair<int, int> GetDisplaySize() const;
 
     /// @brief 描画対象のサイズを設定する
@@ -208,8 +212,30 @@ class EntityRenderer {
      */
 
     /// @brief エンティティを描画する
-    void Draw();
+    void Draw() const;
 
+    /// @brief 現在の描画状態をキャプチャする
+    /// @return 各ピクセルのRGB値を格納したバッファ
+    ///         サイズは`width * height * 3` (R, G, B).
+    /// @note 画像の幅と高さはGetDisplaySize()で取得できる.
+    ///       戻り値は`glReadPixels`で取得した値と同じ形式で格納され、
+    ///       左下が原点で、右方向にx座標が、上方向にy座標が増加する形式に
+    ///       なっている. 例えば、(x, y)のピクセルのR成分は
+    ///       `pixels[(y * width + x) * 3 + 0]`で取得できる.
+    /// @note stb_image_writeなどを使用してPNGなどの画像ファイルとして
+    ///       保存することも可能. `examples/gui/iges_viewer_gui.cpp`の
+    ///       `IgesViewerGUI::CaptureScreenshot`関数を参照のこと
+    std::vector<unsigned char> CaptureScreenshot() const;
+
+
+
+ protected:
+    /// @brief 現在のviewportを取得する
+    /// @return viewportの4要素 (x, y, width, height)
+    /// @note この値とdisplay_width_, display_height_ (すなわち`GetDisplaySize()`
+    ///       で取得される値) は異なる場合がある.
+    ///       その場合、次回描画時にdisplay_width_, display_height_に更新される
+    std::array<int, 4> GetCurrentViewport() const;
 
 
  private:

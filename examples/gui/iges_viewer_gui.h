@@ -12,6 +12,7 @@
 #define EXAMPLES_GUI_IGES_VIEWER_GUI_H_
 
 #include <iostream>
+#include <string>
 
 #include "igesio/graphics/core/open_gl.h"
 #define GLFW_INCLUDE_NONE
@@ -78,6 +79,11 @@ class IgesViewerGUI {
     /// @param vsync 垂直同期を有効にするか
     /// @note イベントループを開始し、描画を行う
     void Run(const bool = true);
+
+    /// @brief 現在のEntityRendererの状態をキャプチャする
+    /// @param filename 画像ファイルのパス
+    /// @throw std::runtime_error 画像の保存に失敗した場合
+    void CaptureScreenshot(const std::string&);
 
 
 

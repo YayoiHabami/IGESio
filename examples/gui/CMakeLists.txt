@@ -46,6 +46,14 @@ else()
     return()
 endif()
 
+# Fetch stb (stb_image_write.h) for image saving
+set(STB_URL https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h)
+set(STB_WRITE_PATH "${CMAKE_BINARY_DIR}/_deps/stb/stb_image_write.h")
+# Show download path
+if (NOT EXISTS ${STB_WRITE_PATH})
+    file(DOWNLOAD ${STB_URL} ${STB_WRITE_PATH} SHOW_PROGRESS)
+endif()
+
 # Build each example as an executable
 foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
     message(STATUS "Processing example: ${EXAMPLE_SOURCE}")
@@ -63,6 +71,7 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
     target_include_directories(${EXAMPLE_NAME} PRIVATE
         ${INCLUDE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_BINARY_DIR}/_deps/stb
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
     )

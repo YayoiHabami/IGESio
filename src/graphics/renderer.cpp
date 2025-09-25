@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "./shaders.h"
 
@@ -149,7 +150,6 @@ std::pair<int, int> EntityRenderer::GetDisplaySize() const {
 void EntityRenderer::SetDisplaySize(const int width, const int height) {
     display_width_ = width;
     display_height_ = height;
-    is_resized_ = true;  // サイズが変更されたことを記録
 }
 
 std::array<float, 4> EntityRenderer::GetBackgroundColor() const {
@@ -176,7 +176,7 @@ void EntityRenderer::SetBackgroundColor(
  * 描画
  */
 
-void EntityRenderer::Draw() {
+void EntityRenderer::Draw() const {
     // 描画対象のサイズが0なら何もしない
     if (display_width_ <= 0 || display_height_ <= 0) return;
 
@@ -188,9 +188,10 @@ void EntityRenderer::Draw() {
     // 描画するエンティティが1つもない場合は何もしない
     if (IsEmpty()) return;
 
-    if (is_resized_) {
+    // 現在の表示サイズと、このクラスが保持している表示サイズが異なる場合は更新
+    auto [x, y, width, height] = GetCurrentViewport();
+    if (width != display_width_ || height != display_height_) {
         gl_->Viewport(0, 0, display_width_, display_height_);
-        is_resized_ = false;  // リサイズフラグをリセット
     }
 
     // ビュー行列と投影行列を取得
@@ -243,6 +244,66 @@ void EntityRenderer::DrawChildren(
             object->Draw(program_id, shader_type, viewport);
         }
     }
+}
+
+std::vector<unsigned char> EntityRenderer::CaptureScreenshot() const {
+    auto [width, height] = GetDisplaySize();
+    if (width <= 0 || height <= 0) {
+        return {};  // サイズが無効な場合は空のベクターを返す
+    }
+
+    // フレームバッファオブジェクトの準備
+    GLuint fbo;
+    gl_->GenFramebuffers(1, &fbo);
+    gl_->BindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    // テクスチャを作成 (カラーバッファ用)
+    GLuint color_tex;
+    gl_->GenTextures(1, &color_tex);
+    gl_->BindTexture(GL_TEXTURE_2D, color_tex);
+    gl_->TexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
+                    0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // レンダーバッファオブジェクトの準備 (深度バッファ用)
+    GLuint rbo;
+    gl_->GenRenderbuffers(1, &rbo);
+    gl_->BindRenderbuffer(GL_RENDERBUFFER, rbo);
+    gl_->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+
+    // テクスチャ/RBOをFBOにアタッチ
+    gl_->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                              GL_TEXTURE_2D, color_tex, 0);
+    gl_->FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                                  GL_RENDERBUFFER, rbo);
+
+    // FBOの準備に成功した場合のみ描画と読み取りを行う
+    std::vector<unsigned char> pixels;
+    if (gl_->CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+        Draw();
+        pixels.resize(width * height * 3);  // RGB形式
+        gl_->ReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    }
+
+    gl_->BindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl_->DeleteFramebuffers(1, &fbo);
+    gl_->DeleteTextures(1, &color_tex);
+    gl_->DeleteRenderbuffers(1, &rbo);
+    return pixels;
+}
+
+
+
+
+/**
+ * protected member functions
+ */
+
+std::array<int, 4> EntityRenderer::GetCurrentViewport() const {
+    GLint viewport[4];
+    gl_->GetIntegerv(GL_VIEWPORT, viewport);
+    return {viewport[0], viewport[1], viewport[2], viewport[3]};
 }
 
 

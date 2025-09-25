@@ -134,6 +134,56 @@ class IOpenGL {
 
 
     /**
+     * Textures
+     */
+
+    virtual void BindTexture(GLenum target, GLuint texture) = 0;
+    virtual void DeleteTextures(GLsizei n, const GLuint *textures) = 0;
+    virtual void GenTextures(GLsizei n, GLuint *textures) = 0;
+    virtual void TexImage2D(GLenum target, GLint level, GLint internalFormat,
+                            GLsizei width, GLsizei height, GLint border,
+                            GLenum format, GLenum type, const void *data) = 0;
+    virtual void TexParameteri(GLenum target, GLenum pname, GLint param) = 0;
+
+
+
+    /**
+     * For Offscreen Rendering
+     */
+
+    /// @note OpenGL 3.0~
+    virtual void BindFramebuffer(GLenum target, GLuint framebuffer) = 0;
+    /// @note OpenGL 3.0~
+    virtual GLenum CheckFramebufferStatus(GLenum target) = 0;
+    /// @note OpenGL 3.0~
+    virtual void DeleteFramebuffers(GLsizei n, const GLuint *framebuffers) = 0;
+    /// @note OpenGL 3.0~
+    virtual void GenFramebuffers(GLsizei n, GLuint *framebuffers) = 0;
+
+    /// @note OpenGL 3.0~
+    virtual void FramebufferTexture2D(GLenum target, GLenum attachment,
+                                      GLenum textarget, GLuint texture,
+                                      GLint level) = 0;
+
+    /// @note OpenGL 3.0~
+    virtual GLenum BindRenderbuffer(GLenum target, GLuint renderbuffer) = 0;
+    /// @note OpenGL 3.0~
+    virtual void DeleteRenderbuffers(GLsizei n, const GLuint *renderbuffers) = 0;
+    /// @note OpenGL 3.0~
+    virtual void GenRenderbuffers(GLsizei n, GLuint *renderbuffers) = 0;
+    /// @note OpenGL 3.0~
+    virtual void RenderbufferStorage(GLenum target, GLenum internalformat,
+                                     GLsizei width, GLsizei height) = 0;
+
+    /// @note OpenGL 3.0~
+    virtual void FramebufferRenderbuffer(GLenum target, GLenum attachment,
+                                         GLenum renderbuffertarget,
+                                         GLuint renderbuffer) = 0;
+
+
+
+
+    /**
      * Others
      */
 
@@ -144,8 +194,11 @@ class IOpenGL {
                             GLfloat blue, GLfloat alpha) = 0;
     virtual void Viewport(GLint x, GLint y,
                           GLsizei width, GLsizei height) = 0;
+    virtual void GetIntegerv(GLenum pname, GLint *data) = 0;
     virtual void LineWidth(GLfloat width) = 0;
     virtual void PointSize(GLfloat size) = 0;
+    virtual void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
+                            GLenum format, GLenum type, void *data) = 0;
 };
 
 }  // namespace igesio::graphics
