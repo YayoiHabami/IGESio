@@ -99,9 +99,22 @@ std::string i_graph::ToString(const ShaderType shader_type) {
             return "Line";
         case ShaderType::kRationalBSplineCurve:
             return "RationalBSplineCurve";
+        case ShaderType::kGeneralSurface:
+            return "GeneralSurface";
+        case ShaderType::kRationalBSplineSurface:
+            return "RationalBSplineSurface";
         case ShaderType::kComposite:
             return "Composite";
         default:
             return "Unknown";
     }
+}
+
+bool i_graph::UsesLighting(const ShaderType shader_type) {
+    if (static_cast<int>(shader_type) >= static_cast<int>(ShaderType::kGeneralSurface) &&
+        shader_type != ShaderType::kNone &&
+        shader_type != ShaderType::kComposite) {
+        return true;
+    }
+    return false;
 }

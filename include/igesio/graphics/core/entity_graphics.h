@@ -16,6 +16,7 @@
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/entities/entity_base.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
+#include "igesio/graphics/core/surface_property.h"
 
 
 
@@ -23,11 +24,14 @@ namespace igesio::graphics {
 
 /// @brief エンティティの描画情報を管理するクラス
 /// @tparam T エンティティの型
+/// @tparam ShaderType_ このクラスが対応するシェーダーのタイプ
+/// @tparam has_surfaces Tがサーフェスを持つか (デフォルト: false)
 /// @note 以下のメンバ関数のオーバーライドが必要
 ///       - `EntityGraphics`由来:
 ///         - `Cleanup`(public): VAO以外のOpenGLリソースを持つ場合
 ///         - `DrawImpl`(protected): 常にオーバーライドが必要
-template<typename T, ShaderType ShaderType_, typename = std::enable_if_t<
+template<typename T, ShaderType ShaderType_,
+         bool has_surfaces = false, typename = std::enable_if_t<
         std::is_base_of_v<entities::IEntityIdentifier, T>>>
 class EntityGraphics : public IEntityGraphics {
  protected:
@@ -38,6 +42,9 @@ class EntityGraphics : public IEntityGraphics {
     GLuint vao_ = 0;
     /// @brief エンティティの描画モード (GL_LINE_STRIP, GL_LINE_LOOPなど)
     GLenum draw_mode_ = GL_LINE_STRIP;
+
+    /// @brief サーフェスプロパティ
+    SurfaceProperty surface_property_;
 
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
@@ -138,6 +145,16 @@ class EntityGraphics : public IEntityGraphics {
                               1, GL_FALSE, model.data());
         gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
                         1, GetColor().data());
+
+        // エンティティが面を持っている場合は関連するパラメータを設定
+        if constexpr (has_surfaces) {
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ambientStrength"),
+                           surface_property_.GetAmbientStrength());
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "specularStrength"),
+                           surface_property_.GetSpecularStrength());
+            gl_->Uniform1i(gl_->GetUniformLocation(shader, "shininess"),
+                           surface_property_.GetShininess());
+        }
 
         DrawImpl(shader, viewport);
     }
@@ -242,6 +259,13 @@ class EntityGraphics : public IEntityGraphics {
             }
         }
         return kDefaultLineWidth;
+    }
+
+    /// @brief サーフェスの色を取得する
+    /// @return サーフェスの色 (RGBA; [0, 1]の範囲)
+    template<bool has_surfaces_ = has_surfaces>
+    std::enable_if_t<has_surfaces_, SurfaceProperty> GetSurfaceProperty() const {
+        return surface_property_;
     }
 
 

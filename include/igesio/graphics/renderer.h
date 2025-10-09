@@ -18,6 +18,7 @@
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
+#include "igesio/graphics/core/light.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
 #include "igesio/graphics/factory.h"
 
@@ -60,6 +61,9 @@ class EntityRenderer {
 
     /// @brief カメラクラス
     graphics::Camera camera_;
+
+    /// @brief 光源クラス
+    graphics::Light light_;
 
     /// @brief 描画に関するグローバルパラメータ (デフォルト)
     std::shared_ptr<const models::GraphicsGlobalParam> default_global_param_;
@@ -204,6 +208,14 @@ class EntityRenderer {
     /// @return カメラの参照
     /// @note カメラの各変数などはこの参照を通じて設定する
     graphics::Camera& Camera() { return camera_; }
+
+    /// @brief 光源の参照を取得する (const)
+    /// @return 光源の参照
+    const Light& Light() const { return light_; }
+    /// @brief 光源の参照を取得する (非const)
+    /// @return 光源の参照
+    /// @note 光源の各変数などはこの参照を通じて設定する
+    graphics::Light& Light() { return light_; }
 
 
 

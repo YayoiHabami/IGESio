@@ -52,6 +52,13 @@ enum class ShaderType {
     /// @brief NURBS曲線シェーダー (Type: 126; Rational B-Spline Curve)
     kRationalBSplineCurve,
 
+    /// @brief 汎用曲面シェーダー
+    /// @note これ以降のすべてのシェーダーは、Lightを使用する
+    kGeneralSurface,
+
+    /// @brief NURBS曲面シェーダー (Type: 128; Rational B-Spline Surface)
+    kRationalBSplineSurface,
+
     /// @brief 複数のシェーダーを使用する
     /// @note CompositeEntityGraphicsを継承したクラスで使用される.
     ///       Composite Curveなど、複数の子要素を持ち、それぞれの子要素で
@@ -76,7 +83,12 @@ inline bool HasSpecificShaderCode(const ShaderType shader_type) {
 /// @return ShaderTypeの値に対応する文字列
 std::string ToString(const ShaderType);
 
-
+/// @brief シェーダーの計算が光源を使用するか
+/// @param shader_type ShaderTypeの値
+/// @return 光源を使用する場合はtrue, そうでない場合はfalse
+/// @note kGeneralSurface以降のシェーダーは光源を使用する
+///       (kCompositeとkNoneは除く)
+bool UsesLighting(const ShaderType);
 
 
 /// @brief EntityGraphicsの型消去クラス

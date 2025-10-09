@@ -215,6 +215,14 @@ void EntityRenderer::Draw() const {
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
                               1, GL_FALSE, projection_matrix.data());
 
+        // 光源のパラメータを設定
+        if (UsesLighting(shader_type)) {
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPos_WorldSpace"),
+                            1, light_.GetPosition().data());
+            gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColor"),
+                            1, light_.GetColor().data());
+        }
+
         // 各エンティティを描画
         DrawChildren(program_id, shader_type,
                      std::pair<float, float>{display_width_, display_height_});

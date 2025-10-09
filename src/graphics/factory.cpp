@@ -18,6 +18,8 @@
 #include "igesio/graphics/curves/line_graphics.h"
 #include "igesio/graphics/curves/rational_b_spline_curve_graphics.h"
 
+#include "igesio/graphics/surfaces/rational_b_spline_surface_graphics.h"
+
 namespace {
 
 namespace i_ent = igesio::entities;
@@ -95,6 +97,23 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
     return std::make_unique<i_graph::ICurveGraphics>(entity, gl);
 }
 
+std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
+        const std::shared_ptr<const i_ent::ISurface> entity,
+        const std::shared_ptr<IOpenGL> gl) {
+    // entityがnullptrの場合は無効なポインタを返す
+    if (!entity) return nullptr;
+
+    if (auto r_bspline_surface = std::dynamic_pointer_cast<
+                const i_ent::RationalBSplineSurface>(entity)) {
+        // Type 128: RationalBSplineSurfaceの描画オブジェクトを作成
+        return std::make_unique<i_graph::RationalBSplineSurfaceGraphics>(r_bspline_surface, gl);
+    }
+
+    // いずれにも当てはまらない場合は無効なポインタを返す
+    // TODO: GeneralSurfaceGraphicsクラスを作成、これを返すようにする
+    return nullptr;
+}
+
 std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(
         const std::shared_ptr<const i_ent::IEntityIdentifier> entity,
         const std::shared_ptr<i_graph::IOpenGL> gl) {
@@ -106,6 +125,9 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(
     if (auto curve = std::dynamic_pointer_cast<const i_ent::ICurve>(entity)) {
         // 曲線の描画オブジェクトを作成
         return CreateCurveGraphics(curve, gl);
+    } else if (auto surface = std::dynamic_pointer_cast<const i_ent::ISurface>(entity)) {
+        // 曲面の描画オブジェクトを作成
+        return CreateSurfaceGraphics(surface, gl);
     }
 
     // いずれにも当てはまらない場合は無効なポインタを返す
