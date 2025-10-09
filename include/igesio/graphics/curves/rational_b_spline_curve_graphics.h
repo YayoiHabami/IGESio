@@ -23,6 +23,13 @@ namespace igesio::graphics {
 class RationalBSplineCurveGraphics
     : public EntityGraphics<entities::RationalBSplineCurve,
                             ShaderType::kRationalBSplineCurve> {
+    /// @brief ノットベクトルのSSBO
+    GLuint knots_ssbo_ = 0;
+    /// @brief 制御点と重みのSSBO
+    GLuint control_with_weights_ssbo_ = 0;
+    /// @brief 参照点のSSBO
+    GLuint reference_points_ssbo_ = 0;
+
  public:
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
@@ -52,6 +59,10 @@ class RationalBSplineCurveGraphics
     ///       描画用のリソースを再セットアップする
     void Synchronize() override;
 
+    /// @brief OpenGLリソースを解放する
+    /// @note SSBO等のOpenGLリソースを解放する
+    void Cleanup() override;
+
 
  protected:
     /// @brief エンティティの描画を行う
@@ -62,8 +73,9 @@ class RationalBSplineCurveGraphics
     /// @brief 参照点
     /// @note テッセレーション数決定のために使用する、曲線上のいくつかの点.
     ///       これで曲線を折れ線に近似し、その画面上での長さからテッセレーション数を決定する.
+    ///       std430のSSBOによるデータ転送を行うため、4行N列の行列として保持する (4行目はダミー).
     /// @note このサイズが0の場合、描画は行わない
-    Matrix3Xf reference_points_;
+    MatrixXf reference_points_;
 };
 
 }  // namespace igesio::graphics

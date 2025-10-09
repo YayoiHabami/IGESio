@@ -126,6 +126,8 @@ class IOpenGL {
      */
 
     virtual void BindBuffer(GLenum target, GLuint buffer) = 0;
+    /// @note OpenGL 3.0~
+    virtual void BindBufferBase(GLenum target, GLuint index, GLuint buffer) = 0;
     virtual void BufferData(GLenum target, GLsizeiptr size,
                             const void *data, GLenum usage) = 0;
     virtual void DeleteBuffers(GLsizei n, const GLuint *buffers) = 0;
@@ -199,6 +201,7 @@ class IOpenGL {
     virtual void PointSize(GLfloat size) = 0;
     virtual void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
                             GLenum format, GLenum type, void *data) = 0;
+    virtual GLenum GetError() = 0;
 };
 
 }  // namespace igesio::graphics

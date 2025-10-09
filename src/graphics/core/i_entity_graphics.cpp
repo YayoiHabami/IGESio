@@ -91,6 +91,16 @@ std::string i_graph::ToString(const ShaderType shader_type) {
             return "CircularArc";
         case ShaderType::kEllipse:
             return "Ellipse";
+        case ShaderType::kCopiousData:
+            return "CopiousData";
+        case ShaderType::kSegment:
+            return "Segment";
+        case ShaderType::kLine:
+            return "Line";
+        case ShaderType::kRationalBSplineCurve:
+            return "RationalBSplineCurve";
+        case ShaderType::kComposite:
+            return "Composite";
         default:
             return "Unknown";
     }

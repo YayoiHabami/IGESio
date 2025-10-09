@@ -7,21 +7,18 @@
  */
 #include "igesio/graphics/curves/rational_b_spline_curve_graphics.h"
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
+
+#include "./../core/type_conversion_utils.h"
 
 namespace {
 
 using RationalBSplineCurveGraphics = igesio::graphics::RationalBSplineCurveGraphics;
 
-/// @brief MAX_REF_POINTSの値 (kRationalBSplineCurveShader)
-constexpr size_t kMaxRefPoints = 10;
 /// @brief MAX_DEGREEの値 (kRationalBSplineCurveShader)
 constexpr size_t kMaxDegree = 5;
-/// @brief MAX_CTRL_POINTSの値 (kRationalBSplineCurveShader)
-constexpr size_t kMaxCtrlPoints = 128;
 
 }  // namespace
 
@@ -44,40 +41,22 @@ RationalBSplineCurveGraphics::~RationalBSplineCurveGraphics() {
  * protected
  */
 
-namespace {
-
-/// @brief std::vector<double> -> std::vector<float> の変換
-std::vector<float> ConvertToFloatVector(
-        const std::vector<double>& vec) {
-    std::vector<float> result(vec.size());
-    std::transform(vec.begin(), vec.end(), result.begin(),
-                   [](double val) { return static_cast<float>(val); });
-    return result;
-}
-
-}  // namespace
-
 void RationalBSplineCurveGraphics::DrawImpl(
         GLuint shader, const std::pair<float, float>& viewport) const {
     // シェーダーのuniform変数を設定
     gl_->Uniform1i(gl_->GetUniformLocation(shader, "numRefPoints"),
                    reference_points_.cols());
-    gl_->Uniform3fv(gl_->GetUniformLocation(shader, "refPoints"),
-                    reference_points_.cols(), reference_points_.data());
 
-    gl_->Uniform1i(gl_->GetUniformLocation(shader, "degree"), entity_->Degree());
-    gl_->Uniform1i(gl_->GetUniformLocation(shader, "numCtrlPoints"),
+    gl_->Uniform1i(gl_->GetUniformLocation(shader, "degreeT"), entity_->Degree());
+    gl_->Uniform1i(gl_->GetUniformLocation(shader, "numCtrlPointsT"),
                    entity_->ControlPoints().cols());
-    gl_->Uniform1fv(gl_->GetUniformLocation(shader, "knots"),
-                    entity_->Knots().size(),
-                    ConvertToFloatVector(entity_->Knots()).data());
-    gl_->Uniform1fv(gl_->GetUniformLocation(shader, "weights"),
-                    entity_->Weights().size(),
-                    ConvertToFloatVector(entity_->Weights()).data());
-    gl_->Uniform3fv(gl_->GetUniformLocation(shader, "ctrlPoints"),
-                    entity_->ControlPoints().cols(),
-                    entity_->ControlPoints().cast<float>().data());
-    gl_->Uniform2f(gl_->GetUniformLocation(shader, "paramRange"),
+
+    // SSBOをバインド
+    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, knots_ssbo_);
+    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, control_with_weights_ssbo_);
+    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, reference_points_ssbo_);
+
+    gl_->Uniform2f(gl_->GetUniformLocation(shader, "paramRangeT"),
                    entity_->GetParameterRange()[0], entity_->GetParameterRange()[1]);
 
     gl_->Uniform2f(gl_->GetUniformLocation(shader, "viewportSize"),
@@ -98,7 +77,7 @@ void RationalBSplineCurveGraphics::Synchronize() {
     // TODO: 曲線の種類によって参照点の数を変更する
     int num_ref_points = 4;
     auto [start, end] = entity_->GetParameterRange();
-    reference_points_.resize(NoChange, num_ref_points);
+    reference_points_.resize(4, num_ref_points);
     for (int i = 0; i < num_ref_points; ++i) {
         auto t = start + (end - start) * i / (num_ref_points - 1);
         auto point = entity_->TryGetDefinedPointAt(t);
@@ -112,6 +91,36 @@ void RationalBSplineCurveGraphics::Synchronize() {
     // 参照点が0の場合は描画しない
     if (reference_points_.cols() == 0) return;
 
+    // 参照点のSSBOを作成
+    gl_->GenBuffers(1, &reference_points_ssbo_);
+    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, reference_points_ssbo_);
+    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+                    sizeof(float) * reference_points_.size(),
+                    reference_points_.data(), GL_STATIC_DRAW);
+
+    // ノットのSSBOを作成
+    gl_->GenBuffers(1, &knots_ssbo_);
+    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, knots_ssbo_);
+    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+                    sizeof(float) * entity_->Knots().size(),
+                    ConvertToFloatVector(entity_->Knots()).data(),
+                    GL_STATIC_DRAW);
+
+    // 制御点と重みの転送
+    MatrixXf control_with_weights(4, entity_->ControlPoints().cols());
+    control_with_weights.block(0, 0, 3, entity_->ControlPoints().cols()) =
+            entity_->ControlPoints().cast<float>();
+    for (int i = 0; i < entity_->Weights().size(); ++i) {
+        control_with_weights(3, i) = static_cast<float>(entity_->Weights()[i]);
+    }
+    // SSBOを作成してデータを転送
+    gl_->GenBuffers(1, &control_with_weights_ssbo_);
+    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, control_with_weights_ssbo_);
+    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+                    sizeof(float) * control_with_weights.size(),
+                    control_with_weights.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
     // テッセレーションシェーダーを使用するため、空のVAOを生成する
     gl_->GenVertexArrays(1, &vao_);
 
@@ -123,5 +132,27 @@ void RationalBSplineCurveGraphics::Synchronize() {
         draw_mode_ = GL_LINE_LOOP;
     } else {
         draw_mode_ = GL_LINE_STRIP;
+    }
+}
+
+void RationalBSplineCurveGraphics::Cleanup() {
+    EntityGraphics::Cleanup();
+
+    // SSBOを解放
+    if (knots_ssbo_ != 0) {
+        gl_->DeleteBuffers(1, &knots_ssbo_);
+        knots_ssbo_ = 0;
+    }
+    if (control_with_weights_ssbo_ != 0) {
+        gl_->DeleteBuffers(1, &control_with_weights_ssbo_);
+        control_with_weights_ssbo_ = 0;
+    }
+
+    if (reference_points_.cols() > 0) {
+        reference_points_.resize(NoChange, 0);
+    }
+    if (reference_points_ssbo_ != 0) {
+        gl_->DeleteBuffers(1, &reference_points_ssbo_);
+        reference_points_ssbo_ = 0;
     }
 }

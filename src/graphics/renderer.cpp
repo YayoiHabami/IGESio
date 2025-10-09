@@ -455,7 +455,13 @@ GLuint EntityRenderer::CreateShaderProgram(
 void EntityRenderer::InitShaders() {
     for (int i = 0; i < static_cast<int>(ShaderType::kNone); ++i) {
         auto shader_type = static_cast<ShaderType>(i);
-        auto shader_opt = shaders::GetShaderCode(shader_type);
+        std::optional<shaders::ShaderCode> shader_opt;
+        try {
+            shader_opt = shaders::GetShaderCode(shader_type);
+        } catch (const igesio::FileError& e) {
+            // #includeするファイルが見つからない場合はエラーをスロー
+            throw igesio::ImplementationError(std::string(e.what()));
+        }
         if (!shader_opt || shader_opt->IsIncomplete()) {
             continue;  // シェーダーが未実装の場合はスキップ
         }

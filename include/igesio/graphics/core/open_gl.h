@@ -197,6 +197,10 @@ class OpenGL : public IOpenGL {
     void BindBuffer(GLenum target, GLuint buffer) override {
         glBindBuffer(target, buffer);
     }
+    /// @note OpenGL 3.0~
+    void BindBufferBase(GLenum target, GLuint index, GLuint buffer) override {
+        glBindBufferBase(target, index, buffer);
+    }
     void BufferData(GLenum target, GLsizeiptr size,
                     const void *data, GLenum usage) override {
         glBufferData(target, size, data, usage);
@@ -325,6 +329,7 @@ class OpenGL : public IOpenGL {
                     GLenum format, GLenum type, void *data) override {
         glReadPixels(x, y, width, height, format, type, data);
     }
+    GLenum GetError() override { return glGetError(); }
 };
 
 }  // namespace igesio::graphics
