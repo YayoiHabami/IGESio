@@ -37,6 +37,9 @@ class IgesViewerGUI {
     /// @brief レンダー
     EntityRenderer renderer_;
 
+    /// @brief MSAA (マルチサンプリング) のサンプル数 (0で無効)
+    int msaa_samples_ = 0;
+
     /// @brief ドラッグ中か
     bool is_dragging_ = false;
     /// @brief パン (平行移動) 中か
@@ -53,9 +56,11 @@ class IgesViewerGUI {
     /// @brief コンストラクタ
     /// @param width ウィンドウの幅の初期値 [px]
     /// @param height ウィンドウの高さの初期値 [px]
+    /// @param msaa_samples マルチサンプリングのサンプル数 (0で無効)
     /// @throw std::runtime_error ウィンドウの初期化に失敗した場合
     explicit IgesViewerGUI(const int = kDefaultDisplayWidth,
-                           const int = kDefaultDisplayHeight);
+                           const int = kDefaultDisplayHeight,
+                           const int = 0);
 
     /// @brief デストラクタ
     ~IgesViewerGUI();

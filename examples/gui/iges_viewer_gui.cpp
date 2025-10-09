@@ -20,7 +20,9 @@ using IgesViewerGUI = igesio::graphics::IgesViewerGUI;
 
 
 
-IgesViewerGUI::IgesViewerGUI(const int width, const int height)
+IgesViewerGUI::IgesViewerGUI(
+        const int width, const int height,
+        const int msaa_samples)
         : renderer_(std::make_shared<OpenGL>(), width, height) {
     glfwSetErrorCallback(ErrorCallback);
     if (!glfwInit()) {
@@ -30,6 +32,11 @@ IgesViewerGUI::IgesViewerGUI(const int width, const int height)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // アンチエイリアス機能
+    if (msaa_samples > 0) {
+        glfwWindowHint(GLFW_SAMPLES, msaa_samples);
+        msaa_samples_ = msaa_samples;
+    }
 
     window_ = glfwCreateWindow(width, height, "IGES Viewer", NULL, NULL);
     if (!window_) {
@@ -87,6 +94,10 @@ void IgesViewerGUI::Run(const bool vsync) {
     renderer_.Initialize();
     // V-Syncの設定
     glfwSwapInterval(vsync ? 1 : 0);
+    // MSAAの設定
+    if (msaa_samples_ > 0) {
+        renderer_.EnableAntialiasing(true);
+    }
 
     while (!glfwWindowShouldClose(window_)) {
         // イベントを待機

@@ -43,6 +43,9 @@ void EntityRenderer::Initialize() {
 
     // 深度テストを有効化
     gl_->Enable(GL_DEPTH_TEST);
+
+    // アンチエイリアシングの初期化
+    EnableAntialiasing(enable_antialiasing_);
 }
 
 void EntityRenderer::Cleanup() {
@@ -168,6 +171,15 @@ void EntityRenderer::SetBackgroundColor(
         const float red, const float green,
         const float blue, const float alpha) {
     background_color_ = {red, green, blue, alpha};
+}
+
+void EntityRenderer::EnableAntialiasing(const bool enable) {
+    enable_antialiasing_ = enable;
+    if (enable_antialiasing_) {
+        gl_->Enable(GL_MULTISAMPLE);
+    } else {
+        gl_->Disable(GL_MULTISAMPLE);
+    }
 }
 
 

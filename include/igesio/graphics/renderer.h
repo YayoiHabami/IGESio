@@ -68,6 +68,9 @@ class EntityRenderer {
     /// @brief 描画に関するグローバルパラメータ (デフォルト)
     std::shared_ptr<const models::GraphicsGlobalParam> default_global_param_;
 
+    /// @brief アンチエイリアシングを有効にするか
+    bool enable_antialiasing_ = false;
+
  public:
     /// @brief コンストラクタ
     /// @param gl OpenGLラッパー
@@ -216,6 +219,13 @@ class EntityRenderer {
     /// @return 光源の参照
     /// @note 光源の各変数などはこの参照を通じて設定する
     graphics::Light& Light() { return light_; }
+
+    /// @brief アンチチエイリアスの有効/無効を設定する
+    /// @param enable trueの場合は有効、falseの場合は無効
+    void EnableAntialiasing(const bool);
+    /// @brief アンチエイリアスが有効か
+    /// @return 有効な場合はtrue、無効な場合はfalse
+    bool IsAntialiasingEnabled() const { return enable_antialiasing_; }
 
 
 

@@ -119,8 +119,10 @@ class CurvesViewerGUI : public IgesViewerGUI {
 
  public:
     // コンストラクタ
-    explicit CurvesViewerGUI(int width = 1280, int height = 720)
-        : IgesViewerGUI(width, height) {
+    explicit CurvesViewerGUI(
+        int width = 1280, int height = 720,
+        int msaa_samples = 0)
+        : IgesViewerGUI(width, height, msaa_samples) {
         // 初期化時に全てのエンティティを表示
         for (auto& p : show_entity_) {
             p.second = true;
@@ -263,7 +265,9 @@ class CurvesViewerGUI : public IgesViewerGUI {
 
 int main() {
     try {
-        auto viewer = CurvesViewerGUI(1280, 720);
+        // ウィンドウサイズ 1280x720
+        // エイリアシングのサンプル数 0 (無効)
+        auto viewer = CurvesViewerGUI(1280, 720, 0);
 
         // イベントループを開始
         viewer.Run();
