@@ -142,7 +142,16 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @param point 変換前の座標
     /// @return 変換後の座標
     /// @note pointがstd::nulloptの場合はそのまま返す
+    /// @note 座標値ではなくベクトル（例えば法線ベクトルなど）を変換する場合は、
+    ///       TransformVectorを使用すること
     std::optional<Vector3d> TransformPoint(const std::optional<Vector3d>&) const;
+
+    /// @brief 自身が参照する変換行列に従い、ベクトルを変換する
+    /// @param vector 変換前のベクトル
+    /// @return 変換後のベクトル
+    /// @note vectorがstd::nulloptの場合はそのまま返す
+    /// @note 座標値を変換する場合は、TransformPointを使用すること
+    std::optional<Vector3d> TransformVector(const std::optional<Vector3d>&) const;
 
     /// @brief コンストラクタ (デフォルトのDEレコードを使用)
     /// @param entity_type エンティティのタイプ

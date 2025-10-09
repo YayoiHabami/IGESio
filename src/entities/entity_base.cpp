@@ -157,7 +157,24 @@ std::optional<Vector3d> EntityBase::TransformPoint(
     }
 
     // 変換して返す
+    // 座標の変換は、回転と平行移動の両方を適用する
     return trans.GetRotation() * (*point) + trans.GetTranslation();
+}
+
+std::optional<Vector3d> EntityBase::TransformVector(
+        const std::optional<Vector3d>& vector) const {
+    // vectorがstd::nulloptの場合はそのまま返す
+    if (!vector) return vector;
+
+    auto& trans = de_transformation_matrix_;
+    if (trans.GetValueType() != DEFieldValueType::kPointer) {
+        // 変換行列を参照していない場合はそのまま返す
+        return vector;
+    }
+
+    // 変換して返す
+    // 方向ベクトルの変換は、回転のみを適用し、平行移動は適用しない
+    return trans.GetRotation() * (*vector);
 }
 
 

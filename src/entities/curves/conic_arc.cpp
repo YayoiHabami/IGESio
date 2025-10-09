@@ -410,12 +410,12 @@ ConicArc::TryGetPointAt(const double t) const {
 
 std::optional<igesio::Vector3d>
 ConicArc::TryGetTangentAt(const double t) const {
-    return TransformPoint(TryGetDefinedTangentAt(t));
+    return TransformVector(TryGetDefinedTangentAt(t));
 }
 
 std::optional<igesio::Vector3d>
 ConicArc::TryGetNormalAt(const double t) const {
-    return TransformPoint(TryGetDefinedNormalAt(t));
+    return TransformVector(TryGetDefinedNormalAt(t));
 }
 
 
