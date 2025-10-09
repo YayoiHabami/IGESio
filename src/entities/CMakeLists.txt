@@ -5,6 +5,7 @@ add_library(igesio_entities STATIC
 
     # Interfaces
     interfaces/i_curve.cpp
+    interfaces/i_surface.cpp
 
     # Directory Entry section related
     de/de_structure.cpp
@@ -26,7 +27,7 @@ add_library(igesio_entities STATIC
     # Entities
     structures/null_entity.cpp                 # 000
     curves/circular_arc.cpp                    # 100
-curves/composite_curve.cpp                 # 102
+    curves/composite_curve.cpp                 # 102
     curves/conic_arc.cpp                       # 104
     curves/copious_data_base.cpp               # 106
     curves/copious_data.cpp                    # 106
@@ -36,6 +37,7 @@ curves/composite_curve.cpp                 # 102
 
     transformations/transformation_matrix.cpp  # 124
     curves/rational_b_spline_curve.cpp         # 126
+    surfaces/rational_b_spline_surface.cpp     # 128
 
     structures/color_definition.cpp            # 314
 

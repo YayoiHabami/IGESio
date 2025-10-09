@@ -4,6 +4,7 @@ set(EXAMPLE_SOURCES
     intermediate_data_io.cpp
     iges_data_io.cpp
     sample_curves.cpp
+    sample_surfaces.cpp
 )
 
 

@@ -22,7 +22,7 @@ namespace igesio::entities {
 
 /// @brief Rational B-Spline Curveの種類
 /// @note フォーム番号に対応する
-enum class RationalBSplineType {
+enum class RationalBSplineCurveType {
     /// @brief 曲線の形状はパラメータにより決定される
     kUndetermined = 0,
     /// @brief 直線
@@ -113,8 +113,8 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     explicit RationalBSplineCurve(const IGESParameterVector&);
 
     /// @brief 曲線の種類
-    /// @return 曲線の種類 (RationalBSplineType)
-    RationalBSplineType GetCurveType() const;
+    /// @return 曲線の種類 (RationalBSplineCurveType)
+    RationalBSplineCurveType GetCurveType() const;
 
 
 
@@ -193,27 +193,6 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
 
     /// @brief 制御点 P (P(0), ..., P(K)) (P(i) = (x_i, y_i, z_i))
     const Matrix3Xd& ControlPoints() const noexcept { return control_points_; }
-
- private:
-    /// @brief 基底関数とその導関数の計算結果を格納する構造体
-    struct BasisFunctionResult {
-        /// @brief パラメータtが含まれるノットスパン
-        /// @note [T(j), T(j+1)] なる j
-        int knot_span;
-        /// @note 基底関数の値
-        std::vector<double> values;
-        /// @note 基底関数の導関数の値
-        /// @note derivatives[i]は(i+1)次導関数の値
-        std::vector<std::vector<double>> derivatives;
-    };
-
-    /// @brief Bスプライン基底関数とその導関数を計算する
-    /// @param t パラメータ値
-    /// @param num_derivatives 計算する導関数の次数
-    ///        (0なら基底関数のみ、1なら1次導関数まで)
-    /// @return BasisFunctionResult構造体、計算に失敗した場合はstd::nullopt
-    std::optional<BasisFunctionResult>
-    TryComputeBasisFunctions(const double, const int) const;
 };
 
 }  // namespace igesio::entities

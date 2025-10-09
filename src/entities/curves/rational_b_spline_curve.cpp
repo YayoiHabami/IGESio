@@ -11,12 +11,28 @@
 #include <vector>
 
 #include "igesio/common/tolerance.h"
+#include "./nurbs_basis_function.h"
 
 namespace {
 
 namespace i_ent = igesio::entities;
 using RationalBSplineCurve = i_ent::RationalBSplineCurve;
 using Vector3d = igesio::Vector3d;
+
+/// @brief RationalBSplineCurveに対して、基底関数とその導関数を計算する
+/// @param t パラメータ値
+/// @param num_derivatives 計算する導関数の数 (0なら基底関数のみ)
+/// @param curve RationalBSplineCurveオブジェクト
+/// @return 基底関数とその導関数の情報; tが定義域外の場合はstd::nullopt
+std::optional<i_ent::BasisFunctionResult>
+TryComputeBasisFunctions(const double t, const int num_derivatives,
+                         const RationalBSplineCurve& curve) {
+    if (!curve.ValidatePD().is_valid) return std::nullopt;
+
+    return i_ent::TryComputeBasisFunctions(
+        t, num_derivatives, curve.Degree(), curve.Knots(),
+        curve.GetParameterRange());
+}
 
 }  // namespace
 
@@ -39,8 +55,8 @@ RationalBSplineCurve::RationalBSplineCurve(
             RawEntityDE::ByDefault(i_ent::EntityType::kRationalBSplineCurve),
             parameters, {}, kUnsetID) {}
 
-i_ent::RationalBSplineType RationalBSplineCurve::GetCurveType() const {
-    return static_cast<RationalBSplineType>(form_number_);
+i_ent::RationalBSplineCurveType RationalBSplineCurve::GetCurveType() const {
+    return static_cast<RationalBSplineCurveType>(form_number_);
 }
 
 
@@ -234,7 +250,7 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
     }
     if (weights_.empty()) {
         errors.emplace_back("Weights vector cannot be empty.");
-    } else  {
+    } else if (is_polynomial_) {
         // polynomial形式の場合、全ての重みが等しいことを確認
         for (const auto& weight : weights_) {
             if (!IsApproxEqual(weight, weights_[0])) {
@@ -284,7 +300,7 @@ bool RationalBSplineCurve::IsClosed() const {
 
 std::optional<igesio::Vector3d>
 RationalBSplineCurve::TryGetDefinedPointAt(const double t) const {
-    auto basis_result = TryComputeBasisFunctions(t, 0);
+    auto basis_result = ::TryComputeBasisFunctions(t, 0, *this);
     if (!basis_result) {
         return std::nullopt;
     }
@@ -309,7 +325,7 @@ RationalBSplineCurve::TryGetDefinedPointAt(const double t) const {
 
 std::optional<igesio::Vector3d>
 RationalBSplineCurve::TryGetDefinedTangentAt(const double t) const {
-    auto basis_result = TryComputeBasisFunctions(t, 1);
+    auto basis_result = ::TryComputeBasisFunctions(t, 1, *this);
     if (!basis_result) return std::nullopt;
 
     // N(t), D(t), N'(t), D'(t) の計算
@@ -338,7 +354,7 @@ RationalBSplineCurve::TryGetDefinedTangentAt(const double t) const {
 std::optional<igesio::Vector3d>
 RationalBSplineCurve::TryGetDefinedNormalAt(const double t) const {
     // 主法線ベクトルを計算する
-    auto basis_result = TryComputeBasisFunctions(t, 2);
+    auto basis_result = ::TryComputeBasisFunctions(t, 2, *this);
     if (!basis_result) return std::nullopt;
 
     // N, D, N', D', N'', D'' の計算
@@ -389,104 +405,5 @@ RationalBSplineCurve::TryGetTangentAt(const double t) const {
 
 std::optional<igesio::Vector3d>
 RationalBSplineCurve::TryGetNormalAt(const double t) const {
-    return TransformPoint(TryGetDefinedNormalAt(t));
-}
-
-
-
-/**
- * private member functions
- */
-
-std::optional<RationalBSplineCurve::BasisFunctionResult>
-RationalBSplineCurve::TryComputeBasisFunctions(const double t, const int num_derivatives) const {
-    // パラメータのいずれかが不正な場合はstd::nulloptを返す
-    if (!ValidatePD().is_valid) return std::nullopt;
-
-    // パラメータtが定義域内にあるかを確認
-    if (IsApproxLessThan(t, parameter_range_[0]) ||
-        IsApproxGreaterThan(t, parameter_range_[1])) {
-        return std::nullopt;
-    }
-    // 比較誤差を考慮し、tを定義域内に丸める
-    const double clamped_t = std::clamp(t, parameter_range_[0], parameter_range_[1]);
-
-    const int m = static_cast<int>(degree_);
-    const int k = static_cast<int>(control_points_.cols() - 1);
-
-    // パラメータtを含むノットスパン [T(j), T(j + 1)] を探す
-    int j;
-    if (clamped_t >= knots_[k + 1]) {
-        // パラメータが定義域の終点にある場合の特別処理
-        j = k;
-    } else {
-        // std::upper_boundを使用して効率的にスパンを探索
-        auto it = std::upper_bound(knots_.begin(), knots_.end(), clamped_t);
-        j = std::distance(knots_.begin(), it) - 1;
-    }
-
-    // 基底関数とその導関数を計算 ("The NURBS Book", Algorithm A2.3)
-    BasisFunctionResult result;
-    result.knot_span = j;
-    result.derivatives.resize(num_derivatives + 1);
-    for (auto& vec : result.derivatives) vec.resize(m + 1, 0.0);
-
-    MatrixXd ndu(m + 1, m + 1);
-    ndu(0, 0) = 1.0;
-
-    std::vector<double> left(m + 1), right(m + 1);
-    for (int p = 1; p <= m; ++p) {
-        left[p] = clamped_t - knots_[j + 1 - p];
-        right[p] = knots_[j + p] - clamped_t;
-        double saved = 0.0;
-        for (int r = 0; r < p; ++r) {
-            ndu(p, r) = right[r + 1] + left[p - r];
-            double temp = ndu(r, p - 1) / ndu(p, r);
-            ndu(r, p) = saved + right[r + 1] * temp;
-            saved = left[p - r] * temp;
-        }
-        ndu(p, p) = saved;
-    }
-
-    result.values.resize(m + 1);
-    for (int i = 0; i <= m; ++i) result.values[i] = ndu(i, m);
-
-    if (num_derivatives > 0) {
-        MatrixXd a = MatrixXd::Zero(m + 1, m + 1);
-        for (int r = 0; r <= m; ++r) {
-            int s1 = 0, s2 = 1;
-            a(0, 0) = 1.0;
-            for (int k = 1; k <= num_derivatives; ++k) {
-                double d = 0.0;
-                int rk = r - k, pk = m - k;
-                if (r >= k) {
-                    a(s2, 0) = a(s1, 0) / ndu(pk + 1, rk);
-                    d = a(s2, 0) * ndu(rk, pk);
-                }
-                int j1 = (rk >= -1) ? 1 : -rk;
-                int j2 = (r - 1 <= pk) ? k - 1 : m - r;
-                for (int i = j1; i <= j2; ++i) {
-                    a(s2, i) = (a(s1, i) - a(s1, i - 1)) / ndu(pk + 1, rk + i);
-                    d += a(s2, i) * ndu(rk + i, pk);
-                }
-                if (r <= pk) {
-                    a(s2, k) = -a(s1, k - 1) / ndu(pk + 1, r);
-                    d += a(s2, k) * ndu(r, pk);
-                }
-                result.derivatives[k-1][r] = d;
-                std::swap(s1, s2);
-            }
-        }
-        int r = m;
-        for (int k = 1; k <= num_derivatives; ++k) {
-            for (int i = 0; i <= m; ++i) {
-                result.derivatives[k-1][i] *= r;
-            }
-            r *= (m - k);
-        }
-    }
-
-    result.derivatives.erase(result.derivatives.begin() + num_derivatives,
-                             result.derivatives.end());
-    return result;
+    return TransformVector(TryGetDefinedNormalAt(t));
 }
