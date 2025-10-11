@@ -18,6 +18,7 @@
 #include "igesio/entities/entity_type.h"
 #include "igesio/models/global_param.h"
 #include "igesio/graphics/core/i_open_gl.h"
+#include "igesio/graphics/core/material_property.h"
 
 
 
@@ -104,6 +105,9 @@ class IEntityGraphics {
     ///        を使用する. 取得に失敗した場合や、trueの場合は`color_`を使用する
     bool is_color_overridden_ = false;
 
+    /// @brief (IGESで管理されない) 描画プロパティ
+    MaterialProperty material_property_;
+
     /// @brief グローバル座標系への変換行列
     /// @note 頂点シェーダーの`model`変数に対応する.
     /// @note エンティティが定義される空間から、グローバル座標系への変換を行う
@@ -177,6 +181,9 @@ class IEntityGraphics {
     ///       描画用のリソースを再セットアップする
     virtual void Synchronize() = 0;
 
+    /// @brief テクスチャ用の描画リソースを同期する
+    virtual void SyncTexture() = 0;
+
 
 
     /**
@@ -223,6 +230,15 @@ class IEntityGraphics {
     /// @brief 線の太さを取得する
     /// @return 線の太さ
     virtual double GetLineWidth() const = 0;
+
+    /// @brief 描画属性を取得する (const版)
+    const MaterialProperty& MaterialProperty() const {
+        return material_property_;
+    }
+    /// @brief 描画属性を取得する (非const版)
+    graphics::MaterialProperty& MaterialProperty() {
+        return material_property_;
+    }
 
 
 

@@ -6,7 +6,7 @@ This section provides an overview of the sample code included in the `examples` 
 
 - [Table of Contents](#table-of-contents)
 - [GUI Applications](#gui-applications)
-  - [curves\_viewer.cpp](#curves_viewercpp)
+  - [iges\_viewer.cpp](#iges_viewercpp)
     - [Loading IGES Files](#loading-iges-files)
     - [Viewer Controls](#viewer-controls)
 - [CUI Applications](#cui-applications)
@@ -17,13 +17,13 @@ This section provides an overview of the sample code included in the `examples` 
 
 ## GUI Applications
 
-### curves_viewer.cpp
+### iges_viewer.cpp
 
 This is a sample code for the graphics module provided by this library. It loads IGES files and displays them in a GUI window. You can select which entity types to display, and use mouse controls to rotate, zoom, and pan the view.
 
 <img src="./images/curves_viewer_window.png" alt="Curves Viewer Screenshot" width="600"/>
 
-**Figure: Screenshot of Curves Viewer**
+**Figure: Screenshot of Iges Viewer**
 
 When you start the program, a window like the one above appears. By default, nothing is displayed until you load an IGES file using the "Controls" panel on the left. The Controls panel can be moved and resized.
 

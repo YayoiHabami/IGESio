@@ -139,8 +139,10 @@ class IOpenGL {
      * Textures
      */
 
+    virtual void ActiveTexture(GLenum texture) = 0;
     virtual void BindTexture(GLenum target, GLuint texture) = 0;
     virtual void DeleteTextures(GLsizei n, const GLuint *textures) = 0;
+    virtual void GenerateMipmap(GLenum target) = 0;
     virtual void GenTextures(GLsizei n, GLuint *textures) = 0;
     virtual void TexImage2D(GLenum target, GLint level, GLint internalFormat,
                             GLsizei width, GLsizei height, GLint border,
@@ -191,9 +193,12 @@ class IOpenGL {
 
     virtual void Enable(GLenum cap) = 0;
     virtual void Disable(GLenum cap) = 0;
+    virtual void BlendFunc(GLenum sfactor, GLenum dfactor) = 0;
     virtual void Clear(GLbitfield mask) = 0;
     virtual void ClearColor(GLfloat red, GLfloat green,
                             GLfloat blue, GLfloat alpha) = 0;
+    virtual void DrawElements(GLenum mode, GLsizei count,
+                              GLenum type, const void *indices) = 0;
     virtual void Viewport(GLint x, GLint y,
                           GLsizei width, GLsizei height) = 0;
     virtual void GetIntegerv(GLenum pname, GLint *data) = 0;

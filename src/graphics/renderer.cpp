@@ -45,7 +45,9 @@ void EntityRenderer::Initialize() {
     gl_->Enable(GL_DEPTH_TEST);
 
     // アンチエイリアシングの初期化
-    EnableAntialiasing(enable_antialiasing_);
+    EnableAntialiasing(settings_.enable_antialiasing);
+    // ブレンド設定
+    EnableTransparency(settings_.enable_transparency);
 }
 
 void EntityRenderer::Cleanup() {
@@ -159,26 +161,48 @@ std::array<float, 4> EntityRenderer::GetBackgroundColor() const {
     return background_color_;
 }
 
-/// @brief 背景色の参照を取得する
-/// @return 背景色の参照 (RGBA) [0.0 - 1.0]
 std::array<float, 4>& EntityRenderer::GetBackgroundColorRef() {
     return background_color_;
 }
 
-/// @brief 背景色を設定する
-/// @param color 背景色 (RGBA) [0.0 - 1.0]
 void EntityRenderer::SetBackgroundColor(
         const float red, const float green,
         const float blue, const float alpha) {
     background_color_ = {red, green, blue, alpha};
 }
 
+void EntityRenderer::SetSettings(const GraphicsSettings& settings) {
+    // アンチエイリアシング
+    if (settings.enable_antialiasing != settings_.enable_antialiasing) {
+        EnableAntialiasing(settings.enable_antialiasing);
+    }
+
+    // 透明度
+    if (settings.enable_transparency != settings_.enable_transparency) {
+        EnableTransparency(settings.enable_transparency);
+    }
+}
+
 void EntityRenderer::EnableAntialiasing(const bool enable) {
-    enable_antialiasing_ = enable;
-    if (enable_antialiasing_) {
+    settings_.enable_antialiasing = enable;
+    if (settings_.enable_antialiasing) {
         gl_->Enable(GL_MULTISAMPLE);
     } else {
         gl_->Disable(GL_MULTISAMPLE);
+    }
+}
+
+bool EntityRenderer::IsAntialiasingEnabled() const {
+    return settings_.enable_antialiasing;
+}
+
+void EntityRenderer::EnableTransparency(const bool enable) {
+    settings_.enable_transparency = enable;
+    if (settings_.enable_transparency) {
+        gl_->Enable(GL_BLEND);
+        gl_->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    } else {
+        gl_->Disable(GL_BLEND);
     }
 }
 
@@ -212,6 +236,8 @@ void EntityRenderer::Draw() const {
         static_cast<float>(display_width_) / display_height_);
 
     // 各シェーダープログラムごとに描画
+    // TODO: 半透明 (opacity < 1.0) なオブジェクトについては、描画を保留する
+    //       (最後にまとめて、画面奥のものから描画するように変更する)
     for (const auto& [shader_type, program_id] : shader_programs_) {
         if (!HasGraphicsObject(shader_type)) {
             // このシェーダータイプの描画オブジェクトがない、または
@@ -230,9 +256,11 @@ void EntityRenderer::Draw() const {
         // 光源のパラメータを設定
         if (UsesLighting(shader_type)) {
             gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPos_WorldSpace"),
-                            1, light_.GetPosition().data());
+                            1, light_.position.data());
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuation"),
+                            1, light_.attenuation.data());
             gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColor"),
-                            1, light_.GetColor().data());
+                            1, light_.color.data());
         }
 
         // 各エンティティを描画
@@ -266,7 +294,7 @@ void EntityRenderer::DrawChildren(
     }
 }
 
-std::vector<unsigned char> EntityRenderer::CaptureScreenshot() const {
+i_graph::Texture EntityRenderer::CaptureScreenshot() const {
     auto [width, height] = GetDisplaySize();
     if (width <= 0 || height <= 0) {
         return {};  // サイズが無効な場合は空のベクターを返す
@@ -310,7 +338,10 @@ std::vector<unsigned char> EntityRenderer::CaptureScreenshot() const {
     gl_->DeleteFramebuffers(1, &fbo);
     gl_->DeleteTextures(1, &color_tex);
     gl_->DeleteRenderbuffers(1, &rbo);
-    return pixels;
+
+    Texture tex;
+    tex.SetData(width, height, false, pixels.data(), false, true);
+    return tex;
 }
 
 

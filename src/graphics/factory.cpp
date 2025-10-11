@@ -18,6 +18,7 @@
 #include "igesio/graphics/curves/line_graphics.h"
 #include "igesio/graphics/curves/rational_b_spline_curve_graphics.h"
 
+#include "igesio/graphics/surfaces/i_surface_graphics.h"
 #include "igesio/graphics/surfaces/rational_b_spline_surface_graphics.h"
 
 namespace {
@@ -110,8 +111,7 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
     }
 
     // いずれにも当てはまらない場合は無効なポインタを返す
-    // TODO: GeneralSurfaceGraphicsクラスを作成、これを返すようにする
-    return nullptr;
+    return std::make_unique<i_graph::ISurfaceGraphics>(entity, gl);
 }
 
 std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(

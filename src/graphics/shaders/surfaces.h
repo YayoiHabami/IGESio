@@ -18,6 +18,13 @@
 
 namespace igesio::graphics::shaders {
 
+/// @brief kGeneralSurface用のシェーダー
+/// @note Vertex, Fragment
+constexpr std::array<const char*, 2> kGeneralSurfaceShader = {
+    "glsl/surfaces/general_surface.vert",
+    "glsl/surfaces/general_surface.frag"
+};
+
 /// @brief kRationalBSplineSurface用のシェーダー
 /// @note Vertex, TCS, TES, Fragment
 constexpr std::array<const char*, 4> kRationalBSplineSurfaceShader = {
@@ -36,6 +43,8 @@ constexpr std::array<const char*, 4> kRationalBSplineSurfaceShader = {
 std::optional<ShaderCode>
 GetSurfaceShaderCode(const ShaderType shader_type) {
     switch (shader_type) {
+        case ShaderType::kGeneralSurface:
+            return ShaderCode(kGeneralSurfaceShader);
         case ShaderType::kRationalBSplineSurface:
             return ShaderCode(kRationalBSplineSurfaceShader);
         default:

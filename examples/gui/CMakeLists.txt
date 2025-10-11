@@ -1,6 +1,6 @@
 # Build the examples with GUI support
 set(GUI_EXAMPLE_SOURCES
-    curves_viewer.cpp
+    iges_viewer.cpp
 )
 
 
@@ -44,14 +44,6 @@ if(IGESIO_BUILD_GUI)
 else()
     # If IGESIO_BUILD_GUI is not ON, skip the GUI-related code
     return()
-endif()
-
-# Fetch stb (stb_image_write.h) for image saving
-set(STB_URL https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h)
-set(STB_WRITE_PATH "${CMAKE_BINARY_DIR}/_deps/stb/stb_image_write.h")
-# Show download path
-if (NOT EXISTS ${STB_WRITE_PATH})
-    file(DOWNLOAD ${STB_URL} ${STB_WRITE_PATH} SHOW_PROGRESS)
 endif()
 
 # Build each example as an executable

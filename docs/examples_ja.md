@@ -6,7 +6,7 @@
 
 - [目次](#目次)
 - [GUIアプリケーション](#guiアプリケーション)
-  - [curves\_viewer.cpp](#curves_viewercpp)
+  - [iges\_viewer.cpp](#iges_viewercpp)
     - [IGESファイルの読み込み](#igesファイルの読み込み)
     - [ビューアの操作](#ビューアの操作)
 - [CUIアプリケーション](#cuiアプリケーション)
@@ -17,13 +17,13 @@
 
 ## GUIアプリケーション
 
-### curves_viewer.cpp
+### iges_viewer.cpp
 
 　本ライブラリで提供するグラフィックスモジュールのサンプルコードです。IGESファイルを読み込み、GUI上で表示します。表示するエンティティのタイプを選択したり、マウス操作で回転・拡大縮小・平行移動が可能です。
 
 <img src="./images/curves_viewer_window.png" alt="Curves Viewer Screenshot" width="600"/>
 
-**図. Curves Viewerのスクリーンショット**
+**図. IGES Viewerのスクリーンショット**
 
 　プログラムを起動すると、デフォルトでは上の図のようなウィンドウが表示されます。初期状態では何も表示されず、左側の「Controls」パネルからIGESファイルをロードする必要があります。このControlsパネルは、移動や拡大・縮小が可能です。
 

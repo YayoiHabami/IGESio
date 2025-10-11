@@ -72,6 +72,7 @@ void RationalBSplineSurfaceGraphics::DrawImpl(
 
 void RationalBSplineSurfaceGraphics::Synchronize() {
     Cleanup();
+    SyncTexture();
 
     // TCSのため、グリッド状の参照点を用意する
     // TODO: 曲面の種類によって参照点の数を変更する

@@ -87,7 +87,7 @@ class IgesViewerGUI {
 
     /// @brief 現在のEntityRendererの状態をキャプチャする
     /// @param filename 画像ファイルのパス
-    /// @throw std::runtime_error 画像の保存に失敗した場合
+    /// @throw igesio::FileError 画像の保存に失敗した場合
     void CaptureScreenshot(const std::string&);
 
 

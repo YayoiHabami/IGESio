@@ -19,6 +19,7 @@
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
 #include "igesio/graphics/core/light.h"
+#include "igesio/graphics/core/texture.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
 #include "igesio/graphics/factory.h"
 
@@ -30,6 +31,15 @@ namespace igesio::graphics {
 constexpr int kDefaultDisplayWidth = 1280;
 /// @brief 描画対象の高さ [px] (デフォルト)
 constexpr int kDefaultDisplayHeight = 720;
+
+/// @brief 描画全般に関する (細かい) 設定
+struct GraphicsSettings {
+    /// @brief アンチエイリアシングを有効にするか
+    bool enable_antialiasing = false;
+    /// @brief 半透明のオブジェクトの描画を有効にするか
+    /// @note 有効にした場合、ブレンドを行う
+    bool enable_transparency = false;
+};
 
 /// @brief エンティティの描画を担当するクラス
 /// @note OpenGLを使用してエンティティの曲線を描画する
@@ -68,8 +78,8 @@ class EntityRenderer {
     /// @brief 描画に関するグローバルパラメータ (デフォルト)
     std::shared_ptr<const models::GraphicsGlobalParam> default_global_param_;
 
-    /// @brief アンチエイリアシングを有効にするか
-    bool enable_antialiasing_ = false;
+    /// @brief 描画全般に関する設定
+    GraphicsSettings settings_;
 
  public:
     /// @brief コンストラクタ
@@ -110,13 +120,15 @@ class EntityRenderer {
     /// @brief エンティティの描画オブジェクトを作成する
     /// @param entity 描画するエンティティのポインタ (const)
     /// @param global_param 描画に関するグローバルパラメータ
+    /// @param material_property 描画プロパティ (IGESが保持しないデータ)
     /// @return エンティティの描画オブジェクトを作成できた場合はtrue
     /// @note すでに同じIDのエンティティが存在する場合は何もしない
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
     bool AddEntity(std::shared_ptr<const T> entity,
                    const std::shared_ptr<const models::GraphicsGlobalParam>
-                   global_param = nullptr) {
+                   global_param = nullptr,
+                   const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;
 
         if (HasEntity(entity->GetID())) return false;
@@ -131,6 +143,10 @@ class EntityRenderer {
                 graphics->SetGlobalParam(default_global_param_);
             }
 
+            // 描画プロパティを設定
+            graphics->MaterialProperty() = material_property;
+            graphics->SyncTexture();
+
             AddGraphicsObject(std::move(graphics));
             return true;
         }
@@ -140,16 +156,19 @@ class EntityRenderer {
     /// @brief エンティティの描画オブジェクトを作成する
     /// @param entity 描画するエンティティのポインタ (非const)
     /// @param global_param 描画に関するグローバルパラメータ
+    /// @param material_property 描画プロパティ (IGESが保持しないデータ)
     /// @return エンティティの描画オブジェクトを作成できた場合はtrue
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
     bool AddEntity(std::shared_ptr<T> entity,
                    const std::shared_ptr<const models::GraphicsGlobalParam>
-                   global_param = nullptr) {
+                   global_param = nullptr,
+                   const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;
 
         // constポインタに変換してAddEntityを呼び出す
-        return AddEntity(std::const_pointer_cast<const T>(entity), global_param);
+        return AddEntity(std::const_pointer_cast<const T>(entity),
+                         global_param, material_property);
     }
 
     /// @brief 指定されたIDのエンティティの描画オブジェクトを削除する
@@ -220,12 +239,28 @@ class EntityRenderer {
     /// @note 光源の各変数などはこの参照を通じて設定する
     graphics::Light& Light() { return light_; }
 
+    /// @brief 描画全般に関する設定を取得する (const)
+    const GraphicsSettings& Settings() const { return settings_; }
+    /// @brief 描画全般に関する設定を上書きする
+    /// @param settings 新しい設定
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
+    void SetSettings(const GraphicsSettings&);
+
     /// @brief アンチチエイリアスの有効/無効を設定する
     /// @param enable trueの場合は有効、falseの場合は無効
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
     void EnableAntialiasing(const bool);
     /// @brief アンチエイリアスが有効か
     /// @return 有効な場合はtrue、無効な場合はfalse
-    bool IsAntialiasingEnabled() const { return enable_antialiasing_; }
+    bool IsAntialiasingEnabled() const;
+
+    /// @brief 半透明のオブジェクトの描画の有効/無効を設定する
+    /// @param enable trueの場合は有効、falseの場合は無効
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
+    void EnableTransparency(const bool);
+    /// @brief 半透明のオブジェクトの描画が有効か
+    /// @return 有効な場合はtrue、無効な場合はfalse
+    bool IsTransparencyEnabled() const;
 
 
 
@@ -237,17 +272,7 @@ class EntityRenderer {
     void Draw() const;
 
     /// @brief 現在の描画状態をキャプチャする
-    /// @return 各ピクセルのRGB値を格納したバッファ
-    ///         サイズは`width * height * 3` (R, G, B).
-    /// @note 画像の幅と高さはGetDisplaySize()で取得できる.
-    ///       戻り値は`glReadPixels`で取得した値と同じ形式で格納され、
-    ///       左下が原点で、右方向にx座標が、上方向にy座標が増加する形式に
-    ///       なっている. 例えば、(x, y)のピクセルのR成分は
-    ///       `pixels[(y * width + x) * 3 + 0]`で取得できる.
-    /// @note stb_image_writeなどを使用してPNGなどの画像ファイルとして
-    ///       保存することも可能. `examples/gui/iges_viewer_gui.cpp`の
-    ///       `IgesViewerGUI::CaptureScreenshot`関数を参照のこと
-    std::vector<unsigned char> CaptureScreenshot() const;
+    Texture CaptureScreenshot() const;
 
 
 

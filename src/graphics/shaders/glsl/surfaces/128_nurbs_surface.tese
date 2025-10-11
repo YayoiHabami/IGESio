@@ -44,6 +44,7 @@ uniform mat4 projection;
 // Data to pass to Fragment Shader
 out vec3 fragPos_WorldSpace;
 out vec3 fragNormal_WorldSpace;
+out vec2 fragTexCoord;
 
 #include "glsl/common/nurbs_surface_prop.glsl"
 
@@ -53,6 +54,9 @@ void main() {
     // Map gl_TessCoord (range [0, 1]) to the surface's parameter range
     float u = paramRangeU.x + gl_TessCoord.x * (paramRangeU.y - paramRangeU.x);
     float v = paramRangeV.x + gl_TessCoord.y * (paramRangeV.y - paramRangeV.x);
+    // Pass normalized (u, v) for texture mapping
+    fragTexCoord = vec2((u - paramRangeU.x) / (paramRangeU.y - paramRangeU.x),
+                        (v - paramRangeV.x) / (paramRangeV.y - paramRangeV.x));
 
     // Calculate the position and normal in object space
     vec3 pos_ObjectSpace, normal_ObjectSpace;

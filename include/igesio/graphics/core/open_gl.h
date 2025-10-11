@@ -218,11 +218,17 @@ class OpenGL : public IOpenGL {
      * Textures
      */
 
+    void ActiveTexture(GLenum texture) override {
+        glActiveTexture(texture);
+    }
     void BindTexture(GLenum target, GLuint texture) override {
         glBindTexture(target, texture);
     }
     void DeleteTextures(GLsizei n, const GLuint *textures) override {
         glDeleteTextures(n, textures);
+    }
+    void GenerateMipmap(GLenum target) override {
+        glGenerateMipmap(target);
     }
     void GenTextures(GLsizei n, GLuint *textures) override {
         glGenTextures(n, textures);
@@ -305,12 +311,19 @@ class OpenGL : public IOpenGL {
     void Disable(GLenum cap) override {
         glDisable(cap);
     }
+    void BlendFunc(GLenum sfactor, GLenum dfactor) override {
+        glBlendFunc(sfactor, dfactor);
+    }
     void Clear(GLbitfield mask) override {
         glClear(mask);
     }
     void ClearColor(GLfloat red, GLfloat green,
                     GLfloat blue, GLfloat alpha) override {
         glClearColor(red, green, blue, alpha);
+    }
+    void DrawElements(GLenum mode, GLsizei count,
+                      GLenum type, const void *indices) override {
+        glDrawElements(mode, count, type, indices);
     }
     void Viewport(GLint x, GLint y,
                   GLsizei width, GLsizei height) override {

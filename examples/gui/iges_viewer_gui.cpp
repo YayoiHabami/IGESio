@@ -7,9 +7,6 @@
  */
 #include "./iges_viewer_gui.h"
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb_image_write.h>
-
 #include <string>
 
 namespace {
@@ -134,16 +131,8 @@ void IgesViewerGUI::Run(const bool vsync) {
 
 void IgesViewerGUI::CaptureScreenshot(const std::string& filename) {
     // OpenGLのフレームバッファからピクセルデータを取得
-    auto [width, height] = renderer_.GetDisplaySize();
-    auto pixels = renderer_.CaptureScreenshot();
-    if (pixels.empty()) {
-        throw std::runtime_error("Failed to capture screenshot");
-    }
-    // 画像を保存 (stb_image_writeを使用)
-    stbi_flip_vertically_on_write(true);  // OpenGLの座標系に合わせて上下反転
-    if (!stbi_write_png(filename.c_str(), width, height, 3, pixels.data(), width * 3)) {
-        throw std::runtime_error("Failed to save screenshot to " + filename);
-    }
+    auto texture = renderer_.CaptureScreenshot();
+    igesio::graphics::SaveTextureToFile(filename, texture);
 }
 
 
