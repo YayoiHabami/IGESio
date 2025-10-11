@@ -157,8 +157,8 @@ ent_vec CreateLine() {
 ent_vec CreateRationalBSplineCurve() {
     // Create NURBS curve
     auto param = igesio::IGESParameterVector{
-        3,  // degree
         3,  // number of control points - 1
+        3,  // degree
         false, false, false, false,  // non-periodic open NURBS curve
         0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
         1.0, 1.0, 1.0, 1.0,  // weights

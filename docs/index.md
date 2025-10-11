@@ -19,6 +19,7 @@ The following documents are particularly important. Please refer to these first.
 - **[Build Instructions](build.md)**: How to build this library
 - **[Examples](examples.md)**: Overview of the sample code in the `examples` directory
 - **[Overview of Classes Used](./class_structure.md)**: Explanation of the relationships of the main classes used in this library
+- **[Implementation Progress](./implementation_progress.md)**: Overview of the implementation status of various components
 
 ## Module-Specific Documents
 

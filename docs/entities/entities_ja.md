@@ -28,6 +28,7 @@
   - [`Line` (type 110)](#line-type-110)
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
 - [Surfaces](#surfaces)
+  - [`RationalBSplineSurface` (type 128)](#rationalbsplinesurface-type-128)
 - [Transformations](#transformations)
   - [`TransformationMatrix` (type 124)](#transformationmatrix-type-124)
 
@@ -403,8 +404,8 @@ auto line = std::make_shared<igesio::entities::Line>(
 
 ```cpp
 auto param = igesio::IGESParameterVector{
-    3,  // degree
     3,  // number of control points - 1
+    3,  // degree
     false, false, false, false,  // non-periodic open NURBS curve
     0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
     1.0, 1.0, 1.0, 1.0,  // weights
@@ -425,6 +426,46 @@ auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
 ## Surfaces
 
 　本節では、IGESファイルに記述される曲面エンティティについて解説します。曲面エンティティは、3次元空間内の曲面を表現するために使用されます。
+
+### `RationalBSplineSurface` (type 128)
+
+> Defined at [rational_b_spline_surface.h](../../include/igesio/entities/surfaces/rational_b_spline_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ RationalBSplineSurface
+>                     └─ ISurface <───┘
+> ```
+
+　`RationalBSplineSurface`は、3次元空間内の有理Bスプライン曲面を表現するためのクラスです。以下のコード例は、6x6個の制御点、3次の非周期的開放NURBS曲面を生成します（図参照; パラメータの詳細については、[examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)の`CreateRationalBSplineSurface`関数を参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。
+
+　この際の注意点として、`IGESParameterVector`には、intとdoubleを明確に区別して渡してください。例えば以下の8つ目のパラメータ (1つ目のUノットベクトル値; `0.0`) を、`0` (int) として渡すと、エラーが発生します。
+
+```cpp
+// Freeform surface
+auto param = igesio::IGESParameterVector{
+    5, 5,  // K1, K2 (Number of control points - 1 in U and V)
+    3, 3,  // M1, M2 (Degree in U and V)
+    false, false, true, false, false,         // PROP1-5
+    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
+    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
+    // Control points (36 points, each with x, y, z)
+    -25., -25., -10.,  // Control point (0,0)
+    -25., -15., -5.,   // Control point (0,1)
+    // ...
+    25., 25., -10.,    // Control point (5,5)
+    0., 3., 0., 3.     // Parameter range in U and V
+};
+auto nurbs_freeform = std::make_shared<igesio::entities::RationalBSplineSurface>(param);
+nurbs_freeform->OverwriteColor(igesio::entities::ColorNumber::kCyan);
+```
+
+<img src="./images/rational_b_spline_surface.png" width=400px alt="RationalBSplineSurface Example" />
+
+**図: RationalBSplineSurfaceエンティティの例**
 
 ## Transformations
 

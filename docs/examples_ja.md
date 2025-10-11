@@ -21,7 +21,7 @@
 
 　本ライブラリで提供するグラフィックスモジュールのサンプルコードです。IGESファイルを読み込み、GUI上で表示します。表示するエンティティのタイプを選択したり、マウス操作で回転・拡大縮小・平行移動が可能です。
 
-<img src="./images/curves_viewer_window.png" alt="Curves Viewer Screenshot" width="600"/>
+<img src="./images/curves_viewer_window.png" alt="IGES Viewer Screenshot" width="600"/>
 
 **図. IGES Viewerのスクリーンショット**
 
@@ -122,6 +122,6 @@ Trimmed Surface                144    No         7
 
 ### sample_curves.cpp
 
-　本ライブラリで実装済みの曲線エンティティを作成し、IGESファイルに書き出すサンプルコードです。[entities](./entities/entities_ja.md)における各曲線エンティティの作成方法の例として参照してください。また、当該ドキュメントの各図は、このサンプルコードで生成したIGESファイルを[Curves Viewer](#guiアプリケーション)で表示したものです。
+　本ライブラリで実装済みの曲線エンティティを作成し、IGESファイルに書き出すサンプルコードです。[entities](./entities/entities_ja.md)における各曲線エンティティの作成方法の例として参照してください。また、当該ドキュメントの各図は、このサンプルコードで生成したIGESファイルを[IGES Viewer](#guiアプリケーション)で表示したものです。
 
 　通常、コマンドライン出力はなく、`sample_curves.igs`というIGESファイルが生成されます。

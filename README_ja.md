@@ -8,11 +8,13 @@ For English documentation, see [README.md](README.md).
 
 ## 概要
 
-IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォーマットを扱うためのモダンなC++ライブラリです。本ライブラリは、IGES 5.3 仕様に基づいてIGESファイルの読み込み、書き出し、および関連データの操作機能を包括的に提供します。
+IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォーマットを扱うためのモダンなC++ライブラリです。本ライブラリは、IGES 5.3 仕様に基づいてIGESファイルの入出力、描画、および関連データの操作機能を包括的に提供します。
 
 現在のバージョンは [`igesio::GetVersion()`](src/common/versions.cpp) で確認できます (例: 0.5.0)。
 
 ライブラリの設計方針やIGES仕様の解釈については、[docs/policy_ja.md](docs/policy_ja.md) を参照してください。
+
+また、現在の実装状況については、[docs/implementation_progress.md](docs/implementation_progress.md) を参照してください。
 
 <!-- omit in toc -->
 ## Table of Contents
@@ -38,19 +40,20 @@ IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォー
 
 　IGESioライブラリでは、主に以下のような機能を提供します：
 
-- **IGESファイル読み込み**: [`igesio::ReadIges`](src/reader.cpp) によるIGESファイルの解析と読み込み
-- **IGESファイル書き出し**: [`igesio::WriteIges`](src/writer.cpp) によるIGESファイルの出力
-- **エンティティデータ管理**: IGESエンティティの効率的な管理と操作
-- **エンティティの描画**: OpenGLを使用したエンティティの視覚化（`IGESIO_ENABLE_GRAPHICS`オプションで有効化可能）
+- **IGESファイルの入出力**: [`igesio::ReadIges`](src/reader.cpp)/[`igesio::WriteIges`](src/writer.cpp) による入出力
+- **エンティティのサポート**: 円弧や直線のような基本的なエンティティから、NURBS曲線・曲面まで、様々なエンティティをサポート
+  - すべてのエンティティは`EntityBase`クラスを基底とした、共通のインターフェースを持つクラスとして実装（[実装状況](docs/implementation_progress.md) / [詳細説明](docs/entities/entities_ja.md)）
+  - 未対応のエンティティを含むIGESファイルも読み込み可能（[`UnsupportedEntity`クラス](docs/entities/entities_ja.md#unsupportedentity)として読み込まれ、パラメータは取得/変更可能）
+- **エンティティの描画**: OpenGLを使用したエンティティの視覚化
   - GUIに依存した処理を分離しているため、GUIアプリケーションへの統合が容易
 
 ## 使用方法
 
 ### GUIアプリケーションへの組み込み例
 
-　本ライブラリを使用してIGESファイルを読み込み、OpenGLで描画するシンプルなGUIアプリケーションの例として、[curves viewer](docs/examples_ja.md#gui)を実装しています。このアプリケーションは、ImGuiとGLFWを使用しており、IGESioにより描画機能を提供しています。
+　本ライブラリを使用してIGESファイルを読み込み、OpenGLで描画するシンプルなGUIアプリケーションの例として、[IGES viewer](docs/examples_ja.md#gui)を実装しています。このアプリケーションは、ImGuiとGLFWを使用しており、IGESioにより描画機能を提供しています。
 
-<img src="docs/images/curves_viewer_window.png" alt="Curves Viewer Example" width="600"/>
+<img src="docs/images/curves_viewer_window.png" alt="IGES Viewer Example" width="600"/>
 
 ### IGESファイルの入出力
 
@@ -92,7 +95,7 @@ try {
 
 ### エンティティの作成
 
-　本ライブラリでは、プログラム上でエンティティを作成することも可能です。以下は、中心点が $(3, 0)$、半径が $1$ の円を作成し、色を設定してからIGESファイルに書き出す例です。
+　本ライブラリでは、プログラム上でエンティティを作成することも可能です。以下は、中心点が $(3, 0)$、半径が $1$ の円を作成し、色を設定してからIGESファイルに書き出す例です。エンティティごとの作成例については、[entities](docs/entities/entities_ja.md)を参照してください。
 
 ```cpp
 #include <memory>
@@ -139,12 +142,14 @@ IGESioライブラリをビルドするには以下の環境が必要です：
 |----|----|
 | ![Ubuntu](https://img.shields.io/badge/Ubuntu-latest-orange?logo=ubuntu) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
 | ![Windows](https://img.shields.io/badge/Windows-latest-blue?logo=windows) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) ![MSVC](https://img.shields.io/badge/MSVC-✓-green) |
-| ![macOS](https://img.shields.io/badge/macOS-latest-lightgrey?logo=apple) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
+| ![macOS](https://img.shields.io/badge/macOS-latest-lightgrey?logo=apple) <sup>*1</sup> | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
 
 > **クロスプラットフォーム対応**: このライブラリはWindows、Ubuntu、macOSで動作確認済みです。
 >
 > - **他のLinux環境**: 類似の環境（GCC、CMakeが利用可能なLinuxディストリビューション）では動作する可能性が高いですが、未検証です
 > - **コンパイラ**: GCC、Clang、MSVC（Windows）での動作を確認済みです
+
+> *1: 本ライブラリではOpenGL4.3以降を要求していますが、macOSではOpenGL4.1までのサポートとなっているため、ほとんどグラフィックス機能は利用できません
 
 ### 環境セットアップ
 
@@ -178,6 +183,7 @@ ninja --version
 | [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0 | OpenGLローダー | Yes (`IGESIO_ENABLE_GRAPHICS` または `IGESIO_BUILD_GUI` 有効時のみ) |
 | [glfw](https://www.glfw.org/) | Zlib | ウィンドウ作成と入力処理 | Yes (`IGESIO_BUILD_GUI` 有効時のみ) |
 | [imgui](https://github.com/ocornut/imgui) | MIT | GUI作成 | Yes (`IGESIO_BUILD_GUI` 有効時のみ) |
+| [stb](https://github.com/nothings/stb) | MIT | 画像読み込み・書き出し | Yes (`IGESIO_ENABLE_TEXTURE_IO` 有効時のみ) |
 
 **ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストについては [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) を参照してください。
 
@@ -233,6 +239,7 @@ target_link_libraries(my_app PRIVATE IGESio::IGESio)
 IGESio/
 ├── build.bat, build.sh     # WindowsおよびLinux用のビルドスクリプト
 ├── CMakeLists.txt          # メインのCMakeビルドスクリプト
+├── ...
 ├── examples/               # 使用例
 │   └── gui/                # GUIを追加した例
 ├── include/                # 公開ヘッダファイル
@@ -257,8 +264,6 @@ IGESio/
 
 ## 著作権・ライセンス
 
-このライブラリは、MITライセンスの下で提供されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。
+このライブラリは、MITライセンスの下で提供されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。本ライブラリが使用するサードパーティの依存関係については、[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) を参照してください。
 
 &copy; 2025 Yayoi Habami
-
-各ソースファイルの詳細な著作権情報については、ファイルヘッダコメントを参照してください（例: [`include/igesio/common/iges_metadata.h`](include/igesio/common/iges_metadata.h)）。

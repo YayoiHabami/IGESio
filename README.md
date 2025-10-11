@@ -8,11 +8,13 @@
 
 ## Overview
 
-IGESio is a modern, cross-platform C++ library for handling IGES (Initial Graphics Exchange Specification) files. It provides comprehensive functionality for reading, writing, and manipulating IGES files in accordance with the IGES 5.3 specification.
+IGESio is a modern C++ library for handling the IGES (Initial Graphics Exchange Specification) file format. This library comprehensively provides functions for input/output, drawing, and manipulation of related data of IGES files based on the IGES 5.3 specification.
 
 The current version can be checked using [`igesio::GetVersion()`](src/common/versions.cpp) (e.g., 0.5.0).
 
 For design principles and IGES specification interpretations, please refer to the [policy documentation (Japanese)](docs/policy_ja.md).
+
+For the current implementation status, please refer to [docs/implementation_progress.md](docs/implementation_progress.md).
 
 <!-- omit in toc -->
 ## Table of Contents
@@ -38,18 +40,20 @@ For design principles and IGES specification interpretations, please refer to th
 
 The IGESio library provides the following core functionality:
 
-- **IGES File Reading**: Parse and load IGES files using [`igesio::ReadIges`](src/reader.cpp)
-- **IGES File Writing**: Generate and output IGES files using [`igesio::WriteIges`](src/writer.cpp)
-- **Entity Data Management**: Efficient management and manipulation of IGES entities
-- **Global Parameter Control**: Manage global section parameters via [`igesio::models::GlobalParam`](include/igesio/models/global_param.h)
+- **IGES File Input/Output**: Input/output using [`igesio::ReadIges`](src/reader.cpp) and [`igesio::WriteIges`](src/writer.cpp)
+- **Entity Support**: Supports various entities from basic entities such as arcs and lines to NURBS curves and surfaces.
+  - All entities are implemented as classes with a common interface based on the `EntityBase` class ([Implementation Status](docs/implementation_progress.md) / [Detailed Explanation](docs/entities/entities.md)).
+  - IGES files containing unsupported entities can also be read (they are read as [`UnsupportedEntity` class](docs/entities/entities.md#unsupportedentity), and parameters can be obtained/modified).
+- **Entity Rendering**: Visualization of entities using OpenGL.
+  - Easy integration into GUI applications because GUI-dependent processing is separated.
 
 ## Usage
 
 ### Example: Integrating with a GUI Application
 
-A simple GUI application example, [curves viewer](docs/examples.md#gui), demonstrates how to use IGESio to read IGES files and render them with OpenGL. This application uses ImGui and GLFW, with IGESio providing the rendering functionality.
+A simple GUI application example, [IGES viewer](docs/examples.md#gui), demonstrates how to use IGESio to read IGES files and render them with OpenGL. This application uses ImGui and GLFW, with IGESio providing the rendering functionality.
 
-<img src="docs/images/curves_viewer_window.png" alt="Curves Viewer Example" width="600"/>
+<img src="docs/images/curves_viewer_window.png" alt="IGES Viewer Example" width="600"/>
 
 ### Reading and Writing IGES Files
 
@@ -90,7 +94,7 @@ For details on the data structures, see [class structure](docs/class_structure.m
 
 ### Creating Entities
 
-You can also create entities programmatically. The following example creates a circle with center $(3, 0)$ and radius $1$, sets its color, and writes it to an IGES file.
+You can also create entities programmatically. The following example creates a circle with center $(3, 0)$ and radius $1$, sets its color, and writes it to an IGES file. For examples of creating each entity, see [entities](docs/entities/entities.md).
 
 ```cpp
 #include <memory>
@@ -136,12 +140,14 @@ This library has been built and tested on the following environments:
 |----|----|
 | ![Ubuntu](https://img.shields.io/badge/Ubuntu-latest-orange?logo=ubuntu) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
 | ![Windows](https://img.shields.io/badge/Windows-latest-blue?logo=windows) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) ![MSVC](https://img.shields.io/badge/MSVC-✓-green) |
-| ![macOS](https://img.shields.io/badge/macOS-latest-lightgrey?logo=apple) | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
+| ![macOS](https://img.shields.io/badge/macOS-latest-lightgrey?logo=apple) <sup>*1</sup> | ![GCC](https://img.shields.io/badge/GCC-✓-green) ![Clang](https://img.shields.io/badge/Clang-✓-green) |
 
 > **Cross-platform Support**: This library has been verified to work on Windows, Ubuntu, and macOS.
 >
 > - **Other Linux environments**: Should work on similar environments (Linux distributions with GCC and CMake available), though not explicitly tested
 > - **Compilers**: Verified to work with GCC, Clang, and MSVC (Windows)
+
+> *1: This library requires OpenGL 4.3 or later, but macOS only supports up to OpenGL 4.1, so most graphics functions are not available.
 
 ### Environment Setup
 
@@ -175,6 +181,7 @@ This library includes optional dependencies with compatible licenses:
 | [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0 | OpenGL loader | Yes (only when `IGESIO_ENABLE_GRAPHICS` or `IGESIO_BUILD_GUI` is enabled) |
 | [glfw](https://www.glfw.org/) | Zlib | Window creation and input handling | Yes (only when `IGESIO_BUILD_GUI` is enabled) |
 | [imgui](https://github.com/ocornut/imgui) | MIT | Graphical user interface | Yes (only when `IGESIO_BUILD_GUI` is enabled) |
+| [stb](https://github.com/nothings/stb) | MIT | Image loading and saving | Yes (only when `IGESIO_ENABLE_TEXTURE_IO` is enabled) |
 
 **License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) for full license texts.
 
@@ -230,6 +237,7 @@ See [docs/build.md](docs/build.md) for details.
 IGESio/
 ├── build.bat, build.sh     # Build scripts for Windows and Linux
 ├── CMakeLists.txt          # Main CMake build script
+├── ...
 ├── examples/               # Example usage
 │   └── gui/                # Examples with GUI
 ├── include/                # Public header files
@@ -254,8 +262,6 @@ The documentation is available in the `docs` directory. See [docs/index.md](docs
 
 ## Copyright & License
 
-This library is provided under the MIT License. See the [LICENSE](LICENSE) file for details.
+This library is provided under the MIT License. See the [LICENSE](LICENSE) file for details. For third-party dependencies used by this library, please refer to [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md).
 
 &copy; 2025 Yayoi Habami
-
-For detailed copyright information on individual source files, refer to the header comments in each file (e.g., [`include/igesio/common/iges_metadata.h`](include/igesio/common/iges_metadata.h)).

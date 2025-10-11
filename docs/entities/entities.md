@@ -28,6 +28,7 @@ This document covers the interfaces for specific entities and individual entity 
   - [`Line` (type 110)](#line-type-110)
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
 - [Surfaces](#surfaces)
+  - [`RationalBSplineSurface` (type 128)](#rationalbsplinesurface-type-128)
 - [Transformations](#transformations)
   - [`TransformationMatrix` (type 124)](#transformationmatrix-type-124)
 
@@ -425,6 +426,46 @@ auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
 ## Surfaces
 
 This section describes the surface entities in IGES files. Surface entities are used to represent surfaces in 3D space.
+
+### `RationalBSplineSurface` (type 128)
+
+> Defined at [rational_b_spline_surface.h](../../include/igesio/entities/surfaces/rational_b_spline_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ RationalBSplineSurface
+>                     └─ ISurface <───┘
+> ```
+
+The `RationalBSplineSurface` class represents rational B-spline surfaces in 3D space. The following code example creates a non-periodic, open NURBS surface of degree 3 with 6x6 control points (see figure; for details on parameters, see the `CreateRationalBSplineSurface` function in [examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)). As shown below, use the `IGESParameterVector` structure to pass parameters at once and generate an instance.
+
+Note that when passing parameters to `IGESParameterVector`, be sure to clearly distinguish between `int` and `double`. For example, if the eighth parameter (the first U knot vector value; `0.0`) is passed as `0` (int), an error will occur.
+
+```cpp
+// Freeform surface
+auto param = igesio::IGESParameterVector{
+  5, 5,  // K1, K2 (Number of control points - 1 in U and V)
+  3, 3,  // M1, M2 (Degree in U and V)
+  false, false, true, false, false,         // PROP1-5
+  0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
+  0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
+  1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
+  1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
+  1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
+  // Control points (36 points, each with x, y, z)
+  -25., -25., -10.,  // Control point (0,0)
+  -25., -15., -5.,   // Control point (0,1)
+  // ...
+  25., 25., -10.,    // Control point (5,5)
+  0., 3., 0., 3.     // Parameter range in U and V
+};
+auto nurbs_freeform = std::make_shared<igesio::entities::RationalBSplineSurface>(param);
+nurbs_freeform->OverwriteColor(igesio::entities::ColorNumber::kCyan);
+```
+
+<img src="./images/rational_b_spline_surface.png" width=400px alt="RationalBSplineSurface Example" />
+
+**Figure: Example of a RationalBSplineSurface entity**
 
 ## Transformations
 
