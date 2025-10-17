@@ -13,6 +13,7 @@
 
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/entities/interfaces/i_curve.h"
+#include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 
 
@@ -26,6 +27,14 @@ namespace igesio::graphics {
 std::unique_ptr<IEntityGraphics>
 CreateCurveGraphics(const std::shared_ptr<const entities::ICurve>,
                     const std::shared_ptr<IOpenGL>);
+
+/// @brief 曲面の描画オブジェクトを作成する
+/// @param entity ISurfaceエンティティのポインタ
+/// @param gl OpenGL関数のラッパー
+/// @return 作成された描画オブジェクト、無効な場合はnullptr
+std::unique_ptr<IEntityGraphics>
+CreateSurfaceGraphics(const std::shared_ptr<const entities::ISurface>,
+                      const std::shared_ptr<IOpenGL>);
 
 /// @brief エンティティの描画オブジェクト作成する関数
 /// @param entity 描画するエンティティのポインタ

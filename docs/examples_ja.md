@@ -6,7 +6,7 @@
 
 - [目次](#目次)
 - [GUIアプリケーション](#guiアプリケーション)
-  - [curves\_viewer.cpp](#curves_viewercpp)
+  - [iges\_viewer.cpp](#iges_viewercpp)
     - [IGESファイルの読み込み](#igesファイルの読み込み)
     - [ビューアの操作](#ビューアの操作)
 - [CUIアプリケーション](#cuiアプリケーション)
@@ -17,13 +17,13 @@
 
 ## GUIアプリケーション
 
-### curves_viewer.cpp
+### iges_viewer.cpp
 
 　本ライブラリで提供するグラフィックスモジュールのサンプルコードです。IGESファイルを読み込み、GUI上で表示します。表示するエンティティのタイプを選択したり、マウス操作で回転・拡大縮小・平行移動が可能です。
 
-<img src="./images/curves_viewer_window.png" alt="Curves Viewer Screenshot" width="600"/>
+<img src="./images/curves_viewer_window.png" alt="IGES Viewer Screenshot" width="600"/>
 
-**図. Curves Viewerのスクリーンショット**
+**図. IGES Viewerのスクリーンショット**
 
 　プログラムを起動すると、デフォルトでは上の図のようなウィンドウが表示されます。初期状態では何も表示されず、左側の「Controls」パネルからIGESファイルをロードする必要があります。このControlsパネルは、移動や拡大・縮小が可能です。
 
@@ -47,6 +47,9 @@
 - 投影モード: 以下の2種類から選択可能です。
   - パースペクティブ（遠近法）: 遠近感のある表示。
   - オーソグラフィック（平行投影）: 平行な線を保った表示 (CADで一般的)。
+- スクリーンショット:
+  - 「Capture Screenshot」ボタンをクリックすると、現在のビューをPNG画像として保存します。
+  - ファイル名は「screenshot YYYY-MM-DD HH-MM-SS.png」の形式で、実行ディレクトリに保存されます。
 - 背景色: カラーピッカーで背景色を変更可能です。
 - エンティティ表示のコントロール:
   - 「Show All Entities」チェックボックスで全エンティティの表示/非表示を切り替えられます。
@@ -119,6 +122,6 @@ Trimmed Surface                144    No         7
 
 ### sample_curves.cpp
 
-　本ライブラリで実装済みの曲線エンティティを作成し、IGESファイルに書き出すサンプルコードです。[entities](./entities/entities_ja.md)における各曲線エンティティの作成方法の例として参照してください。また、当該ドキュメントの各図は、このサンプルコードで生成したIGESファイルを[Curves Viewer](#guiアプリケーション)で表示したものです。
+　本ライブラリで実装済みの曲線エンティティを作成し、IGESファイルに書き出すサンプルコードです。[entities](./entities/entities_ja.md)における各曲線エンティティの作成方法の例として参照してください。また、当該ドキュメントの各図は、このサンプルコードで生成したIGESファイルを[IGES Viewer](#guiアプリケーション)で表示したものです。
 
 　通常、コマンドライン出力はなく、`sample_curves.igs`というIGESファイルが生成されます。

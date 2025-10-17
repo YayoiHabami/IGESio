@@ -18,6 +18,8 @@
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
+#include "igesio/graphics/core/light.h"
+#include "igesio/graphics/core/texture.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
 #include "igesio/graphics/factory.h"
 
@@ -29,6 +31,15 @@ namespace igesio::graphics {
 constexpr int kDefaultDisplayWidth = 1280;
 /// @brief 描画対象の高さ [px] (デフォルト)
 constexpr int kDefaultDisplayHeight = 720;
+
+/// @brief 描画全般に関する (細かい) 設定
+struct GraphicsSettings {
+    /// @brief アンチエイリアシングを有効にするか
+    bool enable_antialiasing = false;
+    /// @brief 半透明のオブジェクトの描画を有効にするか
+    /// @note 有効にした場合、ブレンドを行う
+    bool enable_transparency = false;
+};
 
 /// @brief エンティティの描画を担当するクラス
 /// @note OpenGLを使用してエンティティの曲線を描画する
@@ -50,9 +61,10 @@ class EntityRenderer {
             uint64_t, std::unique_ptr<IEntityGraphics>>> draw_objects_;
 
     /// @brief 描画対象のサイズ [px]
-    int display_width_ = kDefaultDisplayWidth, display_height_ = kDefaultDisplayHeight;
-    /// @brief 描画対象のサイズがリサイズされたか
-    bool is_resized_ = true;
+    /// @note 次回の描画時に反映される (すなわち、glGetIntegrevで取得できるサイズ
+    ///       とは異なる場合は、次回のDraw呼び出し時に以下のサイズに更新される)
+    int display_width_ = kDefaultDisplayWidth,
+        display_height_ = kDefaultDisplayHeight;
 
     /// @brief 背景色
     std::array<float, 4> background_color_ = {1.0f, 1.0f, 1.0f, 1.0f};  // 白色
@@ -60,8 +72,14 @@ class EntityRenderer {
     /// @brief カメラクラス
     graphics::Camera camera_;
 
+    /// @brief 光源クラス
+    graphics::Light light_;
+
     /// @brief 描画に関するグローバルパラメータ (デフォルト)
     std::shared_ptr<const models::GraphicsGlobalParam> default_global_param_;
+
+    /// @brief 描画全般に関する設定
+    GraphicsSettings settings_;
 
  public:
     /// @brief コンストラクタ
@@ -102,13 +120,15 @@ class EntityRenderer {
     /// @brief エンティティの描画オブジェクトを作成する
     /// @param entity 描画するエンティティのポインタ (const)
     /// @param global_param 描画に関するグローバルパラメータ
+    /// @param material_property 描画プロパティ (IGESが保持しないデータ)
     /// @return エンティティの描画オブジェクトを作成できた場合はtrue
     /// @note すでに同じIDのエンティティが存在する場合は何もしない
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
     bool AddEntity(std::shared_ptr<const T> entity,
                    const std::shared_ptr<const models::GraphicsGlobalParam>
-                   global_param = nullptr) {
+                   global_param = nullptr,
+                   const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;
 
         if (HasEntity(entity->GetID())) return false;
@@ -123,6 +143,10 @@ class EntityRenderer {
                 graphics->SetGlobalParam(default_global_param_);
             }
 
+            // 描画プロパティを設定
+            graphics->MaterialProperty() = material_property;
+            graphics->SyncTexture();
+
             AddGraphicsObject(std::move(graphics));
             return true;
         }
@@ -132,16 +156,19 @@ class EntityRenderer {
     /// @brief エンティティの描画オブジェクトを作成する
     /// @param entity 描画するエンティティのポインタ (非const)
     /// @param global_param 描画に関するグローバルパラメータ
+    /// @param material_property 描画プロパティ (IGESが保持しないデータ)
     /// @return エンティティの描画オブジェクトを作成できた場合はtrue
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
     bool AddEntity(std::shared_ptr<T> entity,
                    const std::shared_ptr<const models::GraphicsGlobalParam>
-                   global_param = nullptr) {
+                   global_param = nullptr,
+                   const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;
 
         // constポインタに変換してAddEntityを呼び出す
-        return AddEntity(std::const_pointer_cast<const T>(entity), global_param);
+        return AddEntity(std::const_pointer_cast<const T>(entity),
+                         global_param, material_property);
     }
 
     /// @brief 指定されたIDのエンティティの描画オブジェクトを削除する
@@ -168,6 +195,9 @@ class EntityRenderer {
 
     /// @brief 描画対象のサイズを取得する
     /// @return 描画対象のサイズ (幅, 高さ) [px]
+    /// @note この値とOpenGLのviewportのサイズは異なる場合がある.
+    ///       その場合、次回描画時 (Draw呼び出し時) にOpenGLのviewportの
+    ///       サイズがここで設定されたサイズに更新される
     std::pair<int, int> GetDisplaySize() const;
 
     /// @brief 描画対象のサイズを設定する
@@ -201,6 +231,37 @@ class EntityRenderer {
     /// @note カメラの各変数などはこの参照を通じて設定する
     graphics::Camera& Camera() { return camera_; }
 
+    /// @brief 光源の参照を取得する (const)
+    /// @return 光源の参照
+    const Light& Light() const { return light_; }
+    /// @brief 光源の参照を取得する (非const)
+    /// @return 光源の参照
+    /// @note 光源の各変数などはこの参照を通じて設定する
+    graphics::Light& Light() { return light_; }
+
+    /// @brief 描画全般に関する設定を取得する (const)
+    const GraphicsSettings& Settings() const { return settings_; }
+    /// @brief 描画全般に関する設定を上書きする
+    /// @param settings 新しい設定
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
+    void SetSettings(const GraphicsSettings&);
+
+    /// @brief アンチチエイリアスの有効/無効を設定する
+    /// @param enable trueの場合は有効、falseの場合は無効
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
+    void EnableAntialiasing(const bool);
+    /// @brief アンチエイリアスが有効か
+    /// @return 有効な場合はtrue、無効な場合はfalse
+    bool IsAntialiasingEnabled() const;
+
+    /// @brief 半透明のオブジェクトの描画の有効/無効を設定する
+    /// @param enable trueの場合は有効、falseの場合は無効
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
+    void EnableTransparency(const bool);
+    /// @brief 半透明のオブジェクトの描画が有効か
+    /// @return 有効な場合はtrue、無効な場合はfalse
+    bool IsTransparencyEnabled() const;
+
 
 
     /**
@@ -208,8 +269,20 @@ class EntityRenderer {
      */
 
     /// @brief エンティティを描画する
-    void Draw();
+    void Draw() const;
 
+    /// @brief 現在の描画状態をキャプチャする
+    Texture CaptureScreenshot() const;
+
+
+
+ protected:
+    /// @brief 現在のviewportを取得する
+    /// @return viewportの4要素 (x, y, width, height)
+    /// @note この値とdisplay_width_, display_height_ (すなわち`GetDisplaySize()`
+    ///       で取得される値) は異なる場合がある.
+    ///       その場合、次回描画時にdisplay_width_, display_height_に更新される
+    std::array<int, 4> GetCurrentViewport() const;
 
 
  private:

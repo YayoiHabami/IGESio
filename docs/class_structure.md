@@ -17,7 +17,7 @@ The classes in the IGESio library mainly consist of the following three componen
 
 ```mermaid
 flowchart TD
-    subgraph "グラフィックスクラス群"
+    subgraph "Graphics Classes"
         direction TB
         subgraph "graphics (hidden)"
             direction LR
@@ -30,9 +30,13 @@ flowchart TD
         subgraph "rendering"
             direction LR
             gr1[[Renderer]]
+            gr2[[Camera]]
+            gr3[[Light]]
+            gr4[[MaterialProperty]]
+            z[[︙]]
         end
     end
-    subgraph "エンティティクラス群"
+    subgraph "Entity Classes"
         direction TB
         subgraph "entities"
             direction LR
@@ -47,7 +51,7 @@ flowchart TD
             em1[[IgesData]]
         end
     end
-    subgraph "中間データ構造 (hidden)"
+    subgraph "Intermediate (hidden)"
         direction LR
         i1[[IntermediateIgesData]]
         i2[[GlobalParam]]

@@ -9,6 +9,8 @@
 #ifndef IGESIO_GRAPHICS_CORE_CAMERA_H_
 #define IGESIO_GRAPHICS_CORE_CAMERA_H_
 
+#include <utility>
+
 #include "igesio/common/matrix.h"
 
 
@@ -33,9 +35,13 @@ enum class ProjectionMode {
 };
 
 /// @brief 近接クリッピング面の距離
-constexpr float kDefaultNearPlane = 0.1f;
+/// @note デフォルト値は1 (1mm).
+///       kDefaultFarPlaneとの比が1000程度となるように設定すること
+constexpr float kDefaultNearPlane = 1.0f;
 /// @brief 遠方クリッピング面の距離
-constexpr float kDefaultFarPlane = 100.0f;
+/// @note デフォルト値は10^3 (1m).
+///       kDefaultNearPlaneとの比が1000程度となるように設定すること
+constexpr float kDefaultFarPlane = 1000.0f;
 
 /// @brief デフォルトの投影モード
 constexpr ProjectionMode kDefaultProjectionMode = ProjectionMode::kPerspective;
@@ -102,6 +108,12 @@ class Camera {
     /// @return カメラの視野角 [rad]
     float GetFov() const { return fov_; }
 
+    /// @brief 近接/遠方クリッピング面の距離を取得する
+    /// @return 1つ目が近接クリッピング面、2つ目が遠方クリッピング面の距離
+    std::pair<float, float> GetClippingPlanes() const {
+        return {near_plane_, far_plane_};
+    }
+
     /// @brief カメラの位置を設定する
     /// @param position カメラの位置座標 (x, y, z)
     void SetPosition(const igesio::Vector3f&);
@@ -114,6 +126,19 @@ class Camera {
     /// @param fov カメラの視野角 [rad]
     /// @throw std::invalid_argument fovが0以下またはπ以上の場合
     void SetFov(const float);
+
+    /// @brief 近接/遠方クリッピング面の距離を設定する
+    /// @param near_plane 近接クリッピング面の距離
+    /// @param far_plane 遠方クリッピング面の距離
+    /// @throw std::invalid_argument near_planeが0以下、
+    ///        far_planeがnear_plane以下の場合
+    /// @note Zファイティングを避けるため、far_plane / near_plane
+    ///       の比は1000程度（例: near=1.0, far=1000.0）を推奨
+    /// @note 実際の描画の際は、近平面、遠平面、および上下左右の面で
+    ///       囲まれた立体 (視錐台) の内側のみが描画される. 設定する
+    ///       値によっては、近い物体が見えなくなったり、遠い物体が
+    ///       見えなくなったりする (カリング) ので注意.
+    void SetClippingPlanes(const float, const float);
 
     /// @brief 投影モードを設定する
     /// @param mode 設定する投影モード

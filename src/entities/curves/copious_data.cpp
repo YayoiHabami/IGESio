@@ -75,10 +75,10 @@ CopiousData::TryGetPointAt(const double) const {
 
 std::optional<Vector3d>
 CopiousData::TryGetTangentAt(const double t) const {
-    return TransformPoint(TryGetDefinedTangentAt(t));
+    return TransformVector(TryGetDefinedTangentAt(t));
 }
 
 std::optional<Vector3d>
 CopiousData::TryGetNormalAt(const double t) const {
-    return TransformPoint(TryGetDefinedNormalAt(t));
+    return TransformVector(TryGetDefinedNormalAt(t));
 }

@@ -26,8 +26,14 @@
     - [`CopiousData` (type 106, forms 1-3)](#copiousdata-type-106-forms-1-3)
     - [`LinearPath` (type 106, forms 11-13)](#linearpath-type-106-forms-11-13)
   - [`Line` (type 110)](#line-type-110)
+  - [`ParametricSplineCurve` (type 112)](#parametricsplinecurve-type-112)
+  - [`Point` (type 116)](#point-type-116)
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
 - [Surfaces](#surfaces)
+  - [`RuledSurface` (type 118)](#ruledsurface-type-118)
+  - [`SurfaceOfRevolution` (type 120)](#surfaceofrevolution-type-120)
+  - [`TabulatedCylinder` (type 122)](#tabulatedcylinder-type-122)
+  - [`RationalBSplineSurface` (type 128)](#rationalbsplinesurface-type-128)
 - [Transformations](#transformations)
   - [`TransformationMatrix` (type 124)](#transformationmatrix-type-124)
 
@@ -387,6 +393,79 @@ auto line = std::make_shared<igesio::entities::Line>(
 
 **図: Lineエンティティの例**. 左から線分、半直線、直線.
 
+### `ParametricSplineCurve` (type 112)
+
+> Defined at [parametric_spline_curve.h](../../include/igesio/entities/curves/parametric_spline_curve.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─────────── EntityBase <─┬─ ParametricSplineCurve
+>                     └─ ICurve  <── ICurve3D <─┘
+> ```
+
+　`ParametricSplineCurve`は、3次元空間内のパラメトリックスプライン曲線を表現するためのクラスです。IGES 5.3では、$N$ 個の区間に分割された3次の多項式で曲線を表現します。以下の数式は、$i$ 番目の区間 ($T(i) \leq u \leq T(i + 1)$) における曲線のパラメトリック方程式を示しています。
+
+$$\begin{aligned}
+    X(u) &= A_X(i) + s B_X(i) + s^2 C_X(i) + s^3 D_X(i) \\
+    Y(u) &= A_Y(i) + s B_Y(i) + s^2 C_Y(i) + s^3 D_Y(i) \\
+    Z(u) &= A_Z(i) + s B_Z(i) + s^2 C_Z(i) + s^3 D_Z(i)
+\end{aligned}$$
+
+where
+
+$$\begin{aligned}
+    T(i) &\leq u \leq T(i + 1), \quad i = 1, \ldots, N \\
+    &s = u - T(i)
+\end{aligned}$$
+
+　以下のコード例は、4つの区間に分割された3次のパラメトリックスプライン曲線を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。コード例で使用したパラメータの詳細な値については、[examples/sample_curves.cpp](../../examples/sample_curves.cpp)の`CreateParametricSplineCurve`関数を参照してください。
+
+```cpp
+auto param = igesio::IGESParameterVector{
+    6,     // CTYPE: B-Spline
+    3, 3,  // degree, NDIM (3D)
+    4,     // number of segments
+    0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
+     1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
+     0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
+     5.,     0.,    3.,   -2.,  // Az(1) ~ Dz(1)
+     // ...
+    -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
+     8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
+    11.5,    6.0,   0.0,   0.,  // Az(4) ~ Dz(4),
+    -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
+     8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
+    13.0,     6.0,  0.,   0.    // TPZ0 ~ TPZ3
+};
+auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
+```
+
+<img src="./images/parametric_spline_curve.png" width=400px alt="ParametricSplineCurve Example" />
+
+**図: ParametricSplineCurveエンティティの例**
+
+### `Point` (type 116)
+
+> Defined at [point.h](../../include/igesio/entities/curves/point.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <── Point
+> ```
+
+　`Point`は、3次元空間内の点を表現するためのクラスです。点の座標値と、その点の描画形状（Subfigure Definitionエンティティ (Type 308)）を関連付けることができます。以下のコード例は、座標 $(1.0, 2.0, 3.0)$ に位置する点エンティティを生成し、その色をマゼンタに変更しています（図参照）。
+
+> Note: 現在、Subfigure Definitionエンティティは未実装です。
+
+```cpp
+auto point = std::make_shared<i_ent::Point>(Vector3d{1.0, 2.0, 3.0});
+point->OverwriteColor(i_ent::ColorNumber::kMagenta);
+```
+
+<img src="./images/point.png" width=200px alt="Point Entity Example" />
+
+**図: Pointエンティティの例**
+
 ### `RationalBSplineCurve` (type 126)
 
 > Defined at [rational_b_spline_curve.h](../../include/igesio/entities/curves/rational_b_spline_curve.h)
@@ -403,8 +482,8 @@ auto line = std::make_shared<igesio::entities::Line>(
 
 ```cpp
 auto param = igesio::IGESParameterVector{
-    3,  // degree
     3,  // number of control points - 1
+    3,  // degree
     false, false, false, false,  // non-periodic open NURBS curve
     0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
     1.0, 1.0, 1.0, 1.0,  // weights
@@ -426,6 +505,205 @@ auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
 
 　本節では、IGESファイルに記述される曲面エンティティについて解説します。曲面エンティティは、3次元空間内の曲面を表現するために使用されます。
 
+### `RuledSurface` (type 118)
+
+> Defined at [ruled_surface.h](../../include/igesio/entities/surfaces/ruled_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ RuledSurface
+>                     └─ ISurface <───┘
+> ```
+
+　`RuledSurface`は、2つの曲線エンティティ $C_1(t), C_2(s)$ を結ぶ直線（支線）を用いて生成される曲面を表現するためのクラスです。曲面の各点は、以下のパラメトリック方程式で表現されます。
+
+$$S(u, v) = (1 - v) C_1(t) + v C_2(s)$$
+
+ここで、$u,v \in [0, 1]$ は曲面のパラメータです。$t, s$ はそれぞれの曲線 $C_1, C_2$ のパラメータであり、$u$ および`DIRFLG`（`RuledSurface::IsReversed()`）により決定されます。
+
+$$\begin{aligned}
+  t &= t_{\text{min}} + u (t_{\text{max}} - t_{\text{min}}) \\
+  s &= \begin{cases}
+        s_{\text{min}} + u (s_{\text{max}} - s_{\text{min}}) & \text{if DIRFLG = false} \\
+        s_{\text{max}} - u (s_{\text{max}} - s_{\text{min}}) & \text{if DIRFLG = true}
+      \end{cases}
+\end{aligned}$$
+
+　以下のコード例は、$(-5, 0, 0) \to (5, 0, 0)$ を結ぶ直線と、4つの制御点、3次の[RationalBSplineCurve](#rationalbsplinecurve-type-126)を結ぶ支線で構成されるルールド面を生成します（図参照）。
+
+```cpp
+// curve1: Line
+auto curve1 = std::make_shared<i_ent::Line>(
+    Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
+
+// curve2: Rational B-Spline Curve
+auto param = igesio::IGESParameterVector{
+    3,  // number of control points - 1
+    3,  // degree
+    false, false, false, false,  // non-periodic open NURBS curve
+    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
+    1.0, 1.0, 1.0, 1.0,  // weights
+    -5.0, 0.0, -6.0,     // control point P(0)
+    -3.0, 4.0, -6.0,     // control point P(1)
+     3.0, 4.0, -6.0,     // control point P(2)
+     5.0, 0.0, -6.0,     // control point P(3)
+    0.0, 1.0,            // parameter range V(0), V(1)
+    0.0, 0.0, 1.0        // normal vector of the defining plane
+};
+auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+// Ruled surface
+auto ruled_surf = std::make_shared<i_ent::RuledSurface>(curve1, curve2);
+ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
+```
+
+<img src="./images/ruled_surface.png" width=400px alt="RuledSurface Example" />
+
+**図: RuledSurfaceエンティティの例**
+
+### `SurfaceOfRevolution` (type 120)
+
+> Defined at [surface_of_revolution.h](../../include/igesio/entities/surfaces/surface_of_revolution.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ SurfaceOfRevolution
+>                     └─ ISurface <───┘
+> ```
+
+　`SurfaceOfRevolution`は、3次元空間内の回転曲面を表現するためのクラスです。[Line](#line-type-110)を軸として、[曲線エンティティ](#curves) $C(t)$ を回転させることで曲面を生成します。曲面の各点は、以下のパラメトリック方程式で表現されます。
+
+$$S(u, v) = S(t, \theta) = R_\text{axis}(\theta) (C(t) P_\text{axis}) + P_\text{axis}$$
+
+ここで、$R_\text{axis}(\theta)$ は回転軸周りに $\theta$ だけ回転する回転行列、$P_\text{axis}$ は回転軸上の任意の点です。パラメータ $u$ は曲線 $C(t)$ のパラメータ、$v$ は回転角 $\theta$ に対応します。
+
+　以下のコード例は、$(1, 1, 1) \to (1, 2, 3)$ を結ぶ直線を回転軸とし、[RationalBSplineCurve](#rationalbsplinecurve-type-126)を $\theta = 0$ から $\pi$ [rad] の範囲で回転させた回転曲面を生成します（図参照）。
+
+```cpp
+using igesio::Vector3d;
+namespace i_ent = igesio::entities;
+
+// Axis line
+auto axis_line = std::make_shared<i_ent::Line>(
+    Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
+
+// Generatrix curve (Rational B-Spline Curve)
+auto param = igesio::IGESParameterVector{
+    3,  // number of control points - 1
+    3,  // degree
+    false, false, false, false,  // non-periodic open NURBS curve
+    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
+    1.0, 1.0, 1.0, 1.0,  // weights
+    1.0, -4.0,  0.0,    // control point P(0)
+    1.0, -5.0,  1.5,    // control point P(1)
+    1.0, -3.0,  2.0,    // control point P(2)
+    1.0,  0.0,  4.0,    // control point P(3)
+    0.0, 1.0,            // parameter range V(0), V(1)
+    0.0, 0.0, 1.0        // normal vector of the defining plane
+};
+auto generatrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+// Surface of revolution
+auto surf_rev = std::make_shared<i_ent::SurfaceOfRevolution>(
+    axis_line, generatrix, 0.0, kPi);
+surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
+```
+
+<img src="./images/surface_of_revolution.png" width=400px alt="SurfaceOfRevolution Example" />
+
+**図: SurfaceOfRevolutionエンティティの例**
+
+### `TabulatedCylinder` (type 122)
+
+> Defined at [tabulated_cylinder.h](../../include/igesio/entities/surfaces/tabulated_cylinder.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ TabulatedCylinder
+>                     └─ ISurface <───┘
+> ```
+
+　`TabulatedCylinder`は、3次元空間内の平行曲面を表現するためのクラスです。[曲線エンティティ](#curves) $C(t)$ を準線とし、指定された位置 $L$（または方向ベクトル $D$）に沿って曲線を押し出すことで曲面を生成します。曲面の各点は、以下のパラメトリック方程式で表現されます。
+
+$$S(u, v) = C(t) + v(L - C(0)) = C(t) + vD$$
+
+ここで、$D$ は方向ベクトルであり、$C(0)$ は曲線 $C(t)$ の始点です。また、$t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$、$u,v \in [0, 1]$ です。IGES 5.3では、押し出し開始位置 $L$ をパラメータとして指定します。本ライブラリでは、以下のコード例に示すように、押し出し方向ベクトル $D$ を直接指定することも可能です。
+
+　以下のコード例は、[RationalBSplineCurve](#rationalbsplinecurve-type-126)を準線とし、方向ベクトル $D = 3 * [1, -1, 0]^\top$ に沿って押しだした平行曲面を生成します（図参照）。
+
+```cpp
+// Directrix curve
+auto param = igesio::IGESParameterVector{
+    3,  // number of control points - 1
+    2,  // degree
+    false, false, false, false,   // non-periodic open NURBS curve
+    0., 0., 0., 0.5, 1., 1., 1.,  // knot vector
+    1., 1., 1., 1.,               // weights
+    0.0, -4.0, -4.0,              // control points P(0)
+    0.0,  0.2, -1.1,              // control points P(1)
+    0.0, -1.0,  4.5,              // control points P(2)
+    0.0,  4.0,  4.0,              // control points P(3)
+    0.0, 1.0,                     // parameter range V(0), V(1)
+    1., 0., 0.                    // normal vector of the defining plane
+};
+auto directrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+// Axis direction
+Vector3d axis_dir{1., -1., 0.};
+double axis_length = 3.0;
+
+// Tabulated cylinder
+// 押し出し方向ベクトル D = axis_length * axis_dirを指定する場合
+// -> 押し出し位置Lを指定する場合は、directrixとVector3d型のlocationの2つを引数に与える
+auto tab_cyl = std::make_shared<i_ent::TabulatedCylinder>(
+        directrix, axis_dir, axis_length);
+tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
+```
+
+<img src="./images/tabulated_cylinder.png" width=400px alt="TabulatedCylinder Example" />
+
+**図: TabulatedCylinderエンティティの例**
+
+### `RationalBSplineSurface` (type 128)
+
+> Defined at [rational_b_spline_surface.h](../../include/igesio/entities/surfaces/rational_b_spline_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ RationalBSplineSurface
+>                     └─ ISurface <───┘
+> ```
+
+　`RationalBSplineSurface`は、3次元空間内の有理Bスプライン曲面を表現するためのクラスです。以下のコード例は、6x6個の制御点、3次の非周期的開放NURBS曲面を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。コード例で使用したパラメータの詳細な値については、[examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)の`CreateRationalBSplineSurface`関数を参照してください。
+
+　この際の注意点として、`IGESParameterVector`には、intとdoubleを明確に区別して渡してください。例えば以下の8つ目のパラメータ (1つ目のUノットベクトル値; `0.0`) を、`0` (int) として渡すと、エラーが発生します。
+
+```cpp
+// Freeform surface
+auto param = igesio::IGESParameterVector{
+    5, 5,  // K1, K2 (Number of control points - 1 in U and V)
+    3, 3,  // M1, M2 (Degree in U and V)
+    false, false, true, false, false,         // PROP1-5
+    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
+    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
+    // Control points (36 points, each with x, y, z)
+    -25., -25., -10.,  // Control point (0,0)
+    -25., -15., -5.,   // Control point (0,1)
+    // ...
+    25., 25., -10.,    // Control point (5,5)
+    0., 3., 0., 3.     // Parameter range in U and V
+};
+auto nurbs_freeform = std::make_shared<igesio::entities::RationalBSplineSurface>(param);
+nurbs_freeform->OverwriteColor(igesio::entities::ColorNumber::kCyan);
+```
+
+<img src="./images/rational_b_spline_surface.png" width=400px alt="RationalBSplineSurface Example" />
+
+**図: RationalBSplineSurfaceエンティティの例**
+
 ## Transformations
 
 　本節では、IGESファイルに記述される変換行列エンティティについて解説します。変換行列は、座標系の変換やエンティティの位置、向き、スケールを変更するために使用されます。
@@ -441,3 +719,25 @@ auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
 > IEntityIdentifier <─┬────── EntityBase <─┬─ TransformationMatrix
 >                     └─ ITransformation <─┘
 > ```
+
+　`TransformationMatrix`は、3次元空間におけるエンティティの変換を定義するクラスです。このクラスを用いることで、平行移動、回転といった操作を、単一の行列として表現できます。IGES 5.3では、変換行列は回転行列 $R \in \mathbb{R}^{3\times 3} \; (|R| = 1)$ と平行移動ベクトル $P \in \mathbb{R}^3$ によって以下のように定義されます。
+
+$$T = \begin{bmatrix} R & P \\ 0 & 1 \end{bmatrix} \in \mathbb{R}^{4\times 4}$$
+
+ここで、IGES 5.3においては、回転行列 $R$ に $|R| = 1$ という制約が存在するため、変換行列エンティティを使用してスケーリングやせん断といった変換を表現することはできません。
+
+　`TransformationMatrix`クラスのインスタンスは、他のエンティティの`OverwriteTransformationMatrix`メソッドに渡すことで、そのエンティティに変換を適用できます。以下の例では、単位行列を回転行列、$(1.0, 2.0, 3.0)$ を平行移動ベクトルとする変換行列を作成し、`Line`エンティティに適用することで、線分を平行移動させています。
+
+```cpp
+// (0,0,0) から (1,1,1) までの線分を定義
+auto segment = std::make_shared<igesio::entities::Line>(
+        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 1.0},
+        igesio::entities::LineType::kSegment);
+
+// 変換行列を定義: 回転なし、平行移動ベクトル = (1,2,3)
+auto transform = std::make_shared<igesio::entities::TransformationMatrix>(
+        igesio::Matrix3d::Identity(), igesio::Vector3d{1.0, 2.0, 3.0});
+
+// 変換行列を線分に適用: segmentは (1,2,3) から (2,3,4) を結ぶ線分となる
+segment->OverwriteTransformationMatrix(transform);
+```

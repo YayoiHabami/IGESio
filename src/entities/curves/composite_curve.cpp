@@ -306,11 +306,11 @@ std::optional<Vector3d> CompositeCurve::TryGetPointAt(const double t) const {
 }
 
 std::optional<Vector3d> CompositeCurve::TryGetTangentAt(const double t) const {
-    return TransformPoint(TryGetDefinedTangentAt(t));
+    return TransformVector(TryGetDefinedTangentAt(t));
 }
 
 std::optional<Vector3d> CompositeCurve::TryGetNormalAt(const double t) const {
-    return TransformPoint(TryGetDefinedNormalAt(t));
+    return TransformVector(TryGetDefinedNormalAt(t));
 }
 
 

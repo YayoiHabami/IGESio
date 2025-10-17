@@ -1,6 +1,6 @@
 # Build the examples with GUI support
 set(GUI_EXAMPLE_SOURCES
-    curves_viewer.cpp
+    iges_viewer.cpp
 )
 
 
@@ -63,6 +63,7 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
     target_include_directories(${EXAMPLE_NAME} PRIVATE
         ${INCLUDE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_BINARY_DIR}/_deps/stb
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
     )

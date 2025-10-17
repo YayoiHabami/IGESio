@@ -18,6 +18,7 @@
 #include "igesio/entities/entity_type.h"
 #include "igesio/models/global_param.h"
 #include "igesio/graphics/core/i_open_gl.h"
+#include "igesio/graphics/core/material_property.h"
 
 
 
@@ -49,8 +50,17 @@ enum class ShaderType {
     kSegment,
     /// @brief 半直線/直線シェーダー (Type: 110, Forms 1-2; Line)
     kLine,
+    /// @brief 点シェーダー (Type: 116; Point)
+    kPoint,
     /// @brief NURBS曲線シェーダー (Type: 126; Rational B-Spline Curve)
     kRationalBSplineCurve,
+
+    /// @brief 汎用曲面シェーダー
+    /// @note これ以降のすべてのシェーダーは、Lightを使用する
+    kGeneralSurface,
+
+    /// @brief NURBS曲面シェーダー (Type: 128; Rational B-Spline Surface)
+    kRationalBSplineSurface,
 
     /// @brief 複数のシェーダーを使用する
     /// @note CompositeEntityGraphicsを継承したクラスで使用される.
@@ -76,7 +86,12 @@ inline bool HasSpecificShaderCode(const ShaderType shader_type) {
 /// @return ShaderTypeの値に対応する文字列
 std::string ToString(const ShaderType);
 
-
+/// @brief シェーダーの計算が光源を使用するか
+/// @param shader_type ShaderTypeの値
+/// @return 光源を使用する場合はtrue, そうでない場合はfalse
+/// @note kGeneralSurface以降のシェーダーは光源を使用する
+///       (kCompositeとkNoneは除く)
+bool UsesLighting(const ShaderType);
 
 
 /// @brief EntityGraphicsの型消去クラス
@@ -91,6 +106,9 @@ class IEntityGraphics {
     /// @brief 色をオーバーライドしたか. falseの場合は、エンティティ側が指定する色
     ///        を使用する. 取得に失敗した場合や、trueの場合は`color_`を使用する
     bool is_color_overridden_ = false;
+
+    /// @brief (IGESで管理されない) 描画プロパティ
+    MaterialProperty material_property_;
 
     /// @brief グローバル座標系への変換行列
     /// @note 頂点シェーダーの`model`変数に対応する.
@@ -165,6 +183,9 @@ class IEntityGraphics {
     ///       描画用のリソースを再セットアップする
     virtual void Synchronize() = 0;
 
+    /// @brief テクスチャ用の描画リソースを同期する
+    virtual void SyncTexture() = 0;
+
 
 
     /**
@@ -211,6 +232,15 @@ class IEntityGraphics {
     /// @brief 線の太さを取得する
     /// @return 線の太さ
     virtual double GetLineWidth() const = 0;
+
+    /// @brief 描画属性を取得する (const版)
+    const MaterialProperty& MaterialProperty() const {
+        return material_property_;
+    }
+    /// @brief 描画属性を取得する (非const版)
+    graphics::MaterialProperty& MaterialProperty() {
+        return material_property_;
+    }
 
 
 
