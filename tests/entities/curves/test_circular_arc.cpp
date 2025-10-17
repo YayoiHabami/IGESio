@@ -51,7 +51,8 @@ TEST(CircularArcTest, ConstructorFromDEAndParameters) {
     EXPECT_DOUBLE_EQ(arc.StartAngle(), kPi / 4);
     EXPECT_DOUBLE_EQ(arc.EndAngle(), 5 * kPi / 4);
 
-    EXPECT_TRUE(arc.IsValid());
+    auto result = arc.Validate();
+    EXPECT_TRUE(result.is_valid) << result.Message();
 }
 
 // 中心点と始点・終点から円弧を生成するコンストラクタ

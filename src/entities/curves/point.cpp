@@ -37,7 +37,7 @@ Point::Point(const IGESParameterVector& parameters)
                 parameters, {}, kUnsetID) {}
 
 Point::Point(const Vector3d& position)
-       : Point({position[0], position[1], position[2], 0}) {}
+       : Point(IGESParameterVector{position[0], position[1], position[2], 0}) {}
 
 
 

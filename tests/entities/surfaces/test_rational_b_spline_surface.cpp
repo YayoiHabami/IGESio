@@ -55,7 +55,8 @@ std::shared_ptr<NSurface> CreatePlane() {
 // - 平面エンティティについて、全ての点がY=25であることを確認する
 TEST(RationalBSplineSurface, TryGetDefinedPointAt) {
     auto plane = CreatePlane();
-    ASSERT_TRUE(plane->IsValid());
+    auto result = plane->Validate();
+    ASSERT_TRUE(result.is_valid) << result.Message();
 
     // パラメータ範囲内の点を評価
     for (double u = 0.0; u <= 1.0; u += 0.1) {
@@ -71,7 +72,8 @@ TEST(RationalBSplineSurface, TryGetDefinedPointAt) {
 // - 平面エンティティについて、全ての法線ベクトルが (0,1,0)であることを確認する
 TEST(RationalBSplineSurface, TryGetDefinedNormalAt) {
     auto plane = CreatePlane();
-    ASSERT_TRUE(plane->IsValid());
+    auto result = plane->Validate();
+    ASSERT_TRUE(result.is_valid) << result.Message();
 
     // パラメータ範囲内の点を評価
     for (double u = 0.0; u <= 1.0; u += 0.1) {

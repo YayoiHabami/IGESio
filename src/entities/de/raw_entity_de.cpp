@@ -174,7 +174,8 @@ void IsValid(const i_ent::RawEntityDE& param,
     }
     // Parameter 14 (Parameter Line Count)
     if (!IsValidValue(param.parameter_line_count, expected[8])) {
-        throw iio::DataFormatError("Invalid parameter line count value" + error_suffix);
+        throw iio::DataFormatError("Invalid parameter line count "
+            + std::to_string(param.parameter_line_count) + " " + error_suffix);
     }
 }
 
