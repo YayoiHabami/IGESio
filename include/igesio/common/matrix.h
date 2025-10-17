@@ -11,6 +11,8 @@
 #ifndef IGESIO_COMMON_MATRIX_H_
 #define IGESIO_COMMON_MATRIX_H_
 
+#include <string>
+
 namespace igesio {
 
 /// @brief 円周率の定数
@@ -1651,5 +1653,24 @@ inline auto AngleAxisf = [](float angle, const Vector<float, 3>& axis) {
 }  // namespace igesio
 
 #endif  // IGESIO_ENABLE_EIGEN
+
+namespace igesio {
+
+/// @brief ベクトル/行列を文字列化する
+/// @param mat ベクトル/行列
+/// @param transpose 転置して表示するかどうか.
+///        例えば縦ベクトルの場合、trueならば`(1, 2, 3)^T`のように表示される.
+template<typename T, int N, int M>
+std::string ToString(const Matrix<T, N, M>& mat, bool transpose = false) {
+    std::ostringstream oss;
+    if (transpose) {
+        oss << mat.transpose() << "^T";
+    } else {
+        oss << mat;
+    }
+    return oss.str();
+}
+
+}  // namespace igesio
 
 #endif  // IGESIO_COMMON_MATRIX_H_

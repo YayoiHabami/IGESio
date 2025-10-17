@@ -50,6 +50,8 @@ enum class ShaderType {
     kSegment,
     /// @brief 半直線/直線シェーダー (Type: 110, Forms 1-2; Line)
     kLine,
+    /// @brief 点シェーダー (Type: 116; Point)
+    kPoint,
     /// @brief NURBS曲線シェーダー (Type: 126; Rational B-Spline Curve)
     kRationalBSplineCurve,
 

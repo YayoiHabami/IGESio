@@ -18,7 +18,11 @@
 #include "igesio/entities/curves/copious_data.h"        // type 106, forms  1- 3
 #include "igesio/entities/curves/linear_path.h"         // type 106, forms 11-13
 #include "igesio/entities/curves/line.h"                // type 110
-
+#include "igesio/entities/curves/parametric_spline_curve.h"         // type 112
+#include "igesio/entities/curves/point.h"                           // type 116
+#include "igesio/entities/surfaces/ruled_surface.h"                 // type 118
+#include "igesio/entities/surfaces/surface_of_revolution.h"         // type 120
+#include "igesio/entities/surfaces/tabulated_cylinder.h"            // type 122
 #include "igesio/entities/transformations/transformation_matrix.h"  // type 124
 #include "igesio/entities/curves/rational_b_spline_curve.h"         // type 126
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"     // type 128
@@ -81,7 +85,31 @@ void i_ent::EntityFactory::Initialize() {
                               const p2I& d2i, const uint64_t iid) {
         return std::make_shared<i_ent::Line>(de, p, d2i, iid);
     };
-
+    // 112 - Parametric Spline Curve
+    creators_[ET::kParametricSplineCurve] = [](const DE& de, const IVec& p,
+                                               const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::ParametricSplineCurve>(de, p, d2i, iid);
+    };
+    // 116 - Point
+    creators_[ET::kPoint] = [](const DE& de, const IVec& p,
+                               const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::Point>(de, p, d2i, iid);
+    };
+    // 118 - Ruled Surface
+    creators_[ET::kRuledSurface] = [](const DE& de, const IVec& p,
+                                      const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::RuledSurface>(de, p, d2i, iid);
+    };
+    // 120 - Surface of Revolution
+    creators_[ET::kSurfaceOfRevolution] = [](const DE& de, const IVec& p,
+                                             const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::SurfaceOfRevolution>(de, p, d2i, iid);
+    };
+    // 122 - Tabulated Cylinder
+    creators_[ET::kTabulatedCylinder] = [](const DE& de, const IVec& p,
+                                           const p2I& d2i, const uint64_t iid) {
+        return std::make_shared<i_ent::TabulatedCylinder>(de, p, d2i, iid);
+    };
     // 124 - Transformation Matrix
     creators_[ET::kTransformationMatrix] = [](const DE& de, const IVec& p,
                                               const p2I& d2i, const uint64_t iid) {

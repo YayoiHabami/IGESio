@@ -28,13 +28,13 @@
 | ^                           |108|-1, 1| ^ |❌|❌
 |Line                         |110|  0  |C&S|✅|✅
 | ^                           | ^ | ‡1~2| ^ |✅|✅
-|Parametric<br>Spline Curve   |112|  0  | ^ |❌|❌
+|Parametric<br>Spline Curve   |112|  0  | ^ |✅|⚠️
 |Parametric<br>Spline Surface |114|  0  | ^ |❌|❌
-|Point                        |116|  0  |C&S|❌|❌
-|Ruled Surface                |118|  0  | ^ |❌|❌
-| ^                           | ^ |  1  | ^ |❌|❌
-|Surface of<br>Revolution     |120|  0  | ^ |❌|❌
-|Tabulated<br>Cylinder        |122|  0  | ^ |❌|❌
+|Point                        |116|  0  |C&S|✅|⚠️
+|Ruled Surface                |118|  0  | ^ |⚠️|⚠️
+| ^                           | ^ |  1  | ^ |✅|⚠️
+|Surface of<br>Revolution     |120|  0  | ^ |✅|⚠️
+|Tabulated<br>Cylinder        |122|  0  | ^ |✅|⚠️
 |Direction                    |‡123|0|C&S[7]|-|-
 |Transformation<br>Matrix|124|0~1, 10~12|C&S|✅|🚫
 |Flash                        |125| 0~4 | ^ |-|-
@@ -126,8 +126,9 @@
 |Face          |‡510| 1  | ^ |❌|❌
 |Shell         |‡514| 1~2| ^ |❌|❌
 
-> ✅: Implemented
-> 🚫: Not applicable (no possible implementation)
-> ⚠️: Experimental / partial
-> ❌: Planned but not yet implemented
-> `-`: Not planned
+> - ✅: Implemented
+> - 🚫: Not applicable (no possible implementation)
+> - ⚠️: Experimental / partial
+>   - Graphics: uses general (curve/surface) shaders (not entity-specific)
+> - ❌: Planned but not yet implemented
+> - `-`: Not planned

@@ -10,6 +10,7 @@ add_library(igesio_graphics STATIC
     curves/conic_arc_graphics.cpp        # 104
     curves/copious_data_graphics.cpp     # 106
     curves/line_graphics.cpp             # 110
+    curves/point_graphics.cpp            # 116
     curves/rational_b_spline_curve_graphics.cpp      # 126
 
     surfaces/i_surface_graphics.cpp                  # general surfaces

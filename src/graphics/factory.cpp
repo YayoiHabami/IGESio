@@ -16,6 +16,7 @@
 #include "igesio/graphics/curves/conic_arc_graphics.h"
 #include "igesio/graphics/curves/copious_data_graphics.h"
 #include "igesio/graphics/curves/line_graphics.h"
+#include "igesio/graphics/curves/point_graphics.h"
 #include "igesio/graphics/curves/rational_b_spline_curve_graphics.h"
 
 #include "igesio/graphics/surfaces/i_surface_graphics.h"
@@ -128,6 +129,10 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(
     } else if (auto surface = std::dynamic_pointer_cast<const i_ent::ISurface>(entity)) {
         // 曲面の描画オブジェクトを作成
         return CreateSurfaceGraphics(surface, gl);
+    } else if (auto point = std::dynamic_pointer_cast<const i_ent::Point>(entity)) {
+        // Type 116: Pointの描画オブジェクトを作成
+        // NOTE: curvesの下に配置してはいるが、ICurveを継承していないため、ここで処理する
+        return std::make_unique<i_graph::PointGraphics>(point, gl);
     }
 
     // いずれにも当てはまらない場合は無効なポインタを返す

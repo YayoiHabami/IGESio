@@ -31,6 +31,10 @@ flowchart TD
         subgraph "rendering"
             direction LR
             gr1[[Renderer]]
+            gr2[[Camera]]
+            gr3[[Light]]
+            gr4[[MaterialProperty]]
+            z[[︙]]
         end
     end
     subgraph "エンティティクラス群"

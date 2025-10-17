@@ -15,8 +15,12 @@
 #include <utility>
 #include <vector>
 
+#include <igesio/entities/surfaces/ruled_surface.h>
+#include <igesio/entities/surfaces/surface_of_revolution.h>
+#include <igesio/entities/surfaces/tabulated_cylinder.h>
 #include <igesio/entities/surfaces/rational_b_spline_surface.h>
 
+#include <igesio/entities/curves/rational_b_spline_curve.h>
 #include <igesio/entities/transformations/transformation_matrix.h>
 #include <igesio/writer.h>
 
@@ -28,6 +32,95 @@ using igesio::Vector3d;
 using ent_vec = std::vector<std::shared_ptr<igesio::entities::EntityBase>>;
 
 
+
+/// @brief Example for Ruled Surface entity (Type 118)
+ent_vec CreateRuledSurface() {
+    // curve1: Line
+    auto curve1 = std::make_shared<i_ent::Line>(
+        Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
+
+    // curve2: Rational B-Spline Curve
+    auto param = igesio::IGESParameterVector{
+        3,  // number of control points - 1
+        3,  // degree
+        false, false, false, false,  // non-periodic open NURBS curve
+        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
+        1.0, 1.0, 1.0, 1.0,  // weights
+        -5.0, 0.0, -6.0,     // control point P(0)
+        -3.0, 4.0, -6.0,     // control point P(1)
+         3.0, 4.0, -6.0,     // control point P(2)
+         5.0, 0.0, -6.0,     // control point P(3)
+        0.0, 1.0,            // parameter range V(0), V(1)
+        0.0, 0.0, 1.0        // normal vector of the defining plane
+    };
+    auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+    // Ruled surface
+    auto ruled_surf = std::make_shared<i_ent::RuledSurface>(curve1, curve2);
+    ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
+
+    return {curve1, curve2, ruled_surf};
+}
+
+/// @brief Example for Surface of Revolution entity (Type 120)
+ent_vec CreateSurfaceOfRevolution() {
+    // Axis of revolution:
+    auto axis_line = std::make_shared<i_ent::Line>(
+        Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
+
+    // Generatrix curve
+    auto param = igesio::IGESParameterVector{
+        3,  // number of control points - 1
+        3,  // degree
+        false, false, false, false,  // non-periodic open NURBS curve
+        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
+        1.0, 1.0, 1.0, 1.0,  // weights
+        1.0, -4.0,  0.0,    // control point P(0)
+        1.0, -5.0,  1.5,    // control point P(1)
+        1.0, -3.0,  2.0,    // control point P(2)
+        1.0,  0.0,  4.0,    // control point P(3)
+        0.0, 1.0,            // parameter range V(0), V(1)
+        1.0, 0.0, 0.0        // normal vector of the defining plane
+    };
+    auto generatrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+    // Surface of revolution
+    auto surf_rev = std::make_shared<i_ent::SurfaceOfRevolution>(
+        axis_line, generatrix, 0.0, kPi);
+    surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
+
+    return {axis_line, generatrix, surf_rev};
+}
+
+/// @brief Example for Tabulated Cylinder (Type 122)
+ent_vec CreateTabulatedCylinder() {
+    // Directrix curve
+    auto param = igesio::IGESParameterVector{
+        3,  // number of control points - 1
+        2,  // degree
+        false, false, false, false,   // non-periodic open NURBS curve
+        0., 0., 0., 0.5, 1., 1., 1.,  // knot vector
+        1., 1., 1., 1.,               // weights
+        0.0, -4.0, -4.0,              // control points P(0)
+        0.0,  0.2, -1.1,              // control points P(1)
+        0.0, -1.0,  4.5,              // control points P(2)
+        0.0,  4.0,  4.0,              // control points P(3)
+        0.0, 1.0,                     // parameter range V(0), V(1)
+        1., 0., 0.                    // normal vector of the defining plane
+    };
+    auto directrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+    // Axis direction
+    Vector3d axis_dir{1., -1., 0.};
+    double axis_length = 3.0;
+
+    // Tabulated cylinder
+    auto tab_cyl = std::make_shared<i_ent::TabulatedCylinder>(
+            directrix, axis_dir, axis_length);
+    tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
+
+    return {directrix, tab_cyl};
+}
 
 /// @brief Example for Rational B-Spline Surface entity (Type 128)
 /// @note Creates a NURBS surface with specified parameters
@@ -104,10 +197,21 @@ ent_vec CreateRationalBSplineSurface() {
     return {nurbs_plane, nurbs_freeform};
 }
 
+
+
 /// @brief Main function (creates IGES data and writes to file)
 int main() {
     i_mod::IgesData iges_data;
 
+    for (const auto& entity : CreateRuledSurface()) {
+        iges_data.AddEntity(entity);
+    }
+    for (const auto& entity : CreateSurfaceOfRevolution()) {
+        iges_data.AddEntity(entity);
+    }
+    for (const auto& entity : CreateTabulatedCylinder()) {
+        iges_data.AddEntity(entity);
+    }
     for (const auto& entity : CreateRationalBSplineSurface()) {
         iges_data.AddEntity(entity);
     }

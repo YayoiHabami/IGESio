@@ -134,6 +134,14 @@ kGeneralCurveShader[1]};
 
 
 
+/// @brief kPoint用のシェーダー (Type 116)
+constexpr std::array<const char*, 2> kPointShader = {
+    "glsl/curves/116_point.vert",
+    "glsl/curves/116_point.frag"
+};
+
+
+
 /// @brief kRationalBSplineCurve用のシェーダー (Type 126)
 /// @note Vertex, TCS, TES, Fragment
 constexpr std::array<const char*, 4> kRationalBSplineCurveShader = {
@@ -164,6 +172,8 @@ GetCurveShaderCode(const ShaderType shader_type) {
             return ShaderCode(kSegmentShader);
         case ShaderType::kLine:          // Type 110, Forms 1-2
             return ShaderCode(kLineShader);
+        case ShaderType::kPoint:         // Type 116
+            return ShaderCode(kPointShader);
         case ShaderType::kRationalBSplineCurve:  // Type 126
             return ShaderCode(kRationalBSplineCurveShader);
         default:

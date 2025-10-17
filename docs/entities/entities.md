@@ -26,8 +26,13 @@ This document covers the interfaces for specific entities and individual entity 
     - [`CopiousData` (type 106, forms 1-3)](#copiousdata-type-106-forms-1-3)
     - [`LinearPath` (type 106, forms 11-13)](#linearpath-type-106-forms-11-13)
   - [`Line` (type 110)](#line-type-110)
+  - [`ParametricSplineCurve` (type 112)](#parametricsplinecurve-type-112)
+  - [`Point` (type 116)](#point-type-116)
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
 - [Surfaces](#surfaces)
+  - [`RuledSurface` (type 118)](#ruledsurface-type-118)
+  - [`SurfaceOfRevolution` (type 120)](#surfaceofrevolution-type-120)
+  - [`TabulatedCylinder` (type 122)](#tabulatedcylinder-type-122)
   - [`RationalBSplineSurface` (type 128)](#rationalbsplinesurface-type-128)
 - [Transformations](#transformations)
   - [`TransformationMatrix` (type 124)](#transformationmatrix-type-124)
@@ -388,6 +393,79 @@ auto line = std::make_shared<igesio::entities::Line>(
 
 **Figure: Example of Line entities.** From left: segment, ray, line.
 
+### `ParametricSplineCurve` (type 112)
+
+> Defined at [parametric_spline_curve.h](../../include/igesio/entities/curves/parametric_spline_curve.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─────────── EntityBase <─┬─ ParametricSplineCurve
+>                     └─ ICurve  <── ICurve3D <─┘
+> ```
+
+The `ParametricSplineCurve` class is used to represent parametric spline curves in 3D space. In IGES 5.3, the curve is represented by a cubic polynomial divided into $N$ segments. The following equations show the parametric equation of the curve in the $i$-th segment ($T(i) \leq u \leq T(i + 1)$):
+
+$$\begin{aligned}
+  X(u) &= A_X(i) + s B_X(i) + s^2 C_X(i) + s^3 D_X(i) \\
+  Y(u) &= A_Y(i) + s B_Y(i) + s^2 C_Y(i) + s^3 D_Y(i) \\
+  Z(u) &= A_Z(i) + s B_Z(i) + s^2 C_Z(i) + s^3 D_Z(i)
+\end{aligned}$$
+
+where
+
+$$\begin{aligned}
+  T(i) &\leq u \leq T(i + 1), \quad i = 1, \ldots, N \\
+  &s = u - T(i)
+\end{aligned}$$
+
+The following code example generates a cubic parametric spline curve divided into four segments (see figure). As shown below, use the `IGESParameterVector` structure to pass parameters at once and generate an instance. For detailed values of the parameters used in the code example, see the `CreateParametricSplineCurve` function in [examples/sample_curves.cpp](../../examples/sample_curves.cpp).
+
+```cpp
+auto param = igesio::IGESParameterVector{
+  6,     // CTYPE: B-Spline
+  3, 3,  // degree, NDIM (3D)
+  4,     // number of segments
+  0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
+   1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
+   0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
+   5.,     0.,    3.,   -2.,  // Az(1) ~ Dz(1)
+   // ...
+  -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
+   8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
+  11.5,    6.0,   0.0,   0.,  // Az(4) ~ Dz(4),
+  -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
+   8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
+  13.0,     6.0,  0.,   0.    // TPZ0 ~ TPZ3
+};
+auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
+```
+
+<img src="./images/parametric_spline_curve.png" width=400px alt="ParametricSplineCurve Example" />
+
+**Figure: Example of a ParametricSplineCurve entity**
+
+### `Point` (type 116)
+
+> Defined at [point.h](../../include/igesio/entities/curves/point.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── EntityBase <── Point
+> ```
+
+The `Point` class is used to represent a point in 3D space. It allows associating the point's coordinates with a drawing shape (Subfigure Definition entity (Type 308)). The following code example creates a point entity located at coordinates $(1.0, 2.0, 3.0)$ and changes its color to magenta (see figure).
+
+> Note: Currently, the Subfigure Definition entity is not implemented.
+
+```cpp
+auto point = std::make_shared<i_ent::Point>(Vector3d{1.0, 2.0, 3.0});
+point->OverwriteColor(i_ent::ColorNumber::kMagenta);
+```
+
+<img src="./images/point.png" width=200px alt="Point Entity Example" />
+
+**Figure: Example of a Point entity**
+
 ### `RationalBSplineCurve` (type 126)
 
 > Defined at [rational_b_spline_curve.h](../../include/igesio/entities/curves/rational_b_spline_curve.h)
@@ -427,6 +505,165 @@ auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
 
 This section describes the surface entities in IGES files. Surface entities are used to represent surfaces in 3D space.
 
+### `RuledSurface` (type 118)
+
+> Defined at [ruled_surface.h](../../include/igesio/entities/surfaces/ruled_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ RuledSurface
+>                     └─ ISurface <───┘
+> ```
+
+The `RuledSurface` class is used to represent a ruled surface, which is generated using a straight line (ruling) connecting two curve entities, $C_1(t)$ and $C_2(s)$. Each point on the surface is described by the following parametric equation:
+
+$$S(u, v) = (1 - v) C_1(t) + v C_2(s)$$
+
+Where $u,v \in [0, 1]$ are the surface parameters. $t, s$ are the parameters of the respective curves $C_1, C_2$, and are determined by $u$ and `DIRFLG` (`RuledSurface::IsReversed()`).
+
+$$\begin{aligned}
+  t &= t_{\text{min}} + u (t_{\text{max}} - t_{\text{min}}) \\
+  s &= \begin{cases}
+        s_{\text{min}} + u (s_{\text{max}} - s_{\text{min}}) & \text{if DIRFLG = false} \\
+        s_{\text{max}} - u (s_{\text{max}} - s_{\text{min}}) & \text{if DIRFLG = true}
+      \end{cases}
+\end{aligned}$$
+
+The following code example generates a ruled surface composed of a line connecting $(-5, 0, 0) \to (5, 0, 0)$ and a 3rd degree [RationalBSplineCurve](#rationalbsplinecurve-type-126) with four control points (see figure).
+
+```cpp
+// curve1: Line
+auto curve1 = std::make_shared<i_ent::Line>(
+    Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
+
+// curve2: Rational B-Spline Curve
+auto param = igesio::IGESParameterVector{
+    3,  // number of control points - 1
+    3,  // degree
+    false, false, false, false,  // non-periodic open NURBS curve
+    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
+    1.0, 1.0, 1.0, 1.0,  // weights
+    -5.0, 0.0, -6.0,     // control point P(0)
+    -3.0, 4.0, -6.0,     // control point P(1)
+     3.0, 4.0, -6.0,     // control point P(2)
+     5.0, 0.0, -6.0,     // control point P(3)
+    0.0, 1.0,            // parameter range V(0), V(1)
+    0.0, 0.0, 1.0        // normal vector of the defining plane
+};
+auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+// Ruled surface
+auto ruled_surf = std::make_shared<i_ent::RuledSurface>(curve1, curve2);
+ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
+```
+
+<img src="./images/ruled_surface.png" width=400px alt="RuledSurface Example" />
+
+**Figure: Example of a RuledSurface entity**
+
+### `SurfaceOfRevolution` (type 120)
+
+> Defined at [surface_of_revolution.h](../../include/igesio/entities/surfaces/surface_of_revolution.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ SurfaceOfRevolution
+>                     └─ ISurface <───┘
+> ```
+
+The `SurfaceOfRevolution` class is used to represent a surface of revolution in 3D space. It generates a surface by rotating a [curve entity](#curves) $C(t)$ around an axis defined by a [Line](#line-type-110). Each point on the surface is described by the following parametric equation:
+
+$$S(u, v) = S(t, \theta) = R_\text{axis}(\theta) (C(t) P_\text{axis}) + P_\text{axis}$$
+
+Where $R_\text{axis}(\theta)$ is the rotation matrix that rotates by $\theta$ around the rotation axis, and $P_\text{axis}$ is an arbitrary point on the rotation axis. The parameter $u$ corresponds to the parameter of the curve $C(t)$, and $v$ corresponds to the rotation angle $\theta$.
+
+The following code example creates a surface of revolution by rotating a [RationalBSplineCurve](#rationalbsplinecurve-type-126) around a line connecting the points $(1, 1, 1)$ and $(1, 2, 3)$, from $\theta = 0$ to $\pi$ [rad] (see figure).
+
+```cpp
+using igesio::Vector3d;
+namespace i_ent = igesio::entities;
+
+// Axis line
+auto axis_line = std::make_shared<i_ent::Line>(
+  Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
+
+// Generatrix curve (Rational B-Spline Curve)
+auto param = igesio::IGESParameterVector{
+  3,  // number of control points - 1
+  3,  // degree
+  false, false, false, false,  // non-periodic open NURBS curve
+  0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
+  1.0, 1.0, 1.0, 1.0,  // weights
+  1.0, -4.0,  0.0,    // control point P(0)
+  1.0, -5.0,  1.5,    // control point P(1)
+  1.0, -3.0,  2.0,    // control point P(2)
+  1.0,  0.0,  4.0,    // control point P(3)
+  0.0, 1.0,            // parameter range V(0), V(1)
+  0.0, 0.0, 1.0        // normal vector of the defining plane
+};
+auto generatrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+// Surface of revolution
+auto surf_rev = std::make_shared<i_ent::SurfaceOfRevolution>(
+  axis_line, generatrix, 0.0, kPi);
+surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
+```
+
+<img src="./images/surface_of_revolution.png" width=400px alt="SurfaceOfRevolution Example" />
+
+**Figure: Example of a SurfaceOfRevolution entity**
+
+### `TabulatedCylinder` (type 122)
+
+> Defined at [tabulated_cylinder.h](../../include/igesio/entities/surfaces/tabulated_cylinder.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─ EntityBase <─┬─ TabulatedCylinder
+>                     └─ ISurface <───┘
+> ```
+
+The `TabulatedCylinder` class is used to represent a ruled surface in 3D space. It generates a surface by sweeping a [curve entity](#curves) $C(t)$ along a given location $L$ (or a direction vector $D$). Each point on the surface is described by the following parametric equation:
+
+$$S(u, v) = C(t) + v(L - C(0)) = C(t) + vD$$
+
+Where $D$ is the direction vector, and $C(0)$ is the start point of the curve $C(t)$. Also, $t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$ and $u,v \in [0, 1]$. In IGES 5.3, the extrusion start position $L$ is specified as a parameter. In this library, it is also possible to directly specify the extrusion direction vector $D$, as shown in the code example below.
+
+The following code example generates a tabulated cylinder by sweeping a [RationalBSplineCurve](#rationalbsplinecurve-type-126) along the direction vector $D = 3 * [1, -1, 0]^\top$ (see figure).
+
+```cpp
+// Directrix curve
+auto param = igesio::IGESParameterVector{
+  3,  // number of control points - 1
+  2,  // degree
+  false, false, false, false,   // non-periodic open NURBS curve
+  0., 0., 0., 0.5, 1., 1., 1.,  // knot vector
+  1., 1., 1., 1.,               // weights
+  0.0, -4.0, -4.0,              // control points P(0)
+  0.0,  0.2, -1.1,              // control points P(1)
+  0.0, -1.0,  4.5,              // control points P(2)
+  0.0,  4.0,  4.0,              // control points P(3)
+  0.0, 1.0,                     // parameter range V(0), V(1)
+  1., 0., 0.                    // normal vector of the defining plane
+};
+auto directrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+
+// Axis direction
+Vector3d axis_dir{1., -1., 0.};
+double axis_length = 3.0;
+
+// Tabulated cylinder
+// When specifying the extrusion direction vector D = axis_length * axis_dir
+// -> When specifying the extrusion position L, give directrix and Vector3d type location as arguments.
+auto tab_cyl = std::make_shared<i_ent::TabulatedCylinder>(
+    directrix, axis_dir, axis_length);
+tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
+```
+
+<img src="./images/tabulated_cylinder.png" width=400px alt="TabulatedCylinder Example" />
+
+**Figure: Example of a TabulatedCylinder entity**
+
 ### `RationalBSplineSurface` (type 128)
 
 > Defined at [rational_b_spline_surface.h](../../include/igesio/entities/surfaces/rational_b_spline_surface.h)
@@ -437,7 +674,7 @@ This section describes the surface entities in IGES files. Surface entities are 
 >                     └─ ISurface <───┘
 > ```
 
-The `RationalBSplineSurface` class represents rational B-spline surfaces in 3D space. The following code example creates a non-periodic, open NURBS surface of degree 3 with 6x6 control points (see figure; for details on parameters, see the `CreateRationalBSplineSurface` function in [examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)). As shown below, use the `IGESParameterVector` structure to pass parameters at once and generate an instance.
+The `RationalBSplineSurface` class represents rational B-spline surfaces in 3D space. The following code example creates a non-periodic, open NURBS surface of degree 3 with 6x6 control points (see figure). As shown below, use the `IGESParameterVector` structure to pass parameters at once and generate an instance. For detailed values of the parameters used in the code example, see the `CreateRationalBSplineSurface` function in [examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp).
 
 Note that when passing parameters to `IGESParameterVector`, be sure to clearly distinguish between `int` and `double`. For example, if the eighth parameter (the first U knot vector value; `0.0`) is passed as `0` (int), an error will occur.
 
@@ -482,3 +719,27 @@ This section describes the transformation matrix entities in IGES files. Transfo
 > IEntityIdentifier <─┬────── EntityBase <─┬─ TransformationMatrix
 >                     └─ ITransformation <─┘
 > ```
+
+The `TransformationMatrix` class defines transformations of entities in 3D space. With this class, operations such as translation and rotation can be expressed as a single matrix. In IGES 5.3, the transformation matrix is defined by a rotation matrix $R \in \mathbb{R}^{3\times 3} \; (|R| = 1)$ and a translation vector $P \in \mathbb{R}^3$ as follows:
+
+$$T = \begin{bmatrix} R & P \\ 0 & 1 \end{bmatrix} \in \mathbb{R}^{4\times 4}$$
+
+Here, in IGES 5.3, since the rotation matrix $R$ has the constraint $|R| = 1$, it is not possible to express transformations such as scaling and shearing using the transformation matrix entity.
+
+An instance of the `TransformationMatrix` class can be passed to the `OverwriteTransformationMatrix` method of another entity to apply the transformation to that entity. In the following example, a transformation matrix with the identity matrix as the rotation matrix and $(1.0, 2.0, 3.0)$ as the translation vector is created and applied to the `Line` entity to translate the line segment.
+
+```cpp
+// Define a line segment from (0,0,0) to (1,1,1)
+auto segment = std::make_shared<igesio::entities::Line>(
+  igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 1.0},
+  igesio::entities::LineType::kSegment);
+
+// Define a transformation matrix: no rotation, translation vector = (1,2,3)
+auto transform = std::make_shared<igesio::entities::TransformationMatrix>(
+  igesio::Matrix3d::Identity(), igesio::Vector3d{1.0, 2.0, 3.0});
+
+// Apply the transformation matrix to the line segment:
+// now the line segment is from (1,2,3) to (2,3,4)
+segment->OverwriteTransformationMatrix(transform);
+```
+
