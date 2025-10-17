@@ -23,11 +23,14 @@ namespace igesio::graphics {
 
 /// @brief エンティティの描画情報を管理するクラス
 /// @tparam T エンティティの型
+/// @tparam ShaderType_ このクラスが対応するシェーダーのタイプ
+/// @tparam has_surfaces Tがサーフェスを持つか (デフォルト: false)
 /// @note 以下のメンバ関数のオーバーライドが必要
 ///       - `EntityGraphics`由来:
 ///         - `Cleanup`(public): VAO以外のOpenGLリソースを持つ場合
 ///         - `DrawImpl`(protected): 常にオーバーライドが必要
-template<typename T, ShaderType ShaderType_, typename = std::enable_if_t<
+template<typename T, ShaderType ShaderType_,
+         bool has_surfaces = false, typename = std::enable_if_t<
         std::is_base_of_v<entities::IEntityIdentifier, T>>>
 class EntityGraphics : public IEntityGraphics {
  protected:
@@ -38,6 +41,8 @@ class EntityGraphics : public IEntityGraphics {
     GLuint vao_ = 0;
     /// @brief エンティティの描画モード (GL_LINE_STRIP, GL_LINE_LOOPなど)
     GLenum draw_mode_ = GL_LINE_STRIP;
+    /// @brief テクスチャのID (サーフェスを持つ場合に使用)
+    GLuint texture_id_ = 0;
 
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
@@ -139,7 +144,47 @@ class EntityGraphics : public IEntityGraphics {
         gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
                         1, GetColor().data());
 
+        // エンティティが面を持っている場合は関連するパラメータを設定
+        if constexpr (has_surfaces) {
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ambientStrength"),
+                           material_property_.ambient_strength);
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "specularStrength"),
+                           material_property_.specular_strength);
+            gl_->Uniform1i(gl_->GetUniformLocation(shader, "shininess"),
+                           material_property_.shininess);
+
+            // テクスチャの設定
+            gl_->Uniform1i(gl_->GetUniformLocation(shader, "useTexture"),
+                           material_property_.IsTextureUsable() ? 1 : 0);
+            if (material_property_.IsTextureUsable() && texture_id_ != 0) {
+                gl_->ActiveTexture(GL_TEXTURE0);
+                gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
+                gl_->Uniform1i(gl_->GetUniformLocation(shader, "textureSampler"), 0);
+            }
+        }
+
         DrawImpl(shader, viewport);
+    }
+
+    /// @brief テクスチャの設定を行う
+    void SyncTexture() override {
+        if (!entity_ || !material_property_.IsTextureUsable()) return;
+        if (!has_surfaces) return;
+
+        gl_->GenTextures(1, &texture_id_);
+        gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
+
+        // テクスチャのパラメータを設定
+        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        GLenum format = (material_property_.texture.HasAlpha()) ? GL_RGBA : GL_RGB;
+        auto [width, height] = material_property_.texture.GetSize();
+        gl_->TexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0,
+                        format, GL_UNSIGNED_BYTE, material_property_.texture.GetData());
+        gl_->GenerateMipmap(GL_TEXTURE_2D);
     }
 
 
@@ -161,6 +206,10 @@ class EntityGraphics : public IEntityGraphics {
         if (vao_ != 0) {
             gl_->DeleteVertexArrays(1, &vao_);
             vao_ = 0;
+        }
+        if (texture_id_ != 0) {
+            gl_->DeleteTextures(1, &texture_id_);
+            texture_id_ = 0;
         }
     }
 
@@ -207,7 +256,7 @@ class EntityGraphics : public IEntityGraphics {
                 return {static_cast<GLfloat>(r) / 100.0f,
                         static_cast<GLfloat>(g) / 100.0f,
                         static_cast<GLfloat>(b) / 100.0f,
-                        1.0f};  // 不透明度は1.0f (完全に不透明)
+                        material_property_.opacity};
             }
         }
         return {color_[0], color_[1], color_[2], color_[3]};

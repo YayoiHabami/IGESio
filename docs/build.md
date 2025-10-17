@@ -68,11 +68,12 @@ The IGESio library provides the following CMake options to customize the build p
 |--------|-------------|---------|
 | `IGESIO_BUILD_DOCS` | Build documentation | OFF |
 | `IGESIO_BUILD_EXAMPLE` | Build examples | OFF |
-| `IGESIO_BUILD_GUI` | Build GUI example using GLFW and ImGui<br>Note: When this option is ON, `IGESIO_ENABLE_GRAPHICS` is also enabled<br>Note: Requires Python environment and jinja2 installation | OFF |
+| `IGESIO_BUILD_GUI` | Build GUI example using GLFW and ImGui<br>Note: When this option is ON, `IGESIO_ENABLE_GRAPHICS`, `IGESIO_ENABLE_TEXTURE_IO` are also enabled<br>Note: Requires Python environment and jinja2 installation | OFF |
 | `IGESIO_BUILD_TESTING` | Build tests | OFF |
 | `IGESIO_ENABLE_COVERAGE` | Enable coverage reporting | OFF |
 | `IGESIO_ENABLE_EIGEN` | Enable Eigen support | OFF |
 | `IGESIO_ENABLE_GRAPHICS` | Enable OpenGL (glad) support | OFF |
+| `IGESIO_ENABLE_TEXTURE_IO` | Enable image file I/O support | OFF |
 
 These options must be set before making IGESio available with `FetchContent_MakeAvailable`. They can also be specified as CMake command-line arguments (e.g., `cmake -DIGESIO_BUILD_TESTING=ON ..`).
 

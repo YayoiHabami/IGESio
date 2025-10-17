@@ -30,3 +30,11 @@ void CompositeCurveGraphics::Synchronize() {
         }
     }
 }
+
+void CompositeCurveGraphics::SyncTexture() {
+    for (auto& [shader, graphics] : child_graphics_) {
+        for (auto& graphic : graphics) {
+            graphic->SyncTexture();
+        }
+    }
+}

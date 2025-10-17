@@ -69,10 +69,10 @@ LinearPath::TryGetPointAt(const double) const {
 
 std::optional<Vector3d>
 LinearPath::TryGetTangentAt(const double t) const {
-    return TransformPoint(TryGetDefinedTangentAt(t));
+    return TransformVector(TryGetDefinedTangentAt(t));
 }
 
 std::optional<Vector3d>
 LinearPath::TryGetNormalAt(const double t) const {
-    return TransformPoint(TryGetDefinedNormalAt(t));
+    return TransformVector(TryGetDefinedNormalAt(t));
 }

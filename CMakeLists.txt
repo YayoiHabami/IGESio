@@ -5,11 +5,13 @@
 #   - IGESIO_BUILD_EXAMPLE: Build the examples (default: OFF)
 #   - IGESIO_BUILD_GUI: Build GUI (with GLFW and ImGui) as examples (default: OFF)
 #     - if IGESIO_BUILD_GUI is ON, IGESIO_ENABLE_GRAPHICS is also set to ON
+#     - if IGESIO_BUILD_GUI is ON, IGESIO_ENABLE_TEXTURE_IO is also set to ON
 #     - this option requires python environment and jinja2 installed
 #   - IGESIO_BUILD_TESTING: Build the tests (default: OFF)
 #   - IGESIO_ENABLE_COVERAGE: Enable coverage reporting (default: OFF)
 #   - IGESIO_ENABLE_EIGEN: Enable Eigen support (default: OFF)
 #   - IGESIO_ENABLE_GRAPHICS: Enable OpenGL (glad) support (default: OFF)
+#   - IGESIO_ENABLE_TEXTURE_IO: Enable texture I/O support (default: OFF)
 cmake_minimum_required(VERSION 3.14)
 
 # Set CMP0135 policy to control timestamp handling for FetchContent archive extraction
@@ -128,6 +130,10 @@ if(IGESIO_BUILD_GUI)
   # Enable OpenGL support as well
   set(IGESIO_ENABLE_GRAPHICS ON)
   message(STATUS "GUI support enabled, enabling OpenGL (glad) support as well")
+
+  # Enable texture I/O support as well
+  set(IGESIO_ENABLE_TEXTURE_IO ON)
+  message(STATUS "GUI support enabled, enabling texture I/O support as well")
 endif()
 
 # Fetch glad if OpenGL support is enabled

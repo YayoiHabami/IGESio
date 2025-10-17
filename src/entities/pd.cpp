@@ -304,11 +304,19 @@ i_ent::ToRawEntityPD(const EntityType type,
     for (size_t i = 0; i < vec.size(); ++i) {
         if (vec.is_type<uint64_t>(i)) {
             // IDの場合は、IDをDEポインタに変換して格納
-            if (id2de.find(vec.get<uint64_t>(i)) == id2de.end()) {
+            unsigned int id_uint;
+            if (vec.get<uint64_t>(i) == kUnsetID) {
+                // kUnsetIDの場合（参照の指定なし）は0を格納
+                id_uint = 0;
+            } else if (id2de.find(vec.get<uint64_t>(i)) == id2de.end()) {
+                // kUnsetIDではないIDが、id2deに存在しない場合はエラー
                 throw std::out_of_range("The ID " + std::to_string(vec.get<uint64_t>(i)) +
                         " in Parameter Data section is not found in the id2de mapping.");
+            } else {
+                // id2deに存在する場合はunsigned intに変換
+                id_uint = id2de.at(vec.get<uint64_t>(i));
             }
-            data.push_back(std::to_string(id2de.at(vec.get<uint64_t>(i))));
+            data.push_back(std::to_string(id_uint));
         } else {
             auto x = vec.get_as_string(i);
             data.push_back(x);

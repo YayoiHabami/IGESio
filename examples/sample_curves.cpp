@@ -22,6 +22,8 @@
 #include <igesio/entities/curves/copious_data.h>
 #include <igesio/entities/curves/linear_path.h>
 #include <igesio/entities/curves/line.h>
+#include <igesio/entities/curves/parametric_spline_curve.h>
+#include <igesio/entities/curves/point.h>
 #include <igesio/entities/curves/rational_b_spline_curve.h>
 #include <igesio/entities/structures/color_definition.h>
 #include <igesio/entities/transformations/transformation_matrix.h>
@@ -152,13 +154,51 @@ ent_vec CreateLine() {
     return {line_segment, ray_trans, ray, line_trans, line};
 }
 
+/// @brief Example for Parametric Spline Curve entity (Type 112)
+/// @note Creates a spline curve with specified parameters
+ent_vec CreateParametricSplineCurve() {
+    // Create spline curve
+    auto param = igesio::IGESParameterVector{
+        6,     // CTYPE: B-Spline
+        3, 3,  // degree, NDIM (3D)
+        4,     // number of segments
+        0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
+         1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
+         0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
+         5.,     0.,    3.,   -2.,  // Az(1) ~ Dz(1)
+         0.875, -2.25, -3.5,   2.,  // Ax(2) ~ Dx(2)
+         1.625,  4.25,  1.5,  -1.,  // Ay(2) ~ Dy(2)
+         5.5,    1.5,   0.0,   2.,  // Az(2) ~ Dz(2)
+        -0.875, -4.25, -0.5,   1.,  // Ax(3) ~ Dx(3)
+         4.0,    5.0,   0.0,  -1.,  // Ay(3) ~ Dy(3)
+         6.5,    3.0,   3.0,  -1.,  // Az(3) ~ Dz(3)
+        -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
+         8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
+        11.5,    6.0,   0.0,   0.,  // Az(4) ~ Dz(4),
+        -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
+         8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
+        13.0,     6.0,  0.,   0.    // TPZ0 ~ TPZ3
+    };
+    auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
+    spline_c->OverwriteColor(i_ent::ColorNumber::kBlue);
+    return {spline_c};
+}
+
+/// @brief Example for Point entity (Type 116)
+/// @note Creates a point at (1, 2, 3)
+ent_vec CreatePoint() {
+    auto point = std::make_shared<i_ent::Point>(Vector3d{1.0, 2.0, 3.0});
+    point->OverwriteColor(i_ent::ColorNumber::kMagenta);
+    return {point};
+}
+
 /// @brief Example for Rational B-Spline Curve entity (Type 126)
 /// @note Creates a NURBS curve with specified parameters
 ent_vec CreateRationalBSplineCurve() {
     // Create NURBS curve
     auto param = igesio::IGESParameterVector{
-        3,  // degree
         3,  // number of control points - 1
+        3,  // degree
         false, false, false, false,  // non-periodic open NURBS curve
         0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
         1.0, 1.0, 1.0, 1.0,  // weights
@@ -193,6 +233,12 @@ int main() {
         iges_data.AddEntity(entity);
     }
     for (const auto& entity : CreateLine()) {
+        iges_data.AddEntity(entity);
+    }
+    for (const auto& entity : CreateParametricSplineCurve()) {
+        iges_data.AddEntity(entity);
+    }
+    for (const auto& entity : CreatePoint()) {
         iges_data.AddEntity(entity);
     }
     for (const auto& entity : CreateRationalBSplineCurve()) {

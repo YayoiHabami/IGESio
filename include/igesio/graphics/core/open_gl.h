@@ -197,6 +197,10 @@ class OpenGL : public IOpenGL {
     void BindBuffer(GLenum target, GLuint buffer) override {
         glBindBuffer(target, buffer);
     }
+    /// @note OpenGL 3.0~
+    void BindBufferBase(GLenum target, GLuint index, GLuint buffer) override {
+        glBindBufferBase(target, index, buffer);
+    }
     void BufferData(GLenum target, GLsizeiptr size,
                     const void *data, GLenum usage) override {
         glBufferData(target, size, data, usage);
@@ -211,6 +215,93 @@ class OpenGL : public IOpenGL {
 
 
     /**
+     * Textures
+     */
+
+    void ActiveTexture(GLenum texture) override {
+        glActiveTexture(texture);
+    }
+    void BindTexture(GLenum target, GLuint texture) override {
+        glBindTexture(target, texture);
+    }
+    void DeleteTextures(GLsizei n, const GLuint *textures) override {
+        glDeleteTextures(n, textures);
+    }
+    void GenerateMipmap(GLenum target) override {
+        glGenerateMipmap(target);
+    }
+    void GenTextures(GLsizei n, GLuint *textures) override {
+        glGenTextures(n, textures);
+    }
+    void TexImage2D(GLenum target, GLint level, GLint internalFormat,
+                    GLsizei width, GLsizei height, GLint border,
+                    GLenum format, GLenum type, const void *data) override {
+        glTexImage2D(target, level, internalFormat, width, height, border, format, type, data);
+    }
+    void TexParameteri(GLenum target, GLenum pname, GLint param) override {
+        glTexParameteri(target, pname, param);
+    }
+
+
+    /**
+     * For Offscreen Rendering
+     */
+
+    /// @note OpenGL 3.0~
+    void BindFramebuffer(GLenum target, GLuint framebuffer) override {
+        glBindFramebuffer(target, framebuffer);
+    }
+    /// @note OpenGL 3.0~
+    GLenum CheckFramebufferStatus(GLenum target) override {
+        return glCheckFramebufferStatus(target);
+    }
+    /// @note OpenGL 3.0~
+    void DeleteFramebuffers(GLsizei n, const GLuint *framebuffers) override {
+        glDeleteFramebuffers(n, framebuffers);
+    }
+    /// @note OpenGL 3.0~
+    void GenFramebuffers(GLsizei n, GLuint *framebuffers) override {
+        glGenFramebuffers(n, framebuffers);
+    }
+
+    /// @note OpenGL 3.0~
+    void FramebufferTexture2D(GLenum target, GLenum attachment,
+                              GLenum textarget, GLuint texture,
+                              GLint level) override {
+        glFramebufferTexture2D(target, attachment, textarget, texture, level);
+    }
+
+    /// @note OpenGL 3.0~
+    GLenum BindRenderbuffer(GLenum target, GLuint renderbuffer) override {
+        glBindRenderbuffer(target, renderbuffer);
+        // glBindRenderbuffer returns void, but interface expects GLenum.
+        // Return GL_NO_ERROR for compatibility.
+        return GL_NO_ERROR;
+    }
+    /// @note OpenGL 3.0~
+    void DeleteRenderbuffers(GLsizei n, const GLuint *renderbuffers) override {
+        glDeleteRenderbuffers(n, renderbuffers);
+    }
+    /// @note OpenGL 3.0~
+    void GenRenderbuffers(GLsizei n, GLuint *renderbuffers) override {
+        glGenRenderbuffers(n, renderbuffers);
+    }
+    /// @note OpenGL 3.0~
+    void RenderbufferStorage(GLenum target, GLenum internalformat,
+                             GLsizei width, GLsizei height) override {
+        glRenderbufferStorage(target, internalformat, width, height);
+    }
+
+    /// @note OpenGL 3.0~
+    void FramebufferRenderbuffer(GLenum target, GLenum attachment,
+                                 GLenum renderbuffertarget,
+                                 GLuint renderbuffer) override {
+        glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
+    }
+
+
+
+    /**
      * Others
      */
 
@@ -220,6 +311,9 @@ class OpenGL : public IOpenGL {
     void Disable(GLenum cap) override {
         glDisable(cap);
     }
+    void BlendFunc(GLenum sfactor, GLenum dfactor) override {
+        glBlendFunc(sfactor, dfactor);
+    }
     void Clear(GLbitfield mask) override {
         glClear(mask);
     }
@@ -227,9 +321,16 @@ class OpenGL : public IOpenGL {
                     GLfloat blue, GLfloat alpha) override {
         glClearColor(red, green, blue, alpha);
     }
+    void DrawElements(GLenum mode, GLsizei count,
+                      GLenum type, const void *indices) override {
+        glDrawElements(mode, count, type, indices);
+    }
     void Viewport(GLint x, GLint y,
                   GLsizei width, GLsizei height) override {
         glViewport(x, y, width, height);
+    }
+    void GetIntegerv(GLenum pname, GLint *data) override {
+        glGetIntegerv(pname, data);
     }
     void LineWidth(GLfloat width) override {
         glLineWidth(width);
@@ -237,6 +338,11 @@ class OpenGL : public IOpenGL {
     void PointSize(GLfloat size) override {
         glPointSize(size);
     }
+    void ReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
+                    GLenum format, GLenum type, void *data) override {
+        glReadPixels(x, y, width, height, format, type, data);
+    }
+    GLenum GetError() override { return glGetError(); }
 };
 
 }  // namespace igesio::graphics

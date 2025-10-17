@@ -12,6 +12,7 @@
 #define EXAMPLES_GUI_IGES_VIEWER_GUI_H_
 
 #include <iostream>
+#include <string>
 
 #include "igesio/graphics/core/open_gl.h"
 #define GLFW_INCLUDE_NONE
@@ -36,6 +37,9 @@ class IgesViewerGUI {
     /// @brief レンダー
     EntityRenderer renderer_;
 
+    /// @brief MSAA (マルチサンプリング) のサンプル数 (0で無効)
+    int msaa_samples_ = 0;
+
     /// @brief ドラッグ中か
     bool is_dragging_ = false;
     /// @brief パン (平行移動) 中か
@@ -52,9 +56,11 @@ class IgesViewerGUI {
     /// @brief コンストラクタ
     /// @param width ウィンドウの幅の初期値 [px]
     /// @param height ウィンドウの高さの初期値 [px]
+    /// @param msaa_samples マルチサンプリングのサンプル数 (0で無効)
     /// @throw std::runtime_error ウィンドウの初期化に失敗した場合
     explicit IgesViewerGUI(const int = kDefaultDisplayWidth,
-                           const int = kDefaultDisplayHeight);
+                           const int = kDefaultDisplayHeight,
+                           const int = 0);
 
     /// @brief デストラクタ
     ~IgesViewerGUI();
@@ -78,6 +84,11 @@ class IgesViewerGUI {
     /// @param vsync 垂直同期を有効にするか
     /// @note イベントループを開始し、描画を行う
     void Run(const bool = true);
+
+    /// @brief 現在のEntityRendererの状態をキャプチャする
+    /// @param filename 画像ファイルのパス
+    /// @throw igesio::FileError 画像の保存に失敗した場合
+    void CaptureScreenshot(const std::string&);
 
 
 

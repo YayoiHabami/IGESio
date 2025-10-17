@@ -182,11 +182,11 @@ std::optional<Vector3d> Line::TryGetPointAt(const double t) const {
 }
 
 std::optional<Vector3d> Line::TryGetTangentAt(const double t) const {
-    return TransformPoint(TryGetDefinedTangentAt(t));
+    return TransformVector(TryGetDefinedTangentAt(t));
 }
 
 std::optional<Vector3d> Line::TryGetNormalAt(const double t) const {
-    return TransformPoint(TryGetDefinedNormalAt(t));
+    return TransformVector(TryGetDefinedNormalAt(t));
 }
 
 

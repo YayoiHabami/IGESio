@@ -39,6 +39,17 @@ void Camera::SetFov(const float fov) {
     fov_ = fov;
 }
 
+void Camera::SetClippingPlanes(const float near_plane, const float far_plane) {
+    if (near_plane <= 0.0f) {
+        throw std::invalid_argument("Near plane must be positive");
+    }
+    if (far_plane <= near_plane) {
+        throw std::invalid_argument("Far plane must be greater than near plane");
+    }
+    near_plane_ = near_plane;
+    far_plane_ = far_plane;
+}
+
 /// @brief 投影モードを設定する
 void Camera::SetProjectionMode(const ProjectionMode mode) {
     projection_mode_ = mode;

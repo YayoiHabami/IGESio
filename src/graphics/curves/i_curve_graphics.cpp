@@ -58,13 +58,10 @@ ICurveGraphics& ICurveGraphics::operator=(ICurveGraphics&& other) noexcept {
 }
 
 void ICurveGraphics::Cleanup() {
+    EntityGraphics::Cleanup();
     if (vbo_ != 0) {
         gl_->DeleteBuffers(1, &vbo_);
         vbo_ = 0;
-    }
-    if (vao_ != 0) {
-        gl_->DeleteVertexArrays(1, &vao_);
-        vao_ = 0;
     }
     vertex_count_ = 0;
 }

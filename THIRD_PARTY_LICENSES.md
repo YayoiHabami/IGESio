@@ -13,6 +13,7 @@ This document lists the third-party libraries used in this project, along with t
   - [glad (MIT, Apache-2.0)](#glad-mit-apache-20)
   - [glfw (Zlib)](#glfw-zlib)
   - [imgui (MIT)](#imgui-mit)
+  - [stb (MIT)](#stb-mit)
 
 ## For Development
 
@@ -360,6 +361,38 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### stb (MIT)
+
+This project uses the stb libraries for image I/O and other utilities. It is included in the following cases:
+
+1. The library itself: for texture images I/O when the `IGESIO_ENABLE_TEXTURE_IO` CMake option is enabled.
+2. examples: for saving the rendered image of entities when the `IGESIO_BUILD_GUI` CMake option is enabled (Internally, the `IGESIO_ENABLE_TEXTURE_IO` option is also enabled in this case).
+
+- **Name**: stb
+- **Website**: [stb](https://github.com/nothings/stb)
+- **Version**: -
+- **License**: MIT
+
+```plaintext
+ALTERNATIVE A - MIT License
+Copyright (c) 2017 Sean Barrett
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE

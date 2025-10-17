@@ -14,6 +14,9 @@ set(TEST_SOURCES
 
     # Curves
     curves/test_circular_arc.cpp
+
+    # Surfaces
+    surfaces/test_rational_b_spline_surface.cpp
 )
 
 add_executable(test_entities ${TEST_SOURCES})

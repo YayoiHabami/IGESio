@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "./shaders.h"
 
@@ -42,6 +43,11 @@ void EntityRenderer::Initialize() {
 
     // 深度テストを有効化
     gl_->Enable(GL_DEPTH_TEST);
+
+    // アンチエイリアシングの初期化
+    EnableAntialiasing(settings_.enable_antialiasing);
+    // ブレンド設定
+    EnableTransparency(settings_.enable_transparency);
 }
 
 void EntityRenderer::Cleanup() {
@@ -149,25 +155,55 @@ std::pair<int, int> EntityRenderer::GetDisplaySize() const {
 void EntityRenderer::SetDisplaySize(const int width, const int height) {
     display_width_ = width;
     display_height_ = height;
-    is_resized_ = true;  // サイズが変更されたことを記録
 }
 
 std::array<float, 4> EntityRenderer::GetBackgroundColor() const {
     return background_color_;
 }
 
-/// @brief 背景色の参照を取得する
-/// @return 背景色の参照 (RGBA) [0.0 - 1.0]
 std::array<float, 4>& EntityRenderer::GetBackgroundColorRef() {
     return background_color_;
 }
 
-/// @brief 背景色を設定する
-/// @param color 背景色 (RGBA) [0.0 - 1.0]
 void EntityRenderer::SetBackgroundColor(
         const float red, const float green,
         const float blue, const float alpha) {
     background_color_ = {red, green, blue, alpha};
+}
+
+void EntityRenderer::SetSettings(const GraphicsSettings& settings) {
+    // アンチエイリアシング
+    if (settings.enable_antialiasing != settings_.enable_antialiasing) {
+        EnableAntialiasing(settings.enable_antialiasing);
+    }
+
+    // 透明度
+    if (settings.enable_transparency != settings_.enable_transparency) {
+        EnableTransparency(settings.enable_transparency);
+    }
+}
+
+void EntityRenderer::EnableAntialiasing(const bool enable) {
+    settings_.enable_antialiasing = enable;
+    if (settings_.enable_antialiasing) {
+        gl_->Enable(GL_MULTISAMPLE);
+    } else {
+        gl_->Disable(GL_MULTISAMPLE);
+    }
+}
+
+bool EntityRenderer::IsAntialiasingEnabled() const {
+    return settings_.enable_antialiasing;
+}
+
+void EntityRenderer::EnableTransparency(const bool enable) {
+    settings_.enable_transparency = enable;
+    if (settings_.enable_transparency) {
+        gl_->Enable(GL_BLEND);
+        gl_->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    } else {
+        gl_->Disable(GL_BLEND);
+    }
 }
 
 
@@ -176,7 +212,7 @@ void EntityRenderer::SetBackgroundColor(
  * 描画
  */
 
-void EntityRenderer::Draw() {
+void EntityRenderer::Draw() const {
     // 描画対象のサイズが0なら何もしない
     if (display_width_ <= 0 || display_height_ <= 0) return;
 
@@ -188,9 +224,10 @@ void EntityRenderer::Draw() {
     // 描画するエンティティが1つもない場合は何もしない
     if (IsEmpty()) return;
 
-    if (is_resized_) {
+    // 現在の表示サイズと、このクラスが保持している表示サイズが異なる場合は更新
+    auto [x, y, width, height] = GetCurrentViewport();
+    if (width != display_width_ || height != display_height_) {
         gl_->Viewport(0, 0, display_width_, display_height_);
-        is_resized_ = false;  // リサイズフラグをリセット
     }
 
     // ビュー行列と投影行列を取得
@@ -199,6 +236,8 @@ void EntityRenderer::Draw() {
         static_cast<float>(display_width_) / display_height_);
 
     // 各シェーダープログラムごとに描画
+    // TODO: 半透明 (opacity < 1.0) なオブジェクトについては、描画を保留する
+    //       (最後にまとめて、画面奥のものから描画するように変更する)
     for (const auto& [shader_type, program_id] : shader_programs_) {
         if (!HasGraphicsObject(shader_type)) {
             // このシェーダータイプの描画オブジェクトがない、または
@@ -213,6 +252,16 @@ void EntityRenderer::Draw() {
                               1, GL_FALSE, view_matrix.data());
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
                               1, GL_FALSE, projection_matrix.data());
+
+        // 光源のパラメータを設定
+        if (UsesLighting(shader_type)) {
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPos_WorldSpace"),
+                            1, light_.position.data());
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuation"),
+                            1, light_.attenuation.data());
+            gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColor"),
+                            1, light_.color.data());
+        }
 
         // 各エンティティを描画
         DrawChildren(program_id, shader_type,
@@ -243,6 +292,69 @@ void EntityRenderer::DrawChildren(
             object->Draw(program_id, shader_type, viewport);
         }
     }
+}
+
+i_graph::Texture EntityRenderer::CaptureScreenshot() const {
+    auto [width, height] = GetDisplaySize();
+    if (width <= 0 || height <= 0) {
+        return {};  // サイズが無効な場合は空のベクターを返す
+    }
+
+    // フレームバッファオブジェクトの準備
+    GLuint fbo;
+    gl_->GenFramebuffers(1, &fbo);
+    gl_->BindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    // テクスチャを作成 (カラーバッファ用)
+    GLuint color_tex;
+    gl_->GenTextures(1, &color_tex);
+    gl_->BindTexture(GL_TEXTURE_2D, color_tex);
+    gl_->TexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
+                    0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // レンダーバッファオブジェクトの準備 (深度バッファ用)
+    GLuint rbo;
+    gl_->GenRenderbuffers(1, &rbo);
+    gl_->BindRenderbuffer(GL_RENDERBUFFER, rbo);
+    gl_->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+
+    // テクスチャ/RBOをFBOにアタッチ
+    gl_->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                              GL_TEXTURE_2D, color_tex, 0);
+    gl_->FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                                  GL_RENDERBUFFER, rbo);
+
+    // FBOの準備に成功した場合のみ描画と読み取りを行う
+    std::vector<unsigned char> pixels;
+    if (gl_->CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+        Draw();
+        pixels.resize(width * height * 3);  // RGB形式
+        gl_->ReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    }
+
+    gl_->BindFramebuffer(GL_FRAMEBUFFER, 0);
+    gl_->DeleteFramebuffers(1, &fbo);
+    gl_->DeleteTextures(1, &color_tex);
+    gl_->DeleteRenderbuffers(1, &rbo);
+
+    Texture tex;
+    tex.SetData(width, height, false, pixels.data(), false, true);
+    return tex;
+}
+
+
+
+
+/**
+ * protected member functions
+ */
+
+std::array<int, 4> EntityRenderer::GetCurrentViewport() const {
+    GLint viewport[4];
+    gl_->GetIntegerv(GL_VIEWPORT, viewport);
+    return {viewport[0], viewport[1], viewport[2], viewport[3]};
 }
 
 
@@ -394,7 +506,13 @@ GLuint EntityRenderer::CreateShaderProgram(
 void EntityRenderer::InitShaders() {
     for (int i = 0; i < static_cast<int>(ShaderType::kNone); ++i) {
         auto shader_type = static_cast<ShaderType>(i);
-        auto shader_opt = shaders::GetShaderCode(shader_type);
+        std::optional<shaders::ShaderCode> shader_opt;
+        try {
+            shader_opt = shaders::GetShaderCode(shader_type);
+        } catch (const igesio::FileError& e) {
+            // #includeするファイルが見つからない場合はエラーをスロー
+            throw igesio::ImplementationError(std::string(e.what()));
+        }
         if (!shader_opt || shader_opt->IsIncomplete()) {
             continue;  // シェーダーが未実装の場合はスキップ
         }

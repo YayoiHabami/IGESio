@@ -1,0 +1,396 @@
+/**
+ * @file entities/surfaces/surface_of_revolution.cpp
+ * @brief Surface of Revolution (Type 120): 回転曲面エンティティの定義
+ * @author Yayoi Habami
+ * @date 2025-10-12
+ * @copyright 2025 Yayoi Habami
+ */
+#include "igesio/entities/surfaces/surface_of_revolution.h"
+
+#include <memory>
+#include <unordered_set>
+#include <vector>
+
+#include "igesio/common/tolerance.h"
+
+namespace {
+
+namespace i_ent = igesio::entities;
+using i_ent::SurfaceOfRevolution;
+using igesio::Vector3d;
+
+}  // namespace
+
+
+
+/**
+ * コンストラクタ
+ */
+
+SurfaceOfRevolution::SurfaceOfRevolution(
+        const RawEntityDE& de_record, const IGESParameterVector& parameters,
+        const pointer2ID& de2id, const uint64_t iges_id)
+        : EntityBase(de_record, parameters, de2id, iges_id),
+          axis_(kUnsetID), generatrix_(kUnsetID) {
+    InitializePD(de2id);
+}
+
+SurfaceOfRevolution::SurfaceOfRevolution(
+        const IGESParameterVector& parameters)
+        : SurfaceOfRevolution(
+            RawEntityDE::ByDefault(i_ent::EntityType::kSurfaceOfRevolution),
+            parameters, {}, kUnsetID) {}
+
+SurfaceOfRevolution::SurfaceOfRevolution(
+        const std::shared_ptr<Line>& axis,
+        const std::shared_ptr<ICurve>& generatrix,
+        const double start_angle, const double end_angle)
+        : SurfaceOfRevolution({static_cast<int>(axis->GetID()),
+                               static_cast<int>(generatrix->GetID()),
+                               start_angle, end_angle}) {
+    if (axis == nullptr) {
+        throw std::invalid_argument(
+            "axis of SurfaceOfRevolution must not be nullptr");
+    }
+    if (generatrix == nullptr) {
+        throw std::invalid_argument(
+            "generatrix of SurfaceOfRevolution must not be nullptr");
+    }
+
+    // 参照の解決
+    SetAxis(axis);
+    SetGeneratrix(generatrix);
+}
+
+
+
+/**
+ * EntityBase implementation
+ */
+
+igesio::IGESParameterVector
+SurfaceOfRevolution::GetMainPDParameters() const {
+    return {
+        axis_.GetID(), generatrix_.GetID(),
+        start_angle_, end_angle_
+    };
+}
+
+size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
+    auto& pd = pd_parameters_;
+
+    if (pd.size() < 4) {
+        throw igesio::DataFormatError(
+            "SurfaceOfRevolution must have at least 4 parameters");
+    }
+
+    // 回転軸
+    uint64_t axis_id;
+    if (!de2id.empty()) {
+        // de2idが空でない場合は、取得した数値をde2idでIDに変換
+        auto id_int = static_cast<unsigned int>(pd.access_as<int>(0));
+        if (de2id.find(id_int) == de2id.end()) {
+            throw std::out_of_range("Axis (Line) ID " + std::to_string(id_int)
+                                    + " not found in DE to ID mapping.");
+        }
+        axis_id = de2id.at(id_int);
+    } else {
+        // de2idが空の場合は、そのままIDとして使用
+        axis_id = static_cast<uint64_t>(pd.access_as<int>(0));
+    }
+    axis_ = PointerContainer<false, Line>(axis_id);
+
+    // 母線
+    uint64_t generatrix_id;
+    if (!de2id.empty()) {
+        // de2idが空でない場合は、取得した数値をde2idでIDに変換
+        auto id_int = static_cast<unsigned int>(pd.access_as<int>(1));
+        if (de2id.find(id_int) == de2id.end()) {
+            throw std::out_of_range("Generatrix (ICurve) ID "
+                                    + std::to_string(id_int)
+                                    + " not found in DE to ID mapping.");
+        }
+        generatrix_id = de2id.at(id_int);
+    } else {
+        // de2idが空の場合は、そのままIDとして使用
+        generatrix_id = static_cast<uint64_t>(pd.access_as<int>(1));
+    }
+    generatrix_ = PointerContainer<false, ICurve>(generatrix_id);
+
+    // 回転角度
+    start_angle_ = pd.access_as<double>(2);
+    end_angle_ = pd.access_as<double>(3);
+
+    return 4;
+}
+
+std::unordered_set<uint64_t> SurfaceOfRevolution::GetUnresolvedPDReferences() const {
+    std::unordered_set<uint64_t> unresolved;
+
+    if (!axis_.IsPointerSet()) {
+        unresolved.insert(axis_.GetID());
+    }
+    if (!generatrix_.IsPointerSet()) {
+        unresolved.insert(generatrix_.GetID());
+    }
+    return unresolved;
+}
+
+bool SurfaceOfRevolution::SetUnresolvedPDReferences(
+        const std::shared_ptr<const EntityBase>& entity) {
+    // 指定されたエンティティがnullptrの場合は失敗
+    if (!entity) {
+        return false;
+    }
+
+    if (entity->GetID() == axis_.GetID()) {
+        if (!axis_.IsPointerSet()) {
+            // ポインタが未設定の場合のみ設定
+            if (auto ptr = std::dynamic_pointer_cast<const Line>(entity)) {
+                return axis_.SetPointer(ptr);
+            }
+        }
+    } else if (entity->GetID() == generatrix_.GetID()) {
+        if (!generatrix_.IsPointerSet()) {
+            // ポインタが未設定の場合のみ設定
+            if (auto ptr = std::dynamic_pointer_cast<const ICurve>(entity)) {
+                return generatrix_.SetPointer(ptr);
+            }
+        }
+    }
+
+    // 指定されたエンティティと同一のIDを持つ参照がない場合
+    return false;
+}
+
+std::vector<uint64_t> SurfaceOfRevolution::GetChildIDs() const {
+    std::vector<uint64_t> ids;
+    ids.push_back(axis_.GetID());
+    ids.push_back(generatrix_.GetID());
+    return ids;
+}
+
+std::shared_ptr<const i_ent::EntityBase>
+SurfaceOfRevolution::GetChildEntity(const uint64_t id) const {
+    if (axis_.GetID() == id) {
+        auto ptr = axis_.TryGetEntity<EntityBase>();
+        if (ptr) return ptr.value();
+    } else if (generatrix_.GetID() == id) {
+        auto ptr = generatrix_.TryGetEntity<EntityBase>();
+        if (ptr) return ptr.value();
+    }
+
+    // 指定されたIDを持つ子エンティティが存在しない場合
+    return nullptr;
+}
+
+igesio::ValidationResult SurfaceOfRevolution::ValidatePD() const {
+    std::vector<ValidationError> errors;
+
+    // 回転軸
+    if (!axis_.IsPointerSet()) {
+        errors.emplace_back("Axis (Line) pointer is not set.");
+    } else {
+        auto axis_line = GetAxis();
+        auto result = axis_line->Validate();
+        if (!result.is_valid) {
+            errors.emplace_back("Axis (Line) is invalid: " + result.Message());
+        }
+    }
+
+    // 母線
+    if (!generatrix_.IsPointerSet()) {
+        errors.emplace_back("Generatrix (ICurve) pointer is not set.");
+    } else {
+        auto generatrix_curve = generatrix_.TryGetEntity<EntityBase>();
+        if (!generatrix_curve) {
+            errors.emplace_back("Generatrix (ICurve) is not an EntityBase.");
+        } else {
+            auto result = (*generatrix_curve)->Validate();
+            if (!result.is_valid) {
+                errors.emplace_back("Generatrix (ICurve) is invalid: " + result.Message());
+            }
+        }
+    }
+
+    // 回転角度
+    // 0 <= start_angle < end_angle <= 2*pi
+    if (!(0.0 <= start_angle_ && start_angle_ < end_angle_ && end_angle_ <= 2.0 * kPi)) {
+        errors.emplace_back("Invalid angles: Require 0 <= θstart < θend <= 2*pi, "
+                            "but got θstart = " + std::to_string(start_angle_) + "[rad] and "
+                            "θend = " + std::to_string(end_angle_) + "[rad].");
+    }
+
+    return MakeValidationResult(errors);
+}
+
+
+
+/**
+ * ISurface implementation
+ */
+
+bool SurfaceOfRevolution::IsUClosed() const {
+    // u方向は母線のパラメータに依存する
+    auto generatrix_curve = generatrix_.TryGetEntity<ICurve>();
+    if (!generatrix_curve) return false;
+    return generatrix_curve.value()->IsClosed();
+}
+
+bool SurfaceOfRevolution::IsVClosed() const {
+    // v方向は回転角度に依存する
+    return IsApproxEqual(start_angle_, 0.0)
+           && IsApproxEqual(end_angle_, 2.0 * kPi);
+}
+
+std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
+    auto generatrix_curve = generatrix_.TryGetEntity<ICurve>();
+    if (!generatrix_curve) {
+        // 母線のポインタが未設定の場合、パラメータ範囲は不定
+        return {std::numeric_limits<double>::infinity(),
+                -std::numeric_limits<double>::infinity(),
+                start_angle_, end_angle_};
+    }
+    auto [umin, umax] = generatrix_curve.value()->GetParameterRange();
+    return {umin, umax, start_angle_, end_angle_};
+}
+
+std::optional<Vector3d>
+SurfaceOfRevolution::TryGetDefinedPointAt(
+        const double u, const double v) const {
+    // ポインタの確認
+    if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {
+        return std::nullopt;
+    }
+
+    // パラメータ範囲のチェック
+    auto [umin, umax, vmin, vmax] = GetParameterRange();
+    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
+        return std::nullopt;
+    }
+
+    // 母線の情報を取得: 点 C(u)
+    auto generatrix_curve = GetGeneratrix();
+    auto point_opt = generatrix_curve->TryGetDefinedPointAt(u);
+    if (!point_opt) return std::nullopt;
+    auto c_u = point_opt.value();
+
+    // 回転軸の情報を取得
+    auto axis_line = GetAxis();
+    const auto& [axis_point, p2] = axis_line->GetAnchorPoints();
+    auto axis_dir = (p2 - axis_point).normalized();
+
+    // 回転した点を求める
+    return AngleAxisd(v, axis_dir) * (c_u - axis_point) + axis_point;
+}
+
+std::optional<Vector3d>
+SurfaceOfRevolution::TryGetDefinedNormalAt(
+        const double u, const double v) const {
+    // ポインタの確認
+    if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {
+        return std::nullopt;
+    }
+
+    // パラメータ範囲のチェック
+    auto [umin, umax, vmin, vmax] = GetParameterRange();
+    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
+        return std::nullopt;
+    }
+
+    // 母線の情報を取得: 点 C(u) と接ベクトル T(u)
+    auto generatrix_curve = GetGeneratrix();
+    auto point_opt = generatrix_curve->TryGetDefinedPointAt(u);
+    auto tangent_opt = generatrix_curve->TryGetTangentAt(u);
+    if (!point_opt || !tangent_opt) return std::nullopt;
+    auto c_u = point_opt.value();
+    auto t_u = tangent_opt.value().normalized();
+
+    // 回転軸の情報を取得
+    auto axis_line = GetAxis();
+    const auto& [axis_point, p2] = axis_line->GetAnchorPoints();
+    auto axis_dir = (p2 - axis_point).normalized();
+
+    // 偏導関数ベクトルを計算
+    auto S_uv = AngleAxisd(v, axis_dir) * (c_u - axis_point) + axis_point;
+    auto dSdu = AngleAxisd(v, axis_dir) * t_u;  // ∂S/∂u
+    auto dSdv = axis_dir.cross(S_uv - axis_point);
+    // 法線ベクトルを計算
+    return dSdv.cross(dSdu).normalized();
+}
+
+std::optional<igesio::Vector3d>
+SurfaceOfRevolution::TryGetPointAt(const double u, const double v) const {
+    return TransformPoint(TryGetDefinedPointAt(u, v));
+}
+
+std::optional<igesio::Vector3d>
+SurfaceOfRevolution::TryGetNormalAt(const double u, const double v) const {
+    return TransformVector(TryGetDefinedNormalAt(u, v));
+}
+
+
+
+/**
+ * 要素の変更・取得
+ */
+
+void SurfaceOfRevolution::SetAxis(const std::shared_ptr<Line>& axis) {
+    if (axis == nullptr) {
+        throw std::invalid_argument(
+            "axis of SurfaceOfRevolution must not be nullptr");
+    }
+    if (axis->GetID() == axis_.GetID()) {
+        axis_.SetPointer(axis);
+    } else {
+        axis_.OverwritePointer(axis);
+    }
+
+    // SubordinateEntitySwitchをkPhysicallyDependentに設定
+    if (auto entity_base = std::dynamic_pointer_cast<EntityBase>(axis)) {
+        entity_base->SetSubordinateEntitySwitch(
+            SubordinateEntitySwitch::kPhysicallyDependent);
+    }
+}
+
+void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatrix) {
+    if (generatrix == nullptr) {
+        throw std::invalid_argument(
+            "generatrix of SurfaceOfRevolution must not be nullptr");
+    }
+    if (generatrix->GetID() == generatrix_.GetID()) {
+        generatrix_.SetPointer(generatrix);
+    } else {
+        generatrix_.OverwritePointer(generatrix);
+    }
+
+    // SubordinateEntitySwitchをkPhysicallyDependentに設定
+    if (auto entity_base = std::dynamic_pointer_cast<EntityBase>(generatrix)) {
+        entity_base->SetSubordinateEntitySwitch(
+            SubordinateEntitySwitch::kPhysicallyDependent);
+    }
+}
+
+void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double end_angle) {
+    if (!(0.0 <= start_angle && start_angle < end_angle && end_angle <= 2.0 * kPi)) {
+        throw std::invalid_argument("Invalid angles: Require 0 <= θstart < θend <= 2*pi");
+    }
+    start_angle_ = start_angle;
+    end_angle_ = end_angle;
+}
+
+std::shared_ptr<const i_ent::Line> SurfaceOfRevolution::GetAxis() const {
+    auto ptr = axis_.TryGetEntity<Line>();
+    if (!ptr) {
+        throw std::runtime_error("Axis (Line) pointer is not set or invalid.");
+    }
+    return ptr.value();
+}
+
+std::shared_ptr<const i_ent::ICurve> SurfaceOfRevolution::GetGeneratrix() const {
+    auto ptr = generatrix_.TryGetEntity<ICurve>();
+    if (!ptr) {
+        throw std::runtime_error("Generatrix (ICurve) pointer is not set or invalid.");
+    }
+    return ptr.value();
+}
