@@ -147,7 +147,7 @@ class EntityGraphics : public IEntityGraphics {
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void Draw(GLuint shader, const std::pair<float, float>& viewport) const {
+    void Draw(GLuint shader, const std::pair<float, float>& viewport) const override {
         if (!entity_) return;
         if (!IsDrawable()) return;
 

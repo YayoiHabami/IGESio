@@ -176,7 +176,8 @@ EntityBase::EntityBase(const RawEntityDE& de_record,
                        const ObjectID& iges_id)
         : pd_parameters_(parameters),
             id_((!iges_id.IsSet())
-                ? IDGenerator::Generate(ObjectType::kEntityNew, static_cast<uint16_t>(type_))
+                ? IDGenerator::Generate(ObjectType::kEntityNew,
+                                        static_cast<uint16_t>(de_record.entity_type))
                 : IDGenerator::GetReservedID(iges_id, de_record.sequence_number)),
             type_(de_record.entity_type),
             form_number_(de_record.form_number) {

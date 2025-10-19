@@ -16,6 +16,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <memory>
@@ -289,6 +290,9 @@ class IDGenerator {
     ///        または参照するIdentifierがexpiredの場合
     static ObjectID GetReservedID(const ObjectID&, const uint16_t);
 
+    /// @brief 作成済みのint型IDをすべて取得する
+    /// @return 現在使用中のint型IDの集合
+    static std::set<int> GetAllIntIDs();
     /// @brief int_idからObjectIDを取得する
     /// @param int_id ObjectIDに対応するint型ID
     /// @return 取得したObjectID、指定されたint_idが見つからない場合や

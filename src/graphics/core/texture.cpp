@@ -9,6 +9,7 @@
 #include "igesio/graphics/core/texture.h"
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <stdexcept>
 #include <string>

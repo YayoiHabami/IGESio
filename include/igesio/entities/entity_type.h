@@ -8,6 +8,7 @@
 #ifndef IGESIO_ENTITIES_ENTITY_TYPE_H_
 #define IGESIO_ENTITIES_ENTITY_TYPE_H_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 

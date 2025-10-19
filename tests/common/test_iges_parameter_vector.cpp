@@ -18,12 +18,60 @@ TEST(IGESParameterVectorTest, DefaultConstructor) {
     ASSERT_EQ(vec.size(), 0);
 }
 
+TEST(IGESParameterVectorTest, VecParamTypeDefinition) {
+    using CppPT = igesio::CppParameterType;
+
+    igesio::VecParamType v1 = true;
+    igesio::VecParamType v2 = 42;
+    igesio::VecParamType v3 = 3.14;
+    igesio::VecParamType v4 = igesio::ObjectID(nullptr);
+    igesio::VecParamType v5 = std::string("test");
+
+    EXPECT_TRUE(std::holds_alternative<bool>(v1));
+    EXPECT_EQ(v1.index(), 0);
+    EXPECT_EQ(static_cast<CppPT>(v1.index()), CppPT::kBool);
+
+    EXPECT_TRUE(std::holds_alternative<int>(v2));
+    EXPECT_EQ(v2.index(), 1);
+    EXPECT_EQ(static_cast<CppPT>(v2.index()), CppPT::kInt);
+
+    EXPECT_TRUE(std::holds_alternative<double>(v3));
+    EXPECT_EQ(v3.index(), 2);
+    EXPECT_EQ(static_cast<CppPT>(v3.index()), CppPT::kDouble);
+
+    EXPECT_TRUE(std::holds_alternative<igesio::ObjectID>(v4));
+    EXPECT_EQ(v4.index(), 3);
+    EXPECT_EQ(static_cast<CppPT>(v4.index()), CppPT::kPointer);
+
+    EXPECT_TRUE(std::holds_alternative<std::string>(v5));
+    EXPECT_EQ(v5.index(), 4);
+    EXPECT_EQ(static_cast<CppPT>(v5.index()), CppPT::kString);
+}
+
 TEST(IGESParameterVectorTest, InitializerListConstructor) {
-    igesio::IGESParameterVector vec = {1, 2.0, "three"};
-    ASSERT_EQ(vec.size(), 3);
-    EXPECT_EQ(vec.get<int>(0), 1);
-    EXPECT_EQ(vec.get<double>(1), 2.0);
-    EXPECT_EQ(vec.get<std::string>(2), "three");
+    igesio::IGESParameterVector vec =
+            {false, 1, 2.0, igesio::ObjectID(nullptr), std::string("three")};
+    ASSERT_EQ(vec.size(), 5);
+
+    EXPECT_EQ(vec.get_type(0), igesio::CppParameterType::kBool);
+    EXPECT_NO_THROW(vec.get<bool>(0));
+    EXPECT_EQ(vec.get<bool>(0), false);
+
+    EXPECT_EQ(vec.get_type(1), igesio::CppParameterType::kInt);
+    EXPECT_NO_THROW(vec.get<int>(1));
+    EXPECT_EQ(vec.get<int>(1), 1);
+
+    EXPECT_EQ(vec.get_type(2), igesio::CppParameterType::kDouble);
+    EXPECT_NO_THROW(vec.get<double>(2));
+    EXPECT_EQ(vec.get<double>(2), 2.0);
+
+    EXPECT_EQ(vec.get_type(3), igesio::CppParameterType::kPointer);
+    EXPECT_NO_THROW(vec.get<igesio::ObjectID>(3));
+    EXPECT_EQ(vec.get<igesio::ObjectID>(3), igesio::ObjectID(nullptr));
+
+    EXPECT_EQ(vec.get_type(4), igesio::CppParameterType::kString);
+    EXPECT_NO_THROW(vec.get<std::string>(4));
+    EXPECT_EQ(vec.get<std::string>(4), "three");
 }
 
 TEST(IGESParameterVectorTest, Resize) {

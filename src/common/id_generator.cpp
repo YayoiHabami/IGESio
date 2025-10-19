@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <memory>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -440,6 +441,33 @@ class IdentifierImpl : public igesio::Identifier {
         SetSuffix(upper);
     }
 
+    /// @brief コピーコンストラクタ
+    IdentifierImpl(const IdentifierImpl& other)
+        : unique_id(other.unique_id), int_id(other.int_id) {}
+    /// @brief コピー代入演算子
+    IdentifierImpl& operator=(const IdentifierImpl& other) {
+        if (this != &other) {
+            unique_id = other.unique_id;
+            int_id = other.int_id;
+        }
+        return *this;
+    }
+
+    /// @brief ムーブコンストラクタ
+    IdentifierImpl(IdentifierImpl&& other) noexcept
+        : unique_id(std::move(other.unique_id)), int_id(other.int_id) {}
+    /// @brief ムーブ代入演算子
+    IdentifierImpl& operator=(IdentifierImpl&& other) noexcept {
+        if (this != &other) {
+            unique_id = std::move(other.unique_id);
+            int_id = other.int_id;
+        }
+        return *this;
+    }
+
+    /// @brief デストラクタ
+    ~IdentifierImpl() override = default;
+
     const std::pair<uint64_t, uint64_t>& GetUniqueID() const override {
         return unique_id;
     }
@@ -567,6 +595,9 @@ int igesio::IDGenerator::GenerateNewIntID() {
         new_int_id = int_id_map_.rbegin()->first + 1;
     }
     if (new_int_id < static_cast<int>(max_int_id_)) {
+        // とりあえずUnsetIDを登録しておく
+        // (直後にGenerateNewIntIDを呼び出すと競合する可能性があるため)
+        int_id_map_[new_int_id] = std::shared_ptr<Identifier>();
         return new_int_id;
     }
 
@@ -682,6 +713,16 @@ igesio::IDGenerator::GetReservedID(const ObjectID& iges_id,
         reserved_id = it->second;
     }
     return ObjectID(GetByIntID(reserved_id));
+}
+
+std::set<int> igesio::IDGenerator::GetAllIntIDs() {
+    std::set<int> int_ids;
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto& pair : int_id_map_) {
+        int_ids.insert(pair.first);
+    }
+
+    return int_ids;
 }
 
 std::optional<igesio::ObjectID>
