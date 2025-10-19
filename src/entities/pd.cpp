@@ -293,28 +293,28 @@ i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
 
 i_ent::RawEntityPD
 i_ent::ToRawEntityPD(const EntityType type,
-                     const uint64_t id,
+                     const ObjectID& id,
                      const IGESParameterVector& vec,
-                     const i_ent::id2pointer& id2de) {
+                     const id2pointer& id2de) {
     // vecからエンティティデータと型を取得
     std::vector<std::string> data;
     std::vector<IGESParameterType> types;
     data.reserve(vec.size());
     types.reserve(vec.size());
     for (size_t i = 0; i < vec.size(); ++i) {
-        if (vec.is_type<uint64_t>(i)) {
+        if (vec.is_type<ObjectID>(i)) {
             // IDの場合は、IDをDEポインタに変換して格納
             unsigned int id_uint;
-            if (vec.get<uint64_t>(i) == kUnsetID) {
-                // kUnsetIDの場合（参照の指定なし）は0を格納
+            if (!vec.get<ObjectID>(i).IsSet()) {
+                // 参照の指定がない場合は0を格納
                 id_uint = 0;
-            } else if (id2de.find(vec.get<uint64_t>(i)) == id2de.end()) {
-                // kUnsetIDではないIDが、id2deに存在しない場合はエラー
-                throw std::out_of_range("The ID " + std::to_string(vec.get<uint64_t>(i)) +
+            } else if (id2de.find(vec.get<ObjectID>(i)) == id2de.end()) {
+                // 参照の存在するIDが、id2deに存在しない場合はエラー
+                throw std::out_of_range("The ID " + ToString(vec.get<ObjectID>(i)) +
                         " in Parameter Data section is not found in the id2de mapping.");
             } else {
                 // id2deに存在する場合はunsigned intに変換
-                id_uint = id2de.at(vec.get<uint64_t>(i));
+                id_uint = id2de.at(vec.get<ObjectID>(i));
             }
             data.push_back(std::to_string(id_uint));
         } else {
@@ -326,7 +326,7 @@ i_ent::ToRawEntityPD(const EntityType type,
 
     // DEポインタを取得
     if (id2de.find(id) == id2de.end()) {
-        throw std::out_of_range("The ID " + std::to_string(id) +
+        throw std::out_of_range("The ID " + ToString(id) +
                 " (DE back pointer) is not found in the id2de mapping.");
     }
     unsigned int de_pointer = id2de.at(id);

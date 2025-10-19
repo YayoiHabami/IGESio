@@ -8,6 +8,7 @@
 #ifndef IGESIO_ENTITIES_ENTITY_TYPE_H_
 #define IGESIO_ENTITIES_ENTITY_TYPE_H_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -25,7 +26,7 @@ namespace igesio::entities {
 ///       (5) 構造エンティティ (structure entities)
 /// @note 「‡」マークがついているものは、IGES 5.3でUNTESTEDとされているもの.
 ///       これらは、実装の際に特別な配慮をすることを推奨されている
-enum class EntityType {
+enum class EntityType : uint16_t {
     /// @brief Nullエンティティ (構造クラス)
     /// @note プロセッサによって無視されることを意図したデータ
     kNull = 0,

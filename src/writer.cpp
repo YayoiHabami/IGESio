@@ -335,7 +335,7 @@ igesio::models::IntermediateIgesData
 igesio::ConvertToIntermediate(const models::IgesData& data,
                               const bool save_unsupported) {
     // id -> de_pointerのマッピングを作成する
-    entities::id2pointer id2de;
+    id2pointer id2de;
     for (const auto& [id, entity] : data.GetEntities()) {
         // TODO: 親子関係を考慮してDEポインタを割り当てる
         id2de[id] = id2de.size() * 2 + 1;
@@ -366,7 +366,7 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
         } catch (std::out_of_range& e) {
             // dataが持たないエンティティへの参照を含む場合
             throw igesio::DataFormatError(
-                "Entity with ID " + std::to_string(id) +
+                "Entity with ID " + ToString(id) +
                 " contains reference to unknown entity. " + e.what());
         }
     }

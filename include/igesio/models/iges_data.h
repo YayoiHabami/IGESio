@@ -32,10 +32,10 @@ GlobalParam GetDefaultGlobalParam();
 class IgesData {
  private:
     /// @brief IGESデータのID
-    uint64_t id_ = igesio::IDGenerator::Generate();
+    ObjectID id_ = IDGenerator::Generate(ObjectType::kIgesData);
 
     /// @brief エンティティのIDとポインタのマッピング
-    std::unordered_map<uint64_t, std::shared_ptr<entities::EntityBase>> entities_;
+    std::unordered_map<ObjectID, std::shared_ptr<entities::EntityBase>> entities_;
 
     /// @brief ポインタを設定する
     /// @param[out] entity ポインタを設定するエンティティ
@@ -55,14 +55,14 @@ class IgesData {
 
     /// @brief IgesDataのIDを取得する
     /// @return IgesDataのID
-    uint64_t GetID() const { return id_; }
+    const ObjectID& GetID() const { return id_; }
 
     /// @brief エンティティを追加する
     /// @param entity 追加するエンティティ
     /// @return 追加に成功した場合は、そのエンティティのIDを返す.
     /// @throw std::invalid_argument entityがnullptrの場合
     template<typename T>
-    std::enable_if_t<std::is_base_of_v<entities::EntityBase, T>, uint64_t>
+    std::enable_if_t<std::is_base_of_v<entities::EntityBase, T>, ObjectID>
     AddEntity(const std::shared_ptr<T> entity) {
         // nullptrチェック
         if (!entity) {
@@ -86,16 +86,16 @@ class IgesData {
     ///        ポインタが未設定のもののIDを取得する
     /// @return ポインタが未設定のエンティティのIDのリスト
     /// @note Directory Entry フィールド関連のメンバも含む
-    std::unordered_set<uint64_t> GetUnresolvedReferences() const;
+    std::unordered_set<ObjectID> GetUnresolvedReferences() const;
 
     /// @brief エンティティのポインタを取得する
     /// @param id エンティティのID
     /// @return 指定されたIDのエンティティのポインタ. 存在しない場合は`nullptr`.
-    std::shared_ptr<entities::EntityBase> GetEntity(const uint64_t) const;
+    std::shared_ptr<entities::EntityBase> GetEntity(const ObjectID&) const;
 
     /// @brief エンティティへの参照の取得
     /// @return エンティティのポインタのマップ
-    const std::unordered_map<uint64_t, std::shared_ptr<entities::EntityBase>>&
+    const std::unordered_map<ObjectID, std::shared_ptr<entities::EntityBase>>&
     GetEntities() const { return entities_; }
 
     /// @brief エンティティの数を取得する

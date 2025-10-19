@@ -43,8 +43,8 @@ class PointerContainer {
             UseWeakPtr, std::weak_ptr<T>, std::shared_ptr<T>>;
 
     /// @brief entity_のID
-    /// @note 指し示す先が未設定の場合はkUnsetIDを使用する
-    uint64_t id_;
+    /// @note 指し示す先が未設定の場合はid_.IsSet() == falseとなる
+    ObjectID id_;
     /// @brief ポインタを保持するためのvariant
     /// @note 循環参照が生じる可能性を否定できない場合、`weak_ptr`を使用可能にする
     std::variant<PtrType<const DerivedTypes>...> entity_;
@@ -58,8 +58,8 @@ class PointerContainer {
 
     /// @brief エンティティのIDのみを指定したコンストラクタ
     /// @param id 参照先のエンティティのID
-    /// @note 参照先のIDが未定の場合は、kUnsetIDを使用する
-    explicit PointerContainer(const uint64_t id)
+    /// @note 参照先のIDが未定の場合は、UnsetIDを使用する
+    explicit PointerContainer(const ObjectID& id)
         : id_(id), entity_(), is_pointer_set_(false) {}
 
     /// @brief DerivedTypesのいずれかの型のオブジェクトを受け取るコンストラクタ
@@ -148,7 +148,7 @@ class PointerContainer {
 
     /// @brief 参照先エンティティのIDを取得する
     /// @return 参照先エンティティのID
-    uint64_t GetID() const { return id_; }
+    const ObjectID& GetID() const { return id_; }
 
     /// @brief 格納されているポインタが指定された型であるかを確認する
     /// @tparam T 確認したい型。DerivedTypesのいずれかである必要がある

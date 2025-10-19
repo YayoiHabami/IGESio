@@ -29,7 +29,7 @@ class EntityFactory {
     /// @brief エンティティ作成関数
     using CreateFunction = std::function<std::shared_ptr<EntityBase>(
             const RawEntityDE&, const IGESParameterVector&,
-            const pointer2ID&, const uint64_t)>;
+            const pointer2ID&, const ObjectID&)>;
 
     /// @brief エンティティタイプと作成関数のマッピング
     inline static std::unordered_map<EntityType, CreateFunction> creators_;
@@ -56,11 +56,11 @@ class EntityFactory {
     /// @throw std::bad_variant_access parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
-    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     static std::shared_ptr<EntityBase>
     CreateEntity(const RawEntityDE&, const IGESParameterVector&,
-                 const pointer2ID&, const uint64_t = kUnsetID);
+                 const pointer2ID&, const ObjectID& = IDGenerator::UnsetID());
 
     /// @brief エンティティを作成する
     /// @param de DEレコードのパラメータ
@@ -75,11 +75,11 @@ class EntityFactory {
     /// @throw std::bad_variant_access parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
-    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     static std::shared_ptr<EntityBase>
     CreateEntity(const RawEntityDE&, const RawEntityPD&,
-                 const pointer2ID&, const uint64_t = kUnsetID);
+                 const pointer2ID&, const ObjectID& = IDGenerator::UnsetID());
 };
 
 }  // namespace igesio::entities

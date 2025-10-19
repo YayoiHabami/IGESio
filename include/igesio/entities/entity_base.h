@@ -177,7 +177,7 @@ class EntityBase : public virtual IEntityIdentifier {
     ///       プログラムの再起動後はIDがリセットされることに注意.
     ///       したがって、同じIGESの同じエンティティであっても、プログラムの再起動後は
     ///       異なるIDが生成される可能性がある.
-    const uint64_t id_;
+    const ObjectID id_;
     /// @brief エンティティのタイプ (1st/11th fields of DE)
     const EntityType type_;
     /// @brief エンティティのフォーム番号 (15th field of DE)
@@ -193,14 +193,14 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
-    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     /// @note de2idを空のままにした場合、parameters側で指定されている
     ///       ポインター (int型) はそのままIDとして使用される.
     /// @note 継承コンストラクタでは、必ず`InitializePD`を呼び出すこと.
     ///       これにより、PDレコードのパラメータが設定され、必要な追加のポインタが設定される.
     EntityBase(const RawEntityDE&, const IGESParameterVector&,
-               const pointer2ID& = {}, const uint64_t = kUnsetID);
+               const pointer2ID& = {}, const ObjectID& = IDGenerator::UnsetID());
 
     /// @brief デストラクタ
     virtual ~EntityBase() = default;
@@ -217,7 +217,7 @@ class EntityBase : public virtual IEntityIdentifier {
     ///       プログラムの再起動後はIDがリセットされることに注意.
     ///       したがって、同じIGESの同じエンティティであっても、プログラムの再起動後は
     ///       異なるIDが生成される可能性がある.
-    uint64_t GetID() const override { return id_; }
+    const ObjectID& GetID() const override { return id_; }
 
     /// @brief エンティティのタイプを取得する
     /// @return エンティティのタイプ (EntityType列挙型の値)
@@ -437,7 +437,7 @@ class EntityBase : public virtual IEntityIdentifier {
 
     /// @brief 物理的に従属するエンティティを取得する
     /// @return 物理的に従属するエンティティのID
-    virtual std::vector<uint64_t> GetChildIDs() const { return {}; }
+    virtual std::vector<ObjectID> GetChildIDs() const { return {}; }
 
     /// @brief 物理的に従属するエンティティのポインタを取得する
     /// @param id 物理的に従属するエンティティのID
@@ -445,14 +445,14 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @note 指定されたIDの、物理的に従属するエンティティが存在しない場合は
     ///       nullptrを返す
     virtual std::shared_ptr<const EntityBase>
-    GetChildEntity([[maybe_unused]] const uint64_t id) const {
+    GetChildEntity([[maybe_unused]] const ObjectID& id) const {
         return nullptr;
     }
 
     /// @brief エンティティが参照する全てのエンティティのIDを取得する
     /// @return 参照する全てのエンティティのID
     /// @note Directory Entry フィールド関連のメンバも含む
-    virtual std::vector<uint64_t> GetReferencedEntityIDs() const;
+    virtual std::vector<ObjectID> GetReferencedEntityIDs() const;
 
     /// @brief エンティティが参照する全てのエンティティのポインタが設定済みか
     /// @return 一つでも未設定のポインタがある場合は`false`
@@ -463,7 +463,7 @@ class EntityBase : public virtual IEntityIdentifier {
     ///        ポインタが未設定のもののIDを取得する
     /// @return ポインタが未設定のエンティティのIDのリスト
     /// @note Directory Entry フィールド関連のメンバも含む
-    std::unordered_set<uint64_t> GetUnresolvedReferences() const;
+    std::unordered_set<ObjectID> GetUnresolvedReferences() const;
 
     /// @brief 参照先エンティティのポインタを設定する
     /// @param entity ポインタを設定するエンティティ
@@ -478,7 +478,7 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @brief PDレコードの未設定の参照のIDを取得する
     /// @return ポインタが未設定のエンティティのIDのリスト
     /// @note 追加ポインタは除く (EntityBase側で取得するため)
-    virtual std::unordered_set<uint64_t> GetUnresolvedPDReferences() const {
+    virtual std::unordered_set<ObjectID> GetUnresolvedPDReferences() const {
         // 多くのエンティティは他のエンティティを参照しないため、空のリストを返す
         return {};
     }

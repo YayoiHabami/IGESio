@@ -36,7 +36,7 @@ CompositeCurve::CompositeCurve()
 CompositeCurve::CompositeCurve(const RawEntityDE& de_record,
                                const IGESParameterVector& parameters,
                                const pointer2ID& de2id,
-                               const uint64_t iges_id)
+                               const ObjectID& iges_id)
     : EntityBase(de_record, parameters, de2id, iges_id) {
     InitializePD(de2id);
 }
@@ -102,15 +102,16 @@ size_t CompositeCurve::SetMainPDParameters(const pointer2ID& de2id) {
             curves_.emplace_back(de2id.at(de));
         } else {
             // de2idが空の場合はIDを直接取得
-            curves_.emplace_back(pd.access_as<uint64_t>(i + 1));
+            curves_.emplace_back(pd.access_as<ObjectID>(i + 1));
         }
     }
 
     return num_curves + 1;  // 成功した場合は曲線の数 + 1 を返す
 }
 
-std::unordered_set<uint64_t> CompositeCurve::GetUnresolvedPDReferences() const {
-    std::unordered_set<uint64_t> referenced_ids;
+std::unordered_set<igesio::ObjectID>
+CompositeCurve::GetUnresolvedPDReferences() const {
+    std::unordered_set<ObjectID> referenced_ids;
     // 曲線のIDを追加
     for (const auto& curve : curves_) {
         if (!curve.IsPointerSet()) {
@@ -142,8 +143,8 @@ bool CompositeCurve::SetUnresolvedPDReferences(
     return false;
 }
 
-std::vector<uint64_t> CompositeCurve::GetChildIDs() const {
-    std::vector<uint64_t> ids;
+std::vector<igesio::ObjectID> CompositeCurve::GetChildIDs() const {
+    std::vector<ObjectID> ids;
     ids.reserve(curves_.size());
     for (const auto& curve : curves_) {
         ids.push_back(curve.GetID());
@@ -152,7 +153,7 @@ std::vector<uint64_t> CompositeCurve::GetChildIDs() const {
 }
 
 std::shared_ptr<const i_ent::EntityBase>
-CompositeCurve::GetChildEntity(const uint64_t id) const {
+CompositeCurve::GetChildEntity(const ObjectID& id) const {
     for (const auto& curve : curves_) {
         if (curve.GetID() == id) {
             auto ptr = curve.TryGetEntity<EntityBase>();

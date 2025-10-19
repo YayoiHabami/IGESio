@@ -8,6 +8,7 @@
 #include "igesio/entities/curves/point.h"
 
 #include <memory>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -26,15 +27,15 @@ using igesio::Vector3d;
  */
 
 Point::Point(const RawEntityDE& de_record, const IGESParameterVector& parameters,
-             const pointer2ID& de2id, const uint64_t iges_id)
+             const pointer2ID& de2id, const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id),
-          subfigure_(kUnsetID) {
+          subfigure_(IDGenerator::UnsetID()) {
     InitializePD(de2id);
 }
 
 Point::Point(const IGESParameterVector& parameters)
         : Point(RawEntityDE::ByDefault(i_ent::EntityType::kPoint),
-                parameters, {}, kUnsetID) {}
+                parameters, {}, IDGenerator::UnsetID()) {}
 
 Point::Point(const Vector3d& position)
        : Point(IGESParameterVector{position[0], position[1], position[2], 0}) {}
@@ -69,29 +70,19 @@ size_t Point::SetMainPDParameters(const pointer2ID& de2id) {
     position_[2] = pd.access_as<double>(2);
 
     // subfigure
-    uint64_t subfigure_id;
-    if (pd.access_as<int>(3) == 0) {
-        // 0の場合、Subfigure Definitionへの参照は指定されない
-        subfigure_id = kUnsetID;
-    } else if (!de2id.empty()) {
-        // de2idが空でない場合は、取得した数値をde2idでIDに変換
-        auto id_int = static_cast<unsigned int>(pd.access_as<int>(3));
-        if (de2id.find(id_int) == de2id.end()) {
-            throw std::out_of_range("Subfigure Definition (ID " + std::to_string(id_int)
-                                    + ") not found in DE to ID mapping.");
-        }
-        subfigure_id = de2id.at(id_int);
-    } else {
-        // de2idが空の場合は、そのままIDとして使用
-        subfigure_id = static_cast<uint64_t>(pd.access_as<int>(3));
+    try {
+        subfigure_ = PointerContainer<false, ISubfigureDefinition>(
+                GetObjectIDFromParameters(pd, 3, de2id, true));
+    } catch (const std::exception& e) {
+        throw igesio::DataFormatError(
+            "Failed to set Subfigure Definition pointer: " + std::string(e.what()));
     }
-    subfigure_ = PointerContainer<false, ISubfigureDefinition>(subfigure_id);
 
     return 4;
 }
 
-std::unordered_set<uint64_t> Point::GetUnresolvedPDReferences() const {
-    std::unordered_set<uint64_t> unresolved;
+std::unordered_set<igesio::ObjectID> Point::GetUnresolvedPDReferences() const {
+    std::unordered_set<ObjectID> unresolved;
 
     if (!subfigure_.IsPointerSet()) {
         unresolved.insert(subfigure_.GetID());
@@ -119,14 +110,14 @@ bool Point::SetUnresolvedPDReferences(
     return false;
 }
 
-std::vector<uint64_t> Point::GetChildIDs() const {
-    std::vector<uint64_t> ids;
+std::vector<igesio::ObjectID> Point::GetChildIDs() const {
+    std::vector<ObjectID> ids;
     ids.push_back(subfigure_.GetID());
     return ids;
 }
 
 std::shared_ptr<const i_ent::EntityBase>
-Point::GetChildEntity(const uint64_t id) const {
+Point::GetChildEntity(const ObjectID& id) const {
     if (subfigure_.GetID() == id) {
         auto ptr = subfigure_.TryGetEntity<EntityBase>();
         if (ptr) return ptr.value();
@@ -140,18 +131,18 @@ igesio::ValidationResult Point::ValidatePD() const {
     std::vector<ValidationError> errors;
 
     // subfigure
-    if (subfigure_.GetID() != kUnsetID) {
+    if (subfigure_.GetID().IsSet()) {
         if (!subfigure_.IsPointerSet()) {
             // 参照が存在するはずだが、指定されていない場合
             errors.emplace_back("Subfigure Definition (ID " +
-                                std::to_string(subfigure_.GetID()) +
+                                ToString(subfigure_.GetID()) +
                                 ") is referenced but not set.");
         } else {
             // 参照が存在する場合
             auto result = (*subfigure_.TryGetEntity<EntityBase>())->Validate();
             if (!result.is_valid) {
                 errors.emplace_back("Subfigure Definition (ID " +
-                                    std::to_string(subfigure_.GetID()) +
+                                    ToString(subfigure_.GetID()) +
                                     ") is invalid: " + result.Message());
             }
         }

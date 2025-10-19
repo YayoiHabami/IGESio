@@ -8,6 +8,7 @@
 #include "igesio/entities/surfaces/surface_of_revolution.h"
 
 #include <memory>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -29,9 +30,9 @@ using igesio::Vector3d;
 
 SurfaceOfRevolution::SurfaceOfRevolution(
         const RawEntityDE& de_record, const IGESParameterVector& parameters,
-        const pointer2ID& de2id, const uint64_t iges_id)
+        const pointer2ID& de2id, const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id),
-          axis_(kUnsetID), generatrix_(kUnsetID) {
+          axis_(IDGenerator::UnsetID()), generatrix_(IDGenerator::UnsetID()) {
     InitializePD(de2id);
 }
 
@@ -39,14 +40,13 @@ SurfaceOfRevolution::SurfaceOfRevolution(
         const IGESParameterVector& parameters)
         : SurfaceOfRevolution(
             RawEntityDE::ByDefault(i_ent::EntityType::kSurfaceOfRevolution),
-            parameters, {}, kUnsetID) {}
+            parameters, {}, IDGenerator::UnsetID()) {}
 
 SurfaceOfRevolution::SurfaceOfRevolution(
         const std::shared_ptr<Line>& axis,
         const std::shared_ptr<ICurve>& generatrix,
         const double start_angle, const double end_angle)
-        : SurfaceOfRevolution({static_cast<int>(axis->GetID()),
-                               static_cast<int>(generatrix->GetID()),
+        : SurfaceOfRevolution({axis->GetID(), generatrix->GetID(),
                                start_angle, end_angle}) {
     if (axis == nullptr) {
         throw std::invalid_argument(
@@ -85,37 +85,22 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 回転軸
-    uint64_t axis_id;
-    if (!de2id.empty()) {
-        // de2idが空でない場合は、取得した数値をde2idでIDに変換
-        auto id_int = static_cast<unsigned int>(pd.access_as<int>(0));
-        if (de2id.find(id_int) == de2id.end()) {
-            throw std::out_of_range("Axis (Line) ID " + std::to_string(id_int)
-                                    + " not found in DE to ID mapping.");
-        }
-        axis_id = de2id.at(id_int);
-    } else {
-        // de2idが空の場合は、そのままIDとして使用
-        axis_id = static_cast<uint64_t>(pd.access_as<int>(0));
+    try {
+        axis_ = PointerContainer<false, Line>(
+            GetObjectIDFromParameters(pd, 0, de2id));
+    } catch (const std::exception& e) {
+        throw igesio::DataFormatError("Failed to get Axis (Line) ID "
+            "from parameters: " + std::string(e.what()));
     }
-    axis_ = PointerContainer<false, Line>(axis_id);
 
     // 母線
-    uint64_t generatrix_id;
-    if (!de2id.empty()) {
-        // de2idが空でない場合は、取得した数値をde2idでIDに変換
-        auto id_int = static_cast<unsigned int>(pd.access_as<int>(1));
-        if (de2id.find(id_int) == de2id.end()) {
-            throw std::out_of_range("Generatrix (ICurve) ID "
-                                    + std::to_string(id_int)
-                                    + " not found in DE to ID mapping.");
-        }
-        generatrix_id = de2id.at(id_int);
-    } else {
-        // de2idが空の場合は、そのままIDとして使用
-        generatrix_id = static_cast<uint64_t>(pd.access_as<int>(1));
+    try {
+        generatrix_ = PointerContainer<false, ICurve>(
+            GetObjectIDFromParameters(pd, 1, de2id));
+    } catch (const std::exception& e) {
+        throw igesio::DataFormatError("Failed to get Generatrix (ICurve) ID "
+            "from parameters: " + std::string(e.what()));
     }
-    generatrix_ = PointerContainer<false, ICurve>(generatrix_id);
 
     // 回転角度
     start_angle_ = pd.access_as<double>(2);
@@ -124,8 +109,9 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
     return 4;
 }
 
-std::unordered_set<uint64_t> SurfaceOfRevolution::GetUnresolvedPDReferences() const {
-    std::unordered_set<uint64_t> unresolved;
+std::unordered_set<igesio::ObjectID>
+SurfaceOfRevolution::GetUnresolvedPDReferences() const {
+    std::unordered_set<ObjectID> unresolved;
 
     if (!axis_.IsPointerSet()) {
         unresolved.insert(axis_.GetID());
@@ -163,15 +149,15 @@ bool SurfaceOfRevolution::SetUnresolvedPDReferences(
     return false;
 }
 
-std::vector<uint64_t> SurfaceOfRevolution::GetChildIDs() const {
-    std::vector<uint64_t> ids;
+std::vector<igesio::ObjectID> SurfaceOfRevolution::GetChildIDs() const {
+    std::vector<ObjectID> ids;
     ids.push_back(axis_.GetID());
     ids.push_back(generatrix_.GetID());
     return ids;
 }
 
 std::shared_ptr<const i_ent::EntityBase>
-SurfaceOfRevolution::GetChildEntity(const uint64_t id) const {
+SurfaceOfRevolution::GetChildEntity(const ObjectID& id) const {
     if (axis_.GetID() == id) {
         auto ptr = axis_.TryGetEntity<EntityBase>();
         if (ptr) return ptr.value();

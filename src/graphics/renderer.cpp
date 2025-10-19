@@ -90,7 +90,7 @@ void EntityRenderer::AddGraphicsObject(
             = std::move(graphics);
 }
 
-void EntityRenderer::RemoveEntity(const uint64_t id) {
+void EntityRenderer::RemoveEntity(const ObjectID& id) {
     for (auto& [shader_type, objects] : draw_objects_) {
         auto it = objects.find(id);
         if (it != objects.end()) {
@@ -101,7 +101,7 @@ void EntityRenderer::RemoveEntity(const uint64_t id) {
     }
 }
 
-bool EntityRenderer::HasEntity(const uint64_t id) const {
+bool EntityRenderer::HasEntity(const ObjectID& id) const {
     // draw_objects_を走査
     for (const auto& [shader_type, objects] : draw_objects_) {
         if (objects.find(id) != objects.end()) {
@@ -112,7 +112,7 @@ bool EntityRenderer::HasEntity(const uint64_t id) const {
 }
 
 i_graph::ShaderType
-EntityRenderer::GetEntityShaderType(const uint64_t id) const {
+EntityRenderer::GetEntityShaderType(const ObjectID& id) const {
     for (const auto& [shader_type, objects] : draw_objects_) {
         if (objects.find(id) != objects.end()) {
             return shader_type;

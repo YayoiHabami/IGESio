@@ -31,7 +31,7 @@ using Vector3d = igesio::Vector3d;
 Line::Line(const RawEntityDE& de_record,
            const IGESParameterVector& parameters,
            const pointer2ID& de2id,
-           const uint64_t iges_id)
+           const ObjectID& iges_id)
     : EntityBase(de_record, parameters, de2id, iges_id) {
     InitializePD(de2id);
 }

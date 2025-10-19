@@ -68,10 +68,10 @@ class ConicArc : public EntityBase, public virtual ICurve2D {
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
-    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     ConicArc(const RawEntityDE&, const IGESParameterVector& parameters,
-             const pointer2ID& = {}, const uint64_t = kUnsetID);
+             const pointer2ID& = {}, const ObjectID& = IDGenerator::UnsetID());
 
     /// @brief パラメータから生成する場合のコンストラクタ
     /// @param coeffs 2次方程式の係数 {A, B, C, D, E, F}

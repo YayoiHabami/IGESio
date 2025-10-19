@@ -9,6 +9,7 @@
 
 #include <limits>
 #include <memory>
+#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -31,9 +32,10 @@ using igesio::Vector3d;
 
 TabulatedCylinder::TabulatedCylinder(
         const RawEntityDE& de_record, const IGESParameterVector& parameters,
-        const pointer2ID& de2id, const uint64_t iges_id)
+        const pointer2ID& de2id, const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id),
-          directrix_(kUnsetID), location_vector_(Vector3d::Zero()) {
+          directrix_(IDGenerator::UnsetID()),
+          location_vector_(Vector3d::Zero()) {
     InitializePD(de2id);
 }
 
@@ -41,12 +43,12 @@ TabulatedCylinder::TabulatedCylinder(
         const IGESParameterVector& parameters)
         : TabulatedCylinder(
             RawEntityDE::ByDefault(i_ent::EntityType::kTabulatedCylinder),
-            parameters, {}, kUnsetID) {}
+            parameters, {}, IDGenerator::UnsetID()) {}
 
 TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
                                      const Vector3d& location_vector)
-        : TabulatedCylinder({static_cast<int>(directrix->GetID()),
-                             location_vector(0), location_vector(1), location_vector(2)}) {
+        : TabulatedCylinder({directrix->GetID(), location_vector(0),
+                             location_vector(1), location_vector(2)}) {
     if (directrix == nullptr) {
         throw std::invalid_argument(
             "Directrix curve of TabulatedCylinder cannot be nullptr.");
@@ -67,7 +69,7 @@ TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
 TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
                                      const Vector3d& direction,
                                      const double length)
-        : TabulatedCylinder({static_cast<int>(directrix->GetID()), 0.0, 0.0, 0.0}) {
+        : TabulatedCylinder({directrix->GetID(), 0.0, 0.0, 0.0}) {
     if (directrix == nullptr) {
         throw std::invalid_argument(
             "Directrix curve of TabulatedCylinder cannot be nullptr.");
@@ -110,20 +112,13 @@ size_t TabulatedCylinder::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 曲線
-    uint64_t directrix_id = directrix_.GetID();
-    if (!de2id.empty()) {
-        // de2idが空でない場合は、取得した数値をde2idでIDに変換
-        auto id_int = static_cast<unsigned int>(pd.access_as<int>(0));
-        if (de2id.find(id_int) == de2id.end()) {
-            throw std::out_of_range("Directrix (Curve) ID " + std::to_string(id_int)
-                                    + " not found in DE to ID mapping.");
-        }
-        directrix_id = de2id.at(id_int);
-    } else {
-        // de2idが空の場合は、そのままIDとして使用
-        directrix_id = static_cast<uint64_t>(pd.access_as<int>(0));
+    try {
+        directrix_ = PointerContainer<false, ICurve>(
+                GetObjectIDFromParameters(pd, 0, de2id));
+    } catch (const std::exception& e) {
+        throw igesio::DataFormatError("Failed to set Directrix (Curve) reference"
+            " in TabulatedCylinder: " + std::string(e.what()));
     }
-    directrix_ = PointerContainer<false, ICurve>(directrix_id);
 
     // 位置ベクトル
     location_vector_(0) = pd.access_as<double>(1);
@@ -133,8 +128,9 @@ size_t TabulatedCylinder::SetMainPDParameters(const pointer2ID& de2id) {
     return 4;
 }
 
-std::unordered_set<uint64_t> TabulatedCylinder::GetUnresolvedPDReferences() const {
-    std::unordered_set<uint64_t> unresolved;
+std::unordered_set<igesio::ObjectID>
+TabulatedCylinder::GetUnresolvedPDReferences() const {
+    std::unordered_set<ObjectID> unresolved;
 
     if (!directrix_.IsPointerSet()) {
         unresolved.insert(directrix_.GetID());
@@ -162,14 +158,14 @@ bool TabulatedCylinder::SetUnresolvedPDReferences(
     return false;
 }
 
-std::vector<uint64_t> TabulatedCylinder::GetChildIDs() const {
-    std::vector<uint64_t> ids;
+std::vector<igesio::ObjectID> TabulatedCylinder::GetChildIDs() const {
+    std::vector<ObjectID> ids;
     ids.push_back(directrix_.GetID());
     return ids;
 }
 
 std::shared_ptr<const i_ent::EntityBase>
-TabulatedCylinder::GetChildEntity(const uint64_t id) const {
+TabulatedCylinder::GetChildEntity(const ObjectID& id) const {
     if (directrix_.GetID() == id) {
         auto ptr = directrix_.TryGetEntity<EntityBase>();
         if (ptr) return ptr.value();

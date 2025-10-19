@@ -88,7 +88,7 @@ enum class SectionType {
 /// @brief 本ライブラリで使用する、IGESのパラメータを表現するために
 ///        使用するC++のデータ型を表す列挙型
 /// @note 本ライブラリでは、IGES 5.3で使用される6つのデータ型を表現するために、
-///       bool (logical), int (integer), double (real), uint64_t (pointer),
+///       bool (logical), int (integer), double (real), ObjectID (pointer),
 ///       std::string (string, language statement) の5つのC++のデータ型を
 ///       使用する.
 enum class CppParameterType {
@@ -98,7 +98,7 @@ enum class CppParameterType {
     kInt,
     /// @brief double (Real)
     kDouble,
-    /// @brief uint64_t (Pointer)
+    /// @brief ObjectID (Pointer)
     kPointer,
     /// @brief std::string (String, Language Statement)
     kString

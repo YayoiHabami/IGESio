@@ -18,12 +18,60 @@ TEST(IGESParameterVectorTest, DefaultConstructor) {
     ASSERT_EQ(vec.size(), 0);
 }
 
+TEST(IGESParameterVectorTest, VecParamTypeDefinition) {
+    using CppPT = igesio::CppParameterType;
+
+    igesio::VecParamType v1 = true;
+    igesio::VecParamType v2 = 42;
+    igesio::VecParamType v3 = 3.14;
+    igesio::VecParamType v4 = igesio::ObjectID(nullptr);
+    igesio::VecParamType v5 = std::string("test");
+
+    EXPECT_TRUE(std::holds_alternative<bool>(v1));
+    EXPECT_EQ(v1.index(), 0);
+    EXPECT_EQ(static_cast<CppPT>(v1.index()), CppPT::kBool);
+
+    EXPECT_TRUE(std::holds_alternative<int>(v2));
+    EXPECT_EQ(v2.index(), 1);
+    EXPECT_EQ(static_cast<CppPT>(v2.index()), CppPT::kInt);
+
+    EXPECT_TRUE(std::holds_alternative<double>(v3));
+    EXPECT_EQ(v3.index(), 2);
+    EXPECT_EQ(static_cast<CppPT>(v3.index()), CppPT::kDouble);
+
+    EXPECT_TRUE(std::holds_alternative<igesio::ObjectID>(v4));
+    EXPECT_EQ(v4.index(), 3);
+    EXPECT_EQ(static_cast<CppPT>(v4.index()), CppPT::kPointer);
+
+    EXPECT_TRUE(std::holds_alternative<std::string>(v5));
+    EXPECT_EQ(v5.index(), 4);
+    EXPECT_EQ(static_cast<CppPT>(v5.index()), CppPT::kString);
+}
+
 TEST(IGESParameterVectorTest, InitializerListConstructor) {
-    igesio::IGESParameterVector vec = {1, 2.0, "three"};
-    ASSERT_EQ(vec.size(), 3);
-    EXPECT_EQ(vec.get<int>(0), 1);
-    EXPECT_EQ(vec.get<double>(1), 2.0);
-    EXPECT_EQ(vec.get<std::string>(2), "three");
+    igesio::IGESParameterVector vec =
+            {false, 1, 2.0, igesio::ObjectID(nullptr), std::string("three")};
+    ASSERT_EQ(vec.size(), 5);
+
+    EXPECT_EQ(vec.get_type(0), igesio::CppParameterType::kBool);
+    EXPECT_NO_THROW(vec.get<bool>(0));
+    EXPECT_EQ(vec.get<bool>(0), false);
+
+    EXPECT_EQ(vec.get_type(1), igesio::CppParameterType::kInt);
+    EXPECT_NO_THROW(vec.get<int>(1));
+    EXPECT_EQ(vec.get<int>(1), 1);
+
+    EXPECT_EQ(vec.get_type(2), igesio::CppParameterType::kDouble);
+    EXPECT_NO_THROW(vec.get<double>(2));
+    EXPECT_EQ(vec.get<double>(2), 2.0);
+
+    EXPECT_EQ(vec.get_type(3), igesio::CppParameterType::kPointer);
+    EXPECT_NO_THROW(vec.get<igesio::ObjectID>(3));
+    EXPECT_EQ(vec.get<igesio::ObjectID>(3), igesio::ObjectID(nullptr));
+
+    EXPECT_EQ(vec.get_type(4), igesio::CppParameterType::kString);
+    EXPECT_NO_THROW(vec.get<std::string>(4));
+    EXPECT_EQ(vec.get<std::string>(4), "three");
 }
 
 TEST(IGESParameterVectorTest, Resize) {
@@ -150,16 +198,23 @@ TEST(IGESParameterVectorTest, AccessAsBoolFromInt) {
     ASSERT_EQ(val, false);
 }
 
-TEST(IGESParameterVectorTest, AccessAsUint64FromInt) {
-    igesio::IGESParameterVector vec = {100};
-    uint64_t val = vec.access_as<uint64_t>(0);
-    ASSERT_EQ(val, 100);
+TEST(IGESParameterVectorTest, AccessAsObjectIDFromInt) {
+    // 登録済みのint型IDであれば、ObjectIDに変換できる
+    auto id = igesio::IDGenerator::Generate(igesio::ObjectType::kIgesData);
+
+    igesio::IGESParameterVector vec = {id.ToInt()};
+    igesio::ObjectID val = vec.access_as<igesio::ObjectID>(0);
+    ASSERT_EQ(val, id);
 }
 
 TEST(IGESParameterVectorTest, AccessAsBadVariantAccess) {
     igesio::IGESParameterVector vec = {std::string("test")};
     ASSERT_THROW(vec.access_as<bool>(0), std::bad_variant_access);
-    ASSERT_THROW(vec.access_as<uint64_t>(0), std::bad_variant_access);
+    ASSERT_THROW(vec.access_as<igesio::ObjectID>(0), std::bad_variant_access);
+
+    // 未登録のint型IDはObjectIDに変換できない
+    igesio::IGESParameterVector vec2 = {999999};
+    ASSERT_THROW(vec2.access_as<igesio::ObjectID>(0), std::bad_variant_access);
 }
 
 
@@ -174,7 +229,7 @@ TEST(IGESParameterVectorTest, IsType) {
     ASSERT_TRUE(vec.is_type<double>(1));
     ASSERT_TRUE(vec.is_type<std::string>(2));
     ASSERT_FALSE(vec.is_type<bool>(0));
-    ASSERT_FALSE(vec.is_type<uint64_t>(1));
+    ASSERT_FALSE(vec.is_type<igesio::ObjectID>(1));
 }
 
 TEST(IGESParameterVectorTest, IsTypeOutOfRange) {
@@ -254,9 +309,10 @@ TEST(IGESParameterVectorTest, Empty) {
 
 TEST(IGESParameterVectorTest, OutputStream) {
     std::stringstream ss;
-    igesio::IGESParameterVector vec = {1, 2.5, std::string("test"), true, static_cast<uint64_t>(100)};
+    auto id = igesio::IDGenerator::Generate(igesio::ObjectType::kIgesData);
+    igesio::IGESParameterVector vec = {1, 2.5, std::string("test"), true, id};
     ss << vec;
-    EXPECT_EQ(ss.str(), "[1, 2.5, test, 1, 100u]");
+    EXPECT_EQ(ss.str(), "[1, 2.5, test, 1, " + ToString(id) + "]");
 
     std::stringstream ss2;
     igesio::IGESParameterVector vec2 = {3.0};
