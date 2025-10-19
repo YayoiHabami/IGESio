@@ -4,22 +4,29 @@ set ENABLE_DOCUMENTATION=OFF
 set ENABLE_SOURCE_BUILD=ON
 set BUILD_TYPE=debug
 set BUILD_EXAMPLE=OFF
+set COMPILER=gcc
 
 REM Check if the first argument is provided
 if /i "%1"=="debug" (
     if /i "%2"=="doc" set ENABLE_DOCUMENTATION=ON
     if /i "%2"=="ex" set BUILD_EXAMPLE=ON
+    if /i "%2"=="clang" set COMPILER=clang
     if /i "%3"=="ex" set BUILD_EXAMPLE=ON
+    if /i "%3"=="clang" set COMPILER=clang
+    if /i "%4"=="clang" set COMPILER=clang
 ) else if /i "%1"=="release" (
     set BUILD_TYPE=release
     if /i "%2"=="doc" set ENABLE_DOCUMENTATION=ON
     if /i "%2"=="ex" set BUILD_EXAMPLE=ON
+    if /i "%2"=="clang" set COMPILER=clang
     if /i "%3"=="ex" set BUILD_EXAMPLE=ON
+    if /i "%3"=="clang" set COMPILER=clang
+    if /i "%4"=="clang" set COMPILER=clang
 ) else if /i "%1"=="doc" (
     REM If the first argument is "doc", enable documentation and disable source build
     set ENABLE_SOURCE_BUILD=OFF
 ) else (
-    echo "Usage1: build.bat [debug|release] <doc> <ex>"
+    echo "Usage1: build.bat [debug|release] <doc> <ex> <gcc|clang>"
     echo "If 'doc' is specified, documentation will be built."
     echo "If 'ex' is specified, example will be built."
     echo "If 'debug' or 'release' is specified, the source will be built."
@@ -34,6 +41,10 @@ if "%BUILD_EXAMPLE%"=="ON" (
     set EXAMPLE_SUFFIX=
 )
 set BUILD_DIR=build/%BUILD_TYPE%%EXAMPLE_SUFFIX%_win
+if not "%COMPILER%"=="gcc" (
+    set BUILD_DIR=%BUILD_DIR%_%COMPILER%
+    echo Using compiler: %COMPILER%
+)
 
 
 
@@ -44,7 +55,14 @@ if "%ENABLE_SOURCE_BUILD%"=="ON" (
     if not exist "%BUILD_DIR%" (
         mkdir "%BUILD_DIR%"
 
-        set COMPILER_OPTIONS="-DCMAKE_C_COMPILER=gcc" "-DCMAKE_CXX_COMPILER=g++"
+        if "%COMPILER%"=="gcc" (
+            set COMPILER_OPTIONS="-DCMAKE_C_COMPILER=gcc" "-DCMAKE_CXX_COMPILER=g++"
+        ) else if "%COMPILER%"=="clang" (
+            set COMPILER_OPTIONS="-DCMAKE_C_COMPILER=clang" "-DCMAKE_CXX_COMPILER=clang++"
+        ) else (
+            echo "Unsupported compiler: %COMPILER%"
+            exit /b 1
+        )
 
         if "%BUILD_TYPE%"=="debug" (
             set BUILD_TYPE_OPTION="-DCMAKE_BUILD_TYPE=Debug"

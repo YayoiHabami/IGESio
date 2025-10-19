@@ -49,7 +49,7 @@ class Point : public EntityBase {
     /// @brief PDレコードの未設定の参照のIDを取得する
     /// @return ポインタが未設定のエンティティのIDのリスト
     /// @note 追加ポインタは除く (EntityBase側で取得するため)
-    std::unordered_set<uint64_t> GetUnresolvedPDReferences() const override;
+    std::unordered_set<ObjectID> GetUnresolvedPDReferences() const override;
 
     /// @brief PDレコード内の参照先エンティティのポインタを設定する
     /// @param entity ポインタを設定するエンティティ
@@ -71,10 +71,10 @@ class Point : public EntityBase {
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
-    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     Point(const RawEntityDE&, const IGESParameterVector&,
-          const pointer2ID& = {}, const uint64_t = kUnsetID);
+          const pointer2ID& = {}, const ObjectID& = IDGenerator::UnsetID());
 
     /// @brief コンストラクタ
     /// @param parameters PDレコードのパラメータ
@@ -82,7 +82,7 @@ class Point : public EntityBase {
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
-    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     explicit Point(const IGESParameterVector&);
 
@@ -121,14 +121,14 @@ class Point : public EntityBase {
 
     /// @brief 物理的に従属するエンティティを取得する
     /// @return 物理的に従属するエンティティのID
-    std::vector<uint64_t> GetChildIDs() const override;
+    std::vector<ObjectID> GetChildIDs() const override;
 
     /// @brief 物理的に従属するエンティティのポインタを取得する
     /// @param id 物理的に従属するエンティティのID
     /// @return 物理的に従属するエンティティのポインタ
     /// @note 指定されたIDの、物理的に従属するエンティティが存在しない場合は
     ///       nullptrを返す
-    std::shared_ptr<const EntityBase> GetChildEntity(const uint64_t) const override;
+    std::shared_ptr<const EntityBase> GetChildEntity(const ObjectID&) const override;
 };
 
 }  // namespace igesio::entities

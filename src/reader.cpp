@@ -340,7 +340,7 @@ i_model::IgesData igesio::ConvertFromIntermediate(
     }
 
     // すべてのエンティティのIDを先に生成・取得する
-    entities::pointer2ID de2id;
+    pointer2ID de2id;
     for (const auto& de : intermediate.directory_entry_section) {
         auto de_pointer = de.sequence_number;
         // すでにde2idにde_pointerが存在する場合はエラー
@@ -348,7 +348,8 @@ i_model::IgesData igesio::ConvertFromIntermediate(
             throw iio::DataFormatError("Duplicate directory entry pointer"
                     " found: " + std::to_string(de_pointer));
         }
-        de2id[de_pointer] = IDGenerator::Reserve(iges_id, de_pointer);
+        de2id[de_pointer] = IDGenerator::Reserve(
+                iges_id, static_cast<uint16_t>(de.entity_type), de_pointer);
     }
 
     // DEとPDを組み合わせてエンティティを生成し、IgesDataに追加

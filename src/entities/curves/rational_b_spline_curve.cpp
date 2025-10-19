@@ -44,7 +44,7 @@ TryComputeBasisFunctions(const double t, const int num_derivatives,
 
 RationalBSplineCurve::RationalBSplineCurve(
         const RawEntityDE& de_record, const IGESParameterVector& parameters,
-        const pointer2ID& de2id, const uint64_t iges_id)
+        const pointer2ID& de2id, const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id) {
     InitializePD(de2id);
 }
@@ -53,7 +53,7 @@ RationalBSplineCurve::RationalBSplineCurve(
         const IGESParameterVector& parameters)
         : RationalBSplineCurve(
             RawEntityDE::ByDefault(i_ent::EntityType::kRationalBSplineCurve),
-            parameters, {}, kUnsetID) {}
+            parameters, {}, IDGenerator::UnsetID()) {}
 
 i_ent::RationalBSplineCurveType RationalBSplineCurve::GetCurveType() const {
     return static_cast<RationalBSplineCurveType>(form_number_);

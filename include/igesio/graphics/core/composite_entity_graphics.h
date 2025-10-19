@@ -32,6 +32,9 @@ template<typename T, typename = std::enable_if_t<
       std::is_base_of_v<entities::IEntityIdentifier, T>>>
 class CompositeEntityGraphics : public IEntityGraphics {
  protected:
+    /// @brief 描画オブジェクトのID
+    ObjectID graphics_id_;
+
     /// @brief エンティティのポインタ
     std::shared_ptr<const T> entity_;
 
@@ -58,7 +61,10 @@ class CompositeEntityGraphics : public IEntityGraphics {
                             const std::shared_ptr<IOpenGL> gl,
                             bool use_entity_transform)
             : IEntityGraphics(gl, use_entity_transform),
-            entity_(std::move(entity)) {
+              entity_(std::move(entity)),
+              graphics_id_(IDGenerator::Generate(
+                    ObjectType::kEntityGraphics,
+                    (entity != nullptr) ? static_cast<uint16_t>(entity->GetType()) : 0)) {
         if (!entity_) {
             throw std::invalid_argument("Entity pointer cannot be null");
         }
@@ -76,7 +82,8 @@ class CompositeEntityGraphics : public IEntityGraphics {
     /// @note ムーブ元のリソース所有権を放棄
     CompositeEntityGraphics(CompositeEntityGraphics&& other) noexcept
         : IEntityGraphics(std::move(other)),
-          entity_(std::move(other.entity_)) {
+          entity_(std::move(other.entity_)),
+          graphics_id_(std::move(other.graphics_id_)) {
         // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
         other.entity_ = nullptr;
     }
@@ -92,6 +99,7 @@ class CompositeEntityGraphics : public IEntityGraphics {
 
             // メンバをムーブ
             entity_ = std::move(other.entity_);
+            graphics_id_ = std::move(other.graphics_id_);
 
             // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
             other.entity_ = nullptr;
@@ -101,12 +109,18 @@ class CompositeEntityGraphics : public IEntityGraphics {
 
     /// @brief エンティティのIDを取得する
     /// @return エンティティのID
-    /// @note エンティティが未設定の場合はkUnsetIDを返す
-    uint64_t GetEntityID() const override {
+    /// @note エンティティが未設定の場合はUnsetIDを返す
+    const ObjectID& GetEntityID() const override {
         if (entity_) {
             return entity_->GetID();
         }
-        return kUnsetID;
+        return IDGenerator::UnsetID();
+    }
+
+    /// @brief 描画オブジェクトのIDを取得する
+    /// @return 描画オブジェクトのID
+    const ObjectID& GetGraphicsID() const override {
+        return graphics_id_;
     }
 
     /// @brief エンティティの描画を行う

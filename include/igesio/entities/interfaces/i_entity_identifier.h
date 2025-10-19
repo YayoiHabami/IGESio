@@ -27,7 +27,7 @@ class IEntityIdentifier {
 
     /// @brief エンティティのIDを取得する
     /// @return エンティティのID
-    virtual uint64_t GetID() const = 0;
+    virtual const ObjectID& GetID() const = 0;
     /// @brief エンティティタイプを取得する
     /// @return エンティティタイプ
     virtual EntityType GetType() const = 0;

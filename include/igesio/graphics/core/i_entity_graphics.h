@@ -164,7 +164,11 @@ class IEntityGraphics {
 
     /// @brief エンティティのIDを取得する
     /// @return エンティティのID
-    virtual uint64_t GetEntityID() const = 0;
+    virtual const ObjectID& GetEntityID() const = 0;
+
+    /// @brief 描画オブジェクトのIDを取得する
+    /// @return 描画オブジェクトのID
+    virtual const ObjectID& GetGraphicsID() const = 0;
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID

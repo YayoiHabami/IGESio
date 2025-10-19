@@ -16,6 +16,7 @@
 #include <variant>
 #include <vector>
 
+#include "igesio/common/id_generator.h"
 #include "igesio/common/iges_metadata.h"
 #include "igesio/common/serialization.h"
 
@@ -24,22 +25,22 @@
 namespace igesio {
 
 /// @brief IGESParameterVectorで使用可能な型
-/// @note bool, int, double, uint64_t, std::stringのいずれかを許可
+/// @note bool, int, double, ObjectID, std::stringのいずれかを許可
 /// @note Logical => `bool`, Integer => `int`, Real => `double`,
-///       Pointer => `uint64_t`, String => `std::string`,
+///       Pointer => `ObjectID`, String => `std::string`,
 ///       Language Statement => `std::string`
-using VecParamType = std::variant<bool, int, double, uint64_t, std::string>;
+using VecParamType = std::variant<bool, int, double, ObjectID, std::string>;
 
 /// @brief EntityBaseクラスで保持するパラメータの型を制限するためのヘルパー
 /// @note SFINAEを用いて、許可される型のみを受け入れる:
-///       `bool` (Logical), `int` (Integer), `double` (Real), `uint64_t` (Pointer),
+///       `bool` (Logical), `int` (Integer), `double` (Real), `ObjectID` (Pointer),
 ///       `std::string` (String, Language Statement)
 template<typename T> struct is_allowed_type : std::false_type {};
 template<> struct is_allowed_type<bool> : std::true_type {};
 template<> struct is_allowed_type<int> : std::true_type {};
 template<> struct is_allowed_type<double> : std::true_type {};
 template<> struct is_allowed_type<std::string> : std::true_type {};
-template<> struct is_allowed_type<uint64_t> : std::true_type {};
+template<> struct is_allowed_type<ObjectID> : std::true_type {};
 template<typename T>
 inline constexpr bool is_allowed_type_v = is_allowed_type<T>::value;
 
@@ -48,7 +49,7 @@ inline constexpr bool is_allowed_type_v = is_allowed_type<T>::value;
 /// @note Parameter Dataセクションでは、Logical, Integer, Real, Pointer,
 ///       String, Language Statementの型を持つパラメータが混在するため、
 ///       本クラスを使用して型を制限しつつ、異なる型の値を一つの配列として保持する
-/// @note Logicalは`bool`、Integerは`int`、Realは`double`、Pointerは`uint64_t`、
+/// @note Logicalは`bool`、Integerは`int`、Realは`double`、Pointerは`ObjectID`、
 ///       StringはおよびLanguage Statementは`std::string`として扱う
 class IGESParameterVector {
  private:
@@ -73,12 +74,12 @@ class IGESParameterVector {
 
     /// @brief 指定したサイズまでIGESParameterVectorを拡張（デフォルト値で埋める）
     /// @param new_size 新しいサイズ
-    /// @param default_value デフォルト値 (bool, int, double, uint64_t, std::stringのいずれか)
+    /// @param default_value デフォルト値 (bool, int, double, ObjectID, std::stringのいずれか)
     void resize(const size_t, const VecParamType&);
 
     /// @brief 指定したサイズまでIGESParameterVectorを拡張（デフォルト値で埋める）
     /// @param new_size 新しいサイズ
-    /// @param default_value デフォルト値 (bool, int, double, uint64_t, std::stringのいずれか)
+    /// @param default_value デフォルト値 (bool, int, double, ObjectID, std::stringのいずれか)
     /// @param format ValueFormat
     void resize(const size_t, const VecParamType&, const ValueFormat&);
 
@@ -166,7 +167,8 @@ class IGESParameterVector {
     ///       ② T = int ⇒ 他の型からの変換は許可しない;
     ///       ③ T = double ⇒ 他の型からの変換は許可しない;
     ///       ④ T = std::string ⇒ 他の型からの変換は許可しない;
-    ///       ⑤ T = uint64_t ⇒ data_[index]の型がint
+    ///       ⑤ T = ObjectID ⇒ data_[index]の型がintであり、指定されたint値に対応する
+    ///         ObjectIDが存在する場合
     ///       ただし、format_[index].is_defaultがtrueの場合は、どの型からも変換可能とする
     template<typename T> std::enable_if_t<is_allowed_type_v<T>, T>
     access_as(size_t index) {
@@ -195,14 +197,14 @@ class IGESParameterVector {
                     return std::get<bool>(data_[index]);
                 }
             }
-        } else if constexpr (std::is_same_v<T, uint64_t>) {
-            // uint64_t型の場合、値が正のint型からは変更可能
+        } else if constexpr (std::is_same_v<T, ObjectID>) {
+            // ObjectID型の場合、登録済みのint型IDであれば変更可能
             if (std::holds_alternative<int>(data_[index])) {
                 int val = std::get<int>(data_[index]);
-                if (val >= 0) {
+                if (auto obj_id = IDGenerator::TryGetByIntID(val); obj_id.has_value()) {
                     formats_[index] = DefaultValueFormat<T>();  // formatも更新
-                    data_[index] = static_cast<uint64_t>(val);
-                    return std::get<uint64_t>(data_[index]);
+                    data_[index] = obj_id.value();
+                    return obj_id.value();
                 }
             }
         }
@@ -278,8 +280,19 @@ class IGESParameterVector {
 /// @param os 出力ストリーム
 /// @param vec 出力するIGESParameterVector
 /// @return 出力ストリーム
-/// @note intと区別するため、uint64_tの後ろには"u"を出力する
 std::ostream& operator<<(std::ostream&, const IGESParameterVector&);
+
+/// @brief IGESParameterVectorからObjectIDを取得する
+/// @param parameters IGESParameterVector
+/// @param index パラメータのインデックス
+/// @param de2id DEレコードポインタからObjectIDへのマッピング
+/// @param allow_unset_id 未設定ID (UnsetIDまたは0) を許容するか
+/// @return 取得したObjectID
+/// @throw std::out_of_range indexがparametersの範囲外の場合
+/// @throw std::invalid_argument パラメータの型がint型またはObjectID型でない場合、
+///        int型IDを解決できない場合、未設定IDを許容しない場合に未設定IDとなる場合
+ObjectID GetObjectIDFromParameters(const IGESParameterVector&, const size_t,
+                                   const pointer2ID& = {}, const bool = false);
 
 }  // namespace igesio
 

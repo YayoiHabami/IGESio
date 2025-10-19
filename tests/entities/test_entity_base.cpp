@@ -13,6 +13,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -28,7 +29,9 @@ namespace {
 namespace i_ent = igesio::entities;
 
 /// @brief IGESのDEとPDのレコード
-std::pair<std::vector<i_ent::RawEntityDE>, std::vector<i_ent::RawEntityPD>>
+std::tuple<std::vector<i_ent::RawEntityDE>,
+           std::vector<i_ent::RawEntityPD>,
+           igesio::ObjectID, igesio::pointer2ID>
 GetTestRecords() {
     auto source_dir = std::filesystem::absolute(__FILE__).parent_path()
                       .parent_path() / "test_data";
@@ -38,22 +41,22 @@ GetTestRecords() {
     auto& pd = data.parameter_data_section;
     auto& de = data.directory_entry_section;
 
+    auto iges_id = igesio::IDGenerator::Generate(igesio::ObjectType::kIgesData);
+    igesio::pointer2ID de2id;
+    for (const auto& de_record : de) {
+        auto id = igesio::IDGenerator::Reserve(
+                iges_id, static_cast<uint16_t>(de_record.entity_type), de_record.sequence_number);
+        de2id.emplace(de_record.sequence_number, id);
+    }
+
     EXPECT_EQ(pd.size(), de.size());
 
-    return {de, pd};
+    return {de, pd, iges_id, de2id};
 }
 
 /// @brief エンティティのリスト
 std::vector<std::shared_ptr<i_ent::EntityBase>> GetEntities() {
-    auto [de_records, pd_records] = GetTestRecords();
-    uint64_t iges_id = igesio::IDGenerator::Generate();
-
-    // IDを予約する
-    i_ent::pointer2ID de2id;
-    for (const auto& de : de_records) {
-        auto id = igesio::IDGenerator::Reserve(iges_id, de.sequence_number);
-        de2id.emplace(de.sequence_number, id);
-    }
+    auto [de_records, pd_records, iges_id, de2id] = GetTestRecords();
 
     std::vector<std::shared_ptr<i_ent::EntityBase>> entities;
     for (size_t i = 0; i < de_records.size(); ++i) {
@@ -90,7 +93,7 @@ std::vector<std::shared_ptr<i_ent::EntityBase>> GetEntities() {
 
 // 複数のタイプのエンティティをエラーなく作成できることを確認する
 TEST(EntityBaseTest, Constructor) {
-    auto [de_records, pd_records] = GetTestRecords();
+    auto [de_records, pd_records, iges_id, de2id] = GetTestRecords();
 
     for (size_t i = 0; i < de_records.size(); ++i) {
         auto& de = de_records[i];
@@ -98,7 +101,7 @@ TEST(EntityBaseTest, Constructor) {
 
         // UnsupportedEntityのインスタンスがエラーなく作成できることを確認
         EXPECT_NO_THROW({
-            i_ent::UnsupportedEntity entity(de, pd);
+            i_ent::UnsupportedEntity entity(de, pd, de2id, iges_id);
         });
     }
 }
@@ -111,14 +114,14 @@ TEST(EntityBaseTest, Constructor) {
 
 // エンティティのタイプが正しく取得できることを確認する
 TEST(EntityBaseTest, GetType) {
-    auto [de_records, pd_records] = GetTestRecords();
+    auto [de_records, pd_records, iges_id, de2id] = GetTestRecords();
 
     std::unordered_map<i_ent::EntityType, size_t> type_count;
     for (size_t i = 0; i < de_records.size(); ++i) {
         auto& de = de_records[i];
         auto pd = i_ent::ToIGESParameterVector(pd_records[i]);
 
-        i_ent::UnsupportedEntity entity(de, pd);
+        i_ent::UnsupportedEntity entity(de, pd, de2id, iges_id);
         auto type = entity.GetType();
         type_count[type]++;
     }
@@ -178,12 +181,12 @@ TEST(EntityBaseTest, GetUnresolvedReferences) {
     auto entities = GetEntities();
 
     // TransformationMatrixエンティティのIDを取得
-    std::vector<uint64_t> trans_ids;
+    std::vector<igesio::ObjectID> trans_ids;
     std::string trans_ids_str;
     for (const auto& entity : entities) {
         if (entity->GetType() == i_ent::EntityType::kTransformationMatrix) {
             trans_ids.push_back(entity->GetID());
-            trans_ids_str += std::to_string(entity->GetID()) + ",";
+            trans_ids_str += ToString(entity->GetID()) + ",";
         }
     }
 
@@ -219,7 +222,7 @@ TEST(EntityBaseTest, SetUnresolvedReferenceWithInvalidBase) {
     auto entities = GetEntities();
 
     // TransformationMatrixエンティティのポインタを取得
-    std::unordered_map<uint64_t, std::shared_ptr<const i_ent::EntityBase>>
+    std::unordered_map<igesio::ObjectID, std::shared_ptr<const i_ent::EntityBase>>
             trans_map;
     for (const auto& entity : entities) {
         if (entity->GetType() == i_ent::EntityType::kTransformationMatrix) {

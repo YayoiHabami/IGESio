@@ -24,11 +24,6 @@
 
 namespace igesio::entities {
 
-/// @brief DEポインターとエンティティのIDのマッピングを保持する型
-using pointer2ID = std::unordered_map<unsigned int, uint64_t>;
-/// @brief エンティティのIDとDEポインターのマッピングを保持する型
-using id2pointer = std::unordered_map<uint64_t, unsigned int>;
-
 /// @brief DEフィールドの値の種類
 /// @note DEフィールドが保持する値がデフォルト値、ポインタ、正の値の
 ///       いずれであるかを示す
@@ -59,9 +54,9 @@ class DEFieldWrapper {
  private:
     /// @brief このDEフィールドが参照するエンティティのID
     /// @note プログラム上でエンティティが一意に持つ数値.
-    ///       kUnsetIDの場合はこのフィールドがポインタを持たないことを示す.
+    ///       `!id_.IsSet()`の場合はこのフィールドがポインタを持たないことを示す.
     /// @note ポインタ設定前の予約値としての役割がメイン
-    uint64_t id_;
+    ObjectID id_;
 
     /// @brief このDEフィールドの値の種類
     /// @note デフォルト値、ポインタ、正の値のいずれかを示す
@@ -75,14 +70,14 @@ class DEFieldWrapper {
 
     /// @brief 指定された型のshared_ptrを設定する実装
     /// @param ptr 設定するshared_ptr
-    /// @note id_がkUnsetIDの場合はポインタを設定しない
+    /// @note id_がUnsetIDの場合はポインタを設定しない
     /// @throw std::invalid_argument ptrのIDがid_と一致しない場合
     template<typename T>
     void SetPointerImpl(const std::shared_ptr<const T>& ptr) {
         if (ptr) {
-            if (id_ != kUnsetID && ptr->GetID() != id_) {
-                throw std::invalid_argument("ID mismatch: expected " + std::to_string(id_) +
-                                          ", got " + std::to_string(ptr->GetID()));
+            if (id_ != IDGenerator::UnsetID() && ptr->GetID() != id_) {
+                throw std::invalid_argument("ID mismatch: expected " + ToString(id_) +
+                                          ", got " + ToString(ptr->GetID()));
             }
         }
 
@@ -105,22 +100,22 @@ class DEFieldWrapper {
     /// @brief value_type_をkPointerに設定する
     void SetAsPointer() { value_type_ = DEFieldValueType::kPointer; }
     /// @brief value_type_をkPositiveに設定する
-    /// @note id_をkUnsetIDに置き換え、ポインタを無効化する
+    /// @note id_をUnsetIDに置き換え、ポインタを無効化する
     void SetAsPositive() {
         value_type_ = DEFieldValueType::kPositive;
-        if (id_ != kUnsetID) {
+        if (id_ != IDGenerator::UnsetID()) {
             // ポインタを無効化
-            id_ = kUnsetID;
+            id_ = IDGenerator::UnsetID();
             InvalidateAllPointers();
         }
     }
     /// @brief value_type_をkDefaultに設定する
-    /// @note id_をkUnsetIDに置き換え、ポインタを無効化する
+    /// @note id_をUnsetIDに置き換え、ポインタを無効化する
     void SetAsDefault() {
         value_type_ = DEFieldValueType::kDefault;
-        if (id_ != kUnsetID) {
+        if (id_ != IDGenerator::UnsetID()) {
             // ポインタを無効化
-            id_ = kUnsetID;
+            id_ = IDGenerator::UnsetID();
             InvalidateAllPointers();
         }
     }
@@ -134,15 +129,15 @@ class DEFieldWrapper {
 
     /// @brief デフォルトコンストラクタ
     /// @note デフォルト値（0）のケースで使用
-    DEFieldWrapper() : id_(kUnsetID) {}
+    DEFieldWrapper() : id_(IDGenerator::UnsetID()) {}
 
     /// @brief IDを指定するコンストラクタ
     /// @param id このDEフィールドが参照するエンティティのID
     /// @note 与えられる値は正の値
     /// @note 本来DEフィールドにおいてポインタは負の値で表現されるが、
     ///       その負値から正値への変換は別途行うことを想定している
-    explicit DEFieldWrapper(const uint64_t id) : id_(id) {
-        if (id != kUnsetID) SetAsPointer();
+    explicit DEFieldWrapper(const ObjectID& id) : id_(id) {
+        if (id.IsSet()) SetAsPointer();
     }
 
     /// @brief コピーコンストラクタ
@@ -153,7 +148,7 @@ class DEFieldWrapper {
 
     /// @brief ムーブコンストラクタ
     /// @param other ムーブ元のDEFieldWrapperインスタンス
-    /// @note 他のインスタンスのIDを無効化する (kUnsetIDに設定)
+    /// @note 他のインスタンスのIDを無効化する (UnsetIDに設定)
     DEFieldWrapper(DEFieldWrapper&& other) noexcept
         : id_(other.id_), weak_ptrs_(std::move(other.weak_ptrs_)),
           value_type_(other.value_type_) {
@@ -176,7 +171,7 @@ class DEFieldWrapper {
     /// @brief ムーブ代入演算子
     /// @param other ムーブ元のDEFieldWrapperインスタンス
     /// @return このインスタンスへの参照
-    /// @note 他のインスタンスのIDを無効化する (kUnsetIDに設定)
+    /// @note 他のインスタンスのIDを無効化する (UnsetIDに設定)
     DEFieldWrapper& operator=(DEFieldWrapper&& other) noexcept {
         if (this != &other) {
             id_ = other.id_;
@@ -216,11 +211,11 @@ class DEFieldWrapper {
                         return static_cast<int>(it->second);
                     } else {
                         throw std::out_of_range(
-                            "Entity ID " + std::to_string(id_) +
+                            "Entity ID " + ToString(id_) +
                             " in DEFieldWrapper not found in ID mapping.");
                     }
                 }
-                return static_cast<int>(id_);
+                return id_.ToInt();
             default:
                 throw std::logic_error("Unknown DEFieldValueType");
         }
@@ -234,8 +229,8 @@ class DEFieldWrapper {
 
     /// @brief 現在のIDを取得
     /// @return このフィールドが参照するエンティティのID
-    /// @note エンティティを参照しない場合はkUnsetIDを返す
-    uint64_t GetID() const {
+    /// @note エンティティを参照しない場合はUnsetIDを返す
+    const ObjectID& GetID() const {
         return id_;
     }
 
@@ -243,9 +238,9 @@ class DEFieldWrapper {
     /// @return 未設定のポインタのID、またはstd::nullopt
     /// @note ポインタが設定済みの場合や、デフォルト値が設定されている場合、
     ///       規定値 (正の値) が設定されている場合はstd::nulloptを返す。
-    virtual std::optional<uint64_t> GetUnsetID() const {
-        // デフォルト値の場合 (id_がkUnsetIDの場合) はstd::nulloptを返す
-        if (id_ == kUnsetID) return std::nullopt;
+    virtual std::optional<ObjectID> GetUnsetID() const {
+        // デフォルト値の場合 (id_がUnsetIDの場合) はstd::nulloptを返す
+        if (!id_.IsSet()) return std::nullopt;
 
         // それ以外の場合、有効なポインタを持たなければid_を返す
         if (!HasValidPointer()) {
@@ -260,13 +255,13 @@ class DEFieldWrapper {
     /// @note 新しいIDが現在のIDと異なる場合、すべてのポインタを無効化する.
     ///       このため、ポインタの再設定が必要となる. ポインタが既に作成済みの場合は
     ///       OverwritePointerを使用すること.
-    void OverwriteID(const uint64_t new_id) {
+    void OverwriteID(const ObjectID& new_id) {
         if (id_ != new_id) {
             id_ = new_id;
             InvalidateAllPointers();
 
             // ValueTypeを更新
-            if (new_id != kUnsetID) {
+            if (new_id.IsSet()) {
                 SetAsPointer();
             } else {
                 SetAsDefault();
@@ -305,8 +300,8 @@ class DEFieldWrapper {
     template<typename T>
     typename std::enable_if_t<std::disjunction_v<std::is_same<T, Args>...>, void>
     SetPointer(const std::shared_ptr<const T>& ptr) {
-        if (id_ == kUnsetID) {
-            // id_がkUnsetIDの場合、ポインタは有効化されない
+        if (id_ == IDGenerator::UnsetID()) {
+            // id_がUnsetIDの場合、ポインタは有効化されない
             InvalidateAllPointers();
             return;
         }
@@ -354,7 +349,7 @@ class DEFieldWrapper {
     }
 
     /// @brief デフォルト状態に戻す
-    /// @note ポインタを持たない状態に戻し、IDをkUnsetIDに設定する
+    /// @note ポインタを持たない状態に戻し、IDをUnsetIDに設定する
     void Reset() { SetAsDefault(); }
 };
 

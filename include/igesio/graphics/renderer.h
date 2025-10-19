@@ -58,7 +58,7 @@ class EntityRenderer {
     ///       値はIEntityGraphicsオブジェクト
     /// @note 基本的に描画オブジェクトは外側には公開しない
     std::unordered_map<ShaderType, std::unordered_map<
-            uint64_t, std::unique_ptr<IEntityGraphics>>> draw_objects_;
+            ObjectID, std::unique_ptr<IEntityGraphics>>> draw_objects_;
 
     /// @brief 描画対象のサイズ [px]
     /// @note 次回の描画時に反映される (すなわち、glGetIntegrevで取得できるサイズ
@@ -174,18 +174,18 @@ class EntityRenderer {
     /// @brief 指定されたIDのエンティティの描画オブジェクトを削除する
     /// @param id エンティティのID
     /// @note 存在しない場合は何もしない
-    void RemoveEntity(const uint64_t);
+    void RemoveEntity(const ObjectID&);
 
     /// @brief 指定されたIDのエンティティが登録済みか
     /// @param id エンティティのID
     /// @return 登録済みの場合は`true`, そうでない場合は`false`
-    bool HasEntity(const uint64_t) const;
+    bool HasEntity(const ObjectID&) const;
 
     /// @brief 指定されたIDのエンティティの描画オブジェクトの型の取得
     /// @param id エンティティのID
     /// @return 描画オブジェクトを保持している場合はそのエンティティのShaderTypeを、
     ///         存在しない場合はShaderType::kNoneを返す
-    ShaderType GetEntityShaderType(const uint64_t) const;
+    ShaderType GetEntityShaderType(const ObjectID&) const;
 
 
 

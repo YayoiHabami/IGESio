@@ -144,8 +144,8 @@ std::ostream& igesio::operator<<(std::ostream& os, const IGESParameterVector& ve
             } else {
                 os << value;
             }
-        } else if (vec.is_type<uint64_t>(i)) {
-            os << vec.get<uint64_t>(i) << "u";
+        } else if (vec.is_type<ObjectID>(i)) {
+            os << ToString(vec.get<ObjectID>(i));
         } else if (vec.is_type<std::string>(i)) {
             os << vec.get<std::string>(i);
         } else {
@@ -154,4 +154,56 @@ std::ostream& igesio::operator<<(std::ostream& os, const IGESParameterVector& ve
     }
     os << "]";
     return os;
+}
+
+igesio::ObjectID igesio::GetObjectIDFromParameters(
+        const IGESParameterVector& parameters,
+        const size_t index, const pointer2ID& de2id,
+        const bool allow_unset_id) {
+    if (index >= parameters.size()) {
+        throw std::out_of_range("Parameter index " + std::to_string(index)
+            + " out of range (size: " + std::to_string(parameters.size()) + ").");
+    }
+
+    ObjectID result_id;
+    if (parameters.is_type<int>(index)) {
+        // int型の場合 (負値の場合もあるため、絶対値を取る)
+        auto int_id = std::abs(parameters.get<int>(index));
+        if (int_id == kInvalidIntID) {
+            // 未設定ID
+            result_id = IDGenerator::UnsetID();
+        } else {
+            // 有効なint型ID
+            if (de2id.empty()) {
+                // de2idが空の場合はエラー
+                throw std::invalid_argument(
+                    "Cannot resolve ObjectID from int ID "
+                    + std::to_string(int_id) + " because de2id mapping is empty.");
+            }
+            if (de2id.find(int_id) == de2id.end()) {
+                // de2idに存在しない場合はエラー
+                throw std::invalid_argument(
+                    "Cannot resolve ObjectID from int ID "
+                    + std::to_string(int_id) + " because it is not found in de2id mapping.");
+            }
+            result_id = de2id.at(int_id);
+        }
+    } else if (parameters.is_type<ObjectID>(index)) {
+        // ObjectID型の場合
+        result_id = parameters.get<ObjectID>(index);
+    } else {
+        // それ以外の型の場合はエラー
+        throw std::invalid_argument(
+            "Parameter at index " + std::to_string(index)
+            + " is neither int nor ObjectID type.");
+    }
+
+    // 未設定IDを許容しない場合のチェック
+    if (!allow_unset_id && result_id == IDGenerator::UnsetID()) {
+        throw std::invalid_argument(
+            "Parameter at index " + std::to_string(index)
+            + " resolves to UnsetID, which is not allowed.");
+    }
+
+    return result_id;
 }

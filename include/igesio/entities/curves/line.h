@@ -64,10 +64,10 @@ class Line : public EntityBase, public virtual ICurve3D {
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
-    /// @throw std::invalid_argument iges_idがkUnsetIDではなく、かつ
+    /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     Line(const RawEntityDE&, const IGESParameterVector&,
-         const pointer2ID& = {}, const uint64_t = kUnsetID);
+         const pointer2ID& = {}, const ObjectID& = IDGenerator::UnsetID());
 
     /// @brief コンストラクタ
     /// @param start_point 始点 P1 の座標値 (x, y, z)

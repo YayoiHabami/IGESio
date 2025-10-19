@@ -8,6 +8,7 @@
 #include "igesio/entities/surfaces/ruled_surface.h"
 
 #include <memory>
+#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -30,9 +31,9 @@ using igesio::Vector3d;
 
 RuledSurface::RuledSurface(
         const RawEntityDE& de_record, const IGESParameterVector& parameters,
-        const pointer2ID& de2id, const uint64_t iges_id)
+        const pointer2ID& de2id, const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id),
-          curve1_(kUnsetID), curve2_(kUnsetID) {
+          curve1_(IDGenerator::UnsetID()), curve2_(IDGenerator::UnsetID()) {
     InitializePD(de2id);
 }
 
@@ -40,13 +41,12 @@ RuledSurface::RuledSurface(
         const IGESParameterVector& parameters)
         : RuledSurface(
             RawEntityDE::ByDefault(i_ent::EntityType::kRuledSurface),
-            parameters, {}, kUnsetID) {}
+            parameters, {}, IDGenerator::UnsetID()) {}
 
 RuledSurface::RuledSurface(const std::shared_ptr<ICurve>& curve1,
                            const std::shared_ptr<ICurve>& curve2,
                            const bool is_reversed, const bool is_developable)
-        : RuledSurface({static_cast<int>(curve1->GetID()),
-                        static_cast<int>(curve2->GetID()),
+        : RuledSurface({curve1->GetID(), curve2->GetID(),
                         is_reversed, is_developable}) {
     // nullptrの確認
     if (curve1 == nullptr || curve2 == nullptr) {
@@ -82,29 +82,15 @@ size_t RuledSurface::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 曲線1,2のポインタを設定
-    uint64_t curve1_id, curve2_id;
-    if (!de2id.empty()) {
-        // de2idが空でない場合は、取得した数値をde2idでIDに変換
-        auto id_int = static_cast<unsigned int>(pd.access_as<int>(0));
-        if (de2id.find(id_int) == de2id.end()) {
-            throw std::out_of_range("Curve1 ID " + std::to_string(id_int)
-                                    + " not found in DE to ID mapping.");
-        }
-        curve1_id = de2id.at(id_int);
-
-        id_int = static_cast<unsigned int>(pd.access_as<int>(1));
-        if (de2id.find(id_int) == de2id.end()) {
-            throw std::out_of_range("Curve2 ID " + std::to_string(id_int)
-                                    + " not found in DE to ID mapping.");
-        }
-        curve2_id = de2id.at(id_int);
-    } else {
-        // de2idが空の場合は、そのままIDとして使用
-        curve1_id = static_cast<uint64_t>(pd.access_as<int>(0));
-        curve2_id = static_cast<uint64_t>(pd.access_as<int>(1));
+    try {
+        curve1_ = PointerContainer<false, ICurve>(
+                GetObjectIDFromParameters(pd, 0, de2id));
+        curve2_ = PointerContainer<false, ICurve>(
+                GetObjectIDFromParameters(pd, 1, de2id));
+    } catch (const std::exception& e) {
+        throw igesio::DataFormatError("Failed to set curve pointers "
+            "in RuledSurface entity: " + std::string(e.what()));
     }
-    curve1_ = PointerContainer<false, ICurve>(curve1_id);
-    curve2_ = PointerContainer<false, ICurve>(curve2_id);
 
     // 反転フラグ, 可展面フラグを設定
     is_reversed_ = pd.access_as<bool>(2);
@@ -113,8 +99,9 @@ size_t RuledSurface::SetMainPDParameters(const pointer2ID& de2id) {
     return 4;
 }
 
-std::unordered_set<uint64_t> RuledSurface::GetUnresolvedPDReferences() const {
-    std::unordered_set<uint64_t> unresolved;
+std::unordered_set<igesio::ObjectID>
+RuledSurface::GetUnresolvedPDReferences() const {
+    std::unordered_set<ObjectID> unresolved;
 
     if (!curve1_.IsPointerSet()) {
         unresolved.insert(curve1_.GetID());
@@ -152,15 +139,15 @@ bool RuledSurface::SetUnresolvedPDReferences(
     return false;
 }
 
-std::vector<uint64_t> RuledSurface::GetChildIDs() const {
-    std::vector<uint64_t> ids;
+std::vector<igesio::ObjectID> RuledSurface::GetChildIDs() const {
+    std::vector<ObjectID> ids;
     ids.push_back(curve1_.GetID());
     ids.push_back(curve2_.GetID());
     return ids;
 }
 
 std::shared_ptr<const i_ent::EntityBase>
-RuledSurface::GetChildEntity(const uint64_t id) const {
+RuledSurface::GetChildEntity(const ObjectID& id) const {
     if (curve1_.GetID() == id) {
         auto ptr = curve1_.TryGetEntity<EntityBase>();
         if (ptr) return ptr.value();
@@ -183,12 +170,12 @@ igesio::ValidationResult RuledSurface::ValidatePD() const {
         auto curve1_opt = curve1_.TryGetEntity<EntityBase>();
         if (!curve1_opt) {
             errors.emplace_back("Curve1 entity (ID: ")
-                << curve1_.GetID() << ") is not an EntityBase.";
+                << ToString(curve1_.GetID()) << ") is not an EntityBase.";
         } else {
             auto result = curve1_opt.value()->Validate();
             if (!result.is_valid) {
                 errors.emplace_back("Curve1 entity (ID: ")
-                    << curve1_.GetID() << ") is invalid: " << result.Message();
+                    << ToString(curve1_.GetID()) << ") is invalid: " << result.Message();
             }
         }
     }
@@ -200,12 +187,12 @@ igesio::ValidationResult RuledSurface::ValidatePD() const {
         auto curve2_opt = curve2_.TryGetEntity<EntityBase>();
         if (!curve2_opt) {
             errors.emplace_back("Curve2 entity (ID: ")
-                << curve2_.GetID() << ") is not an EntityBase.";
+                << ToString(curve2_.GetID()) << ") is not an EntityBase.";
         } else {
             auto result = curve2_opt.value()->Validate();
             if (!result.is_valid) {
                 errors.emplace_back("Curve2 entity (ID: ")
-                    << curve2_.GetID() << ") is invalid: " << result.Message();
+                    << ToString(curve2_.GetID()) << ") is invalid: " << result.Message();
             }
         }
     }
@@ -213,7 +200,7 @@ igesio::ValidationResult RuledSurface::ValidatePD() const {
     // 曲線1と曲線2が同じエンティティであってはならない
     if (curve1_.GetID() == curve2_.GetID()) {
         errors.emplace_back("Curve1 and Curve2 must be different entities.")
-            << " (Both are ID: " << curve1_.GetID() << ")";
+            << " (Both are ID: " << ToString(curve1_.GetID()) << ")";
     }
 
     return MakeValidationResult(errors);
