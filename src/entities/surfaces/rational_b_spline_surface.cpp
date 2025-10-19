@@ -54,7 +54,7 @@ TryComputeBasisFunctions(const double t, const bool is_u,
 
 RationalBSplineSurface::RationalBSplineSurface(
         const RawEntityDE& de_record, const IGESParameterVector& parameters,
-        const pointer2ID& de2id, const uint64_t iges_id)
+        const pointer2ID& de2id, const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id) {
     InitializePD(de2id);
 }
@@ -63,7 +63,7 @@ RationalBSplineSurface::RationalBSplineSurface(
         const IGESParameterVector& parameters)
         : RationalBSplineSurface(
             RawEntityDE::ByDefault(i_ent::EntityType::kRationalBSplineSurface),
-            parameters, {}, kUnsetID) {}
+            parameters, {}, IDGenerator::UnsetID()) {}
 
 i_ent::RationalBSplineSurfaceType RationalBSplineSurface::GetSurfaceType() const {
     return static_cast<RationalBSplineSurfaceType>(form_number_);

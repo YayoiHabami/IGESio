@@ -150,16 +150,23 @@ TEST(IGESParameterVectorTest, AccessAsBoolFromInt) {
     ASSERT_EQ(val, false);
 }
 
-TEST(IGESParameterVectorTest, AccessAsUint64FromInt) {
-    igesio::IGESParameterVector vec = {100};
-    uint64_t val = vec.access_as<uint64_t>(0);
-    ASSERT_EQ(val, 100);
+TEST(IGESParameterVectorTest, AccessAsObjectIDFromInt) {
+    // 登録済みのint型IDであれば、ObjectIDに変換できる
+    auto id = igesio::IDGenerator::Generate(igesio::ObjectType::kIgesData);
+
+    igesio::IGESParameterVector vec = {id.ToInt()};
+    igesio::ObjectID val = vec.access_as<igesio::ObjectID>(0);
+    ASSERT_EQ(val, id);
 }
 
 TEST(IGESParameterVectorTest, AccessAsBadVariantAccess) {
     igesio::IGESParameterVector vec = {std::string("test")};
     ASSERT_THROW(vec.access_as<bool>(0), std::bad_variant_access);
-    ASSERT_THROW(vec.access_as<uint64_t>(0), std::bad_variant_access);
+    ASSERT_THROW(vec.access_as<igesio::ObjectID>(0), std::bad_variant_access);
+
+    // 未登録のint型IDはObjectIDに変換できない
+    igesio::IGESParameterVector vec2 = {999999};
+    ASSERT_THROW(vec2.access_as<igesio::ObjectID>(0), std::bad_variant_access);
 }
 
 
@@ -174,7 +181,7 @@ TEST(IGESParameterVectorTest, IsType) {
     ASSERT_TRUE(vec.is_type<double>(1));
     ASSERT_TRUE(vec.is_type<std::string>(2));
     ASSERT_FALSE(vec.is_type<bool>(0));
-    ASSERT_FALSE(vec.is_type<uint64_t>(1));
+    ASSERT_FALSE(vec.is_type<igesio::ObjectID>(1));
 }
 
 TEST(IGESParameterVectorTest, IsTypeOutOfRange) {
@@ -254,9 +261,10 @@ TEST(IGESParameterVectorTest, Empty) {
 
 TEST(IGESParameterVectorTest, OutputStream) {
     std::stringstream ss;
-    igesio::IGESParameterVector vec = {1, 2.5, std::string("test"), true, static_cast<uint64_t>(100)};
+    auto id = igesio::IDGenerator::Generate(igesio::ObjectType::kIgesData);
+    igesio::IGESParameterVector vec = {1, 2.5, std::string("test"), true, id};
     ss << vec;
-    EXPECT_EQ(ss.str(), "[1, 2.5, test, 1, 100u]");
+    EXPECT_EQ(ss.str(), "[1, 2.5, test, 1, " + ToString(id) + "]");
 
     std::stringstream ss2;
     igesio::IGESParameterVector vec2 = {3.0};

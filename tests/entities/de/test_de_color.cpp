@@ -21,17 +21,17 @@ namespace i_ent = igesio::entities;
 /// @brief Mockクラス: IColorDefinitionのテスト用
 class MockColorDefinition : public i_ent::IColorDefinition {
  private:
-    uint64_t id_;
+    igesio::ObjectID id_;
     std::string name_;
     std::array<double, 3> rgb_;
 
  public:
-    explicit MockColorDefinition(uint64_t id,
+    explicit MockColorDefinition(const igesio::ObjectID& id,
                                  const std::string& name = "Custom Color",
                                  const std::array<double, 3>& rgb = {10.0, 20.0, 30.0})
         : id_(id), name_(name), rgb_(rgb) {}
 
-    uint64_t GetID() const override { return id_; }
+    const igesio::ObjectID& GetID() const override { return id_; }
     int GetFormNumber() const override { return 0; }
     i_ent::EntityType GetType() const override {
         return i_ent::EntityType::kColorDefinition;
@@ -48,12 +48,21 @@ class DEColorTest : public ::testing::Test {
  protected:
     std::shared_ptr<i_ent::IColorDefinition> color_def_ptr_1;
     std::shared_ptr<i_ent::IColorDefinition> color_def_ptr_2;
+    igesio::ObjectID id_1;
+    igesio::ObjectID id_2;
 
     void SetUp() override {
+        id_1 = igesio::IDGenerator::Generate(
+                igesio::ObjectType::kEntityNew,
+                static_cast<uint16_t>(i_ent::EntityType::kColorDefinition));
+        id_2 = igesio::IDGenerator::Generate(
+                igesio::ObjectType::kEntityNew,
+                static_cast<uint16_t>(i_ent::EntityType::kColorDefinition));
+
         color_def_ptr_1 = std::make_shared<MockColorDefinition>(
-                123, "Custom Red", std::array<double, 3>{80.0, 20.0, 20.0});
+                id_1, "Custom Red", std::array<double, 3>{80.0, 20.0, 20.0});
         color_def_ptr_2 = std::make_shared<MockColorDefinition>(
-                456, "Custom Blue", std::array<double, 3>{20.0, 20.0, 80.0});
+                id_2, "Custom Blue", std::array<double, 3>{20.0, 20.0, 80.0});
     }
 };
 
@@ -69,7 +78,7 @@ TEST_F(DEColorTest, DefaultConstructor) {
 
     EXPECT_EQ(i_ent::DEFieldValueType::kDefault, color.GetValueType());
     EXPECT_EQ(0, color.GetValue());
-    EXPECT_EQ(igesio::kUnsetID, color.GetID());
+    EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
     EXPECT_EQ(nullptr, color.GetPointer());
 
@@ -79,18 +88,17 @@ TEST_F(DEColorTest, DefaultConstructor) {
 
 // IDを指定するコンストラクタのテスト
 TEST_F(DEColorTest, ConstructorWithID) {
-    uint64_t id = 123;
-    i_ent::DEColor color(id);
+    i_ent::DEColor color(id_1);
 
     EXPECT_EQ(i_ent::DEFieldValueType::kPointer, color.GetValueType());
-    EXPECT_EQ(id, color.GetID());
+    EXPECT_EQ(id_1, color.GetID());
 
     // ポインタを受け入れる用意はあるが、未設定
     EXPECT_FALSE(color.HasValidPointer());
 
     // ポインタは未設定でもIDは取得可能
-    EXPECT_EQ(std::optional<uint64_t>(id), color.GetUnsetID());
-    EXPECT_EQ(color.GetValue(), -static_cast<int>(id));
+    EXPECT_EQ(std::optional<igesio::ObjectID>(id_1), color.GetUnsetID());
+    EXPECT_EQ(color.GetValue(), -id_1.ToInt());
 }
 
 // 色番号を指定するコンストラクタのテスト
@@ -99,7 +107,7 @@ TEST_F(DEColorTest, ConstructorWithColorNumber) {
 
     EXPECT_EQ(i_ent::DEFieldValueType::kPositive, color.GetValueType());
     EXPECT_EQ(3, color.GetValue());
-    EXPECT_EQ(igesio::kUnsetID, color.GetID());
+    EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
     EXPECT_EQ((std::array<double, 3>{0.0, 100.0, 0.0}), color.GetRGB());
 }
@@ -120,7 +128,7 @@ TEST_F(DEColorTest, ConstructorWithIntZeroIsDefault) {
 
     EXPECT_EQ(i_ent::DEFieldValueType::kDefault, color.GetValueType());
     EXPECT_EQ(0, color.GetValue());
-    EXPECT_EQ(igesio::kUnsetID, color.GetID());
+    EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
     EXPECT_EQ((std::array<double, 3>{0.0, 0.0, 0.0}), color.GetRGB());
 }
@@ -142,16 +150,14 @@ TEST_F(DEColorTest, ConstructorWithInvalidIntThrows) {
 
 // ポインタを設定するテスト
 TEST_F(DEColorTest, SetPointerSuccess) {
-    // ID 123 で予約
-    uint64_t id = 123;
-    i_ent::DEColor color(id);
+    i_ent::DEColor color(id_1);
 
     // ポインタを設定
     color.SetPointer(color_def_ptr_1);
     EXPECT_TRUE(color.HasValidPointer());
     EXPECT_EQ(i_ent::DEFieldValueType::kPointer, color.GetValueType());
     EXPECT_EQ(color_def_ptr_1, color.GetPointer());
-    EXPECT_EQ(123, color.GetID());
+    EXPECT_EQ(id_1, color.GetID());
     EXPECT_EQ(std::nullopt, color.GetUnsetID());
 
     EXPECT_EQ(color_def_ptr_1->GetRGB(), color.GetRGB());
@@ -160,8 +166,7 @@ TEST_F(DEColorTest, SetPointerSuccess) {
 // ポインタを設定するテスト（異なるIDのポインタを指定）
 TEST_F(DEColorTest, SetPointerThrowsOnIDMismatch) {
     // 異なるIDで予約
-    uint64_t id = 999;
-    i_ent::DEColor color(id);
+    i_ent::DEColor color(id_2);
 
     // 異なるIDのポインタを設定しようとすると例外を投げる
     EXPECT_THROW(color.SetPointer(color_def_ptr_1), std::invalid_argument);
@@ -177,14 +182,14 @@ TEST_F(DEColorTest, OverwritePointer) {
 
     EXPECT_EQ(i_ent::DEFieldValueType::kPointer, color.GetValueType());
     EXPECT_TRUE(color.HasValidPointer());
-    EXPECT_EQ(123, color.GetID());
+    EXPECT_EQ(id_1, color.GetID());
     EXPECT_EQ(color_def_ptr_1, color.GetPointer());
     EXPECT_EQ(color_def_ptr_1->GetRGB(), color.GetRGB());
 
     // 別のポインタで上書き
     color.OverwritePointer(color_def_ptr_2);
 
-    EXPECT_EQ(456, color.GetID());
+    EXPECT_EQ(id_2, color.GetID());
     EXPECT_EQ(color_def_ptr_2, color.GetPointer());
     EXPECT_EQ(color_def_ptr_2->GetRGB(), color.GetRGB());
 }
@@ -204,27 +209,24 @@ TEST_F(DEColorTest, OverwritePointerThrowsOnNull) {
 
 // IDを上書きするテスト
 TEST_F(DEColorTest, OverwriteIDInvalidatesPointer) {
-    uint64_t id = 123;
-    i_ent::DEColor color(id);
+    i_ent::DEColor color(id_1);
     color.SetPointer(color_def_ptr_1);
     ASSERT_TRUE(color.HasValidPointer());
 
     // IDを上書きすると、ポインタが無効化される
-    uint64_t new_id = 789;
-    color.OverwriteID(new_id);
+    color.OverwriteID(id_2);
 
-    EXPECT_EQ(new_id, color.GetID());
+    EXPECT_EQ(id_2, color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
     EXPECT_EQ(nullptr, color.GetPointer());
 
     // ID 789のポインタを受け入れる準備ができているはず
-    EXPECT_EQ(std::optional<uint64_t>(new_id), color.GetUnsetID());
+    EXPECT_EQ(std::optional<igesio::ObjectID>(id_2), color.GetUnsetID());
 }
 
 // 正の値を設定するテスト
 TEST_F(DEColorTest, SetColorInvalidatesPointer) {
-    uint64_t id = 123;
-    i_ent::DEColor color(id);
+    i_ent::DEColor color(id_1);
     color.SetPointer(color_def_ptr_1);
     ASSERT_TRUE(color.HasValidPointer());
 
@@ -233,7 +235,7 @@ TEST_F(DEColorTest, SetColorInvalidatesPointer) {
 
     EXPECT_EQ(i_ent::DEFieldValueType::kPositive, color.GetValueType());
     EXPECT_EQ(6, color.GetValue());
-    EXPECT_EQ(igesio::kUnsetID, color.GetID());
+    EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
     EXPECT_EQ((std::array<double, 3>{100.0, 0.0, 100.0}), color.GetRGB());
 }
@@ -255,16 +257,13 @@ TEST_F(DEColorTest, GetValueIntegrity) {
     EXPECT_EQ(5, color_positive.GetValue());
 
     // Pointer (ID予約済み) -> IDの負の値
-    uint64_t id = 123;
-    i_ent::DEColor color_pointer_reserved(id);
-    EXPECT_EQ(color_pointer_reserved.GetValue(),
-              -static_cast<int>(id));
+    i_ent::DEColor color_pointer_reserved(id_1);
+    EXPECT_EQ(color_pointer_reserved.GetValue(), -id_1.ToInt());
 
     // Pointer (ポインタ設定済み) -> IDの負の値
-    i_ent::DEColor color_pointer_set(id);
+    i_ent::DEColor color_pointer_set(id_1);
     color_pointer_set.SetPointer(color_def_ptr_1);
-    EXPECT_EQ(color_pointer_set.GetValue(),
-              -static_cast<int>(id));
+    EXPECT_EQ(color_pointer_set.GetValue(), -id_1.ToInt());
 }
 
 // GetCMYのテスト
@@ -274,8 +273,7 @@ TEST_F(DEColorTest, GetCMY) {
     EXPECT_EQ((std::array<double, 3>{100.0, 0.0, 0.0}), color_positive.GetCMY());
 
     // ポインタを設定 -> RGB(80, 20, 20)
-    uint64_t id = 123;
-    i_ent::DEColor color_pointer(id);
+    i_ent::DEColor color_pointer(id_1);
     color_pointer.SetPointer(color_def_ptr_1);
     EXPECT_EQ((std::array<double, 3>{20.0, 80.0, 80.0}), color_pointer.GetCMY());
 }
@@ -287,8 +285,7 @@ TEST_F(DEColorTest, GetCMY) {
 
 TEST_F(DEColorTest, Reset) {
     // ポインタを設定している状態から開始
-    uint64_t id = 123;
-    i_ent::DEColor color(id);
+    i_ent::DEColor color(id_1);
     color.SetPointer(color_def_ptr_1);
     ASSERT_TRUE(color.HasValidPointer());
 
@@ -297,7 +294,7 @@ TEST_F(DEColorTest, Reset) {
     // リセット後、デフォルトコンストラクタと同じ状態になるはず
     EXPECT_EQ(i_ent::DEFieldValueType::kDefault, color.GetValueType());
     EXPECT_EQ(0, color.GetValue());
-    EXPECT_EQ(igesio::kUnsetID, color.GetID());
+    EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
 
     // 正の値を設定している状態から開始

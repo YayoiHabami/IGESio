@@ -35,7 +35,7 @@ namespace {
 using IVec = igesio::IGESParameterVector;
 using ET = igesio::entities::EntityType;
 using DE = igesio::entities::RawEntityDE;
-using p2I = igesio::entities::pointer2ID;
+using p2I = igesio::pointer2ID;
 namespace i_ent = igesio::entities;
 
 }  // namespace
@@ -48,27 +48,27 @@ void i_ent::EntityFactory::Initialize() {
     // エンティティタイプと作成関数のマッピングを設定
     // 0 - Null Entity
     creators_[ET::kNull] = [](const DE& de, const IVec& p,
-                              const p2I& d2i, const uint64_t iid) {
+                              const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::NullEntity>(de, p, d2i, iid);
     };
     // 100 - Circular Arc
     creators_[ET::kCircularArc] = [](const DE& de, const IVec& p,
-                                     const p2I& d2i, const uint64_t iid) {
+                                     const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::CircularArc>(de, p, d2i, iid);
     };
     // 102 - Composite Curve
     creators_[ET::kCompositeCurve] = [](const DE& de, const IVec& p,
-                                        const p2I& d2i, const uint64_t iid) {
+                                        const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::CompositeCurve>(de, p, d2i, iid);
     };
     // 104 - Conic Arc
     creators_[ET::kConicArc] = [](const DE& de, const IVec& p,
-                                  const p2I& d2i, const uint64_t iid) {
+                                  const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::ConicArc>(de, p, d2i, iid);
     };
     // 106 - Copious Data (CopiousDataBaseとして返す)
     creators_[ET::kCopiousData] = [](const DE& de, const IVec& p,
-                                     const p2I& d2i, const uint64_t iid) {
+                                     const p2I& d2i, const ObjectID& iid) {
         if (de.form_number <= static_cast<int>(i_ent::CopiousDataType::kSextuples)) {
             return std::static_pointer_cast<i_ent::CopiousDataBase>(
                 std::make_shared<i_ent::CopiousData>(de, p, d2i, iid));
@@ -82,53 +82,53 @@ void i_ent::EntityFactory::Initialize() {
 
     // 110 - Line
     creators_[ET::kLine] = [](const DE& de, const IVec& p,
-                              const p2I& d2i, const uint64_t iid) {
+                              const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::Line>(de, p, d2i, iid);
     };
     // 112 - Parametric Spline Curve
     creators_[ET::kParametricSplineCurve] = [](const DE& de, const IVec& p,
-                                               const p2I& d2i, const uint64_t iid) {
+                                               const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::ParametricSplineCurve>(de, p, d2i, iid);
     };
     // 116 - Point
     creators_[ET::kPoint] = [](const DE& de, const IVec& p,
-                               const p2I& d2i, const uint64_t iid) {
+                               const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::Point>(de, p, d2i, iid);
     };
     // 118 - Ruled Surface
     creators_[ET::kRuledSurface] = [](const DE& de, const IVec& p,
-                                      const p2I& d2i, const uint64_t iid) {
+                                      const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::RuledSurface>(de, p, d2i, iid);
     };
     // 120 - Surface of Revolution
     creators_[ET::kSurfaceOfRevolution] = [](const DE& de, const IVec& p,
-                                             const p2I& d2i, const uint64_t iid) {
+                                             const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::SurfaceOfRevolution>(de, p, d2i, iid);
     };
     // 122 - Tabulated Cylinder
     creators_[ET::kTabulatedCylinder] = [](const DE& de, const IVec& p,
-                                           const p2I& d2i, const uint64_t iid) {
+                                           const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::TabulatedCylinder>(de, p, d2i, iid);
     };
     // 124 - Transformation Matrix
     creators_[ET::kTransformationMatrix] = [](const DE& de, const IVec& p,
-                                              const p2I& d2i, const uint64_t iid) {
+                                              const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::TransformationMatrix>(de, p, d2i, iid);
     };
     // 126 - Rational B-Spline Curve
     creators_[ET::kRationalBSplineCurve] = [](const DE& de, const IVec& p,
-                                              const p2I& d2i, const uint64_t iid) {
+                                              const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::RationalBSplineCurve>(de, p, d2i, iid);
     };
     // 128 - Rational B-Spline Surface
     creators_[ET::kRationalBSplineSurface] = [](const DE& de, const IVec& p,
-                                                const p2I& d2i, const uint64_t iid) {
+                                                const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::RationalBSplineSurface>(de, p, d2i, iid);
     };
 
     // 314 - Color Definition
     creators_[ET::kColorDefinition] = [](const DE& de, const IVec& p,
-                                         const p2I& d2i, const uint64_t iid) {
+                                         const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::ColorDefinition>(de, p, d2i, iid);
     };
 
@@ -139,7 +139,7 @@ void i_ent::EntityFactory::Initialize() {
 
 std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
         const RawEntityDE& de, const IVec& parameters,
-        const pointer2ID& de2id, const uint64_t iges_id) {
+        const pointer2ID& de2id, const ObjectID& iges_id) {
     Initialize();  // 初期化
 
     auto it = creators_.find(de.entity_type);
@@ -153,6 +153,6 @@ std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
 
 std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
         const RawEntityDE& de, const RawEntityPD& pd,
-        const pointer2ID& de2id, const uint64_t iges_id) {
+        const pointer2ID& de2id, const ObjectID& iges_id) {
     return CreateEntity(de, ToIGESParameterVector(pd), de2id, iges_id);
 }

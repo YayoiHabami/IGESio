@@ -62,8 +62,9 @@ bool IgesData::AreAllReferencesSet() const {
     return unresolved.empty();
 }
 
-std::unordered_set<uint64_t> IgesData::GetUnresolvedReferences() const {
-    std::unordered_set<uint64_t> unresolved_ids;
+std::unordered_set<igesio::ObjectID>
+IgesData::GetUnresolvedReferences() const {
+    std::unordered_set<ObjectID> unresolved_ids;
 
     for (const auto& [id, entity] : entities_) {
         auto unset = entity->GetUnresolvedReferences();
@@ -81,7 +82,7 @@ std::unordered_set<uint64_t> IgesData::GetUnresolvedReferences() const {
 }
 
 std::shared_ptr<igesio::entities::EntityBase>
-IgesData::GetEntity(const uint64_t id) const {
+IgesData::GetEntity(const ObjectID& id) const {
     auto it = entities_.find(id);
     if (it != entities_.end()) {
         return it->second;
@@ -110,7 +111,7 @@ igesio::ValidationResult IgesData::Validate() const {
     // 参照が未設定のエンティティがないか確認
     for (const auto& id : GetUnresolvedReferences()) {
         result.AddError(ValidationError(
-            "Reference to the entity with ID " + std::to_string(id) +
+            "Reference to the entity with ID " + ToString(id) +
             " is unresolved. Please add a pointer to this entity "
             "from `AddEntity` function."));
     }

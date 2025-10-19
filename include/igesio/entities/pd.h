@@ -12,6 +12,7 @@
 #include <tuple>
 #include <vector>
 
+#include "igesio/common/id_generator.h"
 #include "igesio/common/iges_metadata.h"
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/entities/entity_type.h"
@@ -154,7 +155,7 @@ IGESParameterVector ToIGESParameterVector(const RawEntityPD&);
 /// @note sequence_numberについては、出力時に設定されるため、0を設定する
 /// @throw std::out_of_range idまたはvecで指定されるIDがid2deに存在しない場合
 RawEntityPD
-ToRawEntityPD(const EntityType, const uint64_t,
+ToRawEntityPD(const EntityType, const ObjectID&,
               const IGESParameterVector&, const id2pointer&);
 
 }  // namespace igesio::entities

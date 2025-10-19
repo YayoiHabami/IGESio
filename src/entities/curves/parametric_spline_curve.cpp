@@ -57,7 +57,7 @@ Vector3d ComputeSegmentValue(
 
 ParametricSplineCurve::ParametricSplineCurve(
         const RawEntityDE& de_record, const IGESParameterVector& parameters,
-        const pointer2ID& de2id, const uint64_t iges_id)
+        const pointer2ID& de2id, const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id) {
     InitializePD(de2id);
 }
@@ -66,7 +66,7 @@ ParametricSplineCurve::ParametricSplineCurve(
         const IGESParameterVector& parameters)
         : ParametricSplineCurve(
             RawEntityDE::ByDefault(i_ent::EntityType::kParametricSplineCurve),
-            parameters, {}, kUnsetID) {}
+            parameters, {}, IDGenerator::UnsetID()) {}
 
 i_ent::ParametricSplineCurveType
 ParametricSplineCurve::GetCurveType() const noexcept {

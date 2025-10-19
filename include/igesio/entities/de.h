@@ -61,10 +61,9 @@ namespace igesio::entities {
 /// @param value DEフィールドの値
 /// @param de2id DEポインターとIDのマッピング (valueが負の値の場合に使用)
 /// @return DEFieldWrapper継承クラスのインスタンス
-/// @note valueが負かつde2idが空の場合は、その絶対値をIDとして使用する
 /// @throw std::out_of_range de2idが空でない場合に、valueの絶対値がde2idに存在しない場合
 /// @throw igesio::DataFormatError valueが無効な場合 (DELineFontPattern, DELevel,
-///        DEColor以外の型で正の値を指定した場合)
+///        DEColor以外の型で正の値を指定した場合)、valueが負かつde2idが空の場合
 template<typename T>
 std::enable_if_t<std::is_same_v<T, DEStructure> ||
                  std::is_same_v<T, DELineFontPattern> ||
@@ -81,8 +80,9 @@ CreateDEFieldWrapper(const int value, const pointer2ID& de2id) {
         // 負の値の場合はポインタまたはIDとして扱う
         auto p_value = static_cast<unsigned int>(std::abs(value));
         if (de2id.empty()) {
-            // de2idが空の場合は絶対値をIDとして使用
-            return T(static_cast<uint64_t>(p_value));
+            // de2idが空の場合はエラー (int値をIDに変換できないため)
+            throw igesio::DataFormatError("No ID mapping provided for pointer value: "
+                                          + std::to_string(p_value));
         } else if (de2id.find(p_value) == de2id.end()) {
             // de2idが空でなく、p_valueがde2idに存在しない場合はエラー
             throw std::out_of_range("Pointer value not found in ID mapping: "

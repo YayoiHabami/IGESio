@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "igesio/common/errors.h"
+#include "igesio/common/id_generator.h"
 #include "igesio/common/iges_metadata.h"
 
 namespace igesio {
@@ -72,6 +73,9 @@ struct ValueFormat {
     /// @brief 単精度か (kRealのみで使用)
     /// @note 単精度の場合はEの指数部を使用し、倍精度の場合はDの指数部を使用する
     bool is_single_precision = false;
+    /// @brief DEポインタの値 (kPointerのみで使用)
+    /// @note ObjectIDからIGESの文字列に変換する際に使用 (負の場合はエラーとする)
+    int de_pointer = -1;
 
     /// @brief Logical型のValueFormatを生成
     /// @param is_default デフォルト値を使用したか (未指定または空白のみであったか)
@@ -107,8 +111,11 @@ struct ValueFormat {
     }
     /// @brief Pointer型のValueFormatを生成
     /// @param is_default デフォルト値を使用したか (未指定または空白のみであったか)
-    static ValueFormat Pointer(bool is_default = false) {
-        return {IGESParameterType::kPointer, is_default};
+    /// @param de_pointer DEポインタの値
+    static ValueFormat Pointer(bool is_default = false,
+                               int de_pointer = -1) {
+        return {IGESParameterType::kPointer, is_default, false, false, false,
+                false, false, de_pointer};
     }
     /// @brief String型のValueFormatを生成
     /// @param is_default デフォルト値を使用したか (未指定または空白のみであったか)
@@ -156,7 +163,7 @@ ValueFormat DefaultValueFormat() {
         return ValueFormat::Integer();
     } else if constexpr (std::is_same_v<T, double>) {
         return ValueFormat::Real();
-    } else if constexpr (std::is_same_v<T, uint64_t>) {
+    } else if constexpr (std::is_same_v<T, ObjectID>) {
         return ValueFormat::Pointer();
     } else if constexpr (std::is_same_v<T, std::string>) {
         return ValueFormat::String();
@@ -388,8 +395,12 @@ std::string ToIgesValue(const T& value, const ValueFormat& format,
         return ToIgesReal(value, format, config);
     } else if constexpr (std::is_same_v<T, std::string>) {
         return ToIgesString(value, format);
-    } else if constexpr (std::is_same_v<T, uint64_t>) {
-        return ToIgesPointer(static_cast<int>(value), format);
+    } else if constexpr (std::is_same_v<T, ObjectID>) {
+        if (format.de_pointer < 0) {
+            throw std::invalid_argument("DE pointer must be positive when converting "
+                "ObjectID to IGES string, but got: " + std::to_string(format.de_pointer));
+        }
+        return ToIgesPointer(format.de_pointer, format);
     } else if constexpr (std::is_same_v<T, bool>) {
         return ToIgesLogical(value, format);
     } else {

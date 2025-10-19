@@ -9,6 +9,8 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
+#include <vector>
 
 namespace {
 
@@ -79,20 +81,12 @@ void EntityBase::SetAdditionalPointers(const IGESParameterVector& additional_par
         // 追加のパラメータ1を設定
         former_additional_pointers_.reserve(former_length);
         for (size_t i = 0; i < former_length; ++i) {
-            auto value_i = static_cast<unsigned int>(
-                    parameters.get<int>(1 + i));
-            if (de2id.empty()) {
-                // de2idが空の場合は、parameterをそのままIDとして使用
-                former_additional_pointers_.emplace_back(value_i);
-            } else {
-                // de2idが空でない場合は、de2idからIDを取得
-                auto it = de2id.find(value_i);
-                if (it != de2id.end()) {
-                    former_additional_pointers_.emplace_back(it->second);
-                } else {
-                    throw std::out_of_range(std::to_string(i+1) +
-                            "th former additional pointer not found in de2id.");
-                }
+            try {
+                former_additional_pointers_.emplace_back(
+                        GetObjectIDFromParameters(parameters, 1 + i, de2id, true));
+            } catch (const std::exception& e) {
+                throw std::out_of_range(std::to_string(i+1) + "th former additional pointer"
+                        " not found in de2id: " + std::string(e.what()));
             }
         }
     }
@@ -103,20 +97,13 @@ void EntityBase::SetAdditionalPointers(const IGESParameterVector& additional_par
         // 追加のパラメータ2を設定
         latter_additional_pointers_.reserve(latter_length);
         for (size_t i = 0; i < latter_length; ++i) {
-            auto value_i = static_cast<unsigned int>(
-                    parameters.get<int>(2 + former_length + i));
-            if (de2id.empty()) {
-                // de2idが空の場合は、parameterをそのままIDとして使用
-                latter_additional_pointers_.emplace_back(value_i);
-            } else {
-                // de2idが空でない場合は、de2idからIDを取得
-                auto it = de2id.find(value_i);
-                if (it != de2id.end()) {
-                    latter_additional_pointers_.emplace_back(it->second);
-                } else {
-                    throw std::out_of_range(std::to_string(i+1) +
-                            "th latter additional pointer not found in de2id.");
-                }
+            try {
+                latter_additional_pointers_.emplace_back(
+                        GetObjectIDFromParameters(
+                            parameters, 2 + former_length + i, de2id, true));
+            } catch (const std::exception& e) {
+                throw std::out_of_range(std::to_string(i+1) + "th latter additional pointer"
+                        " not found in de2id: " + std::string(e.what()));
             }
         }
     }
@@ -186,10 +173,10 @@ std::optional<Vector3d> EntityBase::TransformVector(
 EntityBase::EntityBase(const RawEntityDE& de_record,
                        const IGESParameterVector& parameters,
                        const pointer2ID& de2id,
-                       const uint64_t iges_id)
+                       const ObjectID& iges_id)
         : pd_parameters_(parameters),
-            id_((iges_id == kUnsetID)
-                ? IDGenerator::Generate()
+            id_((!iges_id.IsSet())
+                ? IDGenerator::Generate(ObjectType::kEntityNew, static_cast<uint16_t>(type_))
                 : IDGenerator::GetReservedID(iges_id, de_record.sequence_number)),
             type_(de_record.entity_type),
             form_number_(de_record.form_number) {
@@ -430,8 +417,9 @@ igesio::IGESParameterVector EntityBase::GetParameters() const {
  * Parameter Data (PD) フィールドの操作
  */
 
-std::vector<uint64_t> EntityBase::GetReferencedEntityIDs() const {
-    std::vector<uint64_t> referenced_ids;
+std::vector<igesio::ObjectID>
+EntityBase::GetReferencedEntityIDs() const {
+    std::vector<ObjectID> referenced_ids;
 
     // Directory Entry フィールドからの参照を追加
     if (de_structure_.GetValueType() == DEFieldValueType::kPointer) {
@@ -480,8 +468,9 @@ bool EntityBase::AreAllReferencesSet() const {
     return false;
 }
 
-std::unordered_set<uint64_t> EntityBase::GetUnresolvedReferences() const {
-    std::unordered_set<uint64_t> referenced_ids;
+std::unordered_set<igesio::ObjectID>
+EntityBase::GetUnresolvedReferences() const {
+    std::unordered_set<ObjectID> referenced_ids;
 
     // Directory Entry フィールドからの参照を追加
     if (auto id = de_structure_.GetUnsetID(); id.has_value()) {

@@ -7,7 +7,7 @@
  */
 #include <gtest/gtest.h>
 
-#include <set>
+#include <unordered_set>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -17,8 +17,9 @@
 
 namespace {
 
-using IDGenerator = igesio::IDGenerator;
-constexpr auto kUnsetID = igesio::kUnsetID;
+using igesio::IDGenerator;
+using igesio::ObjectType;
+using igesio::ObjectID;
 
 }  // namespace
 
@@ -26,43 +27,42 @@ constexpr auto kUnsetID = igesio::kUnsetID;
 
 // 基本的なID生成のテスト
 TEST(IDGeneratorTest, BasicIDGeneration) {
-    uint64_t id1 = IDGenerator::Generate();
-    uint64_t id2 = IDGenerator::Generate();
+    auto id1 = IDGenerator::Generate(ObjectType::kEntityNew, 126);
+    auto id2 = IDGenerator::Generate(ObjectType::kEntityNew, 126);
 
-    // 生成された各IDが、常にkUnsetIDより大きく、
-    // 以前に生成されたIDよりも大きいことを確認
-    EXPECT_GT(id1, kUnsetID);
-    EXPECT_GT(id2, kUnsetID);
-    EXPECT_GT(id2, id1);
+    // 生成された各IDが、常にUnsetIDとは異なり、かつ一意であることを確認
+    EXPECT_NE(id1, IDGenerator::UnsetID());
+    EXPECT_NE(id2, IDGenerator::UnsetID());
+    EXPECT_NE(id2, id1);
 }
 
 // ID予約機能のテスト
 TEST(IDGeneratorTest, ReserveID) {
-    uint64_t iges_id = 100;
+    auto iges_id = IDGenerator::Generate(ObjectType::kIgesData);
     unsigned int pd_pointer = 200;
 
-    uint64_t reserved_id = IDGenerator::Reserve(iges_id, pd_pointer);
-    EXPECT_GT(reserved_id, kUnsetID);
+    auto reserved_id = IDGenerator::Reserve(iges_id, 128, pd_pointer);
+    EXPECT_NE(reserved_id, IDGenerator::UnsetID());
 
     // 同じキーで再度予約すると、同じIDが返される
-    uint64_t same_id = IDGenerator::Reserve(iges_id, pd_pointer);
+    auto same_id = IDGenerator::Reserve(iges_id, 128, pd_pointer);
     EXPECT_EQ(reserved_id, same_id);
 }
 
 // 予約されたIDの取得テスト
 TEST(IDGeneratorTest, GetReservedID) {
-    uint64_t iges_id = 300;
+    auto iges_id = IDGenerator::Generate(ObjectType::kIgesData);
     unsigned int pd_pointer = 400;
 
-    uint64_t reserved_id = IDGenerator::Reserve(iges_id, pd_pointer);
-    uint64_t retrieved_id = IDGenerator::GetReservedID(iges_id, pd_pointer);
+    auto reserved_id = IDGenerator::Reserve(iges_id, 128, pd_pointer);
+    auto retrieved_id = IDGenerator::GetReservedID(iges_id, pd_pointer);
 
     EXPECT_EQ(reserved_id, retrieved_id);
 }
 
 // 予約されていないIDの取得で例外が発生することをテスト
 TEST(IDGeneratorTest, GetUnreservedIDThrowsException) {
-    uint64_t iges_id = 500;
+    auto iges_id = IDGenerator::Generate(ObjectType::kIgesData);
     unsigned int pd_pointer = 600;
 
     EXPECT_THROW(IDGenerator::GetReservedID(iges_id, pd_pointer),
@@ -71,13 +71,13 @@ TEST(IDGeneratorTest, GetUnreservedIDThrowsException) {
 
 // 異なるキーで異なるIDが予約されることをテスト
 TEST(IDGeneratorTest, DifferentKeysGetDifferentIDs) {
-    uint64_t iges_id1 = 700;
+    auto iges_id1 = IDGenerator::Generate(ObjectType::kIgesData);
     unsigned int pd_pointer1 = 800;
-    uint64_t iges_id2 = 701;
+    auto iges_id2 = IDGenerator::Generate(ObjectType::kIgesData);
     unsigned int pd_pointer2 = 801;
 
-    uint64_t id1 = IDGenerator::Reserve(iges_id1, pd_pointer1);
-    uint64_t id2 = IDGenerator::Reserve(iges_id2, pd_pointer2);
+    auto id1 = IDGenerator::Reserve(iges_id1, 126, pd_pointer1);
+    auto id2 = IDGenerator::Reserve(iges_id2, 126, pd_pointer2);
 
     EXPECT_NE(id1, id2);
 }
@@ -87,13 +87,13 @@ TEST(IDGeneratorTest, ThreadSafety) {
     const int num_threads = 10;
     const int ids_per_thread = 100;
     std::vector<std::thread> threads;
-    std::vector<std::vector<uint64_t>> results(num_threads);
+    std::vector<std::vector<ObjectID>> results(num_threads);
 
     // 複数スレッドでID生成
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&results, i, ids_per_thread]() {
             for (int j = 0; j < ids_per_thread; ++j) {
-                results[i].push_back(IDGenerator::Generate());
+                results[i].push_back(IDGenerator::Generate(ObjectType::kEntityNew, 126));
             }
         });
     }
@@ -104,12 +104,12 @@ TEST(IDGeneratorTest, ThreadSafety) {
     }
 
     // 生成されたIDがすべて一意であることを確認
-    std::set<uint64_t> unique_ids;
+    std::unordered_set<ObjectID> unique_ids;
     for (const auto& thread_results : results) {
-        for (uint64_t id : thread_results) {
+        for (ObjectID id : thread_results) {
             EXPECT_TRUE(unique_ids.insert(id).second)
                 << "Duplicate ID found: " << id;
-            EXPECT_GT(id, kUnsetID);
+            EXPECT_NE(id, IDGenerator::UnsetID());
         }
     }
 
@@ -120,15 +120,15 @@ TEST(IDGeneratorTest, ThreadSafety) {
 TEST(IDGeneratorTest, ReservationThreadSafety) {
     const int num_threads = 5;
     std::vector<std::thread> threads;
-    std::vector<uint64_t> results(num_threads);
+    std::vector<ObjectID> results(num_threads);
 
-    uint64_t iges_id = 1000;
+    auto iges_id = IDGenerator::Generate(ObjectType::kIgesData);
     unsigned int pd_pointer = 2000;
 
     // 複数スレッドで同じキーのID予約
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&results, i, iges_id, pd_pointer]() {
-            results[i] = IDGenerator::Reserve(iges_id, pd_pointer);
+            results[i] = IDGenerator::Reserve(iges_id, 126, pd_pointer);
         });
     }
 
@@ -138,29 +138,8 @@ TEST(IDGeneratorTest, ReservationThreadSafety) {
     }
 
     // すべてのスレッドが同じIDを取得したことを確認
-    uint64_t expected_id = results[0];
+    ObjectID expected_id = results[0];
     for (int i = 1; i < num_threads; ++i) {
         EXPECT_EQ(results[i], expected_id);
     }
-}
-
-// PairHashのテスト
-TEST(IDGeneratorTest, PairHashFunction) {
-    igesio::PairHash hasher;
-
-    auto pair1 = std::make_pair(1ULL, 1U);
-    auto pair2 = std::make_pair(1ULL, 2U);
-    auto pair3 = std::make_pair(2ULL, 1U);
-
-    std::size_t hash1 = hasher(pair1);
-    std::size_t hash2 = hasher(pair2);
-    std::size_t hash3 = hasher(pair3);
-
-    // 異なるペアは異なるハッシュ値を持つべき
-    EXPECT_NE(hash1, hash2);
-    EXPECT_NE(hash1, hash3);
-    EXPECT_NE(hash2, hash3);
-
-    // 同じペアは同じハッシュ値を持つべき
-    EXPECT_EQ(hash1, hasher(pair1));
 }
