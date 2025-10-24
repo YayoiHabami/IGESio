@@ -19,31 +19,22 @@ namespace {
 using ConicArc = igesio::entities::ConicArc;
 namespace i_ent = igesio::entities;
 
-/// @brief パラメータ範囲を計算するヘルパー
+/// @brief 楕円のパラメータ範囲を計算するヘルパー (正規化する)
 /// @param[in] start_param 始点に対応するパラメータ
 /// @param[in] end_param 終点に対応するパラメータ
-/// @param[in] is_ellipse 楕円かどうか
 /// @return パラメータ範囲 {t_start, t_end}
-static std::array<double, 2> calculate_parameter_range(
-        double start_param, double end_param, bool is_ellipse) {
-    if (is_ellipse) {
-        // 楕円の場合、角度は反時計回りに増加する
-        // 始点の角度を [0, 2*PI) の範囲に正規化
-        if (start_param < 0) {
-            start_param += 2.0 * igesio::kPi;
-        }
-        // 終点の角度を、始点から反時計回りに進んだ角度として計算
-        if (end_param <= start_param) {
-            end_param += 2.0 * igesio::kPi;
-        }
-        return {start_param, end_param};
-    } else {
-        // 放物線、双曲線の場合
-        if (start_param > end_param) {
-            std::swap(start_param, end_param);
-        }
-        return {start_param, end_param};
+static std::array<double, 2>
+RegularizeParameterRange(double start_param, double end_param) {
+    // 楕円の場合、角度は反時計回りに増加する
+    // 始点の角度を [0, 2*PI] の範囲に正規化
+    if (start_param < 0) {
+        start_param += 2.0 * igesio::kPi;
     }
+    // 終点の角度を、始点から反時計回りに進んだ角度として計算
+    if (end_param <= start_param) {
+        end_param += 2.0 * igesio::kPi;
+    }
+    return {start_param, end_param};
 }
 
 std::optional<i_ent::ConicType>
@@ -241,43 +232,40 @@ igesio::ValidationResult ConicArc::ValidatePD() const {
 std::array<double, 2> ConicArc::GetParameterRange() const {
     auto [A, B, C, D, E, F] = coeffs_;
 
-    auto x1 = start_point_.x(), y1 = start_point_.y();
-    auto x2 = terminate_point_.x(), y2 = terminate_point_.y();
+    auto xs = start_point_.x(), ys = start_point_.y();
+    auto xe = terminate_point_.x(), ye = terminate_point_.y();
 
     switch (GetConicType()) {
         case ConicType::kEllipse: {
-            auto a = std::sqrt(-F / A), b = std::sqrt(-F / C);
-            auto t1 = std::atan2(y1 / b, x1 / a);
-            auto t2 = std::atan2(y2 / b, x2 / a);
-            auto range = calculate_parameter_range(t1, t2, true);
-            if (IsClosed()) {
-                range[1] = range[0] + 2.0 * kPi;
-            }
+            auto [rx, ry] = EllipseRadii();
+            auto t1 = std::atan2(ys / ry, xs / rx);
+            auto t2 = std::atan2(ye / ry, xe / rx);
+
+            // パラメータ範囲を調整 (ただし閉曲線の場合は1周分に設定)
+            auto range = RegularizeParameterRange(t1, t2);
+            if (IsClosed()) range[1] = range[0] + 2.0 * kPi;
             return range;
         }
         case ConicType::kParabola: {
             if (!IsApproxZero(A) && !IsApproxZero(E)) {  // Y = k * X^2
-                return calculate_parameter_range(x1, x2, false);
+                return (xs < xe) ? std::array{xs, xe} : std::array{-xs, -xe};
             }
             if (!IsApproxZero(C) && !IsApproxZero(D)) {  // X = k * Y^2
-                return calculate_parameter_range(y1, y2, false);
+                return (ys < ye) ? std::array{ys, ye} : std::array{-ys, -ye};
             }
             break;  // 不正な放物線
         }
         case ConicType::kHyperbola: {
-            if (F * A < 0.0) {  // X-axis is transverse axis
-                auto a = std::sqrt(-F / A), b = std::sqrt(F / C);
-                // t = atanh(y/b) or asinh(y/b)
-                auto t1 = std::asinh(y1 / b);
-                auto t2 = std::asinh(y2 / b);
-                return calculate_parameter_range(t1, t2, false);
-            } else {  // Y-axis is transverse axis
-                auto a = std::sqrt(F / A), b = std::sqrt(-F / C);
-                // t = atanh(x/a) or asinh(x/a)
-                auto t1 = std::asinh(x1 / a);
-                auto t2 = std::asinh(x2 / a);
-                return calculate_parameter_range(t1, t2, false);
+            if ((F * A < 0.0) && (F * C > 0.0)) {  // X-axis is transverse axis
+                auto t_s = std::atan(ys * std::sqrt(C / F));
+                auto t_e = std::atan(ye * std::sqrt(C / F));
+                return (t_s < t_e) ? std::array{t_s, t_e} : std::array{-t_s, -t_e};
+            } else if ((F * A > 0.0) && (F * C < 0.0)) {  // Y-axis is transverse axis
+                auto t_s = std::atan(xs * std::sqrt(A / F));
+                auto t_e = std::atan(xe * std::sqrt(A / F));
+                return (t_s < t_e) ? std::array{t_s, t_e} : std::array{-t_s, -t_e};
             }
+            break;  // 不正な双曲線
         }
         default:
             break;
@@ -294,128 +282,23 @@ bool ConicArc::IsClosed() const {
     return IsApproxEqual(start_point_, terminate_point_, kGeometryTolerance);
 }
 
-std::optional<igesio::Vector3d>
-ConicArc::TryGetDefinedPointAt(const double t) const {
-    const auto range = GetParameterRange();
-    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
-        return std::nullopt;
-    }
-
-    auto [A, B, C, D, E, F] = coeffs_;
-    auto z_t = start_point_.z();
-
-    Vector3d point;
-
+std::optional<i_ent::CurveDerivatives>
+ConicArc::TryGetDerivatives(const double t, const unsigned int n) const {
+    // 計算式の詳細は docs/entities/curves/104_conic_arc_ja.md を参照
     switch (GetConicType()) {
         case ConicType::kEllipse: {
-            auto a = std::sqrt(-F / A), b = std::sqrt(-F / C);
-            point = {a * std::cos(t), b * std::sin(t), z_t};
-            break;
+            return TryGetEllipseDerivatives(t, n);
         }
         case ConicType::kParabola: {
-            if (!IsApproxZero(A) && !IsApproxZero(E)) {   // Y = k * X^2
-                point = {t, -(A / E) * t * t, z_t};
-            } else if (!IsApproxZero(C) && !IsApproxZero(D)) {   // X = k * Y^2
-                point = {-(C / D) * t * t, t, z_t};
-            } else {
-                return std::nullopt;   // Invalid parabola
-            }
-            break;
+            return TryGetParabolaDerivatives(t, n);
         }
         case ConicType::kHyperbola: {
-            if (F * A < 0.0) {   // X-axis is transverse axis
-                auto a = std::sqrt(-F / A), b = std::sqrt(F / C);
-                point = {a * std::sinh(t), b * std::cosh(t), z_t};
-            } else {   // Y-axis is transverse axis
-                auto a = std::sqrt(F / A), b = std::sqrt(-F / C);
-                point = {a * std::sinh(t), b * std::cosh(t), z_t};
-            }
-            // Hyperbola has two branches. Need to check if the sign is correct.
-            // The parameterization with sinh/cosh only covers one branch (x>0 or y>0).
-            // We check the sign of the start point to determine the branch.
-            if (start_point_.x() < 0) point.x() = -point.x();
-            if (start_point_.y() < 0) point.y() = -point.y();
-            break;
+            return TryGetHyperbolaDerivatives(t, n);
         }
         default:
             return std::nullopt;
     }
-    return point;
-}
-
-std::optional<igesio::Vector3d>
-ConicArc::TryGetDefinedTangentAt(const double t) const {
-    const auto range = GetParameterRange();
-    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
-        return std::nullopt;
-    }
-
-    auto [A, B, C, D, E, F] = coeffs_;
-
-    Vector3d tangent{0.0, 0.0, 0.0};
-
-    switch (GetConicType()) {
-        case ConicType::kEllipse: {
-            auto [a, b] = EllipseRadii();
-            tangent = {-a * std::sin(t), b * std::cos(t), 0.0};
-            break;
-        }
-        case ConicType::kParabola: {
-            if (!IsApproxZero(A) && !IsApproxZero(E)) {  // Y = k * X^2
-                tangent = {1.0, -2.0 * (A / E) * t, 0.0};
-            } else if (!IsApproxZero(C) && !IsApproxZero(D)) {  // X = k * Y^2
-                tangent = {-2.0 * (C / D) * t, 1.0, 0.0};
-            } else {
-                return std::nullopt;  // Invalid parabola
-            }
-            break;
-        }
-        case ConicType::kHyperbola: {
-            if (F * A < 0.0) {  // X-axis is transverse axis
-                auto a = std::sqrt(-F / A), b = std::sqrt(F / C);
-                tangent = {a * std::sinh(t), b * std::cosh(t), 0.0};
-            } else {  // Y-axis is transverse axis
-                auto a = std::sqrt(F / A), b = std::sqrt(-F / C);
-                tangent = {a * std::cosh(t), b * std::sinh(t), 0.0};
-            }
-            // Adjust sign for the correct branch
-            if (start_point_.x() < 0) tangent.x() = -tangent.x();
-            if (start_point_.y() < 0) tangent.y() = -tangent.y();
-            break;
-        }
-        default:
-            return std::nullopt;
-    }
-
-    if (IsApproxZero(tangent.norm(), kGeometryTolerance)) {
-        return std::nullopt;  // Degenerate tangent
-    }
-    return tangent.normalized();
-}
-
-std::optional<igesio::Vector3d>
-ConicArc::TryGetDefinedNormalAt(const double t) const {
-    auto tangent = TryGetDefinedTangentAt(t);
-    if (!tangent) {
-        return std::nullopt;
-    }
-    // 2D平面内の法線ベクトル (接線を+90度回転)
-    return Vector3d{-tangent->y(), tangent->x(), 0.0}.normalized();
-}
-
-std::optional<igesio::Vector3d>
-ConicArc::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<igesio::Vector3d>
-ConicArc::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<igesio::Vector3d>
-ConicArc::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    return std::nullopt;
 }
 
 
@@ -457,4 +340,127 @@ bool ConicArc::IsOnConic(const double x, const double y) const {
     const double value =
             A * x * x + B * x * y + C * y * y + D * x + E * y + F;
     return IsApproxZero(value, kGeometryTolerance);
+}
+
+std::optional<i_ent::CurveDerivatives>
+ConicArc::TryGetEllipseDerivatives(const double t, const unsigned int n) const {
+    const auto range = GetParameterRange();
+    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
+        return std::nullopt;
+    }
+
+    CurveDerivatives result(n);
+
+    auto z_t = start_point_.z();
+
+    auto [rx, ry] = EllipseRadii();
+    // n階導関数を一般式で計算（位相は k * PI/2 で増える）
+    for (unsigned int k = 0; k <= n; ++k) {
+        double phase = t + static_cast<double>(k) * (kPi / 2.0);
+        result[k] = Vector3d{rx * std::cos(phase), ry * std::sin(phase), 0.0};
+
+        // z成分の設定 (0階のみz_t)
+        if (k == 0) result[k].z() = z_t;
+    }
+
+    return result;
+}
+
+std::optional<i_ent::CurveDerivatives>
+ConicArc::TryGetParabolaDerivatives(const double t, const unsigned int n) const {
+    const auto range = GetParameterRange();
+    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
+        return std::nullopt;
+    }
+
+    CurveDerivatives result(n);
+
+    auto [A, B, C, D, E, F] = coeffs_;
+    auto xs = start_point_.x(), ys = start_point_.y();
+    auto xe = terminate_point_.x(), ye = terminate_point_.y();
+    auto z_t = start_point_.z();
+
+    if (!IsApproxZero(A) && !IsApproxZero(E)) {   // Y = k * X^2
+        double x_coef = (xs < xe) ? 1.0 : -1.0;
+        for (unsigned int k = 0; k < n; ++k) {
+            if (k == 0) {
+                result[k] = Vector3d{x_coef*t, -(A/E)*t*t, z_t};
+            } else if (k == 1) {
+                result[k] = Vector3d{x_coef, -2.0*(A/E)*t, 0.0};
+            } else if (k == 2) {
+                result[k] = Vector3d{   0.0, -2.0*(A/E), 0.0};
+            }
+            // 3以上についてはゼロであり、Resizeで初期化されているため省略
+        }
+    } else if (!IsApproxZero(C) && !IsApproxZero(D)) {   // X = k * Y^2
+        double y_coef = (ys < ye) ? 1.0 : -1.0;
+        for (unsigned int k = 0; k < n; ++k) {
+            if (k == 0) {
+                result[k] = Vector3d{-(C/D)*t*t, y_coef*t, z_t};
+            } else if (k == 1) {
+                result[k] = Vector3d{-2.0*(C/D)*t, y_coef, 0.0};
+            } else if (k == 2) {
+                result[k] = Vector3d{-2.0*(C/D),      0.0, 0.0};
+            }
+            // 3以上についてはゼロであり、Resizeで初期化されているため省略
+        }
+    }
+
+    return result;
+}
+
+std::optional<i_ent::CurveDerivatives>
+ConicArc::TryGetHyperbolaDerivatives(const double t, const unsigned int n) const {
+    const auto range = GetParameterRange();
+    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
+        return std::nullopt;
+    }
+
+    CurveDerivatives result(n);
+
+    auto [A, B, C, D, E, F] = coeffs_;
+    auto xs = start_point_.x(), ys = start_point_.y();
+    auto xe = terminate_point_.x(), ye = terminate_point_.y();
+    auto z_t = start_point_.z();
+
+    double sec_t = 1.0 / std::cos(t), tan_t = std::tan(t);
+    double sec_t2 = sec_t * sec_t;
+    double sec3_sec1tan2 = sec_t * (sec_t * sec_t + tan_t * tan_t);
+
+    auto error = igesio::NotImplementedError(
+            "Derivatives of hyperbola higher than 2 are not implemented.");
+
+    if (F * A < 0.0) {   // X-axis is transverse axis
+        double a = std::sqrt(-F / A), b = std::sqrt(F / C);
+        double sgn = (ys < ye) ? 1.0 : -1.0;
+
+        for (unsigned int k = 0; k < n; ++k) {
+            if (k == 0) {
+                result[k] = Vector3d{a / std::cos(t), sgn * b * std::tan(t), z_t};
+            } else if (k == 1) {
+                result[k] = Vector3d{a * sec_t * tan_t, sgn * b * sec_t2, 0.0};
+            } else if (k == 2) {
+                result[k] = Vector3d{a * sec3_sec1tan2, sgn * 2 * b * sec_t2 * tan_t, 0.0};
+            } else {
+                throw error;
+            }
+        }
+    } else {   // Y-axis is transverse axis
+        double a = std::sqrt(F / A), b = std::sqrt(-F / C);
+        double sgn = (xs < xe) ? 1.0 : -1.0;
+
+        for (unsigned int k = 0; k < n; ++k) {
+            if (k == 0) {
+                result[k] = Vector3d{sgn * a * std::tan(t), b / std::cos(t), z_t};
+            } else if (k == 1) {
+                result[k] = Vector3d{sgn * a * sec_t2, b * sec_t * tan_t, 0.0};
+            } else if (k == 2) {
+                result[k] = Vector3d{sgn * 2 * a * sec_t2 * tan_t, b * sec3_sec1tan2, 0.0};
+            } else {
+                throw error;
+            }
+        }
+    }
+
+    return result;
 }

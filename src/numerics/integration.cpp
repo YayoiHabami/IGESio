@@ -12,7 +12,6 @@
 #include <cmath>
 #include <stdexcept>
 #include <string>
-#include <iostream>
 
 #include "igesio/numerics/constexpr_math.h"
 

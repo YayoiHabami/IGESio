@@ -56,9 +56,11 @@
   - [x] v0.6.1: IDシステムの更新（int型との変換を拡充）
   - [ ] v0.6.2: 導関数の計算を追加（曲面等の幾何学的特性の計算に応用）
   - [ ] v0.6.3: Trimmed Surface (144) の基本的な実装
-- [ ] **v0.7: Manifold Solid B-Rep Objectへの対応** (6)
-- [ ] **v0.8: Constructive Solid Geometryへの対応** (8)
-- [ ] **v0.9: Annotation classへの対応** (9)
+  - [ ] v0.6.4: Bounding Box の実装
+  - [ ] v0.6.5: クリック機能 (レイとの交差判定) の実装
+- [ ] **v0.7: Assemblyクラスの実装** (5)
+- [ ] **v0.8: Manifold Solid B-Rep Objectへの対応** (6)
+- [ ] **v0.9: Constructive Solid Geometryへの対応** (8)
 - [ ] **v1.0: 主要なエンティティクラスへの対応** (Untested, Annotation、Property等を除く)
 
 ## 細かいタスク

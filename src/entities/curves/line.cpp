@@ -135,58 +135,21 @@ std::array<double, 2> Line::GetParameterRange() const {
 
 bool Line::IsClosed() const { return false; }
 
-std::optional<Vector3d> Line::TryGetDefinedPointAt(const double t) const {
+std::optional<i_ent::CurveDerivatives>
+Line::TryGetDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
     // パラメータtが定義域内にあるかチェック
     if (t < range[0] || t > range[1]) {
         return std::nullopt;
     }
 
-    // C(t) = P1 + t * (P2 - P1)
-    return start_point_ + t * (terminate_point_ - start_point_);
-}
-
-std::optional<Vector3d> Line::TryGetDefinedTangentAt(const double t) const {
-    const auto range = GetParameterRange();
-    // パラメータtが定義域内にあるかチェック
-    if (t < range[0] || t > range[1]) {
-        return std::nullopt;
+    CurveDerivatives result(n);
+    result[0] = start_point_ + t * (terminate_point_ - start_point_);  // C(t)
+    if (n >= 1) {
+        result[1] = terminate_point_ - start_point_;  // C'(t)
     }
-
-    const Vector3d tangent_vec = terminate_point_ - start_point_;
-
-    // 縮退している場合は接線を定義できない
-    if (tangent_vec.norm() < kGeometryTolerance) {
-        return std::nullopt;
-    }
-
-    // 接線ベクトルはパラメータtによらず一定。単位ベクトルとして返す。
-    return tangent_vec.normalized();
-}
-
-std::optional<Vector3d> Line::TryGetDefinedNormalAt(const double t) const {
-    const auto range = GetParameterRange();
-    // パラメータtが定義域内にあるかチェック
-    if (t < range[0] || t > range[1]) {
-        return std::nullopt;
-    }
-
-    /// 直線においては、本来法線ベクトルは一意に定義されないが、
-    /// ここでは接線を90度回転させた、定義空間においてz=0のベクトルを法線として返す
-    Vector3d tangent_vec = terminate_point_ - start_point_;
-    return Vector3d(-tangent_vec.y(), tangent_vec.x(), 0.0).normalized();
-}
-
-std::optional<Vector3d> Line::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<Vector3d> Line::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d> Line::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    // n >= 2についてはすべてゼロベクトルであり、Resizeで初期化済
+    return result;
 }
 
 

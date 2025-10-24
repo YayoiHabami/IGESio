@@ -28,11 +28,27 @@ struct BasisFunctionResult {
     /// @brief パラメータtが含まれるノットスパン
     /// @note [T(j), T(j+1)] なる j
     int knot_span;
-    /// @note 基底関数の値
+    /// @note 基底関数の値 b_{j-m,m}(t), ..., b_{j,m}(t)
     std::vector<double> values;
-    /// @note 基底関数の導関数の値
+    /// @note 基底関数の導関数の値 b_{j-m,m}^(i)(t), ..., b_{j,m}^(i)(t)
     /// @note derivatives[i]は(i+1)次導関数の値
     std::vector<std::vector<double>> derivatives;
+
+    /// @brief n階導関数の値を取得する
+    /// @param n 導関数の階数 (0なら基底関数)
+    /// @return n階導関数 b_{j-m,m}^(n)(t), ..., b_{j,m}^(n)(t)
+    const std::vector<double>& GetDerivatives(const int n) const {
+        if (n < 0 || n > static_cast<int>(derivatives.size())) {
+            throw std::out_of_range(
+                "Requested derivative order " + std::to_string(n) +
+                " is out of range.");
+        }
+
+        if (n == 0) {
+            return values;
+        }
+        return derivatives[n - 1];
+    }
 };
 
 /// @brief Bスプライン基底関数とその導関数を計算する

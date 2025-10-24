@@ -467,12 +467,12 @@ RationalBSplineSurface::TryGetDefinedNormalAt(
 
 std::optional<igesio::Vector3d>
 RationalBSplineSurface::TryGetPointAt(const double u, const double v) const {
-    return TransformPoint(TryGetDefinedPointAt(u, v));
+    return TransformImpl(TryGetDefinedPointAt(u, v), true);
 }
 
 std::optional<igesio::Vector3d>
 RationalBSplineSurface::TryGetNormalAt(const double u, const double v) const {
-    return TransformVector(TryGetDefinedNormalAt(u, v));
+    return TransformImpl(TryGetDefinedNormalAt(u, v), false);
 }
 
 

@@ -44,41 +44,18 @@ igesio::ValidationResult CopiousData::ValidatePD() const {
 bool CopiousData::IsClosed() const { return false; }
 
 std::array<double, 2> CopiousData::GetParameterRange() const {
-    return {0.0, TotalLength()};
+    return {0.0, Length()};
 }
 
-std::optional<Vector3d>
-CopiousData::TryGetDefinedPointAt(const double t) const {
-    if (t < 0 || t > TotalLength()) return std::nullopt;
+std::optional<i_ent::CurveDerivatives>
+CopiousData::TryGetDerivatives(const double t, const unsigned int n) const {
+    if (t < 0 || t > Length()) return std::nullopt;
+
+    CurveDerivatives result(n);
 
     auto [index, dist] = GetNearestVertexAt(t);
     if (IsApproxZero(dist, kGeometryTolerance)) {
-        return Coordinates().col(index);
+        result[0] = Coordinates().col(index);
     }
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetDefinedTangentAt(const double) const {
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetDefinedNormalAt(const double) const {
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetPointAt(const double) const {
-    return TransformPoint(TryGetDefinedEndPoint());
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    return result;
 }

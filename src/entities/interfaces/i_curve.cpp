@@ -11,13 +11,50 @@ namespace {
 
 namespace i_ent = igesio::entities;
 
-using Vector2d = igesio::Vector2d;
-using Vector3d = igesio::Vector3d;
-using ICurve = i_ent::ICurve;
-using ICurve2D = i_ent::ICurve2D;
-using ICurve3D = i_ent::ICurve3D;
+using igesio::Vector2d;
+using igesio::Vector3d;
+using i_ent::ICurve;
+using i_ent::ICurve2D;
+using i_ent::ICurve3D;
+using i_ent::CurveDerivatives;
 
 }  // namespace
+
+
+
+/**
+ * CurveDerivatives
+ */
+
+CurveDerivatives::CurveDerivatives(const unsigned int n) {
+    derivatives.resize(n + 1, Vector3d::Zero());
+}
+
+const Vector3d& CurveDerivatives::operator[](const unsigned int n) const {
+    if (n < derivatives.size()) {
+        return derivatives[n];
+    } else {
+        throw std::out_of_range(
+            "Requested derivative order " + std::to_string(n) +
+            " is out of range. Contains up to order " +
+            std::to_string(derivatives.size() - 1) + ".");
+    }
+}
+
+Vector3d& CurveDerivatives::operator[](const unsigned int n) {
+    if (n < derivatives.size()) {
+        return derivatives[n];
+    } else {
+        throw std::out_of_range(
+            "Requested derivative order " + std::to_string(n) +
+            " is out of range. Contains up to order " +
+            std::to_string(derivatives.size() - 1) + ".");
+    }
+}
+
+void CurveDerivatives::Resize(const unsigned int n) {
+    derivatives.resize(n, Vector3d::Zero());
+}
 
 
 
@@ -43,6 +80,21 @@ bool ICurve::IsFinite() const {
  * 曲線の幾何学的情報 (ベクトル) を取得する (ICurve)
  */
 
+double ICurve::GetCurvature(const double t) const {
+    auto deriv = TryGetDerivatives(t, 2);
+    if (!deriv.has_value()) return -1;
+
+    // κ = |C' × C''| / |C'|^3
+    return ((*deriv)[1].cross((*deriv)[2]).norm())
+         / std::pow((*deriv)[1].norm(), 3);
+}
+
+
+
+/**
+ * 曲線の幾何学的情報 (ベクトル) を取得する (ICurve)
+ */
+
 std::optional<Vector3d> ICurve::TryGetDefinedStartPoint() const {
     if (!HasFiniteStart()) return std::nullopt;
 
@@ -55,6 +107,46 @@ std::optional<Vector3d> ICurve::TryGetDefinedEndPoint() const {
     return TryGetDefinedPointAt(GetParameterRange()[1]);
 }
 
+std::optional<Vector3d> ICurve::TryGetDefinedPointAt(const double t) const {
+    auto deriv = TryGetDerivatives(t, 0);
+    if (!deriv.has_value()) return std::nullopt;
+
+    // 0階導関数が曲線上の点
+    return (*deriv)[0];
+}
+
+std::optional<Vector3d> ICurve::TryGetDefinedTangentAt(const double t) const {
+    auto deriv = TryGetDerivatives(t, 1);
+    if (!deriv.has_value()) return std::nullopt;
+
+    // T = C' / |C'|
+    return (*deriv)[1].normalized();
+}
+
+std::optional<Vector3d> ICurve::TryGetDefinedNormalAt(const double t) const {
+    // 曲率が0（または計算できない場合の-1）ではない場合にのみ計算する
+    if (GetCurvature(t) <= 0) return std::nullopt;
+
+    auto deriv = TryGetDerivatives(t, 2);
+    if (!deriv.has_value()) return std::nullopt;
+
+    // N = (C''|C'|^2 + C'(C'・C'')) / |C'|^3
+    auto c1_norm = (*deriv)[1].norm();
+    return (*deriv)[2] / c1_norm
+         - (*deriv)[1] * ((*deriv)[1].dot((*deriv)[2])) / std::pow(c1_norm, 3);
+}
+
+std::optional<Vector3d> ICurve::TryGetDefinedBinormalAt(const double t) const {
+    auto tangent = TryGetDefinedTangentAt(t);
+    if (!tangent.has_value()) return std::nullopt;
+
+    auto normal = TryGetDefinedNormalAt(t);
+    if (!normal.has_value()) return std::nullopt;
+
+    // B = T × N
+    return (*tangent).cross(*normal);
+}
+
 std::optional<Vector3d> ICurve::TryGetStartPoint() const {
     if (!HasFiniteStart()) return std::nullopt;
 
@@ -65,6 +157,22 @@ std::optional<Vector3d> ICurve::TryGetEndPoint() const {
     if (!HasFiniteEnd()) return std::nullopt;
 
     return TryGetPointAt(GetParameterRange()[1]);
+}
+
+std::optional<Vector3d> ICurve::TryGetPointAt(const double t) const  {
+    return Transform(TryGetDefinedPointAt(t), true);
+}
+
+std::optional<Vector3d> ICurve::TryGetTangentAt(const double t) const {
+    return Transform(TryGetDefinedTangentAt(t), false);
+}
+
+std::optional<Vector3d> ICurve::TryGetNormalAt(const double t) const {
+    return Transform(TryGetDefinedNormalAt(t), false);
+}
+
+std::optional<Vector3d> ICurve::TryGetBinormalAt(const double t) const {
+    return Transform(TryGetDefinedBinormalAt(t), false);
 }
 
 Vector3d ICurve::GetStartPoint() const {
@@ -108,6 +216,15 @@ Vector3d ICurve::GetNormalAt(const double t) const {
             " is out of range for the curve.");
     }
     return *normal;
+}
+
+Vector3d ICurve::GetBinormalAt(const double t) const {
+    auto binormal = TryGetBinormalAt(t);
+    if (!binormal) {
+        throw std::out_of_range("Parameter t = " + std::to_string(t) +
+            " is out of range for the curve.");
+    }
+    return *binormal;
 }
 
 

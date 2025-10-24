@@ -6,6 +6,7 @@ This document covers the interfaces for specific entities and individual entity 
 
 - [Table of Contents](#table-of-contents)
 - [Interfaces](#interfaces)
+  - [`IGeometry`](#igeometry)
   - [`ICurve`](#icurve)
   - [`ICurve2D`](#icurve2d)
   - [`ICurve3D`](#icurve3d)
@@ -43,13 +44,22 @@ Entities described in IGES files implement corresponding interfaces according to
 
 These interfaces are also used as pointer types to entities that an entity refers to for a specific function. For example, `CompositeCurve` refers to multiple curves, and the references to each entity are held as pointers of type `ICurve`.
 
+### `IGeometry`
+
+> Defined at [i_geometry.h](../../include/igesio/entities/interfaces/i_geometry.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── IGeometry
+> ```
+
 ### `ICurve`
 
 > Defined at [i_curve.h](../../include/igesio/entities/interfaces/i_curve.h)
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─── ICurve
+> IEntityIdentifier <── IGeometry <─── ICurve
 > ```
 
 ### `ICurve2D`
@@ -58,7 +68,7 @@ These interfaces are also used as pointer types to entities that an entity refer
 
 > Ancestor classes:
 > ```plaintext
-> IEntityIdentifier <─── ICurve <─── ICurve2D
+> IEntityIdentifier <── IGeometry <─── ICurve <─── ICurve2D
 > ```
 
 ### `ICurve3D`
@@ -67,7 +77,7 @@ These interfaces are also used as pointer types to entities that an entity refer
 
 > Ancestor classes:
 > ```plaintext
-> IEntityIdentifier <─── ICurve <─── ICurve3D
+> IEntityIdentifier <── IGeometry <─── ICurve <─── ICurve3D
 > ```
 
 ### `ISurface`
@@ -193,8 +203,8 @@ This section describes the curve entities in IGES files. Curve entities are used
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ CircularArc
->                     └─ ICurve  <── ICurve2D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ CircularArc
+>                     └─ IGeometry <──  ICurve  <── ICurve2D <─┘
 > ```
 
 The `CircularArc` class represents 2D circular arcs and circles. The following code example creates a circle with center $(-1.25, 0)$ and radius $1$, and a circular arc with center $(1.25, 0)$ and radius $1$ (see figure).
@@ -224,8 +234,8 @@ auto arc = std::make_shared<igesio::entities::CircularArc>(
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ CompositeCurve
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ CompositeCurve
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 The `CompositeCurve` class is used to represent a single curve composed by joining multiple curve entities together. The following code example creates a `CompositeCurve` entity by connecting three curve entities (arc, line, arc), as shown in the figure.
@@ -268,8 +278,8 @@ comp_curve->AddCurve(comp_3);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ ConicArc
->                     └─ ICurve  <── ICurve2D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ ConicArc
+>                     └─ IGeometry <──  ICurve  <── ICurve2D <─┘
 > ```
 
 The `ConicArc` class represents 2D conic curves (ellipse, parabola, hyperbola). The following code example creates an elliptical arc with center at $(0, 3)$, major axis $3$, and minor axis $2$ (see figure).
@@ -303,7 +313,7 @@ ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <── CopiousDataBase
+> IEntityIdentifier <── IGeometry <── EntityBase <── CopiousDataBase
 > ```
 
 This is the base class for all Copious Data related classes. It does not implement interfaces such as `ICurve`. An instance of this class is generated for form numbers not implemented in this library.
@@ -320,8 +330,8 @@ This is the base class for all Copious Data related classes. It does not impleme
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ CopiousData
->                                    └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬─ EntityBase <───── CopiousDataBase <─┬─ CopiousData
+>                     └─ IGeometry <── ICurve <── ICurve3D <─┘
 > ```
 
 `CopiousData` is a class for representing point cloud data of forms 1–3 (2D coordinates, 3D coordinates, 6D coordinates). The following code example creates a point cloud consisting of five 3D coordinate points (see [CopiousDataBase figure](#copiousdatabase-type-106)).
@@ -341,8 +351,8 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ LinearPath
->                                    └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬─ EntityBase <───── CopiousDataBase <─┬─ LinearPath
+>                     └─ IGeometry <── ICurve <── ICurve3D <─┘
 > ```
 
 `LinearPath` is a class for representing polyline data of forms 11–13 (2D coordinates, 3D coordinates, 6D coordinates). The following code example creates a polyline consisting of five 3D coordinate points (see [CopiousDataBase figure](#copiousdatabase-type-106)). The points used are the same as [CopiousData](#copiousdata-type-106-forms-1-3), but shifted $5$ units to the right.
@@ -350,7 +360,7 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 ```cpp
 auto copious_trans = std::make_shared<igesio::entities::TransformationMatrix>(
     igesio::Matrix3d::Identity(), igesio::Vector3d{5.0, 0.0, 0.0});
-auto linear_path = std::make_shared<igesio::entities::CopiousData>(
+auto linear_path = std::make_shared<igesio::entities::LinearPath>(
     igesio::entities::CopiousDataType::kPolyline3D, copious_coords);
 linear_path->OverwriteTransformationMatrix(copious_trans);
 ```
@@ -361,8 +371,8 @@ linear_path->OverwriteTransformationMatrix(copious_trans);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ Line
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ Line
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 The `Line` class represents straight lines, rays, and line segments in 3D space. The following code example creates three types of Line entities (segment, ray, line), as shown in the figure.
@@ -399,8 +409,8 @@ auto line = std::make_shared<igesio::entities::Line>(
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ ParametricSplineCurve
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ ParametricSplineCurve
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 The `ParametricSplineCurve` class is used to represent parametric spline curves in 3D space. In IGES 5.3, the curve is represented by a cubic polynomial divided into $N$ segments. The following equations show the parametric equation of the curve in the $i$-th segment ($T(i) \leq u \leq T(i + 1)$):
@@ -450,7 +460,7 @@ auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <── Point
+> IEntityIdentifier <── EntityBase <── IGeometry <── Point
 > ```
 
 The `Point` class is used to represent a point in 3D space. It allows associating the point's coordinates with a drawing shape (Subfigure Definition entity (Type 308)). The following code example creates a point entity located at coordinates $(1.0, 2.0, 3.0)$ and changes its color to magenta (see figure).
@@ -472,8 +482,8 @@ point->OverwriteColor(i_ent::ColorNumber::kMagenta);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ RationalBSplineCurve
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ RationalBSplineCurve
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 The `RationalBSplineCurve` class represents rational B-spline curves in 3D space. The following code example creates a non-periodic, open NURBS curve of degree 3 with four control points (see figure). You can use the `IGESParameterVector` structure to pass all parameters at once when creating an instance.
@@ -511,8 +521,8 @@ This section describes the surface entities in IGES files. Surface entities are 
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ RuledSurface
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ RuledSurface
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 The `RuledSurface` class is used to represent a ruled surface, which is generated using a straight line (ruling) connecting two curve entities, $C_1(t)$ and $C_2(s)$. Each point on the surface is described by the following parametric equation:
@@ -567,8 +577,8 @@ ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ SurfaceOfRevolution
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ SurfaceOfRevolution
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 The `SurfaceOfRevolution` class is used to represent a surface of revolution in 3D space. It generates a surface by rotating a [curve entity](#curves) $C(t)$ around an axis defined by a [Line](#line-type-110). Each point on the surface is described by the following parametric equation:
@@ -619,8 +629,8 @@ surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ TabulatedCylinder
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ TabulatedCylinder
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 The `TabulatedCylinder` class is used to represent a ruled surface in 3D space. It generates a surface by sweeping a [curve entity](#curves) $C(t)$ along a given location $L$ (or a direction vector $D$). Each point on the surface is described by the following parametric equation:
@@ -670,8 +680,8 @@ tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ RationalBSplineSurface
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ RationalBSplineSurface
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 The `RationalBSplineSurface` class represents rational B-spline surfaces in 3D space. The following code example creates a non-periodic, open NURBS surface of degree 3 with 6x6 control points (see figure). As shown below, use the `IGESParameterVector` structure to pass parameters at once and generate an instance. For detailed values of the parameters used in the code example, see the `CreateRationalBSplineSurface` function in [examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp).

@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/composite_curve.h"
 
+#include <limits>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -266,52 +267,14 @@ std::array<double, 2> CompositeCurve::GetParameterRange() const {
     return {0.0, total_parametric_length};
 }
 
-std::optional<Vector3d>
-CompositeCurve::TryGetDefinedPointAt(const double t) const {
+std::optional<i_ent::CurveDerivatives>
+CompositeCurve::TryGetDerivatives(const double t, const unsigned int n) const {
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (curve) {
-        // 個別の要素の定義空間の座標ではなく、本エンティティの定義空間における
-        // 曲線を取得するため、`TryGetPointAt`を使用する
-        return curve->TryGetPointAt(t_local);
+        return curve->TryGetDerivatives(t_local, n);
     }
     // パラメータtが範囲外の場合
     return std::nullopt;
-}
-
-std::optional<Vector3d>
-CompositeCurve::TryGetDefinedTangentAt(const double t) const {
-    auto [curve, t_local] = GetCurveAtParameter(t);
-    if (curve) {
-        // 個別の要素の定義空間の接線ベクトルではなく、本エンティティの定義空間における
-        // 曲線接線を取得するため、`TryGetTangentAt`を使用する
-        return curve->TryGetTangentAt(t_local);
-    }
-    // パラメータtが範囲外の場合
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CompositeCurve::TryGetDefinedNormalAt(const double t) const {
-    auto [curve, t_local] = GetCurveAtParameter(t);
-    if (curve) {
-        // 個別の要素の定義空間の法線ベクトルではなく、本エンティティの定義空間における
-        // 曲線法線を取得するため、`TryGetNormalAt`を使用
-        return curve->TryGetNormalAt(t_local);
-    }
-    // パラメータtが範囲外の場合
-    return std::nullopt;
-}
-
-std::optional<Vector3d> CompositeCurve::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<Vector3d> CompositeCurve::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d> CompositeCurve::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
 }
 
 
@@ -319,6 +282,15 @@ std::optional<Vector3d> CompositeCurve::TryGetNormalAt(const double t) const {
 /**
  * CompositeCurve: 構成要素 (曲線) の操作
  */
+
+std::shared_ptr<const i_ent::ICurve>
+CompositeCurve::GetCurveAt(const size_t index) const {
+    if (index >= curves_.size()) {
+        throw std::out_of_range("Index " + std::to_string(index) +
+                                " is out of range for CompositeCurve.");
+    }
+    return curves_[index].GetEntity<ICurve>();
+}
 
 bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
     if (!curve) {

@@ -7,8 +7,10 @@
 - [機能別ドキュメント](#機能別ドキュメント)
   - [commonモジュール](#commonモジュール)
   - [entitiesモジュール](#entitiesモジュール)
+    - [個別エンティティクラス](#個別エンティティクラス)
   - [graphicsモジュール](#graphicsモジュール)
   - [modelsモジュール](#modelsモジュール)
+  - [numericsモジュール](#numericsモジュール)
   - [utilsモジュール](#utilsモジュール)
 - [その他のドキュメント](#その他のドキュメント)
 
@@ -37,12 +39,29 @@
 - **[個別エンティティクラス](entities/entities_ja.md)**
   - 各インターフェースの説明
   - 各エンティティクラスの説明（コード例、図など）
+- **[ジオメトリの幾何学的特性](entities/geometric_properties_ja.md)**
+  - 曲線および曲面エンティティに対して計算可能な、各種幾何学的特性の説明
+  - 各種特性の計算方法（コード例）についても記述
 - **[中間データ構造](intermediate_data_structure_ja.md)**
   - 本ライブラリにおいて、IGESファイルの入出力の際に内部で使用される中間データ構造の説明
   - IGESファイルのDirectory EntryセクションとParameter Dataセクションの中間データ構造
 - **[DEフィールド](entities/de_field_ja.md)**
   - Directory Entryセクションに関する簡単な説明
   - DEフィールドを扱うクラス構造の説明
+
+#### 個別エンティティクラス
+
+　個別のエンティティクラスのドキュメントは、以下の通りです。現時点では、それぞれのパラメトリック曲線/曲面に関する数式的な定義、およびその導関数/偏導関数の定義が記載されています。
+
+| 種別 | ドキュメント |
+|---|---|
+| curves | [Circular Arc (Type 100)](entities/curves/100_circular_arc_ja.md) <br> 円・円弧エンティティ |
+|   ^    | [Composite Curve (Type 102)](entities/curves/102_composite_curve_ja.md) <br> 複数の曲線（`ICurve`派生クラス）を組み合わせ可能なエンティティ |
+|   ^    | [Conic Arc (Type 104)](entities/curves/104_conic_arc_ja.md) <br> 円錐曲線 (楕円・放物線・双曲線) エンティティ |
+|   ^    | [Copious Data (Type 106)](entities/curves/106_copious_data_ja.md) <br> 点列、折れ線エンティティ, 各点/頂点に追加のベクトルを設定することも可能 |
+|   ^    | [Line (Type 110)](entities/curves/110_line_ja.md) <br> 線分・半直線・直線エンティティ |
+|   ^    | [Parametric Spline Curve (Type 112)](entities/curves/112_parametric_spline_curve_ja.md) <br> 複数の、最大3次の多項式セグメントからなる曲線エンティティ |
+|   ^    | [Rational B-Spline Curve (Type 126)](entities/curves/126_rational_b_spline_curve_ja.md) <br> 有理Bスプライン曲線エンティティ (NURBS曲線を含む) |
 
 ### graphicsモジュール
 
@@ -51,6 +70,10 @@
 ### modelsモジュール
 
 - **[中間データ構造](intermediate_data_structure_ja.md)**: IGESファイル入出力時の中間データ構造
+
+### numericsモジュール
+
+- 現在、ドキュメントはありません
 
 ### utilsモジュール
 

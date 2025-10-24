@@ -13,6 +13,7 @@ set(TEST_SOURCES
     test_entity_base.cpp
 
     # Curves
+    curves/test_i_curve.cpp
     curves/test_circular_arc.cpp
 
     # Surfaces

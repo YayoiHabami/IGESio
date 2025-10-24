@@ -187,49 +187,25 @@ bool CircularArc::IsClosed() const {
     return IsApproxEqual(start_point_, terminate_point_, kGeometryTolerance);
 }
 
-std::optional<Vector3d> CircularArc::TryGetDefinedPointAt(const double t) const {
+std::optional<i_ent::CurveDerivatives>
+CircularArc::TryGetDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
-    if (t < range[0] || t > range[1]) {
-        return std::nullopt;
+    if (t < range[0] || t > range[1]) return std::nullopt;
+
+    const double radius = Radius();
+
+    CurveDerivatives result(n);
+    // n階導関数を一般式で計算（位相は k * PI/2 で増える）
+    for (unsigned int k = 0; k <= n; ++k) {
+        double phase = t + static_cast<double>(k) * (kPi / 2.0);
+        result[k] = Vector3d{
+            radius * std::cos(phase),
+            radius * std::sin(phase),
+            0.0
+        };
     }
 
-    const double radius = (start_point_ - center_).norm();
-    return center_ + Vector3d{radius * std::cos(t), radius * std::sin(t), center_[2]};
-}
-
-std::optional<Vector3d> CircularArc::TryGetDefinedTangentAt(const double t) const {
-    const auto point = TryGetDefinedPointAt(t);
-    if (!point) {
-        return std::nullopt;
-    }
-
-    // 接線ベクトルは円の半径ベクトルを90度回転させたもの
-    const double radius = (start_point_ - center_).norm();
-    Vector3d tangent = {radius * -std::sin(t), radius * std::cos(t), 0.0};
-    return tangent.normalized();
-}
-
-std::optional<Vector3d> CircularArc::TryGetDefinedNormalAt(const double t) const {
-    const auto point = TryGetDefinedPointAt(t);
-    if (!point) {
-        return std::nullopt;
-    }
-
-    // 法線ベクトルは円の中心からその点へのベクトル
-    auto normal = point.value() - center_;
-    return normal.normalized();
-}
-
-std::optional<Vector3d> CircularArc::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<Vector3d> CircularArc::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d> CircularArc::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    return result;
 }
 
 

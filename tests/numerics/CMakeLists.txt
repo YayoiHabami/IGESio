@@ -1,5 +1,6 @@
 set (TEST_SOURCES
     test_constexpr_math.cpp
+    test_combinatorics.cpp
     test_integration.cpp
 )
 

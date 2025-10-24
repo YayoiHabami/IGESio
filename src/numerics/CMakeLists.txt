@@ -1,6 +1,7 @@
 # Numerics module
 add_library(igesio_numerics STATIC
     integration.cpp
+    combinatorics.cpp
 )
 
 # Set the source and include directories
