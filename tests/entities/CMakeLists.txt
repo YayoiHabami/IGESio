@@ -17,6 +17,7 @@ set(TEST_SOURCES
     curves/test_circular_arc.cpp
 
     # Surfaces
+    surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
 )
 

@@ -62,6 +62,10 @@
 |   ^    | [Line (Type 110)](entities/curves/110_line_ja.md) <br> 線分・半直線・直線エンティティ |
 |   ^    | [Parametric Spline Curve (Type 112)](entities/curves/112_parametric_spline_curve_ja.md) <br> 複数の、最大3次の多項式セグメントからなる曲線エンティティ |
 |   ^    | [Rational B-Spline Curve (Type 126)](entities/curves/126_rational_b_spline_curve_ja.md) <br> 有理Bスプライン曲線エンティティ (NURBS曲線を含む) |
+| surfaces | [Ruled Surface (Type 118)](entities/surfaces/118_ruled_surface_ja.md) <br> 2つの曲線を直線で結ぶことで定義されるルールド面エンティティ |
+|    ^     | [Surface of Revolution (Type 120)](entities/surfaces/120_surface_of_revolution_ja.md) <br> 曲線を軸回りに回転させることで定義される回転面エンティティ |
+|    ^     | [Tabulated Cylinder (Type 122)](entities/surfaces/122_tabulated_cylinder_ja.md) <br> 準線(曲線)を一定方向に平行移動させることで定義される曲面エンティティ |
+|    ^     | [Rational B-Spline Surface (Type 128)](entities/surfaces/128_rational_b_spline_surface_ja.md) <br> 有理Bスプライン曲面エンティティ (NURBS曲面を含む) |
 
 ### graphicsモジュール
 

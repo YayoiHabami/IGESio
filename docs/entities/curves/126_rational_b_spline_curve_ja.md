@@ -1,4 +1,4 @@
-# Rational B-Spline Curve (Entity Type 126)
+# 有理B-Spline Curve (Entity Type 126)
 
 Defined at [curves/rational_b_spline_curve.h](./../../../include/igesio/entities/curves/rational_b_spline_curve.h)
 
@@ -31,7 +31,7 @@ Defined at [curves/rational_b_spline_curve.h](./../../../include/igesio/entities
 
 #### `RationalBSplineCurveType`
 
-　フォーム番号（`GetFormNumber()`）と一対一で対応する、Rational B-スプライン曲線の種類を表す列挙型です。特に指定がない場合、`kUndetermined`が返されます。
+　フォーム番号（`GetFormNumber()`）と一対一で対応する、有理B-スプライン曲線の種類を表す列挙型です。特に指定がない場合、`kUndetermined`が返されます。
 
 | form | 列挙子 | 説明 |
 |---|---|---|
@@ -46,7 +46,7 @@ Defined at [curves/rational_b_spline_curve.h](./../../../include/igesio/entities
 
 #### 曲線 $C(t)$
 
-　Rational B-スプライン曲線 $C(t)$ は、以下の5種類のパラメータにより定義されます。
+　有理B-スプライン曲線 $C(t)$ は、以下の5種類のパラメータにより定義されます。
 
 - 次数 $m$
 - 制御点 $P_i = (x_i, y_i, z_i)\ (i = 0, 1, \ldots, k)$ ( $k + 1$ 個 )
@@ -56,9 +56,9 @@ Defined at [curves/rational_b_spline_curve.h](./../../../include/igesio/entities
 
 ここで、パラメータ範囲 $[t_{start}, t_{end}]$ は`GetParameterRange()`関数で取得でき、以下の条件を満たします。
 
-$$T_0 \leq t_{start} < t_{end} \leq T_{1+k}$$
+$$t_0 \leq t_{start} < t_{end} \leq t_{1+k}$$
 
-　また、上記のパラメータからB-スプライン基底関数 $b_{i,m}(t)$ が定義され、Rational B-スプライン曲線 $C(t)$ は次のように表されます。
+　また、上記のパラメータからB-スプライン基底関数 $b_{i,m}(t)$ が定義され、有理B-スプライン曲線 $C(t)$ は次のように表されます。
 
 $$C(t) = \frac{\sum_{i=0}^{k} b_{i,m}(t) w_i P_i}{\sum_{i=0}^{k} b_{i,m}(t) w_i}, \quad t \in [t_{start}, t_{end}]$$
 
@@ -73,7 +73,7 @@ $$b_{i,l}(t) = \frac{t - t_i}{t_{i+l} - t_i} b_{i,l-1}(t) + \frac{t_{i+l+1} - t}
 
 #### 導関数 $C'(t), C''(t)$
 
-　Rational B-スプライン曲線 $C(t)$ の1階および2階の導関数 $C'(t), C''(t)$ は、以下のように定義されます。記号の定義および計算方法については、[Appendix-プログラム上での計算](#appendix)を参照してください。
+　有理B-スプライン曲線 $C(t)$ の1階および2階の導関数 $C'(t), C''(t)$ は、以下のように定義されます。記号の定義および計算方法については、[Appendix-プログラム上での計算](#appendix)を参照してください。
 
 $$C'(t) = \frac{1}{w(t)} \left( A'(t) - w'(t) C(t) \right)$$
 
@@ -87,28 +87,29 @@ $$C''(t) = \frac{1}{w(t)} \left( A''(t) - 2 w'(t) C'(t) - w''(t) C(t) \right)$$
 
 #### `src/entities/curves/nurbs_basis_function.h`
 
-　Rational B-スプライン曲線 $C(t)$ のための各種計算は、（公開APIではありませんが）`src/entities/curves/nurbs_basis_function.h`内の`TryComputeBasisFunctions`関数において実装されています。この関数では、与えられたパラメータ値 $t$ に対して、B-スプライン基底関数 $b_{i,m}(t)$ およびその導関数を計算します。戻り値は以下の`BasisFunctionResult`構造体または`std::nullopt`です。
+　有理B-スプライン曲線 $C(t)$ のための各種計算は、（公開APIではありませんが）`src/entities/curves/nurbs_basis_function.h`内の`TryComputeBasisFunctions`関数において実装されています。この関数では、与えられたパラメータ値 $t$ に対して、B-スプライン基底関数 $b_{i,m}(t)$ およびその導関数を計算します。戻り値は以下の`BasisFunctionResult`構造体または`std::nullopt`です。
 
 ```cpp
 struct BasisFunctionResult {
     // t ∈ [t_j, t_{j+1}) なるノット区間のインデックス j
     int knot_span;
-    // 基底関数の値
+    // 基底関数の値 b_{j-m,m}(t), ..., b_{j,m}(t)
     std::vector<double> values;
-    // 基底関数の導関数の値
+    // 基底関数の導関数の値 b_{j-m,m}^(i)(t), ..., b_{j,m}^(i)(t)
+    // derivatives[i]は(i+1)次導関数の値
     std::vector<std::vector<double>> derivatives;
 };
 ```
 
 #### `RationalBSplineCurve::TryGetDefinedPointAt(t)`
 
-　（定義空間における）Rational B-スプライン曲線 $C(t)$ 上の点を取得するには、`RationalBSplineCurve::TryGetDefinedPointAt(t)`関数を使用します。この関数は、引数としてパラメータ値 $t$ を受け取り、曲線上の点 $C(t)$ を計算して返します。計算には上記の`TryComputeBasisFunctions`関数が利用されます。
+　（定義空間における）有理B-スプライン曲線 $C(t)$ 上の点を取得するには、`RationalBSplineCurve::TryGetDefinedPointAt(t)`関数を使用します。この関数は、引数としてパラメータ値 $t$ を受け取り、曲線上の点 $C(t)$ を計算して返します。計算には上記の`TryComputeBasisFunctions`関数が利用されます。
 
 　上記の $t \in [t_{j}, t_{j+1})$ なる $j$ に対して、以下の局所的な基底関数 $b_{j-m+i, m}(t)$ が計算されます（`BasisFunctionResult::values`に対応）。
 
 $$b_{j - m + i, m}(t), \quad i = 0, 1, \ldots, m$$
 
-　この基底関数を用いて、Rational B-スプライン曲線 $C(t)$ 上の点は次のように計算されます。
+　この基底関数を用いて、有理B-スプライン曲線 $C(t)$ 上の点は次のように計算されます。
 
 $$C(t) = \frac{\sum_{i=0}^{m} b_{j - m + i, m}(t) w_{j - m + i} P_{j - m + i}}{\sum_{i=0}^{m} b_{j - m + i, m}(t) w_{j - m + i}} = \frac{\sum_{l=j-m}^{j} b_{l, m}(t) w_{l} P_{l}}{\sum_{l=j-m}^{j} b_{l, m}(t) w_{l}},\quad \text{if } \sum_{l=j-m}^{j} b_{l, m}(t) w_{l} \neq 0$$
 
@@ -121,7 +122,7 @@ $$C(t) = \frac{A(t)}{w(t)}, \quad \text{where } \left\lbrace\begin{aligned}
 
 #### `RationalBSplineCurve::TryGetDerivatives(t, n)`
 
-　（定義空間における）Rational B-スプライン曲線 $C(t)$ の $n$ 階までの導関数 $C'(t), C''(t), \ldots, C^{(n)}(t)$ を取得するには、`RationalBSplineCurve::TryGetDerivatives(t, n)`関数を使用します。この関数は、引数としてパラメータ値 $t$ と導関数の階数 $n$ を受け取り、曲線の導関数を計算して返します。計算には上記の`TryComputeBasisFunctions`関数が利用されます。
+　（定義空間における）有理B-スプライン曲線 $C(t)$ の $n$ 階までの導関数 $C'(t), C''(t), \ldots, C^{(n)}(t)$ を取得するには、`RationalBSplineCurve::TryGetDerivatives(t, n)`関数を使用します。この関数は、引数としてパラメータ値 $t$ と導関数の階数 $n$ を受け取り、曲線の導関数を計算して返します。計算には上記の`TryComputeBasisFunctions`関数が利用されます。
 
 　まず、上式の分子 $A(t)$ および分母 $w(t)$ の $n$ 階の導関数を次のように定義します。
 
@@ -129,7 +130,7 @@ $$A^{(n)}(t) = \sum_{l=j-m}^{j} b_{l, m}^{(n)}(t) w_{l} P_{l}, \quad w^{(n)}(t) 
 
 ここで, $b_{l, m}^{(n)}(t)$ は基底関数 $b_{l, m}(t)$ の $n$ 階の導関数を表し、`BasisFunctionResult::derivatives[n - 1][l - (j - m)]`に対応します。ただし, $n = 0$ の場合は $b_{l, m}^{(0)}(t) = b_{l, m}(t)$ であり、`BasisFunctionResult::values[l - (j - m)]`に対応します。
 
-　このとき、Rational B-スプライン曲線 $C(t)$ の $n$ 階の導関数は、商の微分法則を適用して次のように計算されます。
+　このとき、有理B-スプライン曲線 $C(t)$ の $n$ 階の導関数は、商の微分法則を適用して次のように計算されます。
 
 $$C^{(n)}(t) = \frac{1}{w(t)} \left( A^{(n)}(t) - \sum_{k=0}^{n-1} \binom{n}{k} w^{(n-k)}(t) C^{(k)}(t) \right)$$
 

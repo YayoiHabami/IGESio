@@ -250,8 +250,9 @@ std::array<double, 4> TabulatedCylinder::GetParameterRange() const {
     return {u_start, u_end, 0.0, 1.0};
 }
 
-std::optional<Vector3d>
-TabulatedCylinder::TryGetDefinedPointAt(const double u, const double v) const {
+std::optional<i_ent::SurfaceDerivatives>
+TabulatedCylinder::TryGetDerivatives(
+        const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!directrix_.IsPointerSet()) return std::nullopt;
 
@@ -261,46 +262,36 @@ TabulatedCylinder::TryGetDefinedPointAt(const double u, const double v) const {
         return std::nullopt;
     }
 
-    // 計算: S(u, v) = C(t) + v * direction
+    // 準線の導関数を計算
     double t = GetDirectrixParameterAtU(u);
-    auto c_t = GetDirectrix()->TryGetPointAt(t);
-    if (!c_t.has_value()) return std::nullopt;
+    auto deriv_opt = GetDirectrix()->TryGetDerivatives(t, order);
+    if (!deriv_opt.has_value()) return std::nullopt;
+    const auto& c_deriv = deriv_opt.value();
 
-    return c_t.value() + v * GetDirection();
-}
+    // 準線のパラメータ範囲を取得
+    auto [tmin, tmax] = GetDirectrix()->GetParameterRange();
+    double dt = (tmax - tmin);
 
-std::optional<Vector3d>
-TabulatedCylinder::TryGetDefinedNormalAt(const double u, const double v) const {
-    // ポインタの確認
-    if (!directrix_.IsPointerSet()) return std::nullopt;
+    // サーフェスの導関数を計算
+    SurfaceDerivatives s_deriv(order);
 
-    // パラメータ範囲の確認
-    auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (u < umin || u > umax || v < vmin || v > vmax) {
-        return std::nullopt;
+    // S^(0, 0) = C(t) + v * D
+    s_deriv(0, 0) = c_deriv[0] + v * GetDirection();
+
+    // S^(n_u, 0) = C^(n_u)(t) * (dt/du)^(n_u)
+    for (unsigned int n_u = 1; n_u <= order; ++n_u) {
+        s_deriv(n_u, 0) = c_deriv[n_u] * std::pow(dt, n_u);
     }
 
-    // 計算: N(u, v) = T_C(t) × direction; T_C(t): 準線の接線ベクトル
-    double t = GetDirectrixParameterAtU(u);
-    auto t_c = GetDirectrix()->TryGetTangentAt(t);
-    if (!t_c.has_value()) return std::nullopt;
-
-    auto normal = t_c.value().cross(GetDirection());
-    if (IsApproxZero(normal.norm())) {
-        // 法線ベクトルがゼロベクトルになる場合は、法線ベクトルを計算できない
-        return std::nullopt;
+    if (order >= 1) {
+        // S^(0, 1) = D
+        s_deriv(0, 1) = GetDirection();
     }
-    return normal.normalized();
-}
 
-std::optional<igesio::Vector3d>
-TabulatedCylinder::TryGetPointAt(const double u, const double v) const {
-    return TransformImpl(TryGetDefinedPointAt(u, v), true);
-}
+    // S^(n_u, n_v) = 0 for n_v > 1 or (n_u > 0 and n_v > 0)
+    // SurfaceDerivativesはゼロで初期化されるため、これ以上の計算は不要
 
-std::optional<igesio::Vector3d>
-TabulatedCylinder::TryGetNormalAt(const double u, const double v) const {
-    return TransformImpl(TryGetDefinedNormalAt(u, v), false);
+    return s_deriv;
 }
 
 

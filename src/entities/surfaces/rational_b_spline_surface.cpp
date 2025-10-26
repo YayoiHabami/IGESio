@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "igesio/common/tolerance.h"
+#include "igesio/numerics/combinatorics.h"
 #include "./../curves/nurbs_basis_function.h"
 
 namespace {
@@ -365,9 +366,10 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
 /**
  * ISurface implementation
  */
-std::optional<Vector3d>
-RationalBSplineSurface::TryGetDefinedPointAt(
-        const double u, const double v) const {
+
+std::optional<i_ent::SurfaceDerivatives>
+RationalBSplineSurface::TryGetDerivatives(
+        const double u, const double v, const unsigned int order) const {
     // パラメータ範囲チェック
     if (u < parameter_range_[0] || u > parameter_range_[1] ||
         v < parameter_range_[2] || v > parameter_range_[3]) {
@@ -375,105 +377,81 @@ RationalBSplineSurface::TryGetDefinedPointAt(
     }
 
     // 基底関数の計算
-    auto basis_u_opt = ::TryComputeBasisFunctions(u, true, 0, *this);
-    auto basis_v_opt = ::TryComputeBasisFunctions(v, false, 0, *this);
+    auto basis_u_opt = ::TryComputeBasisFunctions(u, true, order, *this);
+    auto basis_v_opt = ::TryComputeBasisFunctions(v, false, order, *this);
     if (!basis_u_opt || !basis_v_opt) return std::nullopt;
     const auto& basis_u = *basis_u_opt;
     const auto& basis_v = *basis_v_opt;
 
-    Vector3d numerator = Vector3d::Zero();
-    double denominator = 0.0;
+    // u,v方向の次数
+    auto [m_u, m_v] = degrees_;
 
-    // NURBS曲面の定義式
-    for (int l = 0; l <= degrees_.second; ++l) {
-        for (int k = 0; k <= degrees_.first; ++k) {
-            // (l, k) が制御点の範囲外ならスキップ
-            int i = basis_u.knot_span - degrees_.first + k;
-            int j = basis_v.knot_span - degrees_.second + l;
-            if (i < 0 || j < 0 ||
-                static_cast<unsigned int>(i) >= NumControlPoints().first ||
-                static_cast<unsigned int>(j) >= NumControlPoints().second) {
-                continue;
+    // u∈[u_k, u_{k+1}], v∈[v_l, v_{l+1}] を満たすノットスパンのインデックス k, l
+    const int u_span = basis_u.knot_span;  // k
+    const int v_span = basis_v.knot_span;  // l
+
+    // A^(nu, nv) と w^(nu, nv) を計算する
+    SurfaceDerivatives numer(order);
+    SurfaceDerivatives denom(order);  // xの値が分母に対応
+    for (int i = 0; i <= m_u; ++i) {
+        // u方向の制御点インデックス p
+        const int p = u_span - m_u + i;
+        for (int j = 0; j <= m_v; ++j) {
+            // v方向の制御点インデックス q
+            const int q = v_span - m_v + j;
+
+            // A^(nu, nv) と w^(nu, nv) を 0 <= nu + nv <= order について計算
+            for (unsigned int nu = 0; nu <= order; ++nu) {
+                // b_p^(nu)(u) 基底関数のnu次導関数
+                const double b_u = basis_u.GetDerivatives(nu)[i];
+                for (unsigned int nv = 0; nv <= order - nu; ++nv) {
+                    // b_q^(nv)(v) 基底関数のnv次導関数
+                    const double b_v = basis_v.GetDerivatives(nv)[j];
+
+                    numer(nu, nv) += WeightAt(p, q) * b_u * b_v * ControlPointAt(p, q);
+                    denom(nu, nv).x() += WeightAt(p, q) * b_u * b_v;
+                }
             }
-
-            double N = basis_u.values[k] * basis_v.values[l];
-            numerator   += N * weights_(i, j) * ControlPointAt(i, j);
-            denominator += N * weights_(i, j);
         }
     }
 
-    // 分母がほぼ0の場合は定義されない
-    if (IsApproxZero(denominator)) return std::nullopt;
+    // 分母 w^(0,0) がほぼ0の場合は定義されない
+    if (IsApproxZero(denom(0, 0).x())) return std::nullopt;
 
-    return numerator / denominator;
-}
+    // S^(nu, nv) を計算する
+    SurfaceDerivatives result(order);
+    const double w00 = denom(0, 0).x();
 
-std::optional<Vector3d>
-RationalBSplineSurface::TryGetDefinedNormalAt(
-        const double u, const double v) const {
-    // パラメータ範囲チェック
-    if (u < parameter_range_[0] || u > parameter_range_[1] ||
-        v < parameter_range_[2] || v > parameter_range_[3]) {
-        return std::nullopt;
-    }
+    // k = nu + nv について 0からorderまでループ
+    for (unsigned int k = 0; k <= order; ++k) {
+        for (unsigned int nu = 0; nu <= k; ++nu) {
+            const unsigned int nv = k - nu;
 
-    // 基底関数と1次導関数を計算
-    auto basis_u_opt = ::TryComputeBasisFunctions(u, true, 1, *this);
-    auto basis_v_opt = ::TryComputeBasisFunctions(v, false, 1, *this);
-    if (!basis_u_opt || !basis_v_opt) return std::nullopt;
-    const auto& basis_u = *basis_u_opt;
-    const auto& basis_v = *basis_v_opt;
+            // S^(nu, nv) の計算
+            Vector3d sum_term = Vector3d::Zero();
 
-    // 曲面の点、u方向の接ベクトル、v方向の接ベクトルを計算
-    Vector3d S = Vector3d::Zero();
-    Vector3d Su = Vector3d::Zero();
-    Vector3d Sv = Vector3d::Zero();
-    double w = 0.0, wu = 0.0, wv = 0.0;
+            // Σ_{i=0...nu, j=0...nv, (i,j)!=(nu,nv)} ...
+            for (unsigned int i = 0; i <= nu; ++i) {
+                for (unsigned int j = 0; j <= nv; ++j) {
+                    // (i, j) == (nu, nv) の場合はスキップ
+                    if (i == nu && j == nv) continue;
 
-    for (int l = 0; l <= degrees_.second; ++l) {
-        for (int k = 0; k <= degrees_.first; ++k) {
-            // (l, k) が制御点の範囲外ならスキップ
-            int i = basis_u.knot_span - degrees_.first + k;
-            int j = basis_v.knot_span - degrees_.second + l;
-            if (i < 0 || j < 0 ||
-                static_cast<unsigned int>(i) >= NumControlPoints().first ||
-                static_cast<unsigned int>(j) >= NumControlPoints().second) {
-                continue;
+                    // C(nu, i) * C(nv, j) * S^(i, j) * w^(nu - i, nv - j)
+                    sum_term += numerics::BinomialCoefficient<double>(nu, i) *
+                                numerics::BinomialCoefficient<double>(nv, j) *
+                                result(i, j) *              // S^(i, j)
+                                denom(nu - i, nv - j).x();  // w^(nu - i, nv - j)
+                }
             }
 
-            double N = basis_u.values[k] * basis_v.values[l];
-            double Nu = basis_u.derivatives[0][k] * basis_v.values[l];
-            double Nv = basis_u.values[k] * basis_v.derivatives[0][l];
-            S  += N  * weights_(i, j) * ControlPointAt(i, j);
-            Su += Nu * weights_(i, j) * ControlPointAt(i, j);
-            Sv += Nv * weights_(i, j) * ControlPointAt(i, j);
-            w  += N  * weights_(i, j);
-            wu += Nu * weights_(i, j);
-            wv += Nv * weights_(i, j);
+            // S^(nu, nv) = (A^(nu, nv) - Σ ...) / w^(0,0)
+            result(nu, nv) = (numer(nu, nv) - sum_term) / w00;
         }
     }
-    // 分母がほぼ0の場合は定義されない
-    if (IsApproxZero(w)) return std::nullopt;
 
-    // NURBS曲面の微分公式から法線ベクトルを計算
-    Vector3d dSdu = (Su * w - S * wu) / (w * w);
-    Vector3d dSdv = (Sv * w - S * wv) / (w * w);
-    Vector3d normal = dSdu.cross(dSdv);
-
-    // 法線ベクトルがほぼ0の場合は定義されない
-    if (IsApproxZero(normal.norm())) return std::nullopt;
-    return normal.normalized();
+    return result;
 }
 
-std::optional<igesio::Vector3d>
-RationalBSplineSurface::TryGetPointAt(const double u, const double v) const {
-    return TransformImpl(TryGetDefinedPointAt(u, v), true);
-}
-
-std::optional<igesio::Vector3d>
-RationalBSplineSurface::TryGetNormalAt(const double u, const double v) const {
-    return TransformImpl(TryGetDefinedNormalAt(u, v), false);
-}
 
 
 /**
