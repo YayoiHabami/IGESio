@@ -10,11 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/combinatorics.h"
 #include "./nurbs_basis_function.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using RationalBSplineCurve = i_ent::RationalBSplineCurve;
 using Vector3d = igesio::Vector3d;
@@ -253,7 +255,7 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
     } else if (is_polynomial_) {
         // polynomial形式の場合、全ての重みが等しいことを確認
         for (const auto& weight : weights_) {
-            if (!IsApproxEqual(weight, weights_[0])) {
+            if (!i_num::IsApproxEqual(weight, weights_[0])) {
                 errors.emplace_back("All weights must be equal for polynomial form. "
                         "Got weights: " + std::to_string(weights_[0]) + " and " +
                         std::to_string(weight) + ".");
@@ -298,112 +300,46 @@ bool RationalBSplineCurve::IsClosed() const {
     return is_closed_;
 }
 
-std::optional<igesio::Vector3d>
-RationalBSplineCurve::TryGetDefinedPointAt(const double t) const {
-    auto basis_result = ::TryComputeBasisFunctions(t, 0, *this);
-    if (!basis_result) {
+std::optional<i_ent::CurveDerivatives>
+RationalBSplineCurve::TryGetDerivatives(const double t, const unsigned int n) const {
+    auto basis = ::TryComputeBasisFunctions(t, static_cast<int>(n), *this);
+    if (!basis) {
         return std::nullopt;
     }
 
-    // 点の座標を計算
-    auto numerator = Vector3d::Zero();
-    double denominator = 0.0;
+    // A(t), w(t), A'(t), w'(t), ..., A^(n)(t), w^(n)(t) の計算
+    // - numerators[d]   = A^(d)(t)   (A^0(t) = A(t))
+    // - denominators[d] = w^(d)(t)   (w^0(t) = w(t))
+    // 計算の詳細については[docs/entities/curves/126_rational_b_spline_curve_ja.md]を参照
+    std::vector<Vector3d> numerators(n + 1, Vector3d::Zero());
+    std::vector<double> denominators(n + 1, 0.0);
     for (int i = 0; i <= degree_; ++i) {
-        int ctrl_point_idx = basis_result->knot_span - degree_ + i;
-        const double tmp = basis_result->values[i] * weights_[ctrl_point_idx];
-        denominator += tmp;
-        numerator += tmp * control_points_.col(ctrl_point_idx);
-    }
-
-    if (IsApproxZero(denominator)) {
-        // 分母が0の場合は定義されない
-        return std::nullopt;
-    }
-
-    return numerator / denominator;
-}
-
-std::optional<igesio::Vector3d>
-RationalBSplineCurve::TryGetDefinedTangentAt(const double t) const {
-    auto basis_result = ::TryComputeBasisFunctions(t, 1, *this);
-    if (!basis_result) return std::nullopt;
-
-    // N(t), D(t), N'(t), D'(t) の計算
-    auto num = Vector3d::Zero(), num_d = Vector3d::Zero();
-    auto denom = 0.0, denom_d = 0.0;
-    for (int i = 0; i <= degree_; ++i) {
-        int ctrl_point_idx = basis_result->knot_span - degree_ + i;
+        int ctrl_point_idx = basis->knot_span - degree_ + i;
         const auto& w = weights_[ctrl_point_idx];
         const auto& p = control_points_.col(ctrl_point_idx);
 
-        // N(t) & D(t)
-        denom += w * basis_result->values[i];
-        num   += w * p * basis_result->values[i];
-        // N'(t) & D'(t)
-        denom_d += w * basis_result->derivatives[0][i];
-        num_d   += w * p * basis_result->derivatives[0][i];
+        for (unsigned int d = 0; d <= n; ++d) {
+            numerators[d]   += w * basis->GetDerivatives(d)[i] * p;
+            denominators[d] += w * basis->GetDerivatives(d)[i];
+        }
     }
 
-    // 商の微分法則を適用して計算
-    if (IsApproxZero(denom * denom)) {
-        return std::nullopt;
-    }
-    return (num_d * denom - num * denom_d) / (denom * denom);
-}
+    // 分母が0の場合は定義されない
+    if (i_num::IsApproxZero(denominators[0]))  return std::nullopt;
 
-std::optional<igesio::Vector3d>
-RationalBSplineCurve::TryGetDefinedNormalAt(const double t) const {
-    // 主法線ベクトルを計算する
-    auto basis_result = ::TryComputeBasisFunctions(t, 2, *this);
-    if (!basis_result) return std::nullopt;
+    // 商の微分法則を適用して各導関数を計算
+    // C^(d)(t) = (A^(d)(t) - Σ[k=0 → d-1] dCk w^(d-k)(t) C^(k)(t)) / w(t)
+    // ただし dCk は d choose k (二項係数)、C^(0)(t) = A(t) / w(t)
+    CurveDerivatives derivatives(n);
+    for (unsigned int d = 0; d <= n; ++d) {
+        Vector3d num_d = numerators[d];
+        for (unsigned int k = 0; k < d; ++k) {
+            num_d -= numerics::BinomialCoefficient<double>(d, k)
+                     * denominators[d - k] * derivatives[k];
+        }
 
-    // N, D, N', D', N'', D'' の計算
-    auto num = Vector3d::Zero(), num_d = Vector3d::Zero(),
-         num_dd = Vector3d::Zero();
-    auto denom = 0.0, denom_d = 0.0, denom_dd = 0.0;
-    for (int i = 0; i <= degree_; ++i) {
-        int ctrl_point_idx = basis_result->knot_span - degree_ + i;
-        const auto& w = weights_[ctrl_point_idx];
-        const auto& p = control_points_.col(ctrl_point_idx);
-
-        // N(t), D(t)
-        denom += w * basis_result->values[i];
-        num   += w * p * basis_result->values[i];
-        // N'(t), D'(t)
-        denom_d += w * basis_result->derivatives[0][i];
-        num_d   += w * p * basis_result->derivatives[0][i];
-        // N''(t), D''(t)
-        denom_dd += w * basis_result->derivatives[1][i];
-        num_dd   += w * p * basis_result->derivatives[1][i];
+        derivatives[d] = num_d / denominators[0];
     }
 
-    // C'(t) を計算
-    if (IsApproxZero(denom * denom)) return std::nullopt;
-    const auto c_d = (num_d * denom - num * denom_d) / (denom * denom);
-
-    // C''(t) を計算
-    const auto c_dd = ((num_dd * denom - num * denom_dd) / denom
-                       - (2.0 * num_d * denom_d) ) / denom;
-
-    // 軌道面に垂直な C'(t) x C''(t) を計算、これが定義できない場合はnullopt
-    auto prod = c_d.cross(c_dd);
-    if (IsApproxZero(prod.norm())) return std::nullopt;
-
-    // 法線方向のベクトルを計算
-    return prod.cross(c_d).normalized();
-}
-
-std::optional<igesio::Vector3d>
-RationalBSplineCurve::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<igesio::Vector3d>
-RationalBSplineCurve::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<igesio::Vector3d>
-RationalBSplineCurve::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    return derivatives;
 }

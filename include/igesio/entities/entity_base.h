@@ -138,20 +138,15 @@ class EntityBase : public virtual IEntityIdentifier {
     ///       継承クラス側のコンストラクタで呼び出す必要がある。
     void InitializePD(const pointer2ID&);
 
-    /// @brief 自身が参照する変換行列に従い、座標を変換する
-    /// @param point 変換前の座標
-    /// @return 変換後の座標
-    /// @note pointがstd::nulloptの場合はそのまま返す
-    /// @note 座標値ではなくベクトル（例えば法線ベクトルなど）を変換する場合は、
-    ///       TransformVectorを使用すること
-    std::optional<Vector3d> TransformPoint(const std::optional<Vector3d>&) const;
-
-    /// @brief 自身が参照する変換行列に従い、ベクトルを変換する
-    /// @param vector 変換前のベクトル
-    /// @return 変換後のベクトル
-    /// @note vectorがstd::nulloptの場合はそのまま返す
-    /// @note 座標値を変換する場合は、TransformPointを使用すること
-    std::optional<Vector3d> TransformVector(const std::optional<Vector3d>&) const;
+    /// @brief エンティティ自身が参照する変換行列に従い、座標orベクトルを変換する
+    /// @param input 変換前の座標orベクトル v
+    /// @param is_point 座標を変換する場合は`true`、ベクトルを変換する場合は`false`
+    /// @return 変換後の座標orベクトル. 回転行列 R、平行移動ベクトル T に対し、
+    ///         座標値の場合は v' = Rv + T、ベクトルの場合は v' = Rv
+    /// @note inputがstd::nulloptの場合はそのまま返す
+    /// @note IGeometry::Transform用の実装、個別エンティティクラスでオーバーライドする
+    std::optional<Vector3d> TransformImpl(
+            const std::optional<Vector3d>&, const bool) const;
 
     /// @brief コンストラクタ (デフォルトのDEレコードを使用)
     /// @param entity_type エンティティのタイプ

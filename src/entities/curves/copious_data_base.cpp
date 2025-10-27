@@ -11,10 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CopiousDataBase;
 
@@ -122,7 +123,8 @@ CopiousDataBase::ValidatePD() const {
         // IP=1の場合: すべてのZ座標値が同じであること
         auto z_value = coordinates_(2, 0);
         for (size_t i = 1; i < coordinates_.cols(); ++i) {
-            if (!IsApproxEqual(coordinates_(2, i), z_value, kGeometryTolerance)) {
+            if (!i_num::IsApproxEqual(coordinates_(2, i), z_value,
+                                      i_num::kGeometryTolerance)) {
                 errors.emplace_back(
                     "All Z coordinates must be the same for CopiousDataType with IP=1."
                     "index " + std::to_string(i) + " has Z=" +
@@ -258,7 +260,7 @@ size_t CopiousDataBase::SetMainPDParameters(const pointer2ID& de2id) {
  */
 
 igesio::Vector3d
-CopiousDataBase::GetCoordinate(const size_t i) const {
+CopiousDataBase::Coordinate(const size_t i) const {
     if (i >= coordinates_.cols()) {
         throw std::out_of_range("Index out of range in CopiousDataBase.");
     }
@@ -266,7 +268,7 @@ CopiousDataBase::GetCoordinate(const size_t i) const {
 }
 
 igesio::Vector3d
-CopiousDataBase::GetAddition(const size_t i) const {
+CopiousDataBase::Addition(const size_t i) const {
     if (i >= addition_.cols()) {
         throw std::out_of_range("Index out of range in CopiousDataBase.");
     }
@@ -277,17 +279,53 @@ size_t CopiousDataBase::GetCount() const {
     return coordinates_.cols();
 }
 
-double CopiousDataBase::TotalLength() const {
+double CopiousDataBase::Length() const {
     double total_length = 0.0;
     for (size_t i = 1; i < coordinates_.cols(); ++i) {
         total_length += (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
     }
+
+    // kPlanarLoopの場合、末端と先頭を結ぶ線分も加える
+    if (GetDataType() == CopiousDataType::kPlanarLoop) {
+        size_t i_end = coordinates_.cols() - 1;
+        total_length += (coordinates_.col(0) - coordinates_.col(i_end)).norm();
+    }
+
     return total_length;
+}
+
+std::optional<size_t>
+CopiousDataBase::GetSegmentIndexAt(const double length) const {
+    if (length < 0.0 || length > Length()) {
+        return std::nullopt;
+    }
+
+    double accumulated_length = 0.0;
+    for (size_t i = 1; i < coordinates_.cols(); ++i) {
+        // 各セグメントごとに長さを計算し、指定された長さに達するか確認
+        double segment_length = (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
+        if (accumulated_length + segment_length >= length) {
+            // 指定された長さがこのセグメント内にある場合、そのセグメントのインデックスを返す
+            return i - 1;
+        }
+        accumulated_length += segment_length;
+    }
+
+    // kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
+    if (GetDataType() == CopiousDataType::kPlanarLoop) {
+        size_t i_end = coordinates_.cols() - 1;
+        double segment_length = (coordinates_.col(0) - coordinates_.col(i_end)).norm();
+        if (accumulated_length + segment_length >= length) {
+            return i_end;
+        }
+    }
+
+    return std::nullopt;
 }
 
 std::optional<igesio::Vector3d>
 CopiousDataBase::GetCoordinateAtLength(const double length) const {
-    if (length < 0.0 || length > TotalLength()) {
+    if (length < 0.0 || length > Length()) {
         return std::nullopt;
     }
 
@@ -297,10 +335,20 @@ CopiousDataBase::GetCoordinateAtLength(const double length) const {
         double segment_length = (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
         if (accumulated_length + segment_length >= length) {
             // 指定された長さがこのセグメント内にある場合、線形補間で座標を計算
-            double t = (length - accumulated_length) / segment_length;
-            return coordinates_.col(i - 1) * (1 - t) + coordinates_.col(i) * t;
+            double r = (length - accumulated_length) / segment_length;
+            return coordinates_.col(i - 1) * (1 - r) + coordinates_.col(i) * r;
         }
         accumulated_length += segment_length;
+    }
+
+    // kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
+    if (GetDataType() == CopiousDataType::kPlanarLoop) {
+        size_t i_end = coordinates_.cols() - 1;
+        double segment_length = (coordinates_.col(0) - coordinates_.col(i_end)).norm();
+        if (accumulated_length + segment_length >= length) {
+            double r = (length - accumulated_length) / segment_length;
+            return coordinates_.col(i_end) * (1 - r) + coordinates_.col(0) * r;
+        }
     }
 
     return std::nullopt;
@@ -327,6 +375,21 @@ CopiousDataBase::GetNearestVertexAt(const double length) const {
             }
         }
         accumulated_length += segment_length;
+    }
+
+    // kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
+    if (GetDataType() == CopiousDataType::kPlanarLoop) {
+        size_t i_end = coordinates_.cols() - 1;
+        double segment_length = (coordinates_.col(0) - coordinates_.col(i_end)).norm();
+        if (accumulated_length + segment_length >= length) {
+            double dist_to_end = length - accumulated_length;
+            double dist_to_start = (accumulated_length + segment_length) - length;
+            if (dist_to_end <= dist_to_start) {
+                return {i_end, dist_to_end};
+            } else {
+                return {0, dist_to_start};
+            }
+        }
     }
 
     // 終点より後の場合

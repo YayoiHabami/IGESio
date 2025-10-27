@@ -11,7 +11,7 @@
 
 #include <utility>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 
 
 

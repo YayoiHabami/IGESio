@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/interfaces/i_surface.h"
@@ -181,37 +181,29 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     ///       `std::numeric_limits<double>::infinity()`となる
     std::array<double, 4> GetParameterRange() const override;
 
-    /// @brief 定義空間におけるサーフェス上の点 P(u, v) を取得する
+    /// @brief 定義空間におけるサーフェスの偏導関数 S^(i,j)(u, v) を計算する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v
-    /// @return サーフェス上の点の座標値 (x, y, z).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d>
-    TryGetDefinedPointAt(const double, const double) const override;
+    /// @param order 何階まで計算するか; 例えば2を指定した場合、0階 S(u, v) から
+    ///              2階 S^(2,0)(u, v), S^(1,1)(u, v), S^(0,2)(u, v) まで計算
+    /// @return 偏導関数 S, Su, Sv, ...、計算できない場合は`std::nullopt`
+    std::optional<SurfaceDerivatives>
+    TryGetDerivatives(const double, const double, const unsigned int) const override;
 
-    /// @brief 定義空間におけるサーフェス上の法線ベクトル N(u, v) を取得する
-    /// @param u パラメータ値 u
-    /// @param v パラメータ値 v
-    /// @return サーフェス上の法線ベクトル (nx, ny, nz).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d>
-    TryGetDefinedNormalAt(const double, const double) const override;
 
-    /// @brief サーフェス上の点 P(u, v) を取得する
-    /// @param u パラメータ値 u
-    /// @param v パラメータ値 v
-    /// @return サーフェス上の点の座標値 (x, y, z).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d>
-    TryGetPointAt(const double, const double) const override;
 
-    /// @brief サーフェス上の法線ベクトル N(u, v) を取得する
-    /// @param u パラメータ値 u
-    /// @param v パラメータ値 v
-    /// @return サーフェス上の法線ベクトル (nx, ny, nz).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d>
-    TryGetNormalAt(const double, const double) const override;
+ protected:
+    /// @brief エンティティ自身が参照する変換行列に従い、座標orベクトルを変換する
+    /// @param input 変換前の座標orベクトル v
+    /// @param is_point 座標を変換する場合は`true`、ベクトルを変換する場合は`false`
+    /// @return 変換後の座標orベクトル. 回転行列 R、平行移動ベクトル T に対し、
+    ///         座標値の場合は v' = Rv + T、ベクトルの場合は v' = Rv
+    /// @note inputがstd::nulloptの場合はそのまま返す
+    ///       としてオーバライドすること
+    std::optional<Vector3d> Transform(
+            const std::optional<Vector3d>& input, const bool is_point) const override {
+        return TransformImpl(input, is_point);
+    }
 };
 
 }  // namespace igesio::entities

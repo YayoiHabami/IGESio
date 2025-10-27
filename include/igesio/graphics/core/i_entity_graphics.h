@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/entity_type.h"
 #include "igesio/models/global_param.h"
 #include "igesio/graphics/core/i_open_gl.h"

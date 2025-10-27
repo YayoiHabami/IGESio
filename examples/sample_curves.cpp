@@ -119,7 +119,7 @@ ent_vec CreateCopiousData() {
     // 2. Polyline with transformation
     auto copious_trans = std::make_shared<i_ent::TransformationMatrix>(
             igesio::Matrix3d::Identity(), Vector3d{5.0, 0.0, 0.0});
-    auto linear_path = std::make_shared<i_ent::CopiousData>(
+    auto linear_path = std::make_shared<i_ent::LinearPath>(
             i_ent::CopiousDataType::kPolyline3D, copious_coords);
     linear_path->OverwriteTransformationMatrix(copious_trans);
 

@@ -1,6 +1,7 @@
 # サブディレクトリの追加
 add_subdirectory(common)
 add_subdirectory(utils)
+add_subdirectory(numerics)
 add_subdirectory(entities)
 add_subdirectory(models)
 if(IGESIO_ENABLE_GRAPHICS)
@@ -24,6 +25,7 @@ target_include_directories(igesio PUBLIC
 target_link_libraries(igesio PUBLIC
     IGESio::common
     IGESio::utils
+    IGESio::numerics
     IGESio::entities
     IGESio::models
 )

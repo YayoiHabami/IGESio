@@ -8,10 +8,13 @@
  */
 #include "igesio/entities/curves/linear_path.h"
 
-#include "igesio/common/tolerance.h"
+#include <vector>
+
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::LinearPath;
 using igesio::Vector3d;
@@ -23,16 +26,37 @@ using igesio::Vector3d;
 igesio::ValidationResult LinearPath::ValidatePD() const {
     auto result = CopiousDataBase::ValidatePD();
 
-    // CopiousDataTypeが1-3のいずれかであることを確認
+    // CopiousDataTypeが11-13, 63のいずれかであることを確認
     auto type = GetDataType();
     if (type != CopiousDataType::kPlanarPolyline &&
         type != CopiousDataType::kPolyline3D &&
-        type != CopiousDataType::kPolylineAndVectors) {
+        type != CopiousDataType::kPolylineAndVectors &&
+        type != CopiousDataType::kPlanarLoop) {
         result.AddError(ValidationError(
             "Invalid CopiousDataType for CopiousData: " +
             std::to_string(static_cast<int>(type))));
     }
     return result;
+}
+
+LinearPath::LinearPath(const std::vector<Vector2d>& coordinates, const bool is_closed)
+        : CopiousDataBase(is_closed ? CopiousDataType::kPlanarLoop
+                                    : CopiousDataType::kPlanarPolyline,
+                          Matrix3Xd(3, coordinates.size())) {
+    // 座標値を3xNの行列に変換して格納
+    for (size_t i = 0; i < coordinates.size(); ++i) {
+        coordinates_.block<2, 1>(0, i) = coordinates[i];
+        coordinates_(2, i) = 0.0;  // z座標は0に設定
+    }
+}
+
+LinearPath::LinearPath(const std::vector<Vector3d>& coordinates)
+        : CopiousDataBase(CopiousDataType::kPolyline3D,
+                          Matrix3Xd(3, coordinates.size())) {
+    // 座標値を3xNの行列に変換して格納
+    for (size_t i = 0; i < coordinates.size(); ++i) {
+        coordinates_.col(i) = coordinates[i];
+    }
 }
 
 
@@ -41,38 +65,82 @@ igesio::ValidationResult LinearPath::ValidatePD() const {
  * ICurve implementation
  */
 
-bool LinearPath::IsClosed() const { return false; }
+bool LinearPath::IsClosed() const {
+    // kPlanarLoopの場合は常に閉じている
+    if (GetDataType() == CopiousDataType::kPlanarLoop) return true;
+
+    // 点が2点未満の場合は閉じていない
+    if (GetCount() < 2) return false;
+
+    // 最初の点と最後の点が一致するか確認
+    const auto& first_point = Coordinate(0);
+    const auto& last_point = Coordinate(GetCount() - 1);
+    if (i_num::IsApproxEqual(first_point, last_point, i_num::kGeometryTolerance)) {
+        return true;
+    }
+    return false;
+}
 
 std::array<double, 2> LinearPath::GetParameterRange() const {
-    return {0.0, TotalLength()};
+    return {0.0, CopiousDataBase::Length()};
 }
 
-std::optional<Vector3d>
-LinearPath::TryGetDefinedPointAt(const double t) const {
-    return GetCoordinateAtLength(t);
+std::optional<i_ent::CurveDerivatives>
+LinearPath::TryGetDerivatives(const double t, const unsigned int n) const {
+    auto idx = GetSegmentIndexAt(t);
+    if (!idx.has_value())  return std::nullopt;
+
+    CurveDerivatives result(n);
+
+    // 0階導関数: 点の座標値
+    auto point_opt = GetCoordinateAtLength(t);
+    if (point_opt.has_value()) {
+        result[0] = point_opt.value();
+    } else {
+        // エラー
+        return std::nullopt;
+    }
+    if (n < 1) return result;
+
+    // 1階導関数
+    if ((*idx) < GetCount() - 2) {
+        // セグメントが始点から終点までの間にある場合
+        result[1] = (Coordinate(*idx + 1) - Coordinate(*idx)).normalized();
+    } else if ((*idx) == GetCount() - 2) {
+        // セグメントが終点と始点を結ぶ線分（kPlanarLoopの場合）にある場合
+        result[1] = (Coordinate(0) - Coordinate(*idx)).normalized();
+    } else {
+        // エラー
+        return std::nullopt;
+    }
+
+    // 二階導関数以上は常にゼロベクトル
+    return result;
 }
 
-std::optional<Vector3d>
-LinearPath::TryGetDefinedTangentAt(const double) const {
-    return std::nullopt;
-}
+double LinearPath::Length(const double start, const double end) const {
+    // パラメータの妥当性確認
+    if (start >= end) {
+        throw std::invalid_argument(
+            "Invalid parameters: start must be less than end.");
+    }
+    auto [t_start, t_end] = GetParameterRange();
+    if (start < t_start || end > t_end) {
+        throw std::invalid_argument("Parameters out of range: [" +
+            std::to_string(t_start) + ", " + std::to_string(t_end) + "].");
+    } else if (numerics::IsApproxEqual(start, t_start) &&
+               numerics::IsApproxEqual(end, t_end)) {
+        // 完全一致
+        return CopiousDataBase::Length();
+    }
 
-std::optional<Vector3d>
-LinearPath::TryGetDefinedNormalAt(const double) const {
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-LinearPath::TryGetPointAt(const double) const {
-    return TransformPoint(TryGetDefinedEndPoint());
-}
-
-std::optional<Vector3d>
-LinearPath::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d>
-LinearPath::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    // 完全一致ではない場合は、各セグメントの長さを足し合わせて計算
+    auto start_index = GetSegmentIndexAt(start);
+    auto end_index = GetSegmentIndexAt(end);
+    if (!start_index.has_value() || !end_index.has_value()) {
+        throw std::invalid_argument("Parameters out of range: [" +
+            std::to_string(t_start) + ", " +  std::to_string(t_end) + "].");
+    }
+    // 対応するセグメントが存在していれば、セグメントの長さはend-startに相当
+    return end - start;
 }

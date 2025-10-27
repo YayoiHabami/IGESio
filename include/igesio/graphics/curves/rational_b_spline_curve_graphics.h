@@ -11,7 +11,7 @@
 #include <memory>
 #include <utility>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 #include "igesio/graphics/core/entity_graphics.h"
 

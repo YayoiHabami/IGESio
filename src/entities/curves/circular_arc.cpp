@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/common/iges_parameter_vector.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using CircularArc = i_ent::CircularArc;
 using Vector3d = igesio::Vector3d;
@@ -44,12 +45,12 @@ CircularArc::CircularArc(const Vector2d& center, const Vector2d& start_point,
     // 値の検証: 中心から始点と終点までの距離が等しいことを確認
     double r1 = (start_point - center).norm();
     double r2 = (terminate_point - center).norm();
-    if (!IsApproxEqual(r1, r2, kGeometryTolerance)) {
+    if (!i_num::IsApproxEqual(r1, r2, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError(
             "Start and terminate points must be equidistant from the center.");
     }
     // 半径が0に近い場合はエラー
-    if (IsApproxZero(r1, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(r1, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
     }
 }
@@ -65,7 +66,7 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
                             center[0] + radius * std::cos(end_angle),
                             center[1] + radius * std::sin(end_angle)}) {
     // 半径が0に近い場合はエラー
-    if (IsApproxZero(radius, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
     }
     // 始点と終点の角度が不正な場合はエラー
@@ -83,7 +84,7 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
                                 center[0] + radius, center[1],
                                 center[0] + radius, center[1]}) {
     // 半径が0に近い場合はエラー
-    if (IsApproxZero(radius, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
     }
 }
@@ -137,7 +138,7 @@ igesio::ValidationResult CircularArc::ValidatePD() const {
     std::vector<ValidationError> errors;
 
     // 距離が等しいか確認する（許容範囲内で）
-    if (!IsApproxEqual(r1, r2, kGeometryTolerance)) {
+    if (!i_num::IsApproxEqual(r1, r2, i_num::kGeometryTolerance)) {
         // 点は中心から等距離でなければならない
         errors.push_back(ValidationError(
                 "Start and terminate points must be equidistant from the center.")
@@ -145,7 +146,7 @@ igesio::ValidationResult CircularArc::ValidatePD() const {
     }
 
     // 縮退した円弧でないか確認する（半径が小さすぎる）
-    if (IsApproxZero(r1, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(r1, i_num::kGeometryTolerance)) {
         // 半径が小さすぎる場合は縮退した円弧とみなす
         errors.emplace_back("Degenerate circular arc: radius is too small.");
     }
@@ -184,52 +185,34 @@ std::array<double, 2> CircularArc::GetParameterRange() const {
 
 bool CircularArc::IsClosed() const {
     // 始点と終点が一致するかどうかを確認
-    return IsApproxEqual(start_point_, terminate_point_, kGeometryTolerance);
+    return i_num::IsApproxEqual(start_point_, terminate_point_,
+                                i_num::kGeometryTolerance);
 }
 
-std::optional<Vector3d> CircularArc::TryGetDefinedPointAt(const double t) const {
+std::optional<i_ent::CurveDerivatives>
+CircularArc::TryGetDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
-    if (t < range[0] || t > range[1]) {
-        return std::nullopt;
+    if (t < range[0] || t > range[1]) return std::nullopt;
+
+    const double radius = Radius();
+
+    CurveDerivatives result(n);
+    // n階導関数を一般式で計算（位相は k * PI/2 で増える）
+    for (unsigned int k = 0; k <= n; ++k) {
+        double phase = t + static_cast<double>(k) * (kPi / 2.0);
+        result[k] = Vector3d{
+            radius * std::cos(phase),
+            radius * std::sin(phase),
+            0.0
+        };
     }
 
-    const double radius = (start_point_ - center_).norm();
-    return center_ + Vector3d{radius * std::cos(t), radius * std::sin(t), center_[2]};
-}
-
-std::optional<Vector3d> CircularArc::TryGetDefinedTangentAt(const double t) const {
-    const auto point = TryGetDefinedPointAt(t);
-    if (!point) {
-        return std::nullopt;
+    if (n >= 0) {
+        // 0階導関数は位置ベクトルに変換
+        result[0] += center_;
     }
 
-    // 接線ベクトルは円の半径ベクトルを90度回転させたもの
-    const double radius = (start_point_ - center_).norm();
-    Vector3d tangent = {radius * -std::sin(t), radius * std::cos(t), 0.0};
-    return tangent.normalized();
-}
-
-std::optional<Vector3d> CircularArc::TryGetDefinedNormalAt(const double t) const {
-    const auto point = TryGetDefinedPointAt(t);
-    if (!point) {
-        return std::nullopt;
-    }
-
-    // 法線ベクトルは円の中心からその点へのベクトル
-    auto normal = point.value() - center_;
-    return normal.normalized();
-}
-
-std::optional<Vector3d> CircularArc::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<Vector3d> CircularArc::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d> CircularArc::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    return result;
 }
 
 

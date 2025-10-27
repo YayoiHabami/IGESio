@@ -10,10 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::ParametricSplineCurve;
 using Vector3d = igesio::Vector3d;
@@ -23,7 +24,6 @@ using Vector3d = igesio::Vector3d;
 /// @param s セグメントの始点からの距離 (s = u - T(i))
 /// @param order 導関数の階数 (0: 関数値, 1: 1次導関数, 2: 2次導関数, 3: 3次導関数)
 /// @return 関数値または導関数値 (3次元ベクトル)
-/// @throw std::invalid_argument orderが0～3の範囲外の場合
 Vector3d ComputeSegmentValue(
         const igesio::Matrix<double, 3, 4>& coefficients,
         const double s, const unsigned int order) {
@@ -42,7 +42,7 @@ Vector3d ComputeSegmentValue(
             s_vector << 0, 0, 0, 6;
             break;
         default:
-            throw std::invalid_argument("Order must be between 0 and 3.");
+            return Vector3d::Zero();
     }
     return coefficients * s_vector;
 }
@@ -250,14 +250,14 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
             + std::to_string(coefficients_.cols()) + ".");
     }
     for (unsigned int i = 0; i < n_segments; ++i) {
-        bool all_bcd_positive = true;
+        bool is_all_zero = true;
         for (unsigned int j = 0; j < 3; ++j) {
             auto b_ij = coefficients_(j, i * 4 + 1);
             auto c_ij = coefficients_(j, i * 4 + 2);
             auto d_ij = coefficients_(j, i * 4 + 3);
 
-            if (b_ij == 0.0 || c_ij == 0.0 || d_ij == 0.0) {
-                all_bcd_positive = false;
+            if (b_ij != 0.0 || c_ij != 0.0 || d_ij != 0.0) {
+                is_all_zero = false;
             }
 
             // N = 1の場合はC, Dが0であること
@@ -274,11 +274,11 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
             }
         }
 
-        // 縮退を防ぐため、x,y,zのいずれかのB, C, Dが0であること
-        if (all_bcd_positive) {
+        // 縮退を防ぐため、x,y,zのいずれかのB, C, Dが非ゼロであること
+        if (is_all_zero) {
             errors.emplace_back("At least one of B, C, or D coefficients"
-                " must be zero in each segment to avoid degeneration, but got"
-                " B, C, D all non-zero in segment "
+                " must not be zero in each segment to avoid degeneration,"
+                " but got B, C, D all zero in segment "
                 + std::to_string(i + 1) + ".");
         }
     }
@@ -293,7 +293,7 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
                     " coefficients must be zero in all segments, but got"
                     " non-zero value in segment " + std::to_string(i + 1) + ".");
             }
-            if (!igesio::IsApproxEqual(coefficients_(2, i * 4 + 0), az_value)) {
+            if (!i_num::IsApproxEqual(coefficients_(2, i * 4 + 0), az_value)) {
                 errors.emplace_back("For NDIM=2, Az coefficients"
                     " must be the same in all segments, but got different"
                     " values in segment " + std::to_string(i + 1) + ".");
@@ -319,7 +319,7 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
         auto second_derivative_k = ComputeSegmentValue(coeffs_k, 0, 2);
 
         // 関数値の連続性
-        if (!igesio::IsApproxEqual(value_k_m1, value_k)) {
+        if (!i_num::IsApproxEqual(value_k_m1, value_k)) {
             errors.emplace_back("Discontinuity in function value at breakpoint T("
                 + std::to_string(k + 1) + ") = " + std::to_string(t_k) + "; "
                 + ToString(value_k_m1, true) + " != " + ToString(value_k, true) + ".");
@@ -327,7 +327,7 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
 
         // 接線の連続性 (H >= 1)
         if (degree_ >= 1) {
-            if (!igesio::IsApproxEqual(first_derivative_k_m1, first_derivative_k)) {
+            if (!i_num::IsApproxEqual(first_derivative_k_m1, first_derivative_k)) {
                 errors.emplace_back("Discontinuity in tangent vector at breakpoint T("
                     + std::to_string(k + 1) + ") = " + std::to_string(t_k)
                     + "; " + ToString(first_derivative_k_m1, true) + " != "
@@ -336,7 +336,7 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
         }
         // 曲率の連続性 (H >= 2)
         if (degree_ >= 2) {
-            if (!igesio::IsApproxEqual(second_derivative_k_m1, second_derivative_k)) {
+            if (!i_num::IsApproxEqual(second_derivative_k_m1, second_derivative_k)) {
                 errors.emplace_back("Discontinuity in curvature vector at breakpoint T("
                     + std::to_string(k + 1) + ") = " + std::to_string(t_k)
                     + "; " + ToString(second_derivative_k_m1, true) + " != "
@@ -363,57 +363,24 @@ bool ParametricSplineCurve::IsClosed() const {
     auto start = TryGetDefinedStartPoint();
     auto end = TryGetDefinedEndPoint();
     if (start && end) {
-        return igesio::IsApproxEqual(*start, *end);
+        return i_num::IsApproxEqual(*start, *end);
     }
     return false;
 }
 
-std::optional<Vector3d>
-ParametricSplineCurve::TryGetDefinedPointAt(const double t) const {
+std::optional<i_ent::CurveDerivatives>
+ParametricSplineCurve::TryGetDerivatives(const double t, const unsigned int n) const {
     // tが定義域内にあるか確認
     auto i_s_ptr = FindSegmentIndex(t);
     if (!i_s_ptr) return std::nullopt;
     auto [i, s] = *i_s_ptr;
 
-    // i番目のセグメントにおけるsに対する関数値を計算
-    return ComputeSegmentValue(Coefficients(i), s, 0);
-}
+    CurveDerivatives result(n);
+    for (unsigned int k = 0; k <= n; ++k) {
+        result[k] = ComputeSegmentValue(Coefficients(i), s, k);
+    }
 
-std::optional<igesio::Vector3d>
-ParametricSplineCurve::TryGetDefinedTangentAt(const double t) const {
-    // tが定義域内にあるか確認
-    auto i_s_ptr = FindSegmentIndex(t);
-    if (!i_s_ptr) return std::nullopt;
-    auto [i, s] = *i_s_ptr;
-
-    // i番目のセグメントにおけるsに対する1次導関数値を計算
-    return ComputeSegmentValue(Coefficients(i), s, 1).normalized();
-}
-
-std::optional<igesio::Vector3d>
-ParametricSplineCurve::TryGetDefinedNormalAt(const double t) const {
-    // tが定義域内にあるか確認
-    auto i_s_ptr = FindSegmentIndex(t);
-    if (!i_s_ptr) return std::nullopt;
-    auto [i, s] = *i_s_ptr;
-
-    // i番目のセグメントにおけるsに対する2次導関数値を計算
-    return ComputeSegmentValue(Coefficients(i), s, 2).normalized();
-}
-
-std::optional<igesio::Vector3d>
-ParametricSplineCurve::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<igesio::Vector3d>
-ParametricSplineCurve::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<igesio::Vector3d>
-ParametricSplineCurve::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    return result;
 }
 
 
@@ -425,14 +392,14 @@ ParametricSplineCurve::TryGetNormalAt(const double t) const {
 std::optional<std::pair<unsigned int, double>>
 ParametricSplineCurve::FindSegmentIndex(const double t) const {
     // tが定義域内にあるか確認
-    if (igesio::IsApproxLessThan(t, GetParameterRange()[0])
-        || igesio::IsApproxGreaterThan(t, GetParameterRange()[1])) {
+    if (i_num::IsApproxLessThan(t, GetParameterRange()[0])
+        || i_num::IsApproxGreaterThan(t, GetParameterRange()[1])) {
         return std::nullopt;
     }
 
     // tがブレークポイント T(k+1) に一致する場合は、セグメント k を返す
     for (unsigned int i = 0; i < NumberOfSegments(); ++i) {
-        if (igesio::IsApproxEqual(t, breakpoints_[i + 1])) {
+        if (i_num::IsApproxEqual(t, breakpoints_[i + 1])) {
             double s = t - breakpoints_[i];
             return std::make_pair(i, s);
         }

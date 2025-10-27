@@ -8,7 +8,7 @@
 #ifndef IGESIO_GRAPHICS_CORE_LIGHT_H_
 #define IGESIO_GRAPHICS_CORE_LIGHT_H_
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 
 
 

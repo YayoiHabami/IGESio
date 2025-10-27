@@ -172,13 +172,13 @@ class CopiousDataBase : public EntityBase {
     /// @param i 座標値のインデックス
     /// @return 座標値のベクトル
     /// @throw std::out_of_range インデックスが範囲外の場合
-    Vector3d GetCoordinate(const size_t) const;
+    Vector3d Coordinate(const size_t) const;
 
     /// @brief i番目の追加座標値を取得する (IP=3の場合のみ)
     /// @param i 追加座標値のインデックス
     /// @return 追加座標値のベクトル
     /// @throw std::out_of_range インデックスが範囲外の場合
-    Vector3d GetAddition(const size_t) const;
+    Vector3d Addition(const size_t) const;
 
     /// @brief 座標値の数を取得する
     /// @return 座標値の数
@@ -191,24 +191,34 @@ class CopiousDataBase : public EntityBase {
     }
     /// @brief 全追加座標値を取得する (const参照, IP=3の場合のみ)
     /// @return 追加座標値の行列
-    const Matrix3Xd& Addition() const {
+    const Matrix3Xd& Additions() const {
         return addition_;
     }
 
     /// @brief 全長を計算する
-    /// @note 1本の折れ線として計算する (IP=3の場合、座標6つ組の前半3つ組のみ使用)
-    double TotalLength() const;
+    /// @note 1本の折れ線として計算する (IP=3の場合、座標6つ組の前半3つ組のみ使用).
+    ///       ただし、kPlanarLoopのみ、末端 P_{n-1} と先頭 P_0 を結ぶ線分も加える
+    double Length() const;
+
+    /// @brief 指定した長さに対応するセグメントのインデックスを取得する
+    /// @param length 全長に対する位置 (0.0～Length()の範囲)
+    /// @return 指定した長さに対応するセグメントのインデックス
+    ///         範囲外の場合はstd::nullopt
+    std::optional<size_t> GetSegmentIndexAt(const double) const;
 
     /// @brief 指定した長さに対応する座標値を取得する
-    /// @param length 全長に対する位置 (0.0～TotalLength()の範囲)
+    /// @param length 全長に対する位置 (0.0～Length()の範囲)
     /// @return 指定した長さに対応する座標値、範囲外の場合はstd::nullopt
     /// @note 2つの点の間に位置する場合、線形補間で計算する
+    /// @note `ICurve::TryGetDefinedPointAt`に同じ
+    /// @note kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
     std::optional<Vector3d> GetCoordinateAtLength(const double) const;
 
     /// @brief 指定した長さに最も近い頂点のインデックスを取得する
-    /// @param length 全長に対する位置 (0.0～TotalLength()の範囲)
+    /// @param length 全長に対する位置 (0.0～Length()の範囲)
     /// @return 指定した長さに最も近い頂点のインデックスと、その点への距離.
     ///         範囲外の場合は距離をinfinityとする
+    /// @note kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
     std::pair<size_t, double> GetNearestVertexAt(const double) const;
 };
 

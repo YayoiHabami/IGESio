@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
@@ -135,58 +135,53 @@ std::array<double, 2> Line::GetParameterRange() const {
 
 bool Line::IsClosed() const { return false; }
 
-std::optional<Vector3d> Line::TryGetDefinedPointAt(const double t) const {
+std::optional<i_ent::CurveDerivatives>
+Line::TryGetDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
     // パラメータtが定義域内にあるかチェック
     if (t < range[0] || t > range[1]) {
         return std::nullopt;
     }
 
-    // C(t) = P1 + t * (P2 - P1)
-    return start_point_ + t * (terminate_point_ - start_point_);
+    CurveDerivatives result(n);
+    result[0] = start_point_ + t * (terminate_point_ - start_point_);  // C(t)
+    if (n >= 1) {
+        result[1] = terminate_point_ - start_point_;  // C'(t)
+    }
+    // n >= 2についてはすべてゼロベクトルであり、Resizeで初期化済
+    return result;
 }
 
-std::optional<Vector3d> Line::TryGetDefinedTangentAt(const double t) const {
+double Line::Length() const {
+    switch (GetLineType()) {
+        case LineType::kSegment:
+            return (terminate_point_ - start_point_).norm();
+        case LineType::kRay:
+        case LineType::kLine:
+            // 半直線および直線は無限長とみなす
+            return std::numeric_limits<double>::infinity();
+        default:
+            return (terminate_point_ - start_point_).norm();
+    }
+}
+
+double Line::Length(const double start, const double end) const {
     const auto range = GetParameterRange();
-    // パラメータtが定義域内にあるかチェック
-    if (t < range[0] || t > range[1]) {
-        return std::nullopt;
+    // 引数の妥当性チェック
+    if (start >= end) {
+        throw std::invalid_argument("Start parameter must be less than end parameter.");
+    }
+    if (start < range[0] || end > range[1]) {
+        throw std::invalid_argument("Parameters are out of range.");
+    }
+    if (std::abs(start) == std::numeric_limits<double>::infinity() ||
+        std::abs(end) == std::numeric_limits<double>::infinity()) {
+        // 一端が無限大の場合、長さは無限大
+        return std::numeric_limits<double>::infinity();
     }
 
-    const Vector3d tangent_vec = terminate_point_ - start_point_;
-
-    // 縮退している場合は接線を定義できない
-    if (tangent_vec.norm() < kGeometryTolerance) {
-        return std::nullopt;
-    }
-
-    // 接線ベクトルはパラメータtによらず一定。単位ベクトルとして返す。
-    return tangent_vec.normalized();
-}
-
-std::optional<Vector3d> Line::TryGetDefinedNormalAt(const double t) const {
-    const auto range = GetParameterRange();
-    // パラメータtが定義域内にあるかチェック
-    if (t < range[0] || t > range[1]) {
-        return std::nullopt;
-    }
-
-    /// 直線においては、本来法線ベクトルは一意に定義されないが、
-    /// ここでは接線を90度回転させた、定義空間においてz=0のベクトルを法線として返す
-    Vector3d tangent_vec = terminate_point_ - start_point_;
-    return Vector3d(-tangent_vec.y(), tangent_vec.x(), 0.0).normalized();
-}
-
-std::optional<Vector3d> Line::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<Vector3d> Line::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d> Line::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    // 線分の長さを計算
+    return (terminate_point_ - start_point_).norm() * (end - start);
 }
 
 

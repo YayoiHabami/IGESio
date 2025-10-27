@@ -6,6 +6,7 @@
 
 - [目次](#目次)
 - [Interfaces](#interfaces)
+  - [`IGeometry`](#igeometry)
   - [`ICurve`](#icurve)
   - [`ICurve2D`](#icurve2d)
   - [`ICurve3D`](#icurve3d)
@@ -43,13 +44,22 @@
 
 　また、これらのインターフェースは、エンティティが特定の機能を目的として参照するエンティティへのポインタの型としても使用されます。例えば`CompositeCurve`は複数の曲線を参照しますが、各エンティティへの参照は`ICurve`型のポインタとして保持されます。
 
+### `IGeometry`
+
+> Defined at [i_geometry.h](../../include/igesio/entities/interfaces/i_geometry.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <── IGeometry
+> ```
+
 ### `ICurve`
 
 > Defined at [i_curve.h](../../include/igesio/entities/interfaces/i_curve.h)
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─── ICurve
+> IEntityIdentifier <─── IGeometry <─── ICurve
 > ```
 
 ### `ICurve2D`
@@ -58,7 +68,7 @@
 
 > Ancestor classes:
 > ```plaintext
-> IEntityIdentifier <─── ICurve <─── ICurve2D
+> IEntityIdentifier <── IGeometry <─── ICurve <─── ICurve2D
 > ```
 
 ### `ICurve3D`
@@ -67,7 +77,7 @@
 
 > Ancestor classes:
 > ```plaintext
-> IEntityIdentifier <─── ICurve <─── ICurve3D
+> IEntityIdentifier <── IGeometry <─── ICurve <─── ICurve3D
 > ```
 
 ### `ISurface`
@@ -193,8 +203,8 @@ blue_circle->OverwriteColor(color_def);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ CircularArc
->                     └─ ICurve  <── ICurve2D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ CircularArc
+>                     └─ IGeometry <──  ICurve  <── ICurve2D <─┘
 > ```
 
 　`CircularArc`は2次元円弧・円を表現するためのクラスです。以下のコード例は $(-1.25, 0)$ を中心とする半径 $1$ の円と、$(1.25, 0)$ を中心とする半径 $1$ の円弧を生成します（図参照）。
@@ -224,8 +234,8 @@ auto arc = std::make_shared<igesio::entities::CircularArc>(
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ CompositeCurve
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ CompositeCurve
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 　`CompositeCurve`は複数の曲線エンティティを連結して一つの曲線として表現するためのクラスです。以下のコード例は、3つの曲線エンティティ（円弧、直線、円弧）を連結したCompositeCurveエンティティを生成します（図参照）。
@@ -268,8 +278,8 @@ comp_curve->AddCurve(comp_3);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ ConicArc
->                     └─ ICurve  <── ICurve2D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ ConicArc
+>                     └─ IGeometry <──  ICurve  <── ICurve2D <─┘
 > ```
 
 　`ConicArc`は2次元の円錐曲線（楕円、放物線、双曲線）を表現するためのクラスです。以下のコード例は、中心が $(0, 3)$、長軸・短軸がそれぞれ $3$、$2$ の楕円弧を生成します（図参照）。
@@ -303,7 +313,7 @@ ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <── CopiousDataBase
+> IEntityIdentifier <── IGeometry <── EntityBase <── CopiousDataBase
 > ```
 
 　すべてのCopious Data関連クラスの基底クラスです。`ICurve`等のインターフェースは実装していません。本ライブラリで未実装のフォーム番号に対しては、このクラスのインスタンスが生成されます。
@@ -320,8 +330,8 @@ ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ CopiousData
->                                    └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬─ EntityBase <───── CopiousDataBase <─┬─ CopiousData
+>                     └─ IGeometry <── ICurve <── ICurve3D <─┘
 > ```
 
 　`CopiousData`は、フォーム1～3 (座標2つ組、座標3つ組、座標6つ組) の点群データを表現するためのクラスです。以下のコード例は、5つの3次元座標点からなる点群を生成します（[CopiousDataBaseの図参照](#copiousdatabase-type-106)）。
@@ -341,8 +351,8 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <─┬────── CopiousDataBase <─┬─ LinearPath
->                                    └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬─ EntityBase <───── CopiousDataBase <─┬─ LinearPath
+>                     └─ IGeometry <── ICurve <── ICurve3D <─┘
 > ```
 
 　`LinearPath`は、フォーム11～13 (座標2つ組、座標3つ組、座標6つ組) の折れ線データを表現するためのクラスです。以下のコード例は、5つの3次元座標点からなる折れ線を生成します（[CopiousDataBaseの図参照](#copiousdatabase-type-106)）。与える点群は[CopiousData](#copiousdata-type-106-forms-1-3)と同じですが、右方向に $5$ だけシフトしています。
@@ -350,7 +360,7 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 ```cpp
 auto copious_trans = std::make_shared<igesio::entities::TransformationMatrix>(
         igesio::Matrix3d::Identity(), igesio::Vector3d{5.0, 0.0, 0.0});
-auto linear_path = std::make_shared<igesio::entities::CopiousData>(
+auto linear_path = std::make_shared<igesio::entities::LinearPath>(
         igesio::entities::CopiousDataType::kPolyline3D, copious_coords);
 linear_path->OverwriteTransformationMatrix(copious_trans);
 ```
@@ -361,8 +371,8 @@ linear_path->OverwriteTransformationMatrix(copious_trans);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ Line
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ Line
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 　`Line`は、3次元空間内の直線、半直線、線分を表現するためのクラスです。以下のコード例は、3種類のLineエンティティ（線分、半直線、直線）を生成します（図参照）。
@@ -399,8 +409,8 @@ auto line = std::make_shared<igesio::entities::Line>(
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ ParametricSplineCurve
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ ParametricSplineCurve
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 　`ParametricSplineCurve`は、3次元空間内のパラメトリックスプライン曲線を表現するためのクラスです。IGES 5.3では、$N$ 個の区間に分割された3次の多項式で曲線を表現します。以下の数式は、$i$ 番目の区間 ($T(i) \leq u \leq T(i + 1)$) における曲線のパラメトリック方程式を示しています。
@@ -450,7 +460,7 @@ auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <── EntityBase <── Point
+> IEntityIdentifier <── EntityBase <── IGeometry <── Point
 > ```
 
 　`Point`は、3次元空間内の点を表現するためのクラスです。点の座標値と、その点の描画形状（Subfigure Definitionエンティティ (Type 308)）を関連付けることができます。以下のコード例は、座標 $(1.0, 2.0, 3.0)$ に位置する点エンティティを生成し、その色をマゼンタに変更しています（図参照）。
@@ -472,8 +482,8 @@ point->OverwriteColor(i_ent::ColorNumber::kMagenta);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─────────── EntityBase <─┬─ RationalBSplineCurve
->                     └─ ICurve  <── ICurve3D <─┘
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ RationalBSplineCurve
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
 　`RationalBSplineCurve`は、3次元空間内の有理Bスプライン曲線を表現するためのクラスです。以下のコード例は、4つの制御点、3次の非周期的開放NURBS曲線を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。
@@ -511,8 +521,8 @@ auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ RuledSurface
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ RuledSurface
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 　`RuledSurface`は、2つの曲線エンティティ $C_1(t), C_2(s)$ を結ぶ直線（支線）を用いて生成される曲面を表現するためのクラスです。曲面の各点は、以下のパラメトリック方程式で表現されます。
@@ -567,8 +577,8 @@ ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ SurfaceOfRevolution
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ SurfaceOfRevolution
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 　`SurfaceOfRevolution`は、3次元空間内の回転曲面を表現するためのクラスです。[Line](#line-type-110)を軸として、[曲線エンティティ](#curves) $C(t)$ を回転させることで曲面を生成します。曲面の各点は、以下のパラメトリック方程式で表現されます。
@@ -619,8 +629,8 @@ surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ TabulatedCylinder
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ TabulatedCylinder
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 　`TabulatedCylinder`は、3次元空間内の平行曲面を表現するためのクラスです。[曲線エンティティ](#curves) $C(t)$ を準線とし、指定された位置 $L$（または方向ベクトル $D$）に沿って曲線を押し出すことで曲面を生成します。曲面の各点は、以下のパラメトリック方程式で表現されます。
@@ -670,8 +680,8 @@ tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 
 > Ancestor class:
 > ```plaintext
-> IEntityIdentifier <─┬─ EntityBase <─┬─ RationalBSplineSurface
->                     └─ ISurface <───┘
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ RationalBSplineSurface
+>                     └─ IGeometry <── ISurface <───┘
 > ```
 
 　`RationalBSplineSurface`は、3次元空間内の有理Bスプライン曲面を表現するためのクラスです。以下のコード例は、6x6個の制御点、3次の非周期的開放NURBS曲面を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。コード例で使用したパラメータの詳細な値については、[examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)の`CreateRationalBSplineSurface`関数を参照してください。

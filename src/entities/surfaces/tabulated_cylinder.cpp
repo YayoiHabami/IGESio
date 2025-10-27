@@ -14,10 +14,11 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::TabulatedCylinder;
 using igesio::Vector3d;
@@ -56,7 +57,7 @@ TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
     // 曲線の始点とlocation_vectorが一致する場合はエラー
     auto start_pt_opt = directrix->TryGetDefinedStartPoint();
     if (start_pt_opt.has_value()) {
-        if (IsApproxEqual(start_pt_opt.value(), location_vector)) {
+        if (i_num::IsApproxEqual(start_pt_opt.value(), location_vector)) {
             throw std::invalid_argument("Directrix curve's start point and "
                 "location vector of TabulatedCylinder cannot be the same.");
         }
@@ -79,7 +80,7 @@ TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
         throw std::invalid_argument(
             "Directrix curve of TabulatedCylinder must have a valid start point.");
     }
-    if (IsApproxZero((length * direction).norm())) {
+    if (i_num::IsApproxZero((length * direction).norm())) {
         throw std::invalid_argument(
             "Direction vector of TabulatedCylinder cannot be zero vector.");
     }
@@ -209,7 +210,7 @@ igesio::ValidationResult TabulatedCylinder::ValidatePD() const {
             "Cannot validate location vector because directrix start point is invalid.");
     } else {
         // 曲線の始点とlocation_vectorが一致する場合はエラー
-        if (IsApproxEqual(directrix_start, location_vector_)) {
+        if (i_num::IsApproxEqual(directrix_start, location_vector_)) {
             errors.emplace_back("Directrix curve's start point and "
                 "location vector of TabulatedCylinder cannot be the same.");
         }
@@ -250,8 +251,9 @@ std::array<double, 4> TabulatedCylinder::GetParameterRange() const {
     return {u_start, u_end, 0.0, 1.0};
 }
 
-std::optional<Vector3d>
-TabulatedCylinder::TryGetDefinedPointAt(const double u, const double v) const {
+std::optional<i_ent::SurfaceDerivatives>
+TabulatedCylinder::TryGetDerivatives(
+        const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!directrix_.IsPointerSet()) return std::nullopt;
 
@@ -261,46 +263,36 @@ TabulatedCylinder::TryGetDefinedPointAt(const double u, const double v) const {
         return std::nullopt;
     }
 
-    // 計算: S(u, v) = C(t) + v * direction
+    // 準線の導関数を計算
     double t = GetDirectrixParameterAtU(u);
-    auto c_t = GetDirectrix()->TryGetPointAt(t);
-    if (!c_t.has_value()) return std::nullopt;
+    auto deriv_opt = GetDirectrix()->TryGetDerivatives(t, order);
+    if (!deriv_opt.has_value()) return std::nullopt;
+    const auto& c_deriv = deriv_opt.value();
 
-    return c_t.value() + v * GetDirection();
-}
+    // 準線のパラメータ範囲を取得
+    auto [tmin, tmax] = GetDirectrix()->GetParameterRange();
+    double dt = (tmax - tmin);
 
-std::optional<Vector3d>
-TabulatedCylinder::TryGetDefinedNormalAt(const double u, const double v) const {
-    // ポインタの確認
-    if (!directrix_.IsPointerSet()) return std::nullopt;
+    // サーフェスの導関数を計算
+    SurfaceDerivatives s_deriv(order);
 
-    // パラメータ範囲の確認
-    auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (u < umin || u > umax || v < vmin || v > vmax) {
-        return std::nullopt;
+    // S^(0, 0) = C(t) + v * D
+    s_deriv(0, 0) = c_deriv[0] + v * GetDirection();
+
+    // S^(n_u, 0) = C^(n_u)(t) * (dt/du)^(n_u)
+    for (unsigned int n_u = 1; n_u <= order; ++n_u) {
+        s_deriv(n_u, 0) = c_deriv[n_u] * std::pow(dt, n_u);
     }
 
-    // 計算: N(u, v) = T_C(t) × direction; T_C(t): 準線の接線ベクトル
-    double t = GetDirectrixParameterAtU(u);
-    auto t_c = GetDirectrix()->TryGetTangentAt(t);
-    if (!t_c.has_value()) return std::nullopt;
-
-    auto normal = t_c.value().cross(GetDirection());
-    if (IsApproxZero(normal.norm())) {
-        // 法線ベクトルがゼロベクトルになる場合は、法線ベクトルを計算できない
-        return std::nullopt;
+    if (order >= 1) {
+        // S^(0, 1) = D
+        s_deriv(0, 1) = GetDirection();
     }
-    return normal.normalized();
-}
 
-std::optional<igesio::Vector3d>
-TabulatedCylinder::TryGetPointAt(const double u, const double v) const {
-    return TransformPoint(TryGetDefinedPointAt(u, v));
-}
+    // S^(n_u, n_v) = 0 for n_v > 1 or (n_u > 0 and n_v > 0)
+    // SurfaceDerivativesはゼロで初期化されるため、これ以上の計算は不要
 
-std::optional<igesio::Vector3d>
-TabulatedCylinder::TryGetNormalAt(const double u, const double v) const {
-    return TransformVector(TryGetDefinedNormalAt(u, v));
+    return s_deriv;
 }
 
 
@@ -339,7 +331,7 @@ void TabulatedCylinder::SetLocationVector(const Vector3d& location_vector) {
     // 曲線の始点とlocation_vectorが一致する場合はエラー
     auto start_pt_opt = GetDirectrix()->TryGetDefinedStartPoint();
     if (start_pt_opt.has_value()) {
-        if (IsApproxEqual(start_pt_opt.value(), location_vector)) {
+        if (i_num::IsApproxEqual(start_pt_opt.value(), location_vector)) {
             throw std::invalid_argument("Directrix curve's start point and "
                 "location vector of TabulatedCylinder cannot be the same.");
         }
@@ -353,7 +345,7 @@ Vector3d TabulatedCylinder::GetLocationVector() const {
 }
 
 void TabulatedCylinder::SetDirection(const Vector3d& direction, const double length) {
-    if (IsApproxZero((length * direction).norm())) {
+    if (i_num::IsApproxZero((length * direction).norm())) {
         throw std::invalid_argument("Direction vector of TabulatedCylinder cannot be zero vector.");
     }
 
@@ -361,7 +353,7 @@ void TabulatedCylinder::SetDirection(const Vector3d& direction, const double len
     auto start_pt_opt = GetDirectrix()->TryGetDefinedStartPoint();
     if (start_pt_opt.has_value()) {
         Vector3d new_location_vector = start_pt_opt.value() + direction * length;
-        if (IsApproxEqual(start_pt_opt.value(), new_location_vector)) {
+        if (i_num::IsApproxEqual(start_pt_opt.value(), new_location_vector)) {
             throw std::invalid_argument("Directrix curve's start point and "
                 "location vector of TabulatedCylinder cannot be the same.");
         }

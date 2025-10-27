@@ -1,5 +1,5 @@
 /**
- * @file common/matrix.h
+ * @file numerics/matrix.h
  * @brief 本ライブラリで使用する行列・ベクトルクラスを定義する
  * @author Yayoi Habami
  * @date 2025-05-30
@@ -8,9 +8,10 @@
  *       サードパーティーライブラリであるEigenを使用しない場合に備えて、
  *       代替の行列・ベクトルクラスを定義する。
  */
-#ifndef IGESIO_COMMON_MATRIX_H_
-#define IGESIO_COMMON_MATRIX_H_
+#ifndef IGESIO_NUMERICS_MATRIX_H_
+#define IGESIO_NUMERICS_MATRIX_H_
 
+#include <algorithm>
 #include <string>
 
 namespace igesio {
@@ -102,6 +103,38 @@ template<typename T>
 using AngleAxis = Eigen::AngleAxis<T>;
 using AngleAxisf = Eigen::AngleAxisf;
 using AngleAxisd = Eigen::AngleAxisd;
+
+/// @brief 2つのベクトル間の角度をラジアンで計算する
+/// @param a ベクトル1
+/// @param b ベクトル2
+/// @param in_degrees 角度を度で取得する場合は`true`、ラジアンで取得する場合は`false`(デフォルト)
+/// @return ベクトルaとbのなす角
+/// @throw std::invalid_argument ベクトルのサイズが異なる場合、またはゼロベクトルが含まれる場合
+template<typename DerivedA, typename DerivedB>
+double AngleBetween(const Eigen::MatrixBase<DerivedA>& a,
+                    const Eigen::MatrixBase<DerivedB>& b,
+                    bool in_degrees = false) {
+    // 単位ベクトルに正規化
+    double na = a.norm();
+    double nb = b.norm();
+    if (na == 0.0 || nb == 0.0) {
+        throw std::invalid_argument("Cannot compute angle with zero-length vector.");
+    }
+    // サイズが異なる場合は例外を投げる
+    if (a.size() != b.size()) {
+        throw std::invalid_argument("Vectors must have the same dimension.");
+    }
+
+    // 内積を計算 ([-1, 1]の範囲に収める)
+    double cos_theta = a.dot(b) / (na * nb);
+    cos_theta = std::clamp(cos_theta, -1.0, 1.0);
+    double angle_rad = std::acos(cos_theta);
+    if (in_degrees) {
+        return angle_rad * (180.0 / kPi);
+    } else {
+        return angle_rad;
+    }
+}
 
 }  // namespace igesio
 
@@ -1671,6 +1704,43 @@ std::string ToString(const Matrix<T, N, M>& mat, bool transpose = false) {
     return oss.str();
 }
 
+
+
+/**
+ * ユーティリティ関数
+ */
+
+/// @brief 2つのベクトル間の角度をラジアンで計算する
+/// @param a ベクトル1
+/// @param b ベクトル2
+/// @param in_degrees 角度を度で取得する場合は`true`、ラジアンで取得する場合は`false`(デフォルト)
+/// @return ベクトルaとbのなす角
+/// @throw std::invalid_argument ベクトルのサイズが異なる場合、またはゼロベクトルが含まれる場合
+template<typename T, int N1, int N2>
+double AngleBetween(const Vector<T, N1>& a, const Vector<T, N2>& b,
+                    bool in_degrees = false) {
+    // 単位ベクトルに正規化
+    double na = a.norm();
+    double nb = b.norm();
+    if (na == 0.0 || nb == 0.0) {
+        throw std::invalid_argument("Cannot compute angle with zero-length vector.");
+    }
+    // サイズが異なる場合は例外を投げる
+    if (a.size() != b.size()) {
+        throw std::invalid_argument("Vectors must have the same dimension.");
+    }
+
+    // 内積を計算 ([-1, 1]の範囲に収める)
+    double cos_theta = a.dot(b) / (na * nb);
+    cos_theta = std::clamp(cos_theta, -1.0, 1.0);
+    double angle_rad = std::acos(cos_theta);
+    if (in_degrees) {
+        return angle_rad * (180.0 / kPi);
+    } else {
+        return angle_rad;
+    }
+}
+
 }  // namespace igesio
 
-#endif  // IGESIO_COMMON_MATRIX_H_
+#endif  // IGESIO_NUMERICS_MATRIX_H_

@@ -1,5 +1,5 @@
 /**
- * @file common/test_matrix.cpp
+ * @file numerics/test_matrix.cpp
  * @brief Matrixクラスのテスト
  * @author Yayoi Habami
  * @date 2025-06-07
@@ -11,7 +11,7 @@
 #include <initializer_list>
 #include <string>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 
 
 namespace {

@@ -1,20 +1,20 @@
 /**
- * @file common/tolerance.h
+ * @file numerics/tolerance.h
  * @brief 許容誤差に関する定数と、近似比較のための関数を定義する
  * @author Yayoi Habami
  * @date 2025-07-05
  * @copyright 2025 Yayoi Habami
  */
-#ifndef IGESIO_COMMON_TOLERANCE_H_
-#define IGESIO_COMMON_TOLERANCE_H_
+#ifndef IGESIO_NUMERICS_TOLERANCE_H_
+#define IGESIO_NUMERICS_TOLERANCE_H_
 
 #include <limits>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 
 
 
-namespace igesio {
+namespace igesio::numerics {
 
 /// @brief ジオメトリの計算に使用する許容誤差
 constexpr double kGeometryTolerance = 1e-9;
@@ -76,4 +76,4 @@ bool IsApproxGreaterThan(const double, const double, const double = kParameterTo
 
 }  // namespace igesio
 
-#endif  // IGESIO_COMMON_TOLERANCE_H_
+#endif  // IGESIO_NUMERICS_TOLERANCE_H_
