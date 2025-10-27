@@ -82,7 +82,7 @@ bool LinearPath::IsClosed() const {
 }
 
 std::array<double, 2> LinearPath::GetParameterRange() const {
-    return {0.0, Length()};
+    return {0.0, CopiousDataBase::Length()};
 }
 
 std::optional<i_ent::CurveDerivatives>
@@ -116,4 +116,31 @@ LinearPath::TryGetDerivatives(const double t, const unsigned int n) const {
 
     // 二階導関数以上は常にゼロベクトル
     return result;
+}
+
+double LinearPath::Length(const double start, const double end) const {
+    // パラメータの妥当性確認
+    if (start >= end) {
+        throw std::invalid_argument(
+            "Invalid parameters: start must be less than end.");
+    }
+    auto [t_start, t_end] = GetParameterRange();
+    if (start < t_start || end > t_end) {
+        throw std::invalid_argument("Parameters out of range: [" +
+            std::to_string(t_start) + ", " + std::to_string(t_end) + "].");
+    } else if (numerics::IsApproxEqual(start, t_start) &&
+               numerics::IsApproxEqual(end, t_end)) {
+        // 完全一致
+        return CopiousDataBase::Length();
+    }
+
+    // 完全一致ではない場合は、各セグメントの長さを足し合わせて計算
+    auto start_index = GetSegmentIndexAt(start);
+    auto end_index = GetSegmentIndexAt(end);
+    if (!start_index.has_value() || !end_index.has_value()) {
+        throw std::invalid_argument("Parameters out of range: [" +
+            std::to_string(t_start) + ", " +  std::to_string(t_end) + "].");
+    }
+    // 対応するセグメントが存在していれば、セグメントの長さはend-startに相当
+    return end - start;
 }

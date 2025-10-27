@@ -13,6 +13,7 @@
 #include <tuple>
 
 #include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/integration.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "./curves_for_testing.h"
 
@@ -294,3 +295,131 @@ INSTANTIATE_TEST_SUITE_P(
                           TestParamT("ThreeQuarters_r075", 0.75)),
         testing::PrintToStringParamName()
 );
+
+// ICurve::Length() のテスト
+TEST(ICurveTest, Length) {
+    // テスト用の曲線で計算できることを確認
+    auto curves = igesio::tests::CreateAllTestCurves();
+    for (const auto& curve : curves) {
+        SCOPED_TRACE("Curve: " + curve.name);
+        ASSERT_TRUE(curve.curve != nullptr)
+                << "Curve '" << curve.name << "' is nullptr.";
+
+        double length = curve.curve->Length();
+        if (curve.curve->GetType() == i_ent::EntityType::kCopiousData &&
+            curve.curve->GetFormNumber() <= 3) {
+            // 点列のCopiousDataは常にゼロを返す
+            ASSERT_EQ(length, 0.0)
+                    << "CopiousData curve length should be 0, but got " << length;
+        } else {
+            // その他の曲線は正の長さを持つことを確認
+            ASSERT_GT(length, 0.0)
+                    << "Curve length should be positive, but got " << length;
+        }
+    }
+
+    // 解析的に計算できるものについて個別に計算
+    double expected, actual;
+    double tol = i_num::Tolerance().abs_tol;
+
+    // 円・円弧
+    curves = igesio::tests::CreateCircularArcs();
+    // 1つめは半径1.5の円: 全周長 = 2πr
+    expected = 2.0 * igesio::kPi * 1.5;
+    actual = curves[0].curve->Length();
+    ASSERT_TRUE(i_num::IsApproxEqual(expected, actual, tol))
+            << "Expected: " << expected << ", Actual: " << actual;
+    // 2つめは半径2の円弧: 開始角4π/3、終了角5π/2 -> 弧長 = r * Δθ
+    expected = 2.0 * (5.0 * igesio::kPi / 2.0 - 4.0 * igesio::kPi / 3.0);
+    actual = curves[1].curve->Length();
+    ASSERT_TRUE(i_num::IsApproxEqual(expected, actual, tol))
+            << "Expected: " << expected << ", Actual: " << actual;
+
+    // CompositeCurve
+    // 半径1.5の半円 + 長さ√5の直線 + 長さ1+√10の折れ線
+    curves = igesio::tests::CreateCompositeCurves();
+    expected = igesio::kPi * 1.5 + std::sqrt(5.0)
+             + (1.0 + std::sqrt(10.0));
+    actual = curves[0].curve->Length();
+    ASSERT_TRUE(i_num::IsApproxEqual(expected, actual, tol))
+            << "Expected: " << expected << ", Actual: " << actual;
+}
+
+// ICurve::Length() のテスト
+TEST(ICurveTest, LengthWithRange) {
+    // テスト用の曲線で計算できることを確認
+    auto curves = igesio::tests::CreateAllTestCurves();
+    for (const auto& curve : curves) {
+        SCOPED_TRACE("Curve: " + curve.name);
+        ASSERT_TRUE(curve.curve != nullptr)
+                << "Curve '" << curve.name << "' is nullptr.";
+
+        auto [start, end] = curve.curve->GetParameterRange();
+        auto t_start = start + (end - start) * 0.2;
+        auto t_end   = start + (end - start) * 0.8;
+        if (std::abs(start) == std::numeric_limits<double>::infinity() ||
+            std::abs(end) == std::numeric_limits<double>::infinity()) {
+            t_start = 0.0;
+            t_end = 1.0;
+        }
+
+        ASSERT_NO_THROW({
+            curve.curve->Length(t_start, t_end);
+        }) << "start: " << t_start << ", end: " << t_end;
+        double length = curve.curve->Length(t_start, t_end);
+        if (curve.curve->GetType() == i_ent::EntityType::kCopiousData &&
+            curve.curve->GetFormNumber() <= 3) {
+            // 点列のCopiousDataは常にゼロを返す
+            ASSERT_EQ(length, 0.0)
+                    << "CopiousData curve length should be 0, but got " << length;
+        } else {
+            // その他の曲線は正の長さを持つことを確認
+            ASSERT_GT(length, 0.0)
+                    << "Curve length should be positive, but got " << length
+                    << " (t in [" << t_start << ", " << t_end << "])";
+        }
+    }
+
+    // 解析的に計算できるものについて個別に計算
+    double expected, actual;
+    double tol = i_num::Tolerance().abs_tol;
+
+    // 円・円弧
+    curves = igesio::tests::CreateCircularArcs();
+    {
+        SCOPED_TRACE("Circle and Arc Length with Range");
+        // 1つめは半径1.5の円: 全周長 = 2πr * (0.8 - 0.2) = 2πr * 0.6
+        auto [start, end] = curves[0].curve->GetParameterRange();
+        expected = 2.0 * igesio::kPi * 1.5 * 0.6;
+        actual = curves[0].curve->Length(start + (end - start) * 0.2,
+                                        start + (end - start) * 0.8);
+        ASSERT_TRUE(i_num::IsApproxEqual(expected, actual, tol))
+                << "Expected: " << expected << ", Actual: " << actual;
+    }
+
+    {
+        SCOPED_TRACE("Arc Length with Range");
+        // 2つめは半径2の円弧: 開始角4π/3、終了角5π/2 -> 弧長 = r * Δθ * 0.6
+        auto [start, end] = curves[1].curve->GetParameterRange();
+        expected = 2.0 * (5.0 * igesio::kPi / 2.0 - 4.0 * igesio::kPi / 3.0) * 0.6;
+        actual = curves[1].curve->Length(start + (end - start) * 0.2,
+                                         start + (end - start) * 0.8);
+        ASSERT_TRUE(i_num::IsApproxEqual(expected, actual, tol))
+                << "Expected: " << expected << ", Actual: " << actual;
+    }
+
+    // CompositeCurve
+    // 半径1.5の半円 + 長さ√5の直線 + 長さ1+√10の折れ線
+    curves = igesio::tests::CreateCompositeCurves();
+    {
+        SCOPED_TRACE("Composite Curve Length with Range");
+        auto [start, end] = curves[0].curve->GetParameterRange();
+        expected = (igesio::kPi * 1.5) * 0.5
+                 + std::sqrt(5.0)
+                 + (1.0 + std::sqrt(10.0)) - std::sqrt(10.0) / 2.0;
+        actual = curves[0].curve->Length(start + igesio::kPi / 2.0,
+                                         end - std::sqrt(10.0) / 2.0);
+        ASSERT_TRUE(i_num::IsApproxEqual(expected, actual, tol))
+                << "Expected: " << expected << ", Actual: " << actual;
+    }
+}

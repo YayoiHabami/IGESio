@@ -7,8 +7,14 @@
  */
 #include "igesio/entities/interfaces/i_curve.h"
 
+#include <limits>
+
+#include "igesio/numerics/integration.h"
+#include "igesio/numerics/tolerance.h"
+
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 
 using igesio::Vector2d;
@@ -87,6 +93,44 @@ double ICurve::GetCurvature(const double t) const {
     // κ = |C' × C''| / |C'|^3
     return ((*deriv)[1].cross((*deriv)[2]).norm())
          / std::pow((*deriv)[1].norm(), 3);
+}
+
+double ICurve::Length() const {
+    return Length(GetParameterRange()[0], GetParameterRange()[1]);
+}
+
+double ICurve::Length(const double start, const double end) const {
+    if (std::abs(start) == std::numeric_limits<double>::infinity() ||
+        std::abs(end) == std::numeric_limits<double>::infinity()) {
+        // 一端が無限大の場合、長さは無限大
+        return std::numeric_limits<double>::infinity();
+    } else if (!numerics::IsApproxLessThan(start, end)) {
+        throw std::invalid_argument(
+            "Invalid parameter range for Length(): start must be less than end. Got "
+            "start = " + std::to_string(start) + ", end = " + std::to_string(end) + ".");
+    } else if (!(GetParameterRange()[0] <= start) || !(end <= GetParameterRange()[1])) {
+        throw std::invalid_argument(
+            "Parameter range for Length() is out of curve's parameter range. Got "
+            "start = " + std::to_string(start) + ", end = " + std::to_string(end) + ", "
+            "curve parameter range = [" + std::to_string(GetParameterRange()[0]) +
+            ", " + std::to_string(GetParameterRange()[1]) + "].");
+    }
+
+    auto integrand = [this](double t) -> double {
+        auto deriv = TryGetDerivatives(t, 1);
+        // 導関数が取得できない場合は0を返す
+        if (!deriv.has_value()) return 0.0;
+
+        const auto& c1 = (*deriv)[1];
+        return c1.norm();
+    };
+
+    try {
+        return i_num::Integrate(integrand, {start, end});
+    } catch (const std::invalid_argument& e) {
+        // パラメータの問題で積分に失敗した場合は0を返す
+        return 0.0;
+    }
 }
 
 

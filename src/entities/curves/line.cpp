@@ -152,6 +152,38 @@ Line::TryGetDerivatives(const double t, const unsigned int n) const {
     return result;
 }
 
+double Line::Length() const {
+    switch (GetLineType()) {
+        case LineType::kSegment:
+            return (terminate_point_ - start_point_).norm();
+        case LineType::kRay:
+        case LineType::kLine:
+            // 半直線および直線は無限長とみなす
+            return std::numeric_limits<double>::infinity();
+        default:
+            return (terminate_point_ - start_point_).norm();
+    }
+}
+
+double Line::Length(const double start, const double end) const {
+    const auto range = GetParameterRange();
+    // 引数の妥当性チェック
+    if (start >= end) {
+        throw std::invalid_argument("Start parameter must be less than end parameter.");
+    }
+    if (start < range[0] || end > range[1]) {
+        throw std::invalid_argument("Parameters are out of range.");
+    }
+    if (std::abs(start) == std::numeric_limits<double>::infinity() ||
+        std::abs(end) == std::numeric_limits<double>::infinity()) {
+        // 一端が無限大の場合、長さは無限大
+        return std::numeric_limits<double>::infinity();
+    }
+
+    // 線分の長さを計算
+    return (terminate_point_ - start_point_).norm() * (end - start);
+}
+
 
 
 /**

@@ -207,6 +207,11 @@ CircularArc::TryGetDerivatives(const double t, const unsigned int n) const {
         };
     }
 
+    if (n >= 0) {
+        // 0階導関数は位置ベクトルに変換
+        result[0] += center_;
+    }
+
     return result;
 }
 

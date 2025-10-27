@@ -325,6 +325,48 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
     return true;
 }
 
+double CompositeCurve::Length(const double start, const double end) const {
+    // パラメータ開始/終了値に対応する曲線とローカルパラメータを取得
+    auto start_result = GetCurveIndexAtParameter(start);
+    auto end_result = GetCurveIndexAtParameter(end);
+    if (!start_result || !end_result) {
+        throw std::invalid_argument("Parameter out of range in Length calculation.");
+    }
+
+    // パラメータ範囲の妥当性を確認
+    size_t start_index = start_result->first;
+    double t_start_local = start_result->second;
+    size_t end_index = end_result->first;
+    double t_end_local = end_result->second;
+    if (start_index > end_index ||
+        (start_index == end_index && t_start_local >= t_end_local)) {
+        throw std::invalid_argument("Invalid parameter range in Length calculation.");
+    }
+
+    double total_length = 0.0;
+    for (size_t i = start_index; i <= end_index; ++i) {
+        auto curve = curves_[i].GetEntity<ICurve>();
+
+        double t_curve_start = 0.0;
+        double t_curve_end = 0.0;
+        if (i == start_index) {
+            t_curve_start = t_start_local;
+        } else {
+            t_curve_start = curve->GetParameterRange()[0];
+        }
+
+        if (i == end_index) {
+            t_curve_end = t_end_local;
+        } else {
+            t_curve_end = curve->GetParameterRange()[1];
+        }
+
+        total_length += curve->Length(t_curve_start, t_curve_end);
+    }
+
+    return total_length;
+}
+
 
 
 /**
@@ -333,8 +375,22 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
 
 std::pair<std::shared_ptr<const i_ent::ICurve>, double>
 CompositeCurve::GetCurveAtParameter(const double t) const {
+    auto result = GetCurveIndexAtParameter(t);
+    if (result) {
+        size_t curve_index = result->first;
+        double t_local = result->second;
+        auto curve = curves_[curve_index].GetEntity<ICurve>();
+        return std::make_pair(curve, t_local);
+    }
+    // パラメータtが範囲外の場合
+    return {nullptr, 0.0};
+}
+
+std::optional<std::pair<size_t, double>>
+CompositeCurve::GetCurveIndexAtParameter(const double t) const {
     double accumulated_length = 0.0;
-    for (const auto& curve_container : curves_) {
+    for (size_t i = 0; i < curves_.size(); ++i) {
+        auto curve_container = curves_[i];
         if (auto curve = curve_container.GetEntity<ICurve>()) {
             const auto range = curve->GetParameterRange();
             // 無限の長さを持つ曲線はパラメータ範囲の計算から除外
@@ -350,11 +406,11 @@ CompositeCurve::GetCurveAtParameter(const double t) const {
                 // ローカルパラメータを計算
                 // t_local = t_start + (t_global - accumulated_length)
                 const double t_local = range[0] + (t - accumulated_length);
-                return {curve, t_local};
+                return std::make_pair(i, t_local);
             }
             accumulated_length += current_length;
         }
     }
     // パラメータtが範囲外の場合
-    return {nullptr, 0.0};
+    return std::nullopt;
 }

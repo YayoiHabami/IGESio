@@ -118,6 +118,14 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     std::optional<CurveDerivatives>
     TryGetDerivatives(const double, const unsigned int) const override;
 
+    /// @brief 曲線の [t_start, t_end] 間の長さを取得する
+    /// @param start パラメータ範囲の開始値
+    /// @param end パラメータ範囲の終了値
+    /// @return 曲線の t ∈ [start, end] 間の長さ
+    /// @throw std::invalid_argument start >= endの場合、
+    ///        startまたはendがパラメータ範囲外の場合
+    double Length(const double, const double) const override;
+
 
 
     /**
@@ -168,6 +176,14 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @note パラメータ値が範囲外の場合はnullptrを返す
     std::pair<std::shared_ptr<const ICurve>, double>
     GetCurveAtParameter(const double) const;
+
+    /// @brief 指定されたパラメータ値に対する曲線のインデックスを取得する
+    /// @param t パラメータ値
+    /// @return 指定されたパラメータ値に対応する曲線のインデックス、
+    ///         およびその曲線上におけるパラメータ値
+    /// @note パラメータ値が範囲外の場合はnulloptを返す
+    std::optional<std::pair<size_t, double>>
+    GetCurveIndexAtParameter(const double) const;
 };
 
 }  // namespace igesio::entities

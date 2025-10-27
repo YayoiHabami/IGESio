@@ -49,6 +49,19 @@ class CopiousData : public CopiousDataBase,
     std::optional<CurveDerivatives>
     TryGetDerivatives(const double, const unsigned int) const override;
 
+    /// @brief 曲線の全長を取得する
+    /// @return 曲線の全長
+    double Length() const override { return 0; };
+
+    /// @brief 曲線の [t_start, t_end] 間の長さを取得する
+    /// @param start パラメータ範囲の開始値
+    /// @param end パラメータ範囲の終了値
+    /// @return 曲線の t ∈ [start, end] 間の長さ
+    /// @throw std::invalid_argument start >= endの場合、
+    ///        startまたはendがパラメータ範囲外の場合
+    /// @note 常にゼロ（連続な曲線ではなく、離散な点列であるため）
+    double Length(const double start, const double end) const override { return 0; }
+
 
 
  protected:

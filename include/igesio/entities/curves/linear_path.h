@@ -66,6 +66,20 @@ class LinearPath : public CopiousDataBase,
     std::optional<CurveDerivatives>
     TryGetDerivatives(const double, const unsigned int) const override;
 
+    /// @brief 曲線の全長を取得する
+    /// @return 曲線の全長
+    double Length() const override { return CopiousDataBase::Length(); }
+
+    /// @brief 曲線の [t_start, t_end] 間の長さを取得する
+    /// @param start パラメータ範囲の開始値
+    /// @param end パラメータ範囲の終了値
+    /// @return 曲線の t ∈ [start, end] 間の長さ
+    /// @throw std::invalid_argument start >= endの場合、
+    ///        startまたはendがパラメータ範囲外の場合
+    /// @note 1本の折れ線として計算する (IP=3の場合、座標6つ組の前半3つ組のみ使用).
+    ///       ただし、kPlanarLoopのみ、末端 P_{n-1} と先頭 P_0 を結ぶ線分も加える
+    double Length(const double, const double) const override;
+
 
 
  protected:

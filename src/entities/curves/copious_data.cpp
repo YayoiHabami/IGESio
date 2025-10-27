@@ -45,12 +45,16 @@ igesio::ValidationResult CopiousData::ValidatePD() const {
 bool CopiousData::IsClosed() const { return false; }
 
 std::array<double, 2> CopiousData::GetParameterRange() const {
-    return {0.0, Length()};
+    // パラメータ範囲は常に[0, 全長]
+    // ここでの全長は曲線としての長さではなく、頂点列の長さ
+    return {0.0, CopiousDataBase::Length()};
 }
 
 std::optional<i_ent::CurveDerivatives>
 CopiousData::TryGetDerivatives(const double t, const unsigned int n) const {
-    if (t < 0 || t > Length()) return std::nullopt;
+    if (t < GetParameterRange()[0] || t > GetParameterRange()[1]) {
+        return std::nullopt;
+    }
 
     CurveDerivatives result(n);
 

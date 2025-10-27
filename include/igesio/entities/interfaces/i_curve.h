@@ -113,11 +113,17 @@ class ICurve : public virtual IEntityIdentifier,
     /// @return 曲率 κ(t) ∈ [0, ∞), 計算できない場合は-1
     double GetCurvature(const double) const;
 
-    /* -> 実装時はCopiousDataBase::Lengthをoverrideに変更すること
     /// @brief 曲線の全長を取得する
     /// @return 曲線の全長
     virtual double Length() const;
-     */
+
+    /// @brief 曲線の [t_start, t_end] 間の長さを取得する
+    /// @param start パラメータ範囲の開始値
+    /// @param end パラメータ範囲の終了値
+    /// @return 曲線の t ∈ [start, end] 間の長さ
+    /// @throw std::invalid_argument start >= endの場合、
+    ///        startまたはendがパラメータ範囲外の場合
+    virtual double Length(const double, const double) const;
 
 
 
