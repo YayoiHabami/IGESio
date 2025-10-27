@@ -8,10 +8,11 @@
  */
 #include "igesio/entities/curves/copious_data.h"
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CopiousData;
 using Vector3d = igesio::Vector3d;
@@ -44,41 +45,22 @@ igesio::ValidationResult CopiousData::ValidatePD() const {
 bool CopiousData::IsClosed() const { return false; }
 
 std::array<double, 2> CopiousData::GetParameterRange() const {
-    return {0.0, TotalLength()};
+    // パラメータ範囲は常に[0, 全長]
+    // ここでの全長は曲線としての長さではなく、頂点列の長さ
+    return {0.0, CopiousDataBase::Length()};
 }
 
-std::optional<Vector3d>
-CopiousData::TryGetDefinedPointAt(const double t) const {
-    if (t < 0 || t > TotalLength()) return std::nullopt;
+std::optional<i_ent::CurveDerivatives>
+CopiousData::TryGetDerivatives(const double t, const unsigned int n) const {
+    if (t < GetParameterRange()[0] || t > GetParameterRange()[1]) {
+        return std::nullopt;
+    }
+
+    CurveDerivatives result(n);
 
     auto [index, dist] = GetNearestVertexAt(t);
-    if (IsApproxZero(dist, kGeometryTolerance)) {
-        return Coordinates().col(index);
+    if (i_num::IsApproxZero(dist, i_num::kGeometryTolerance)) {
+        result[0] = Coordinates().col(index);
     }
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetDefinedTangentAt(const double) const {
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetDefinedNormalAt(const double) const {
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetPointAt(const double) const {
-    return TransformPoint(TryGetDefinedEndPoint());
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d>
-CopiousData::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
+    return result;
 }

@@ -15,6 +15,7 @@ target_include_directories(igesio_models PUBLIC
 
 target_link_libraries(igesio_models PUBLIC
     IGESio::common
+    IGESio::numerics
     IGESio::utils
     IGESio::entities
 )

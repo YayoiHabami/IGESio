@@ -245,7 +245,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
 
-    install(TARGETS igesio igesio_common igesio_utils igesio_entities igesio_models
+    install(TARGETS igesio igesio_common igesio_utils igesio_numerics igesio_entities igesio_models
         EXPORT IGESioTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

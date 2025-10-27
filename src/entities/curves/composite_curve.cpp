@@ -7,15 +7,17 @@
  */
 #include "igesio/entities/curves/composite_curve.h"
 
+#include <limits>
 #include <memory>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CompositeCurve;
 using igesio::Vector3d;
@@ -205,7 +207,8 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
                 continue;
             }
             // 前の曲線の終点と現在の曲線の始点が一致するか確認
-            if (!IsApproxEqual(prev_end_point, *start_point, kGeometryTolerance)) {
+            if (!i_num::IsApproxEqual(prev_end_point, *start_point,
+                                      i_num::kGeometryTolerance)) {
                 errors.emplace_back("End point of the curve at index " + std::to_string(i - 1)
                                     + " does not match start point of " + str_i + ".");
                 continue;
@@ -248,7 +251,8 @@ bool CompositeCurve::IsClosed() const {
     if (!start_point || !end_point) return false;
 
     // 始点と終点の座標を比較
-    return IsApproxEqual(*start_point, *end_point, kGeometryTolerance);
+    return i_num::IsApproxEqual(*start_point, *end_point,
+                                i_num::kGeometryTolerance);
 }
 
 std::array<double, 2> CompositeCurve::GetParameterRange() const {
@@ -266,52 +270,14 @@ std::array<double, 2> CompositeCurve::GetParameterRange() const {
     return {0.0, total_parametric_length};
 }
 
-std::optional<Vector3d>
-CompositeCurve::TryGetDefinedPointAt(const double t) const {
+std::optional<i_ent::CurveDerivatives>
+CompositeCurve::TryGetDerivatives(const double t, const unsigned int n) const {
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (curve) {
-        // 個別の要素の定義空間の座標ではなく、本エンティティの定義空間における
-        // 曲線を取得するため、`TryGetPointAt`を使用する
-        return curve->TryGetPointAt(t_local);
+        return curve->TryGetDerivatives(t_local, n);
     }
     // パラメータtが範囲外の場合
     return std::nullopt;
-}
-
-std::optional<Vector3d>
-CompositeCurve::TryGetDefinedTangentAt(const double t) const {
-    auto [curve, t_local] = GetCurveAtParameter(t);
-    if (curve) {
-        // 個別の要素の定義空間の接線ベクトルではなく、本エンティティの定義空間における
-        // 曲線接線を取得するため、`TryGetTangentAt`を使用する
-        return curve->TryGetTangentAt(t_local);
-    }
-    // パラメータtが範囲外の場合
-    return std::nullopt;
-}
-
-std::optional<Vector3d>
-CompositeCurve::TryGetDefinedNormalAt(const double t) const {
-    auto [curve, t_local] = GetCurveAtParameter(t);
-    if (curve) {
-        // 個別の要素の定義空間の法線ベクトルではなく、本エンティティの定義空間における
-        // 曲線法線を取得するため、`TryGetNormalAt`を使用
-        return curve->TryGetNormalAt(t_local);
-    }
-    // パラメータtが範囲外の場合
-    return std::nullopt;
-}
-
-std::optional<Vector3d> CompositeCurve::TryGetPointAt(const double t) const {
-    return TransformPoint(TryGetDefinedPointAt(t));
-}
-
-std::optional<Vector3d> CompositeCurve::TryGetTangentAt(const double t) const {
-    return TransformVector(TryGetDefinedTangentAt(t));
-}
-
-std::optional<Vector3d> CompositeCurve::TryGetNormalAt(const double t) const {
-    return TransformVector(TryGetDefinedNormalAt(t));
 }
 
 
@@ -319,6 +285,15 @@ std::optional<Vector3d> CompositeCurve::TryGetNormalAt(const double t) const {
 /**
  * CompositeCurve: 構成要素 (曲線) の操作
  */
+
+std::shared_ptr<const i_ent::ICurve>
+CompositeCurve::GetCurveAt(const size_t index) const {
+    if (index >= curves_.size()) {
+        throw std::out_of_range("Index " + std::to_string(index) +
+                                " is out of range for CompositeCurve.");
+    }
+    return curves_[index].GetEntity<ICurve>();
+}
 
 bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
     if (!curve) {
@@ -334,7 +309,8 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
         auto last_end_point = last_curve->TryGetEndPoint();
         auto new_start_point = curve->TryGetStartPoint();
         if (!last_end_point || !new_start_point ||
-            !IsApproxEqual(*last_end_point, *new_start_point, kGeometryTolerance)) {
+            !i_num::IsApproxEqual(*last_end_point, *new_start_point,
+                                  i_num::kGeometryTolerance)) {
             return false;  // 終点と始点が一致しない場合は追加できない
         }
     }
@@ -349,6 +325,48 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
     return true;
 }
 
+double CompositeCurve::Length(const double start, const double end) const {
+    // パラメータ開始/終了値に対応する曲線とローカルパラメータを取得
+    auto start_result = GetCurveIndexAtParameter(start);
+    auto end_result = GetCurveIndexAtParameter(end);
+    if (!start_result || !end_result) {
+        throw std::invalid_argument("Parameter out of range in Length calculation.");
+    }
+
+    // パラメータ範囲の妥当性を確認
+    size_t start_index = start_result->first;
+    double t_start_local = start_result->second;
+    size_t end_index = end_result->first;
+    double t_end_local = end_result->second;
+    if (start_index > end_index ||
+        (start_index == end_index && t_start_local >= t_end_local)) {
+        throw std::invalid_argument("Invalid parameter range in Length calculation.");
+    }
+
+    double total_length = 0.0;
+    for (size_t i = start_index; i <= end_index; ++i) {
+        auto curve = curves_[i].GetEntity<ICurve>();
+
+        double t_curve_start = 0.0;
+        double t_curve_end = 0.0;
+        if (i == start_index) {
+            t_curve_start = t_start_local;
+        } else {
+            t_curve_start = curve->GetParameterRange()[0];
+        }
+
+        if (i == end_index) {
+            t_curve_end = t_end_local;
+        } else {
+            t_curve_end = curve->GetParameterRange()[1];
+        }
+
+        total_length += curve->Length(t_curve_start, t_curve_end);
+    }
+
+    return total_length;
+}
+
 
 
 /**
@@ -357,8 +375,22 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
 
 std::pair<std::shared_ptr<const i_ent::ICurve>, double>
 CompositeCurve::GetCurveAtParameter(const double t) const {
+    auto result = GetCurveIndexAtParameter(t);
+    if (result) {
+        size_t curve_index = result->first;
+        double t_local = result->second;
+        auto curve = curves_[curve_index].GetEntity<ICurve>();
+        return std::make_pair(curve, t_local);
+    }
+    // パラメータtが範囲外の場合
+    return {nullptr, 0.0};
+}
+
+std::optional<std::pair<size_t, double>>
+CompositeCurve::GetCurveIndexAtParameter(const double t) const {
     double accumulated_length = 0.0;
-    for (const auto& curve_container : curves_) {
+    for (size_t i = 0; i < curves_.size(); ++i) {
+        auto curve_container = curves_[i];
         if (auto curve = curve_container.GetEntity<ICurve>()) {
             const auto range = curve->GetParameterRange();
             // 無限の長さを持つ曲線はパラメータ範囲の計算から除外
@@ -370,15 +402,15 @@ CompositeCurve::GetCurveAtParameter(const double t) const {
             // パラメータtが現在の曲線の範囲内にあるかチェック
             // 浮動小数点数の比較のため、わずかな誤差を許容する
             if (t >= accumulated_length &&
-                t <= accumulated_length + current_length + kGeometryTolerance) {
+                t <= accumulated_length + current_length + i_num::kGeometryTolerance) {
                 // ローカルパラメータを計算
                 // t_local = t_start + (t_global - accumulated_length)
                 const double t_local = range[0] + (t - accumulated_length);
-                return {curve, t_local};
+                return std::make_pair(i, t_local);
             }
             accumulated_length += current_length;
         }
     }
     // パラメータtが範囲外の場合
-    return {nullptr, 0.0};
+    return std::nullopt;
 }

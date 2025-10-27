@@ -5,6 +5,8 @@ set(EXAMPLE_SOURCES
     iges_data_io.cpp
     sample_curves.cpp
     sample_surfaces.cpp
+
+    geometric_properties.cpp
 )
 
 

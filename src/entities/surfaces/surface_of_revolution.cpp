@@ -12,10 +12,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::SurfaceOfRevolution;
 using igesio::Vector3d;
@@ -225,8 +226,8 @@ bool SurfaceOfRevolution::IsUClosed() const {
 
 bool SurfaceOfRevolution::IsVClosed() const {
     // v方向は回転角度に依存する
-    return IsApproxEqual(start_angle_, 0.0)
-           && IsApproxEqual(end_angle_, 2.0 * kPi);
+    return i_num::IsApproxEqual(start_angle_, 0.0)
+           && i_num::IsApproxEqual(end_angle_, 2.0 * kPi);
 }
 
 std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
@@ -241,9 +242,9 @@ std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
     return {umin, umax, start_angle_, end_angle_};
 }
 
-std::optional<Vector3d>
-SurfaceOfRevolution::TryGetDefinedPointAt(
-        const double u, const double v) const {
+std::optional<i_ent::SurfaceDerivatives>
+SurfaceOfRevolution::TryGetDerivatives(
+        const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {
         return std::nullopt;
@@ -255,64 +256,48 @@ SurfaceOfRevolution::TryGetDefinedPointAt(
         return std::nullopt;
     }
 
-    // 母線の情報を取得: 点 C(u)
-    auto generatrix_curve = GetGeneratrix();
-    auto point_opt = generatrix_curve->TryGetDefinedPointAt(u);
-    if (!point_opt) return std::nullopt;
-    auto c_u = point_opt.value();
+    // 回転軸の始点P0と方向ベクトルDを取得
+    const auto& [P0, end_point] = GetAxis()->GetAnchorPoints();
+    auto D = (end_point - P0).normalized();
 
-    // 回転軸の情報を取得
-    auto axis_line = GetAxis();
-    const auto& [axis_point, p2] = axis_line->GetAnchorPoints();
-    auto axis_dir = (p2 - axis_point).normalized();
+    // 母線の偏導関数を取得
+    auto curve_deriv_opt = GetGeneratrix()->TryGetDerivatives(u, order);
+    if (!curve_deriv_opt) return std::nullopt;
+    auto c_deriv = curve_deriv_opt.value();
 
-    // 回転した点を求める
-    return AngleAxisd(v, axis_dir) * (c_u - axis_point) + axis_point;
-}
+    // サーフェスの偏導関数を計算
+    // 計算式の詳細については[docs/entities/surfaces/120_surface_of_revolution_ja.md]を参照
+    SurfaceDerivatives s_deriv(order);
+    const double cos_v = std::cos(v);
+    const double sin_v = std::sin(v);
+    for (unsigned int nu = 0; nu <= order; ++nu) {
+        // C(u) - P0 または C^(nu)(u) を計算
+        const auto& c_n = c_deriv[nu];
+        const auto cp_n = (nu == 0) ? (c_n - P0) : c_n;
 
-std::optional<Vector3d>
-SurfaceOfRevolution::TryGetDefinedNormalAt(
-        const double u, const double v) const {
-    // ポインタの確認
-    if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {
-        return std::nullopt;
+        // D との内積・外積
+        const double dot_d_cp_n = D.dot(cp_n);
+        const auto cross_d_cp_n = D.cross(cp_n);
+
+        for (unsigned int nv = 0; nv <= order - nu; ++nv) {
+            if (nu == 0 && nv == 0) {
+                // S(u, v)
+                s_deriv(0, 0) = P0 + cp_n * cos_v + cross_d_cp_n * sin_v
+                              + D * dot_d_cp_n * (1.0 - cos_v);
+            } else if (nv == 0) {
+                // S^(nu, 0)(u, v)
+                s_deriv(nu, 0) = cp_n * cos_v + cross_d_cp_n * sin_v
+                               + D * dot_d_cp_n * (1.0 - cos_v);
+            } else {
+                // S^(nu, nv)(u, v)
+                const double angle = v + nv * kPi / 2.0;
+                const auto term1 = cp_n - D * dot_d_cp_n;
+                s_deriv(nu, nv) = term1 * std::cos(angle) + cross_d_cp_n * std::sin(angle);
+            }
+        }
     }
 
-    // パラメータ範囲のチェック
-    auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
-        return std::nullopt;
-    }
-
-    // 母線の情報を取得: 点 C(u) と接ベクトル T(u)
-    auto generatrix_curve = GetGeneratrix();
-    auto point_opt = generatrix_curve->TryGetDefinedPointAt(u);
-    auto tangent_opt = generatrix_curve->TryGetTangentAt(u);
-    if (!point_opt || !tangent_opt) return std::nullopt;
-    auto c_u = point_opt.value();
-    auto t_u = tangent_opt.value().normalized();
-
-    // 回転軸の情報を取得
-    auto axis_line = GetAxis();
-    const auto& [axis_point, p2] = axis_line->GetAnchorPoints();
-    auto axis_dir = (p2 - axis_point).normalized();
-
-    // 偏導関数ベクトルを計算
-    auto S_uv = AngleAxisd(v, axis_dir) * (c_u - axis_point) + axis_point;
-    auto dSdu = AngleAxisd(v, axis_dir) * t_u;  // ∂S/∂u
-    auto dSdv = axis_dir.cross(S_uv - axis_point);
-    // 法線ベクトルを計算
-    return dSdv.cross(dSdu).normalized();
-}
-
-std::optional<igesio::Vector3d>
-SurfaceOfRevolution::TryGetPointAt(const double u, const double v) const {
-    return TransformPoint(TryGetDefinedPointAt(u, v));
-}
-
-std::optional<igesio::Vector3d>
-SurfaceOfRevolution::TryGetNormalAt(const double u, const double v) const {
-    return TransformVector(TryGetDefinedNormalAt(u, v));
+    return s_deriv;
 }
 
 

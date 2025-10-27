@@ -13,9 +13,11 @@ set(TEST_SOURCES
     test_entity_base.cpp
 
     # Curves
+    curves/test_i_curve.cpp
     curves/test_circular_arc.cpp
 
     # Surfaces
+    surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
 )
 

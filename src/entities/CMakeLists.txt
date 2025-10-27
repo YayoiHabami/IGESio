@@ -59,6 +59,7 @@ target_include_directories(igesio_entities PUBLIC
 
 target_link_libraries(igesio_entities PUBLIC
     IGESio::common
+    IGESio::numerics
     IGESio::utils
 )
 

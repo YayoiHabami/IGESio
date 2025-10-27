@@ -1,5 +1,6 @@
 add_subdirectory(common)
 add_subdirectory(utils)
+add_subdirectory(numerics)
 add_subdirectory(entities)
 add_subdirectory(models)
 

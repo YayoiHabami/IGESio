@@ -61,6 +61,7 @@ endif()
 target_link_libraries(igesio_graphics
     PUBLIC
         IGESio::common
+        IGESio::numerics
         IGESio::utils
         IGESio::entities
         IGESio::models

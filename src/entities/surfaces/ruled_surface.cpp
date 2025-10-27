@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
@@ -212,9 +212,9 @@ igesio::ValidationResult RuledSurface::ValidatePD() const {
  * ISurface implementation
  */
 
-std::optional<Vector3d>
-RuledSurface::TryGetDefinedPointAt(
-        const double u, const double v) const {
+std::optional<i_ent::SurfaceDerivatives>
+RuledSurface::TryGetDerivatives(
+        const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!curve1_.IsPointerSet() || !curve2_.IsPointerSet()) {
         return std::nullopt;
@@ -226,56 +226,40 @@ RuledSurface::TryGetDefinedPointAt(
         return std::nullopt;
     }
 
-    // 曲線上の点を取得
+    // 曲線の導関数を取得
     auto [t, s] = GetParametersTS(u);
-    auto point1 = GetCurve1()->TryGetPointAt(t);
-    auto point2 = GetCurve2()->TryGetPointAt(s);
-    if (!point1 || !point2)  return std::nullopt;
+    auto deriv1_opt = GetCurve1()->TryGetDerivatives(t, order);
+    auto deriv2_opt = GetCurve2()->TryGetDerivatives(s, order);
+    if (!deriv1_opt || !deriv2_opt)  return std::nullopt;
+    const auto& deriv1 = deriv1_opt.value();
+    const auto& deriv2 = deriv2_opt.value();
 
-    return (1 - v) * point1.value() + v * point2.value();
-}
+    // 曲線の範囲を取得 : Δt, Δs
+    auto [tmin, tmax] = GetCurve1()->GetParameterRange();
+    auto [smin, smax] = GetCurve2()->GetParameterRange();
+    auto dt = tmax - tmin;
+    auto ds = smax - smin;
 
-std::optional<Vector3d>
-RuledSurface::TryGetDefinedNormalAt(
-        const double u, const double v) const {
-    // ポインタの確認
-    if (!curve1_.IsPointerSet() || !curve2_.IsPointerSet()) {
-        return std::nullopt;
+    // 反転フラグを取得
+    auto sigma = is_reversed_ ? -1.0 : 1.0;
+
+    // サーフェスの導関数を計算
+    // 計算式についてはdocs/entities/surfaces/118_ruled_surface_ja.mdを参照
+    SurfaceDerivatives s_deriv(order);
+    for (unsigned int n_u = 0; n_u <= order; ++n_u) {
+        auto max_n_v = order - n_u;
+        if (max_n_v >= 0) {
+            s_deriv(n_u, 0) = (1 - v) * deriv1[n_u] * std::pow(dt, n_u)
+                            + v * deriv2[n_u] * std::pow(sigma * ds, n_u);
+        }
+        if (max_n_v >= 1) {
+            s_deriv(n_u, 1) = -1.0 * deriv1[n_u] * std::pow(dt, n_u)
+                            + deriv2[n_u] * std::pow(sigma * ds, n_u);
+        }
+        // n_v >= 2については、S^(n_u, n_v) = 0となるため計算不要
     }
 
-    // パラメータの範囲チェック
-    auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
-        return std::nullopt;
-    }
-
-    // 曲線上の点を取得
-    auto [t, s] = GetParametersTS(u);
-    auto point1 = GetCurve1()->TryGetPointAt(t);
-    auto point2 = GetCurve2()->TryGetPointAt(s);
-    auto tangent1 = GetCurve1()->TryGetTangentAt(t);
-    auto tangent2 = GetCurve2()->TryGetTangentAt(s);
-    if (!point1 || !point2 || !tangent1 || !tangent2)  return std::nullopt;
-
-    // 点S(u,v)上の接線ベクトルを計算 - C2(s)を逆転させる場合は符号を反転
-    auto tangent = (is_reversed_) ?
-            (1 - v) * tangent1.value() - v * tangent2.value() :
-            (1 - v) * tangent1.value() + v * tangent2.value();
-
-    // 法線ベクトルを計算
-    auto normal = tangent.cross(point2.value() - point1.value());
-    if (IsApproxZero(normal.norm())) return std::nullopt;
-    return normal.normalized();
-}
-
-std::optional<igesio::Vector3d>
-RuledSurface::TryGetPointAt(const double u, const double v) const {
-    return TransformPoint(TryGetDefinedPointAt(u, v));
-}
-
-std::optional<igesio::Vector3d>
-RuledSurface::TryGetNormalAt(const double u, const double v) const {
-    return TransformVector(TryGetDefinedNormalAt(u, v));
+    return s_deriv;
 }
 
 

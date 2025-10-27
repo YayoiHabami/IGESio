@@ -104,41 +104,12 @@ class CircularArc : public EntityBase, public virtual ICurve2D {
     /// @return 始点と終点が一致する場合は`true`、そうでない場合は`false`
     bool IsClosed() const override;
 
-    /// @brief 定義空間における曲線上の点 C(t) を取得する
-    /// @param t パラメータ値 (角度)
-    /// @return 曲線上の点の座標値 (x, y, z).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d> TryGetDefinedPointAt(const double) const override;
-
-    /// @brief 定義空間における曲線上の接線ベクトル T(t) を取得する
+    /// @brief 定義空間における曲線のn階導関数 C^n(t) を計算する
     /// @param t パラメータ値
-    /// @return 曲線上の正規化された接線ベクトル (tx, ty, 0).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d> TryGetDefinedTangentAt(const double) const override;
-
-    /// @brief 定義空間における曲線上の法線ベクトル N(t) を取得する
-    /// @param t パラメータ値
-    /// @return 曲線上の正規化された法線ベクトル (nx, ny, 0).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d> TryGetDefinedNormalAt(const double) const override;
-
-    /// @brief 曲線上の点 C(t) を取得する
-    /// @param t パラメータ値
-    /// @return 曲線上の点の座標値 (x, y, z).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d> TryGetPointAt(const double) const override;
-
-    /// @brief 曲線上の接線ベクトル T(t) を取得する
-    /// @param t パラメータ値
-    /// @return 曲線上の正規化された接線ベクトル (tx, ty, tz).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d> TryGetTangentAt(const double) const override;
-
-    /// @brief 曲線上の法線ベクトル N(t) を取得する
-    /// @param t パラメータ値
-    /// @return 曲線上の正規化された法線ベクトル (nx, ny, nz).
-    ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
-    std::optional<Vector3d> TryGetNormalAt(const double) const override;
+    /// @param n 何階まで計算するか; 例えば2を指定した場合、0階 C(t) から2階 C''(t) まで計算
+    /// @return 導関数 C'(t), C''(t)、計算できない場合は`std::nullopt`
+    std::optional<CurveDerivatives>
+    TryGetDerivatives(const double, const unsigned int) const override;
 
 
 
@@ -162,6 +133,21 @@ class CircularArc : public EntityBase, public virtual ICurve2D {
     /// @return 終点の角度 [rad]
     /// @note 反時計周りのX軸からの角度、start_angle < end_angle
     double EndAngle() const;
+
+
+
+ protected:
+    /// @brief エンティティ自身が参照する変換行列に従い、座標orベクトルを変換する
+    /// @param input 変換前の座標orベクトル v
+    /// @param is_point 座標を変換する場合は`true`、ベクトルを変換する場合は`false`
+    /// @return 変換後の座標orベクトル. 回転行列 R、平行移動ベクトル T に対し、
+    ///         座標値の場合は v' = Rv + T、ベクトルの場合は v' = Rv
+    /// @note inputがstd::nulloptの場合はそのまま返す
+    ///       としてオーバライドすること
+    std::optional<Vector3d> Transform(
+            const std::optional<Vector3d>& input, const bool is_point) const override {
+        return TransformImpl(input, is_point);
+    }
 };
 
 }  // namespace igesio::entities

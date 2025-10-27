@@ -43,6 +43,7 @@ IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォー
 - **IGESファイルの入出力**: [`igesio::ReadIges`](src/reader.cpp)/[`igesio::WriteIges`](src/writer.cpp) による入出力
 - **エンティティのサポート**: 円弧や直線のような基本的なエンティティから、NURBS曲線・曲面まで、様々なエンティティをサポート
   - すべてのエンティティは`EntityBase`クラスを基底とした、共通のインターフェースを持つクラスとして実装（[実装状況](docs/implementation_progress.md) / [詳細説明](docs/entities/entities_ja.md)）
+  - すべての曲線・曲面エンティティに、パラメトリックな操作や微分、法線の計算など、共通のジオメトリ計算機能を提供（[ジオメトリ計算機能の詳細](docs/entities/geometric_properties_ja.md)）
   - 未対応のエンティティを含むIGESファイルも読み込み可能（[`UnsupportedEntity`クラス](docs/entities/entities_ja.md#unsupportedentity)として読み込まれ、パラメータは取得/変更可能）
 - **エンティティの描画**: OpenGLを使用したエンティティの視覚化
   - GUIに依存した処理を分離しているため、GUIアプリケーションへの統合が容易

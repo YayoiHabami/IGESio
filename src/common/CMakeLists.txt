@@ -3,7 +3,6 @@ add_library(igesio_common STATIC
     versions.cpp
     iges_metadata.cpp
     validation_result.cpp
-    tolerance.cpp
     id_generator.cpp
     serialization.cpp
     iges_parameter_vector.cpp

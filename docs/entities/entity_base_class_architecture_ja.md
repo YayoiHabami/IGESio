@@ -48,6 +48,10 @@ classDiagram
         <<interface>>
     }
 
+    class IGeometry {
+        <<interface>>
+    }
+
     class ICurve {
         <<interface>>
     }
@@ -69,9 +73,11 @@ classDiagram
     class TransformationMatrix
 
     IEntityIdentifier <|-- ITransformation
-    IEntityIdentifier <|-- ICurve
-    IEntityIdentifier <|-- ISurface
+    IEntityIdentifier <|-- IGeometry
     IEntityIdentifier <|-- EntityBase
+
+    IGeometry <|-- ICurve
+    IGeometry <|-- ISurface
 
     ICurve <|-- ICurve2D
 

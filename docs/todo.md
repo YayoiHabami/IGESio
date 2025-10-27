@@ -1,52 +1,99 @@
+# TODOリスト
 
-- [ ] IDによる管理への移行 (PD/DEポインターによる管理を行わないようにするため)
-  - [ ] `RawEntityPD`クラスと`RawEntityDE`クラスをファイル読み込み結果の[中間生成物にする](./class_reference_ja.md#中間生成物)
-    - [x] `EntityParameterData`と`RawEntityDE`の名称を`RawEntityPD`と`RawEntityDE`に変更
-    - [x] `IGESParameterVector`クラスを追加
-      - [x] ~~`RawParameterData`のデータ型を`IGESParameterVector`に変更~~しない⇒パース処理がかなり複雑になるため、その変換は`EntityBase`の責任とする
-      - [x] `formats_`メンバを作成する。IGESからの読み込みの際に使用し、ファイル上での元の値が何であったか（デフォルト値か否か、doubleかfloatかなど、さらに言えば数値は元の表記がどうであったか（頭に+-あるか、整数部はあるか、小数部はあるか、基数部はあるか）なども）を記録する
-      - [ ] `std::vector<std::string>` (Stringが'5HHello'の形式のままのもの) から、`IGESParameterVector` (Stringが'Hello'の形式のもの) に変換する関数を追加
-        - [x] `utils`下の`FromIgesXxx`関数を`common/serialization.h/cpp`に移動
-        - [x] `iges_string_utils.cpp`の`IsDigitOrSign`、`AssertStrConvertibility`、`ConvertDToE`を同ファイルに移動
-        - [x] `common/serialization.h/cpp`に、`CppParameterType`、`IGESParameterType`、`ValueFormat`、`DefaultValueFormat`を追加
-        - [x] 変換後の数値と`ValueFormat`を返す（`std::pair<double, ValueFormat>`など）`FromIgesXxxWithFormat`関数を追加
-        - [ ] `common/iges_parameter_vector.h/cpp`に、`IGESParameterVector`クラスを追加
-      - [ ] その逆変換関数も追加
-        - [x] グローバルパラメータのうち、文字列化に必要な情報を保持する`SerializationConfig`クラスを追加
-        - [x] `GlobalParam`クラスに、`SerializationConfig`を返す関数を追加
-        - [x] データ`T`と`ValueFormat`、`SerializationConfig`を受け取り、文字列化する`ToIgesXxx`関数を追加
-        - [x] `std::vector<std::string>` (パラメータ) と`SerializationConfig`、および1行あたりの最大文字数`max_line_length`を受け取り、IGESの自由形式表現の文字列`std::vector<std::string>`を返す`ToFreeFormattedLines`関数を追加 (グローバル、PD、および恐らくデータセクションに使用可能)
-          - [x] パラメータを`IgesParameterVector`で表現したバージョンを作成
-          - [x] `GlobalParam`クラス~~から~~を引数として、`IgesParameterVector`を返す関数を追加
-      - [ ] `IgesParameterVector`関連部分のテストコードを変更
-    - [x] `IgesData`クラスを`IntermediateIgesData`クラスに変更
-      - [x] ターミネートセクションのデータを読み込むようにする
-    - [ ] `EntityBase`継承クラスを作成する
-      - [x] `id`を生成・保持するクラスを`EntityBase`クラスに変更
-      - [x] `std::weak_ptr<const IEntity>`を持つ`PointerContainer`クラスを作成
-    - [ ] `IgesData`クラスのコンストラクタに中間生成物を与えた場合に、ポインターを`id`に置き換える処理を追加する
-      - [ ] まず、全てのDEポインターをリスト化する
-      - [ ] リストの冒頭から、DEポインターを基準に（`RawRawEntityDE.sequence_number`と`RawRawEntityPD.de_pointer`を基準に）、同じエンティティの`RawRawEntityDE`と`RawRawEntityPD`を探す。
-      - [ ] `IDGenerator`を用いて、`IGESData`とPDポインタによるIDの予約を行う
-        - [ ] `IGESData`クラスに`id_`メンバを追加し、コンストラクタで初期化する
-        - [ ] `IDGenerator::Reserve`メンバ関数で各PDポインタを予約する
-        - [ ] `EntityBase`クラスに`iges_id`引数を持つコンストラクタを追加し、`IGESData`の内部ではそちらを呼び出すようにする
-      - [ ] 全てのエンティティを`IgesData.AddEntity`で登録したら、すべてのポインターは有効になっているはず。そのテストコードを記述する
-    - [ ] `EntityBase`継承クラスにパラメータ1, 3~9, 12~13, 15, 18~19を展開・保持させる
-      - [ ] パラメータ3,7,8は、ポインタ or 未指定 (0) ⇒
-      - [ ] パラメータ4,13は、特定値 (正) or 未指定 (0) or ポインタ (負) ⇒
-      - [ ] パラメータ5,6は、単一ポインタ (正) or 未指定 (0) or 複数ポインタ (負) ⇒
-      - [ ] パラメータ9は、さらにこれを展開して直接保持する
-      - [ ] パラメータ12は、グローバルパラメータとの演算を行った結果をdouble型で保持する
-      - [ ] パラメータ15,18,19は、直接保持する
-- [ ] クラス内部における単位表現を変更するためのメンバ関数を`IgesData`クラスに追加する
-- [x] エクスポートのため、自由形式の最後のデータをシリアル化した際に、行の末尾 (グローバルセクションでは72文字目、その他では64文字目) にちょうどフィールド区切り文字が収まらない場合は、それよりも前に改行する必要がある。数値フィールドの場合は、そのフィールド終了区切り文字が同じ行に表示されるように、少なくとも最後のデータ列の1列前で終了する必要がある (Section 2.2.3)。
+　本ドキュメントでは、IGESioライブラリの今後の開発に関するTODOリストを示します。主に長期的な開発計画に関して記述しています。
+
+　エンティティ等の実装状況については、[Implementation Progress](implementation_progress.md)ドキュメントを参照してください。
+
+## 目次
+
+- [目次](#目次)
+- [方針](#方針)
+  - [実装順序](#実装順序)
+  - [バージョンの目安/履歴](#バージョンの目安履歴)
+- [細かいタスク](#細かいタスク)
+  - [未分類](#未分類)
+  - [エンティティ全般](#エンティティ全般)
+  - [IGES規格への準拠](#iges規格への準拠)
+  - [全体への影響が大きいもの](#全体への影響が大きいもの)
+
+## 方針
+
+### 実装順序
+
+　以下は大まかな実装順序であり、各タスクは前後する可能性があります。
+
+- [x] **1. シンプルなCurve and Surface Geometry classの実装**
+  - [x] 1-0. 未対応のエンティティも読み込めるように、`UnsupportedEntity`クラスを実装
+  - [x] 1-1. 変換行列 (124) の実装
+  - [x] 1-2. `ICurve`クラスおよび、シンプルな曲線（円弧、直線など）の実装
+  - [x] 1-3. `ISurface`クラスおよび、シンプルな曲面（回転面、NURBS面など）の実装
+- [x] **2. 描画システムの作成**
+  - [x] 2-1. 基本的なグラフィックスクラス (`EntityGraphics`および派生クラス) の実装
+  - [x] 2-2. `Camera`クラスの実装
+  - [x] 2-3. シーンのレンダリング機能 (`EntityRenderer`クラス) の実装
+  - [x] 2-4. サーフェス等描画のための`Light`,`Texture`,`MaterialProperty`クラスの実装
+- [ ] **3. `IgesData`クラスの実装**
+  - [x] 3-1. IGESファイルとの入出力をサポート
+  - [x] 3-2. エンティティの登録・管理機能の実装
+  - [ ] 3-3. 登録状態の削除・リセット機能の実装
+- [ ] **4. Trimmed Surface (144) の実装**
+  - [ ] 4-1. Curve on a Parametric Surface (142) の実装
+  - [ ] 4-2. Trimmed Surface (144) の実装
+  - [ ] 4-3. 上記の描画サポート
+  - [ ] 4-4. 固有のシェーダーコードを使用したグラフィックスクラスの作成
+- [ ] **5. `Assembly`クラスの実装**
+- [ ] **6. Manifold Solid B-Rep Object (186) の実装**
+- [ ] **7. Bounded Surface (143) の実装**
+- [ ] **8. Constructive Solid Geometry classの実装**
+- [ ] **9. Annotation classの実装**
+- [ ] ...
+
+### バージョンの目安/履歴
+
+- [x] **v0.5: 曲線への対応** (1-2)
+- [x] **v0.6: 曲面への対応&描画システムの基礎** (2-4)
+  - [x] v0.6.0: シンプルな曲面クラスの実装＆描画対応
+  - [x] v0.6.1: IDシステムの更新（int型との変換を拡充）
+  - [ ] v0.6.2: 導関数の計算を追加（曲面等の幾何学的特性の計算に応用）
+  - [ ] v0.6.3: Trimmed Surface (144) の基本的な実装
+  - [ ] v0.6.4: Bounding Box の実装
+  - [ ] v0.6.5: クリック機能 (レイとの交差判定) の実装
+- [ ] **v0.7: Assemblyクラスの実装** (5)
+- [ ] **v0.8: Manifold Solid B-Rep Objectへの対応** (6)
+- [ ] **v0.9: Constructive Solid Geometryへの対応** (8)
+- [ ] **v1.0: 主要なエンティティクラスへの対応** (Untested, Annotation、Property等を除く)
+
+## 細かいタスク
+
+### 未分類
+
 - [ ] C++内部および出力での数値表現においては、C++側の数値上限等を利用する
   - [ ] `SerializationConfig`のデフォルト値`constexpr`を設定する。C++側の制約があるのだから、それを適用してよいだろう
   - [ ] `ToIgesXxx`関数において、`SerializationConfig`のデフォルト値を使用する
+- [ ] ユーザー定義のエンティティタイプへの対応
+  - [ ] エンティティのファクトリクラスに対し、std::functionを使用してユーザー定義エンティティを登録できるようにする
+  - [ ] グラフィックスクラスのファクトリクラスに対し、同上
+  - [ ] 範囲外の`EntityType`値を受け取った際に、関連する関数がエラー等を投げないようにする
+
+### エンティティ全般
+
+- [ ] 行列・ベクトルなどとの演算を行うメンバ関数を追加する
+  - 現在は、`OverwriteTransformationMatrix`関数などによる変換行列の設定のみが可能であるが、エンティティのデータを直接操作するためのメンバ関数を追加する
+  - [ ] 行列を左から掛けるメンバ関数（3x3: `Rotate`、4x4: `Transform`）を追加する
+  - [ ] ベクトルを右から足すメンバ関数`Translate`を追加する
+  - [ ] 演算子オーバーロードを定義する
+    - [ ] 行列との演算などを`*`などを使用して実行すると、戻り値はIDが異なる旨の注意書きをどこかに記述する
+    - [ ] エンティティのコピーコンストラクタが、ID以外のすべての要素をコピーすることを確認する。これが確認できれば、`bef = rot * bef + trans;`のような記述が可能になる
+    - [x] 内部で定義されている数値を取得するTryGetDefinedXxx関数を仮想関数として定義する。現行のTryGet系はICurveで実装まで行う
+
+### IGES規格への準拠
+
+- [ ] クラス内部における単位表現を変更するためのメンバ関数を`IgesData`クラス等に追加する
+- [x] エクスポートのため、自由形式の最後のデータをシリアル化した際に、行の末尾 (グローバルセクションでは72文字目、その他では64文字目) にちょうどフィールド区切り文字が収まらない場合は、それよりも前に改行する必要がある。数値フィールドの場合は、そのフィールド終了区切り文字が同じ行に表示されるように、少なくとも最後のデータ列の1列前で終了する必要がある (Section 2.2.3)。
 - [ ] **Section 1.6への対応**: かなり重要な方針であるため、（短期的にではないが）対応する必要がある。例えば以下のような仕様などが定義されている。
   - Property Entity (406)が一つもエンティティを参照していない場合、そのエンティティのレベル番号と同じレベル番号を持つエンティティは、すべてそのプロパティを参照する (Section 1.6.1)。
 
-方針:
+### 全体への影響が大きいもの
 
-まずは入出力ができるようにしたいので、`ICurve`などのインターフェースには何のメンバ関数も定義しない（TODOコメントは一応書いておく）
+- [ ] エラークラスの再構成
+  - 現在、`igesio::IGESioError`系統のエラークラスと、`std::runtime_error`系統のエラークラスが混在している。これを統一する。(`std::out_of_range`などの標準例外クラスは除く)

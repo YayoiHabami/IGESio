@@ -15,8 +15,9 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/interfaces/i_subfigure_definition.h"
+#include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/entity_base.h"
 #include "igesio/entities/pointer_container.h"
 
@@ -25,7 +26,7 @@
 namespace igesio::entities {
 
 /// @brief 点エンティティ (Entity Type 116)
-class Point : public EntityBase {
+class Point : public EntityBase, public virtual IGeometry {
     /// @brief 点の位置ベクトル
     Vector3d position_ = {0.0, 0.0, 0.0};
 
@@ -96,12 +97,12 @@ class Point : public EntityBase {
      * 要素の変更・取得
      */
 
-    /// @brief 点の位置ベクトルを設定する
+    /// @brief (定義空間における) 点の位置ベクトルを設定する
     /// @param position 点の位置ベクトル
-    void SetPosition(const Vector3d& position) { position_ = position; }
-    /// @brief 点の位置ベクトルを取得する
+    void SetDefinedPosition(const Vector3d& position) { position_ = position; }
+    /// @brief (定義空間における) 点の位置ベクトルを取得する
     /// @return 点の位置ベクトル
-    const Vector3d& GetPosition() const { return position_; }
+    const Vector3d& GetDefinedPosition() const { return position_; }
 
     /// @brief 点の描画用サブフィギュアを設定する
     /// @param subfigure 点の描画用サブフィギュア
@@ -109,6 +110,10 @@ class Point : public EntityBase {
     /// @brief 点の描画用サブフィギュアを取得する
     /// @return 点の描画用サブフィギュア
     std::shared_ptr<const ISubfigureDefinition> GetSubfigure() const;
+
+    /// @brief (親の空間における) 点の位置ベクトルを取得する
+    /// @return 点の位置ベクトル
+    Vector3d GetPosition() const { return Transform(position_, true).value(); }
 
 
 
@@ -129,6 +134,21 @@ class Point : public EntityBase {
     /// @note 指定されたIDの、物理的に従属するエンティティが存在しない場合は
     ///       nullptrを返す
     std::shared_ptr<const EntityBase> GetChildEntity(const ObjectID&) const override;
+
+
+
+ protected:
+    /// @brief エンティティ自身が参照する変換行列に従い、座標orベクトルを変換する
+    /// @param input 変換前の座標orベクトル v
+    /// @param is_point 座標を変換する場合は`true`、ベクトルを変換する場合は`false`
+    /// @return 変換後の座標orベクトル. 回転行列 R、平行移動ベクトル T に対し、
+    ///         座標値の場合は v' = Rv + T、ベクトルの場合は v' = Rv
+    /// @note inputがstd::nulloptの場合はそのまま返す
+    ///       としてオーバライドすること
+    std::optional<Vector3d> Transform(
+            const std::optional<Vector3d>& input, const bool is_point) const override {
+        return TransformImpl(input, is_point);
+    }
 };
 
 }  // namespace igesio::entities
