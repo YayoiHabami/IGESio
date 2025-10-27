@@ -79,7 +79,7 @@ inline curve_vec CreateCompositeCurves() {
 
     // 2. line
     auto comp_2 = std::make_shared<entities::Line>(
-            Vector3d{-1.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
+            Vector3d{2.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
     // 3. polyline
     auto comp_3 = std::make_shared<entities::LinearPath>(

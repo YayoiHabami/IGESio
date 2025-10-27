@@ -43,6 +43,7 @@ The IGESio library provides the following core functionality:
 - **IGES File Input/Output**: Input/output using [`igesio::ReadIges`](src/reader.cpp) and [`igesio::WriteIges`](src/writer.cpp)
 - **Entity Support**: Supports various entities from basic entities such as arcs and lines to NURBS curves and surfaces.
   - All entities are implemented as classes with a common interface based on the `EntityBase` class ([Implementation Status](docs/implementation_progress.md) / [Detailed Explanation](docs/entities/entities.md)).
+  - **Unified geometric operations**: All curve and surface entities provide common geometric computation features, such as parametric evaluation, differentiation, and normal calculation ([Details on geometric computation features](docs/entities/geometric_properties.md))
   - IGES files containing unsupported entities can also be read (they are read as [`UnsupportedEntity` class](docs/entities/entities.md#unsupportedentity), and parameters can be obtained/modified).
 - **Entity Rendering**: Visualization of entities using OpenGL.
   - Easy integration into GUI applications because GUI-dependent processing is separated.

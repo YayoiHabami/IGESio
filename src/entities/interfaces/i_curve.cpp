@@ -132,8 +132,9 @@ std::optional<Vector3d> ICurve::TryGetDefinedNormalAt(const double t) const {
 
     // N = (C''|C'|^2 + C'(C'・C'')) / |C'|^3
     auto c1_norm = (*deriv)[1].norm();
-    return (*deriv)[2] / c1_norm
+    auto normal = (*deriv)[2] / c1_norm
          - (*deriv)[1] * ((*deriv)[1].dot((*deriv)[2])) / std::pow(c1_norm, 3);
+    return normal.normalized();
 }
 
 std::optional<Vector3d> ICurve::TryGetDefinedBinormalAt(const double t) const {
