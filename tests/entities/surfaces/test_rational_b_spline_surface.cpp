@@ -12,11 +12,12 @@
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using igesio::Vector2d;
 using igesio::Vector3d;
@@ -63,7 +64,7 @@ TEST(RationalBSplineSurface, TryGetDefinedPointAt) {
         for (double v = 0.0; v <= 1.0; v += 0.1) {
             auto pt_opt = plane->TryGetDefinedPointAt(u, v);
             ASSERT_TRUE(pt_opt.has_value());
-            EXPECT_TRUE(igesio::IsApproxEqual((*pt_opt).y(), 25.0));
+            EXPECT_TRUE(i_num::IsApproxEqual((*pt_opt).y(), 25.0));
         }
     }
 }
@@ -80,9 +81,9 @@ TEST(RationalBSplineSurface, TryGetDefinedNormalAt) {
         for (double v = 0.0; v <= 1.0; v += 0.1) {
             auto n_opt = plane->TryGetDefinedNormalAt(u, v);
             ASSERT_TRUE(n_opt.has_value());
-            EXPECT_TRUE(igesio::IsApproxEqual((*n_opt).x(), 0.0));
-            EXPECT_TRUE(igesio::IsApproxEqual((*n_opt).y(), 1.0));
-            EXPECT_TRUE(igesio::IsApproxEqual((*n_opt).z(), 0.0));
+            EXPECT_TRUE(i_num::IsApproxEqual((*n_opt).x(), 0.0));
+            EXPECT_TRUE(i_num::IsApproxEqual((*n_opt).y(), 1.0));
+            EXPECT_TRUE(i_num::IsApproxEqual((*n_opt).z(), 0.0));
         }
     }
 }

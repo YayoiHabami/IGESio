@@ -12,10 +12,11 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 using ConicArc = igesio::entities::ConicArc;
 namespace i_ent = igesio::entities;
 
@@ -44,13 +45,13 @@ CalculateConicType(std::array<double, 6> coeffs) {
     // 規格書の式だと正しく判定できないことがあるため、q2の式のみを使用
     auto q2 = A * C - (B * B) / 4.0;
 
-    if (igesio::IsApproxZero(q2)) {
+    if (i_num::IsApproxZero(q2)) {
         // parabola
         return i_ent::ConicType::kParabola;
-    } else if (igesio::IsApproxGreaterThan(q2, 0.0)) {
+    } else if (i_num::IsApproxGreaterThan(q2, 0.0)) {
         // ellipse
         return i_ent::ConicType::kEllipse;
-    } else if (igesio::IsApproxLessThan(q2, 0.0)) {
+    } else if (i_num::IsApproxLessThan(q2, 0.0)) {
         // hyperbola
         return i_ent::ConicType::kHyperbola;
     }
@@ -120,7 +121,7 @@ ConicArc::ConicArc(const std::pair<double, double>& radius,
                         static_cast<int>(i_ent::ConicType::kEllipse)),
                 IGESParameterVector{}) {
     auto rx = radius.first, ry = radius.second;
-    if (IsApproxZero(rx) || IsApproxZero(ry)) {
+    if (i_num::IsApproxZero(rx) || i_num::IsApproxZero(ry)) {
         throw igesio::DataFormatError("Invalid radius for ConicArc");
     }
     auto rx2 = rx * rx, ry2 = ry * ry;
@@ -214,7 +215,7 @@ igesio::ValidationResult ConicArc::ValidatePD() const {
     auto q1 = A * (C * F - E * E / 4.0) -
               B / 2.0 * (B / 2.0 * F - E / 2.0 * D / 2.0) +
               D / 2.0 * (B / 2.0 * E / 2.0 - C * D / 2.0);
-    if (IsApproxZero(q1, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(q1, i_num::kGeometryTolerance)) {
         errors.emplace_back(
             "Degenerate conic (e.g., point or line) is not allowed for "
             "ConicArc entity.");
@@ -247,10 +248,10 @@ std::array<double, 2> ConicArc::GetParameterRange() const {
             return range;
         }
         case ConicType::kParabola: {
-            if (!IsApproxZero(A) && !IsApproxZero(E)) {  // Y = k * X^2
+            if (!i_num::IsApproxZero(A) && !i_num::IsApproxZero(E)) {  // Y = k * X^2
                 return (xs < xe) ? std::array{xs, xe} : std::array{-xs, -xe};
             }
-            if (!IsApproxZero(C) && !IsApproxZero(D)) {  // X = k * Y^2
+            if (!i_num::IsApproxZero(C) && !i_num::IsApproxZero(D)) {  // X = k * Y^2
                 return (ys < ye) ? std::array{ys, ye} : std::array{-ys, -ye};
             }
             break;  // 不正な放物線
@@ -279,7 +280,7 @@ bool ConicArc::IsClosed() const {
     if (GetConicType() != ConicType::kEllipse) {
         return false;
     }
-    return IsApproxEqual(start_point_, terminate_point_, kGeometryTolerance);
+    return i_num::IsApproxEqual(start_point_, terminate_point_, i_num::kGeometryTolerance);
 }
 
 std::optional<i_ent::CurveDerivatives>
@@ -339,13 +340,14 @@ bool ConicArc::IsOnConic(const double x, const double y) const {
 
     const double value =
             A * x * x + B * x * y + C * y * y + D * x + E * y + F;
-    return IsApproxZero(value, kGeometryTolerance);
+    return i_num::IsApproxZero(value, i_num::kGeometryTolerance);
 }
 
 std::optional<i_ent::CurveDerivatives>
 ConicArc::TryGetEllipseDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
-    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
+    if (t < range[0] - i_num::kGeometryTolerance ||
+        t > range[1] + i_num::kGeometryTolerance) {
         return std::nullopt;
     }
 
@@ -369,7 +371,8 @@ ConicArc::TryGetEllipseDerivatives(const double t, const unsigned int n) const {
 std::optional<i_ent::CurveDerivatives>
 ConicArc::TryGetParabolaDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
-    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
+    if (t < range[0] - i_num::kGeometryTolerance ||
+        t > range[1] + i_num::kGeometryTolerance) {
         return std::nullopt;
     }
 
@@ -380,7 +383,7 @@ ConicArc::TryGetParabolaDerivatives(const double t, const unsigned int n) const 
     auto xe = terminate_point_.x(), ye = terminate_point_.y();
     auto z_t = start_point_.z();
 
-    if (!IsApproxZero(A) && !IsApproxZero(E)) {   // Y = k * X^2
+    if (!i_num::IsApproxZero(A) && !i_num::IsApproxZero(E)) {   // Y = k * X^2
         double x_coef = (xs < xe) ? 1.0 : -1.0;
         for (unsigned int k = 0; k < n; ++k) {
             if (k == 0) {
@@ -392,7 +395,7 @@ ConicArc::TryGetParabolaDerivatives(const double t, const unsigned int n) const 
             }
             // 3以上についてはゼロであり、Resizeで初期化されているため省略
         }
-    } else if (!IsApproxZero(C) && !IsApproxZero(D)) {   // X = k * Y^2
+    } else if (!i_num::IsApproxZero(C) && !i_num::IsApproxZero(D)) {   // X = k * Y^2
         double y_coef = (ys < ye) ? 1.0 : -1.0;
         for (unsigned int k = 0; k < n; ++k) {
             if (k == 0) {
@@ -412,7 +415,8 @@ ConicArc::TryGetParabolaDerivatives(const double t, const unsigned int n) const 
 std::optional<i_ent::CurveDerivatives>
 ConicArc::TryGetHyperbolaDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
-    if (t < range[0] - kGeometryTolerance || t > range[1] + kGeometryTolerance) {
+    if (t < range[0] - i_num::kGeometryTolerance ||
+        t > range[1] + i_num::kGeometryTolerance) {
         return std::nullopt;
     }
 

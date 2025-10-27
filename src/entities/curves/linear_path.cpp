@@ -10,10 +10,11 @@
 
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::LinearPath;
 using igesio::Vector3d;
@@ -74,7 +75,7 @@ bool LinearPath::IsClosed() const {
     // 最初の点と最後の点が一致するか確認
     const auto& first_point = Coordinate(0);
     const auto& last_point = Coordinate(GetCount() - 1);
-    if (IsApproxEqual(first_point, last_point, igesio::kGeometryTolerance)) {
+    if (i_num::IsApproxEqual(first_point, last_point, i_num::kGeometryTolerance)) {
         return true;
     }
     return false;

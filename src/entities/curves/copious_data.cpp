@@ -8,10 +8,11 @@
  */
 #include "igesio/entities/curves/copious_data.h"
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CopiousData;
 using Vector3d = igesio::Vector3d;
@@ -54,7 +55,7 @@ CopiousData::TryGetDerivatives(const double t, const unsigned int n) const {
     CurveDerivatives result(n);
 
     auto [index, dist] = GetNearestVertexAt(t);
-    if (IsApproxZero(dist, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(dist, i_num::kGeometryTolerance)) {
         result[0] = Coordinates().col(index);
     }
     return result;

@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/entities/entity_base.h"

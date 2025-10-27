@@ -13,10 +13,11 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CompositeCurve;
 using igesio::Vector3d;
@@ -206,7 +207,8 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
                 continue;
             }
             // 前の曲線の終点と現在の曲線の始点が一致するか確認
-            if (!IsApproxEqual(prev_end_point, *start_point, kGeometryTolerance)) {
+            if (!i_num::IsApproxEqual(prev_end_point, *start_point,
+                                      i_num::kGeometryTolerance)) {
                 errors.emplace_back("End point of the curve at index " + std::to_string(i - 1)
                                     + " does not match start point of " + str_i + ".");
                 continue;
@@ -249,7 +251,8 @@ bool CompositeCurve::IsClosed() const {
     if (!start_point || !end_point) return false;
 
     // 始点と終点の座標を比較
-    return IsApproxEqual(*start_point, *end_point, kGeometryTolerance);
+    return i_num::IsApproxEqual(*start_point, *end_point,
+                                i_num::kGeometryTolerance);
 }
 
 std::array<double, 2> CompositeCurve::GetParameterRange() const {
@@ -306,7 +309,8 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
         auto last_end_point = last_curve->TryGetEndPoint();
         auto new_start_point = curve->TryGetStartPoint();
         if (!last_end_point || !new_start_point ||
-            !IsApproxEqual(*last_end_point, *new_start_point, kGeometryTolerance)) {
+            !i_num::IsApproxEqual(*last_end_point, *new_start_point,
+                                  i_num::kGeometryTolerance)) {
             return false;  // 終点と始点が一致しない場合は追加できない
         }
     }
@@ -342,7 +346,7 @@ CompositeCurve::GetCurveAtParameter(const double t) const {
             // パラメータtが現在の曲線の範囲内にあるかチェック
             // 浮動小数点数の比較のため、わずかな誤差を許容する
             if (t >= accumulated_length &&
-                t <= accumulated_length + current_length + kGeometryTolerance) {
+                t <= accumulated_length + current_length + i_num::kGeometryTolerance) {
                 // ローカルパラメータを計算
                 // t_local = t_start + (t_global - accumulated_length)
                 const double t_local = range[0] + (t - accumulated_length);

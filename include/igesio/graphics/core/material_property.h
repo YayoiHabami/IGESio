@@ -8,7 +8,7 @@
 #ifndef IGESIO_GRAPHICS_CORE_MATERIAL_PROPERTY_H_
 #define IGESIO_GRAPHICS_CORE_MATERIAL_PROPERTY_H_
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/graphics/core/texture.h"
 
 

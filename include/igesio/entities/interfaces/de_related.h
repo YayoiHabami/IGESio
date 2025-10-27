@@ -18,7 +18,7 @@
 #include <memory>
 #include <string>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 
 namespace igesio::entities {

@@ -29,7 +29,7 @@
 
 ### commonモジュール
 
-- **[Matrix](common/matrix_ja.md)**: 固定/動的サイズの行列クラス
+- 現在、ドキュメントはありません。
 
 ### entitiesモジュール
 
@@ -77,7 +77,7 @@
 
 ### numericsモジュール
 
-- 現在、ドキュメントはありません
+- **[Matrix](numerics/matrix_ja.md)**: 固定/動的サイズの行列クラス
 
 ### utilsモジュール
 

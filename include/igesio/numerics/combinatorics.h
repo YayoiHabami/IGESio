@@ -15,7 +15,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 
 
@@ -40,7 +40,7 @@ T BinomialCoefficient(const T n, const T r) {
         n_eff = std::trunc(n);
         r_eff = std::trunc(r);
     }
-    if (IsApproxZero(r_eff) || IsApproxEqual(r_eff, n_eff))  return 1;
+    if (numerics::IsApproxZero(r_eff) || numerics::IsApproxEqual(r_eff, n_eff)) return 1;
 
     // 計算の効率化のため、rをn-rと比較して小さい方を使用
     if (r_eff > n_eff - r_eff) {

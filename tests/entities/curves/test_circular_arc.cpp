@@ -11,11 +11,12 @@
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/entities/curves/circular_arc.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using Vector2d = igesio::Vector2d;
 using Vector3d = igesio::Vector3d;
@@ -46,7 +47,7 @@ TEST(CircularArcTest, ConstructorFromDEAndParameters) {
 
     CircularArc arc(de, parameters);
 
-    EXPECT_TRUE(igesio::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
+    EXPECT_TRUE(i_num::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
     EXPECT_DOUBLE_EQ(arc.Radius(), sqrt(2.0));
     EXPECT_DOUBLE_EQ(arc.StartAngle(), kPi / 4);
     EXPECT_DOUBLE_EQ(arc.EndAngle(), 5 * kPi / 4);
@@ -68,7 +69,7 @@ TEST(CircularArcTest, ConstructorFromCenterStartTerminate) {
 
     CircularArc arc(center, start_point, terminate_point, z_t);
 
-    EXPECT_TRUE(igesio::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
+    EXPECT_TRUE(i_num::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
     EXPECT_DOUBLE_EQ(arc.Radius(), 1.0);
     EXPECT_DOUBLE_EQ(arc.StartAngle(), 0.0);
     EXPECT_DOUBLE_EQ(arc.EndAngle(), kPi / 2);
@@ -89,8 +90,8 @@ TEST(CircularArcTest, ConstructorFromCenterStartTerminate) {
 
     // 例外テスト: 半径が0に近い場合
     Vector2d center_zero_radius(0.0, 0.0);
-    Vector2d start_point_zero_radius(0.0, 0.0 + igesio::kGeometryTolerance / 2);
-    Vector2d terminate_point_zero_radius(0.0, 0.0 + igesio::kGeometryTolerance / 2);
+    Vector2d start_point_zero_radius(0.0, 0.0 + i_num::kGeometryTolerance / 2);
+    Vector2d terminate_point_zero_radius(0.0, 0.0 + i_num::kGeometryTolerance / 2);
     double z_t_zero_radius = 0.0;
 
     ASSERT_THROW({
@@ -115,7 +116,7 @@ TEST(CircularArcTest, ConstructorFromCenterRadiusStartEndAngle) {
 
     CircularArc arc(center, radius, start_angle, end_angle, z_t);
 
-    EXPECT_TRUE(igesio::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
+    EXPECT_TRUE(i_num::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
     EXPECT_DOUBLE_EQ(arc.Radius(), 1.0);
     EXPECT_DOUBLE_EQ(arc.StartAngle(), 0.0);
     EXPECT_DOUBLE_EQ(arc.EndAngle(), kPi / 2);
@@ -125,7 +126,7 @@ TEST(CircularArcTest, ConstructorFromCenterRadiusStartEndAngle) {
 
     // 例外テスト: 半径が0に近い場合
     Vector2d center_zero_radius(0.0, 0.0);
-    double radius_zero = igesio::kGeometryTolerance / 2;
+    double radius_zero = i_num::kGeometryTolerance / 2;
     double start_angle_zero = 0.0;
     double end_angle_zero = kPi / 2;
     double z_t_zero = 0.0;
@@ -161,7 +162,7 @@ TEST(CircularArcTest, ConstructorFromCenterRadius) {
 
     CircularArc arc(center, radius, z_t);
 
-    EXPECT_TRUE(igesio::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
+    EXPECT_TRUE(i_num::IsApproxEqual(arc.Center(), Vector3d(0.0, 0.0, 0.0)));
     EXPECT_DOUBLE_EQ(arc.Radius(), 1.0);
     EXPECT_DOUBLE_EQ(arc.StartAngle(), 0.0);
     EXPECT_DOUBLE_EQ(arc.EndAngle(), 2.0 * kPi);
@@ -239,11 +240,11 @@ TEST(CircularArcTest, PointTangentNormalAt) {
 
         // PointAtは中心からの距離が半径であるか
         EXPECT_NEAR((point.value() - Vector3d(center[0], center[1], z_t)).norm(),
-                    radius, igesio::kGeometryTolerance);
+                    radius, i_num::kGeometryTolerance);
 
         // TangentAtとNormalAtは直交するか
         EXPECT_NEAR(tangent.value().dot(normal.value()),
-                    0.0, igesio::kGeometryTolerance);
+                    0.0, i_num::kGeometryTolerance);
     }
 
     // パラメータ範囲外のテスト

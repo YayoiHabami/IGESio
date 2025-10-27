@@ -14,8 +14,8 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/matrix.h"
 
 
 
@@ -62,8 +62,8 @@ TryComputeBasisFunctions(const double t, const int num_derivatives,
                          const std::vector<double>& knots,
                          const std::array<double, 2>& parameter_range) {
     // パラメータtが定義域内にあるか確認
-    if (IsApproxLessThan(t, parameter_range[0]) ||
-        IsApproxGreaterThan(t, parameter_range[1])) {
+    if (numerics::IsApproxLessThan(t, parameter_range[0]) ||
+        numerics::IsApproxGreaterThan(t, parameter_range[1])) {
         return std::nullopt;
     }
     // 比較誤差を考慮し、tを定義域内に丸める

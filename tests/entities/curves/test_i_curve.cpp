@@ -12,12 +12,13 @@
 #include <string>
 #include <tuple>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "./curves_for_testing.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::ICurve;
 using igesio::Vector3d;
@@ -129,11 +130,11 @@ TEST_P(ICurveDerivativesTest, ContinuityOrder) {
                 << "TryGetDefinedPointAt returned std::nullopt at t + ε = " << t_plus;
 
         // C(t)の連続性を確認
-        ASSERT_TRUE(igesio::IsApproxEqual(*result_t_minus, *result_t, tol))
+        ASSERT_TRUE(i_num::IsApproxEqual(*result_t_minus, *result_t, tol))
                 << "C(t) is not continuous at t = " << t
                 << "\n  C(t - ε): " << result_t_minus->transpose()
                 << "\n  C(t):     " << result_t->transpose();
-        ASSERT_TRUE(igesio::IsApproxEqual(*result_t_plus, *result_t, tol))
+        ASSERT_TRUE(i_num::IsApproxEqual(*result_t_plus, *result_t, tol))
                 << "C(t) is not continuous at t = " << t
                 << "\n  C(t + ε): " << result_t_plus->transpose()
                 << "\n  C(t):     " << result_t->transpose();
@@ -152,12 +153,12 @@ TEST_P(ICurveDerivativesTest, ContinuityOrder) {
         ASSERT_TRUE(deriv_t_plus.has_value())
                 << "TryGetDerivatives returned std::nullopt at t + ε = " << t_plus;
         // 確認
-        ASSERT_TRUE(igesio::IsApproxEqual(deriv_t_minus->derivatives[1],
+        ASSERT_TRUE(i_num::IsApproxEqual(deriv_t_minus->derivatives[1],
                                           deriv_t->derivatives[1], tol))
                 << "C'(t) is not continuous at t = " << t
                 << "\n  C'(t - ε): " << deriv_t_minus->derivatives[1].transpose()
                 << "\n  C'(t):     " << deriv_t->derivatives[1].transpose();
-        ASSERT_TRUE(igesio::IsApproxEqual(deriv_t_plus->derivatives[1],
+        ASSERT_TRUE(i_num::IsApproxEqual(deriv_t_plus->derivatives[1],
                                           deriv_t->derivatives[1], tol))
                 << "C'(t) is not continuous at t = " << t
                 << "\n  C'(t + ε): " << deriv_t_plus->derivatives[1].transpose()
@@ -165,12 +166,12 @@ TEST_P(ICurveDerivativesTest, ContinuityOrder) {
 
         // C''(t)の連続性を確認（C2連続以上の場合のみ）
         if (curve.continuity_order < 2) continue;
-        ASSERT_TRUE(igesio::IsApproxEqual(deriv_t_minus->derivatives[2],
+        ASSERT_TRUE(i_num::IsApproxEqual(deriv_t_minus->derivatives[2],
                                           deriv_t->derivatives[2], tol))
                 << "C''(t) is not continuous at t = " << t
                 << "\n  C''(t - ε): " << deriv_t_minus->derivatives[2].transpose()
                 << "\n  C''(t):     " << deriv_t->derivatives[2].transpose();
-        ASSERT_TRUE(igesio::IsApproxEqual(deriv_t_plus->derivatives[2],
+        ASSERT_TRUE(i_num::IsApproxEqual(deriv_t_plus->derivatives[2],
                                           deriv_t->derivatives[2], tol))
                 << "C''(t) is not continuous at t = " << t
                 << "\n  C''(t + ε): " << deriv_t_plus->derivatives[2].transpose()
@@ -223,7 +224,7 @@ TEST_P(ICurveDerivativesTest, TryGetFirstDerivatives) {
         // C'(t) の数値微分を計算
         auto num_deriv_1 = (*pt_plus - *pt_minus) / (2.0 * epsilon);
         auto angle_1 = igesio::AngleBetween(result_t->derivatives[1], num_deriv_1);
-        ASSERT_TRUE(igesio::IsApproxZero(angle_1, tol))
+        ASSERT_TRUE(i_num::IsApproxZero(angle_1, tol))
                 << "First derivative mismatch at t = " << t
                 << "\n  Expected: " << num_deriv_1.transpose()
                 << "\n  Actual:   " << result_t->derivatives[1].transpose();
@@ -275,7 +276,7 @@ TEST_P(ICurveDerivativesTest, TryGetSecondDerivatives) {
         auto num_deriv_2 = (*pt_plus - 2.0 * result_t->derivatives[0] + *pt_minus)
                          / (epsilon * epsilon);
         auto angle_2 = igesio::AngleBetween(result_t->derivatives[2], num_deriv_2);
-        ASSERT_TRUE(igesio::IsApproxZero(angle_2, tol))
+        ASSERT_TRUE(i_num::IsApproxZero(angle_2, tol))
                 << "Second derivative mismatch at t = " << t
                 << "\n  Expected: " << num_deriv_2.transpose()
                 << "\n  Actual:   " << result_t->derivatives[2].transpose();

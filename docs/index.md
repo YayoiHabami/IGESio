@@ -29,7 +29,7 @@ The following are module-specific documents. For files not listed, please refer 
 
 ### common module
 
-- **[Matrix](common/matrix.md)**: Fixed/dynamic size matrix classes
+- Currently, there are no documents.
 
 ### entities module
 
@@ -76,7 +76,7 @@ Individual entity class documents are as follows. Currently, they include mathem
 
 ### numerics module
 
-- Currently, there are no documents.
+- **[Matrix](numerics/matrix.md)**: Fixed/dynamic size matrix classes
 
 ### utils module
 

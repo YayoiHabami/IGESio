@@ -1,5 +1,5 @@
 /**
- * @file common/matrix.h
+ * @file numerics/matrix.h
  * @brief 本ライブラリで使用する行列・ベクトルクラスを定義する
  * @author Yayoi Habami
  * @date 2025-05-30
@@ -8,8 +8,8 @@
  *       サードパーティーライブラリであるEigenを使用しない場合に備えて、
  *       代替の行列・ベクトルクラスを定義する。
  */
-#ifndef IGESIO_COMMON_MATRIX_H_
-#define IGESIO_COMMON_MATRIX_H_
+#ifndef IGESIO_NUMERICS_MATRIX_H_
+#define IGESIO_NUMERICS_MATRIX_H_
 
 #include <algorithm>
 #include <string>
@@ -1743,4 +1743,4 @@ double AngleBetween(const Vector<T, N1>& a, const Vector<T, N2>& b,
 
 }  // namespace igesio
 
-#endif  // IGESIO_COMMON_MATRIX_H_
+#endif  // IGESIO_NUMERICS_MATRIX_H_

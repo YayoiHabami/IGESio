@@ -10,12 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/numerics/combinatorics.h"
 #include "./../curves/nurbs_basis_function.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using RationalBSplineSurface = i_ent::RationalBSplineSurface;
 using Vector3d = igesio::Vector3d;
@@ -254,7 +255,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
     } else {
         // 非減少列であること
         for (size_t i = 1; i < u_knots_.size(); ++i) {
-            if (u_knots_[i] < u_knots_[i - 1] - igesio::kParameterTolerance) {
+            if (u_knots_[i] < u_knots_[i - 1] - i_num::kParameterTolerance) {
                 errors.emplace_back("U knot vector must be non-decreasing, "
                     "but got decrease at index " + std::to_string(i) +
                     ": " + std::to_string(u_knots_[i - 1]) + " > "
@@ -280,7 +281,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
     } else {
         // 非減少列であること
         for (size_t i = 1; i < v_knots_.size(); ++i) {
-            if (v_knots_[i] < v_knots_[i - 1] - igesio::kParameterTolerance) {
+            if (v_knots_[i] < v_knots_[i - 1] - i_num::kParameterTolerance) {
                 errors.emplace_back("V knot vector must be non-decreasing, "
                     "but got decrease at index " + std::to_string(i) +
                     ": " + std::to_string(v_knots_[i - 1]) + " > "
@@ -309,7 +310,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
         // 全て正の値であること
         for (int i = 0; i <= k1; ++i) {
             for (int j = 0; j <= k2; ++j) {
-                if (weights_(i, j) <= igesio::kParameterTolerance) {
+                if (weights_(i, j) <= i_num::kParameterTolerance) {
                     errors.emplace_back("All weights must be positive, "
                         "but got weight W(" + std::to_string(i) + ", "
                         + std::to_string(j) + ") = "
@@ -323,7 +324,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
         // polynomial形式の場合、全ての重みが等しいことを確認
         for (int i = 0; i <= k1; ++i) {
             for (int j = 0; j <= k2; ++j) {
-                if (!igesio::IsApproxEqual(weights_(i, j), weights_(0, 0))) {
+                if (!i_num::IsApproxEqual(weights_(i, j), weights_(0, 0))) {
                     errors.emplace_back("In polynomial form, all weights "
                         "must be equal, but got weight W(" +
                         std::to_string(i) + ", " + std::to_string(j) +
@@ -416,7 +417,7 @@ RationalBSplineSurface::TryGetDerivatives(
     }
 
     // 分母 w^(0,0) がほぼ0の場合は定義されない
-    if (IsApproxZero(denom(0, 0).x())) return std::nullopt;
+    if (i_num::IsApproxZero(denom(0, 0).x())) return std::nullopt;
 
     // S^(nu, nv) を計算する
     SurfaceDerivatives result(order);

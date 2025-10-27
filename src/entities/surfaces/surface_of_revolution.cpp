@@ -12,10 +12,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::SurfaceOfRevolution;
 using igesio::Vector3d;
@@ -225,8 +226,8 @@ bool SurfaceOfRevolution::IsUClosed() const {
 
 bool SurfaceOfRevolution::IsVClosed() const {
     // v方向は回転角度に依存する
-    return IsApproxEqual(start_angle_, 0.0)
-           && IsApproxEqual(end_angle_, 2.0 * kPi);
+    return i_num::IsApproxEqual(start_angle_, 0.0)
+           && i_num::IsApproxEqual(end_angle_, 2.0 * kPi);
 }
 
 std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {

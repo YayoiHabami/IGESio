@@ -10,12 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/numerics/combinatorics.h"
 #include "./nurbs_basis_function.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using RationalBSplineCurve = i_ent::RationalBSplineCurve;
 using Vector3d = igesio::Vector3d;
@@ -254,7 +255,7 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
     } else if (is_polynomial_) {
         // polynomial形式の場合、全ての重みが等しいことを確認
         for (const auto& weight : weights_) {
-            if (!IsApproxEqual(weight, weights_[0])) {
+            if (!i_num::IsApproxEqual(weight, weights_[0])) {
                 errors.emplace_back("All weights must be equal for polynomial form. "
                         "Got weights: " + std::to_string(weights_[0]) + " and " +
                         std::to_string(weight) + ".");
@@ -324,7 +325,7 @@ RationalBSplineCurve::TryGetDerivatives(const double t, const unsigned int n) co
     }
 
     // 分母が0の場合は定義されない
-    if (IsApproxZero(denominators[0]))  return std::nullopt;
+    if (i_num::IsApproxZero(denominators[0]))  return std::nullopt;
 
     // 商の微分法則を適用して各導関数を計算
     // C^(d)(t) = (A^(d)(t) - Σ[k=0 → d-1] dCk w^(d-k)(t) C^(k)(t)) / w(t)

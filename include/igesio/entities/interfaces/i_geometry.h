@@ -8,7 +8,7 @@
 #ifndef IGESIO_ENTITIES_INTERFACES_I_GEOMETRY_H_
 #define IGESIO_ENTITIES_INTERFACES_I_GEOMETRY_H_
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 
 

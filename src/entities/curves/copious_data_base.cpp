@@ -11,10 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CopiousDataBase;
 
@@ -122,7 +123,8 @@ CopiousDataBase::ValidatePD() const {
         // IP=1の場合: すべてのZ座標値が同じであること
         auto z_value = coordinates_(2, 0);
         for (size_t i = 1; i < coordinates_.cols(); ++i) {
-            if (!IsApproxEqual(coordinates_(2, i), z_value, kGeometryTolerance)) {
+            if (!i_num::IsApproxEqual(coordinates_(2, i), z_value,
+                                      i_num::kGeometryTolerance)) {
                 errors.emplace_back(
                     "All Z coordinates must be the same for CopiousDataType with IP=1."
                     "index " + std::to_string(i) + " has Z=" +

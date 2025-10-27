@@ -1,5 +1,6 @@
 # Numerics module
 add_library(igesio_numerics STATIC
+    tolerance.cpp
     integration.cpp
     combinatorics.cpp
 )

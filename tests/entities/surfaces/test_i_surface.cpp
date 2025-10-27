@@ -12,7 +12,7 @@
 #include <string>
 #include <tuple>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "./surfaces_for_testing.h"
 

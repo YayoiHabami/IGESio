@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 #include "igesio/common/iges_parameter_vector.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using CircularArc = i_ent::CircularArc;
 using Vector3d = igesio::Vector3d;
@@ -44,12 +45,12 @@ CircularArc::CircularArc(const Vector2d& center, const Vector2d& start_point,
     // 値の検証: 中心から始点と終点までの距離が等しいことを確認
     double r1 = (start_point - center).norm();
     double r2 = (terminate_point - center).norm();
-    if (!IsApproxEqual(r1, r2, kGeometryTolerance)) {
+    if (!i_num::IsApproxEqual(r1, r2, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError(
             "Start and terminate points must be equidistant from the center.");
     }
     // 半径が0に近い場合はエラー
-    if (IsApproxZero(r1, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(r1, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
     }
 }
@@ -65,7 +66,7 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
                             center[0] + radius * std::cos(end_angle),
                             center[1] + radius * std::sin(end_angle)}) {
     // 半径が0に近い場合はエラー
-    if (IsApproxZero(radius, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
     }
     // 始点と終点の角度が不正な場合はエラー
@@ -83,7 +84,7 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
                                 center[0] + radius, center[1],
                                 center[0] + radius, center[1]}) {
     // 半径が0に近い場合はエラー
-    if (IsApproxZero(radius, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
         throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
     }
 }
@@ -137,7 +138,7 @@ igesio::ValidationResult CircularArc::ValidatePD() const {
     std::vector<ValidationError> errors;
 
     // 距離が等しいか確認する（許容範囲内で）
-    if (!IsApproxEqual(r1, r2, kGeometryTolerance)) {
+    if (!i_num::IsApproxEqual(r1, r2, i_num::kGeometryTolerance)) {
         // 点は中心から等距離でなければならない
         errors.push_back(ValidationError(
                 "Start and terminate points must be equidistant from the center.")
@@ -145,7 +146,7 @@ igesio::ValidationResult CircularArc::ValidatePD() const {
     }
 
     // 縮退した円弧でないか確認する（半径が小さすぎる）
-    if (IsApproxZero(r1, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(r1, i_num::kGeometryTolerance)) {
         // 半径が小さすぎる場合は縮退した円弧とみなす
         errors.emplace_back("Degenerate circular arc: radius is too small.");
     }
@@ -184,7 +185,8 @@ std::array<double, 2> CircularArc::GetParameterRange() const {
 
 bool CircularArc::IsClosed() const {
     // 始点と終点が一致するかどうかを確認
-    return IsApproxEqual(start_point_, terminate_point_, kGeometryTolerance);
+    return i_num::IsApproxEqual(start_point_, terminate_point_,
+                                i_num::kGeometryTolerance);
 }
 
 std::optional<i_ent::CurveDerivatives>

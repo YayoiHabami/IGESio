@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/interfaces/i_subfigure_definition.h"
 #include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/entity_base.h"

@@ -10,7 +10,7 @@
 
 #include <memory>
 
-#include "igesio/common/matrix.h"
+#include "igesio/numerics/matrix.h"
 #include "igesio/entities/interfaces/de_related.h"
 #include "igesio/entities/de/de_field_wrapper.h"
 

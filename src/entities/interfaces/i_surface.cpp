@@ -9,10 +9,11 @@
 
 #include <utility>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 
 using igesio::Vector2d;
@@ -131,7 +132,7 @@ ISurface::TryGetSecondFundamentalForm(const double u, const double v) const {
 
     // 法線ベクトルを計算
     auto N = Su.cross(Sv).normalized();
-    if (IsApproxZero(N.norm(), kGeometryTolerance)) {
+    if (i_num::IsApproxZero(N.norm(), i_num::kGeometryTolerance)) {
         // 正規化できない（接ベクトルが線形従属）場合は計算不可
         return std::nullopt;
     }
@@ -150,7 +151,7 @@ ISurface::TryGetGaussianCurvature(const double u, const double v) const {
     const auto [L, M, N] = *second_form;
 
     const double denominator = E * G - F * F;
-    if (IsApproxZero(denominator, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(denominator, i_num::kGeometryTolerance)) {
         // 第一基本形式の行列式が0の場合、ガウス曲率は定義されない
         return std::nullopt;
     }
@@ -167,7 +168,7 @@ ISurface::TryGetMeanCurvature(const double u, const double v) const {
     const auto [L, M, N] = *second_form;
 
     const double denominator = E * G - F * F;
-    if (IsApproxZero(denominator, kGeometryTolerance)) {
+    if (i_num::IsApproxZero(denominator, i_num::kGeometryTolerance)) {
         // 第一基本形式の行列式が0の場合、平均曲率は定義されない
         return std::nullopt;
     }
@@ -236,7 +237,7 @@ ISurface::TryGetDefinedNormalAt(const double u, const double v) const {
 
     // 法線ベクトルを計算
     auto N = Su.cross(Sv);
-    if (IsApproxZero(N.norm(), kGeometryTolerance)) {
+    if (i_num::IsApproxZero(N.norm(), i_num::kGeometryTolerance)) {
         // 正規化できない（接ベクトルが線形従属）場合は計算不可
         return std::nullopt;
     }

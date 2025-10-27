@@ -1,4 +1,6 @@
 set (TEST_SOURCES
+    test_matrix.cpp
+    test_tolerance.cpp
     test_constexpr_math.cpp
     test_combinatorics.cpp
     test_integration.cpp

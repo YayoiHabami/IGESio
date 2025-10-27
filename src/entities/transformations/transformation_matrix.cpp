@@ -11,10 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/tolerance.h"
+#include "igesio/numerics/tolerance.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using TransMatrix = i_ent::TransformationMatrix;
 using Vector3d = igesio::Vector3d;
@@ -110,24 +111,24 @@ igesio::ValidationResult TransMatrix::ValidatePD() const {
     const auto& rot = rotation_;
 
     // 各列が単位ベクトルであることを確認
-    if (!IsApproxOne(rot.col(0).norm())) {
+    if (!i_num::IsApproxOne(rot.col(0).norm())) {
         errors.emplace_back("First column of rotation matrix is not a unit vector.");
     }
-    if (!IsApproxOne(rot.col(1).norm())) {
+    if (!i_num::IsApproxOne(rot.col(1).norm())) {
         errors.emplace_back("Second column of rotation matrix is not a unit vector.");
     }
-    if (!IsApproxOne(rot.col(2).norm())) {
+    if (!i_num::IsApproxOne(rot.col(2).norm())) {
         errors.emplace_back("Third column of rotation matrix is not a unit vector.");
     }
 
     // 列同士が直交していることを確認
-    if (!IsApproxZero(rot.col(0).dot(rot.col(1)))) {
+    if (!i_num::IsApproxZero(rot.col(0).dot(rot.col(1)))) {
         errors.emplace_back("Column 1 and column 2 of rotation matrix are not orthogonal.");
     }
-    if (!IsApproxZero(rot.col(0).dot(rot.col(2)))) {
+    if (!i_num::IsApproxZero(rot.col(0).dot(rot.col(2)))) {
         errors.emplace_back("Column 1 and column 3 of rotation matrix are not orthogonal.");
     }
-    if (!IsApproxZero(rot.col(1).dot(rot.col(2)))) {
+    if (!i_num::IsApproxZero(rot.col(1).dot(rot.col(2)))) {
         errors.emplace_back("Column 2 and column 3 of rotation matrix are not orthogonal.");
     }
 
@@ -137,14 +138,14 @@ igesio::ValidationResult TransMatrix::ValidatePD() const {
     // フォーム番号ごとの検証
     switch (form_number_) {
         case 0:  // デフォルトフォーム - 右手系直交正規行列
-            if (std::abs(det - 1.0) > kGeometryTolerance) {
+            if (std::abs(det - 1.0) > i_num::kGeometryTolerance) {
                 errors.emplace_back("For form 0, determinant of "
                                     "rotation matrix must be +1 (right-handed).");
             }
             break;
 
         case 1:  // 左手系直交正規行列
-            if (std::abs(det + 1.0) > kGeometryTolerance) {
+            if (std::abs(det + 1.0) > i_num::kGeometryTolerance) {
                 errors.emplace_back("For form 1, determinant of "
                                     "rotation matrix must be -1 (left-handed).");
             }
@@ -152,25 +153,27 @@ igesio::ValidationResult TransMatrix::ValidatePD() const {
 
         case 10:  // 直交座標系 - Rは単位行列であるべき
             // 各要素が単位行列と一致するか確認
-            if (IsApproxEqual(rot, Matrix3d::Identity(), kGeometryTolerance)) {
+            if (i_num::IsApproxEqual(rot, Matrix3d::Identity(),
+                                     i_num::kGeometryTolerance)) {
                 errors.emplace_back("For form 10, rotation matrix must be identity.");
             }
             break;
 
         case 11:  // 円筒座標系
             // 第3列が[0, 0, 1]であること
-            if (IsApproxEqual(rot.col(2), Vector3d::UnitZ(), kGeometryTolerance)) {
+            if (i_num::IsApproxEqual(rot.col(2), Vector3d::UnitZ(),
+                                     i_num::kGeometryTolerance)) {
                 errors.emplace_back("For form 11, third column must be [0, 0, 1].");
             }
 
             // 最初の2列がxy平面上にあること
-            if (IsApproxZero(rot(2, 0)) || IsApproxZero(rot(2, 1))) {
+            if (i_num::IsApproxZero(rot(2, 0)) || i_num::IsApproxZero(rot(2, 1))) {
                 errors.emplace_back("For form 11, first two columns must be in the xy-plane.");
             }
 
             // 第1列が[cos(θ), sin(θ), 0]、第2列が[-sin(θ), cos(θ), 0]であること
-            if (std::abs(rot(0, 0) - rot(1, 1)) > kGeometryTolerance ||
-                std::abs(rot(1, 0) + rot(0, 1)) > kGeometryTolerance) {
+            if (std::abs(rot(0, 0) - rot(1, 1)) > i_num::kGeometryTolerance ||
+                std::abs(rot(1, 0) + rot(0, 1)) > i_num::kGeometryTolerance) {
                 errors.emplace_back("For form 11, rotation matrix "
                                     "must follow cylindrical coordinate structure.");
             }
@@ -178,7 +181,7 @@ igesio::ValidationResult TransMatrix::ValidatePD() const {
 
         case 12:  // 球座標系
             // 第3列の第3成分が0であること
-            if (IsApproxZero(rot(2, 2))) {
+            if (i_num::IsApproxZero(rot(2, 2))) {
                 errors.emplace_back("For form 12, third component of third column must be 0.");
             }
 
