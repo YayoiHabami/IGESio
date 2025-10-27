@@ -299,7 +299,7 @@ $$S(u,v) \in \mathbb{R}^3 \quad (u \in [u_{\text{min}}, u_{\text{max}}], v \in [
 | [**単位接線ベクトル**](#接線法線ベクトル-曲面) <br> (Tangent) | $T_u(u,v) = \frac{S_u(u,v)}{\|S_u(u,v)\|}$ <br> $T_v(u,v) = \frac{S_v(u,v)}{\|S_v(u,v)\|}$ | 曲面のu,v方向への接線方向 <br> `TryGetTangentAt(u, v)` |
 | [**単位法線ベクトル**](#接線法線ベクトル-曲面) <br> (Normal) | $N(u,v) = T_u(u,v) \times T_v(u,v)$ | 曲面の法線方向 <br> `TryGetNormalAt(u, v)` |
 | [**第一基本形式**](#第一第二基本形式) <br> (First Fundamental Form) | $E(u,v) = S_u(u,v) \cdot S_u(u,v)$ <br> $F(u,v) = S_u(u,v) \cdot S_v(u,v)$ <br> $G(u,v) = S_v(u,v) \cdot S_v(u,v)$ | 曲面の内在的な性質を表す |
-| [**面積**](#面積-曲面) <br> (Area) | $A = \int_{v_{\text{min}}}^{v_{\text{max}}} \int_{u_{\text{min}}}^{u_{\text{max}}} \|S_u(u,v) \times S_v(u,v)\| du dv$ <br> $\left(\|S_u(u,v) \times S_v(u,v)\| = \sqrt{EG-F^2}\right)$ | 矩形領域の面積 |
+| [**面積**](#面積-曲面) <br> (Area) | $A = \int_{v_{\text{min}}}^{v_{\text{max}}} \int_{u_{\text{min}}}^{u_{\text{max}}} \|S_u(u,v) \times S_v(u,v)\| du dv$ <br> $\left(\|S_u(u,v) \times S_v(u,v)\| = \sqrt{EG-F^2}\right)$ | 矩形領域の面積 <br> `Area()` <br> `Area(u_start, u_end, v_start, v_end)` |
 | [**第二基本形式**](#第一第二基本形式) <br> (Second Fundamental Form) | $L(u,v) = S_{uu}(u,v) \cdot N(u,v)$ <br> $M(u,v) = S_{uv}(u,v) \cdot N(u,v)$ <br> $N(u,v) = S_{vv}(u,v) \cdot N(u,v)$ | 曲線の外在的な性質を表す |
 | [**ガウス曲率**](#曲率-曲面) <br> (Gaussian Curvature) | $K(u,v) = \frac{LN - M^2}{EG - F^2}$ | 曲面の総合的な曲がり方 |
 | [**平均曲率**](#曲率-曲面) <br> (Mean Curvature) | $H(u,v) = \frac{GL - 2FM + EN}{2(EG - F^2)}$ | 曲面の平均的な曲がり方 |
@@ -513,6 +513,27 @@ $$\begin{aligned}
 \end{aligned}$$
 
 ここで、$\sqrt{EG - F^2}$ は面積要素を表し、曲面上の微小な領域の面積を意味します。この式は、曲面を微小な平行四辺形の集まりとみなし、それらの面積を足し合わせることで全体の面積を求めるという考えに基づいています。本ライブラリでは、`igesio/numerics/integration.h`の`Integrate`関数のような、数値積分を行う関数を用いて、この二重積分を近似的に計算します。
+
+**コード例**
+
+```cpp
+// 曲面全体の面積を計算
+double area = surface->Area();
+std::cout << "Surface area: " << area << std::endl;
+
+// 指定したパラメータ範囲 u_start ～ u_end, v_start ～ v_end における面積を計算
+auto u_mid = (u_start + u_end) / 2.0;
+auto v_mid = (v_start + v_end) / 2.0;
+area = surface->Area(u_start, u_mid, v_start, v_mid);
+std::cout << "Surface area in subregion: " << area << std::endl;
+```
+
+出力例：
+
+```
+Surface area: 2624.32
+Surface area in subregion: 652.025
+```
 
 ### 曲率 (曲面)
 

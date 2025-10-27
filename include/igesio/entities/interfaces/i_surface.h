@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "igesio/numerics/matrix.h"
+#include "igesio/numerics/integration.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/interfaces/i_curve.h"
@@ -180,6 +181,23 @@ class ISurface : public virtual IEntityIdentifier,
     ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
     std::optional<std::pair<double, double>>
     TryGetPrincipalCurvatures(const double, const double) const;
+
+    /// @brief サーフェスの面積を取得する
+    /// @return サーフェスの面積
+    virtual double Area() const;
+
+    /// @brief サーフェスの面積を取得する (パラメータ範囲指定版)
+    /// @param u_start uパラメータ範囲の開始値
+    /// @param u_end uパラメータ範囲の終了値
+    /// @param v_start vパラメータ範囲の開始値
+    /// @param v_end vパラメータ範囲の終了値
+    /// @param tol 面積計算の許容誤差、デフォルトは絶対誤差1 mm^2.
+    ///        デフォルトは大きめだが、小さくすると計算時間が指数関数的に増加するため注意.
+    /// @return サーフェスの面積 (u ∈ [u_start, u_end], v ∈ [v_start, v_end] の範囲)
+    /// @throw std::invalid_argument u_start >= u_end または v_start >= v_end の場合、
+    ///        または指定されたパラメータ範囲がサーフェスのパラメータ範囲外の場合
+    virtual double Area(const double, const double, const double, const double,
+                        const numerics::Tolerance& = numerics::Tolerance(1)) const;
 
 
 

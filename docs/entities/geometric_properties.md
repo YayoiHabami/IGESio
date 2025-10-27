@@ -299,7 +299,7 @@ These are used to define and calculate the following geometric properties:
 | [**Unit Tangent Vector**](#tangent-and-normal-vectors-surface) | $T_u(u,v) = \frac{S_u(u,v)}{\|S_u(u,v)\|}$ <br> $T_v(u,v) = \frac{S_v(u,v)}{\|S_v(u,v)\|}$ | Tangent direction to the surface in the u and v directions <br> `TryGetTangentAt(u, v)` |
 | [**Unit Normal Vector**](#tangent-and-normal-vectors-surface) | $N(u,v) = T_u(u,v) \times T_v(u,v)$ | Normal direction of the surface <br> `TryGetNormalAt(u, v)` |
 | [**First Fundamental Form**](#first-and-second-fundamental-forms) | $E(u,v) = S_u(u,v) \cdot S_u(u,v)$ <br> $F(u,v) = S_u(u,v) \cdot S_v(u,v)$ <br> $G(u,v) = S_v(u,v) \cdot S_v(u,v)$ | Represents the intrinsic properties of the surface |
-| [**Area**](#area-surface) | $A = \int_{v_{\text{min}}}^{v_{\text{max}}} \int_{u_{\text{min}}}^{u_{\text{max}}} \|S_u(u,v) \times S_v(u,v)\| du dv$ <br> $\left(\|S_u(u,v) \times S_v(u,v)\| = \sqrt{EG-F^2}\right)$ | Area of the rectangular region |
+| [**Area**](#area-surface) | $A = \int_{v_{\text{min}}}^{v_{\text{max}}} \int_{u_{\text{min}}}^{u_{\text{max}}} \|S_u(u,v) \times S_v(u,v)\| du dv$ <br> $\left(\|S_u(u,v) \times S_v(u,v)\| = \sqrt{EG-F^2}\right)$ | Area of the rectangular region <br> `Area()` <br> `Area(u_start, u_end, v_start, v_end)` |
 | [**Second Fundamental Form**](#first-and-second-fundamental-forms) | $L(u,v) = S_{uu}(u,v) \cdot N(u,v)$ <br> $M(u,v) = S_{uv}(u,v) \cdot N(u,v)$ <br> $N(u,v) = S_{vv}(u,v) \cdot N(u,v)$ | Represents the extrinsic properties of the surface |
 | [**Gaussian Curvature**](#curvature-surface) | $K(u,v) = \frac{LN - M^2}{EG - F^2}$ | Overall curvature of the surface |
 | [**Mean Curvature**](#curvature-surface) | $H(u,v) = \frac{GL - 2FM + EN}{2(EG - F^2)}$ | Average curvature of the surface |
@@ -512,6 +512,27 @@ $$\begin{aligned}
 \end{aligned}$$
 
 Here, $\sqrt{EG - F^2}$ represents the area element and means the area of a minute region on the surface. This equation is based on the idea of ​​considering the surface as a collection of minute parallelograms and finding the total area by adding up those areas. In this library, this double integral is approximately calculated using a function that performs numerical integration, such as the `Integrate` function in `igesio/numerics/integration.h`.
+
+**Code Example**
+
+```cpp
+// Calculate the total area of the surface
+double area = surface->Area();
+std::cout << "Surface area: " << area << std::endl;
+
+// Calculate the area of a subregion defined by (u_start, u_end) and (v_start, v_end)
+auto u_mid = (u_start + u_end) / 2.0;
+auto v_mid = (v_start + v_end) / 2.0;
+area = surface->Area(u_start, u_mid, v_start, v_mid);
+std::cout << "Surface area in subregion: " << area << std::endl;
+```
+
+Output:
+
+```
+Surface area: 2624.32
+Surface area in subregion: 652.025
+```
 
 ### Curvature (Surface)
 

@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/interfaces/i_surface.h"
 
+#include <limits>
 #include <utility>
 
 #include "igesio/numerics/tolerance.h"
@@ -197,6 +198,59 @@ ISurface::TryGetPrincipalCurvatures(
     const double k2 = H - sqrt_discriminant;
 
     return std::make_pair(k1, k2);
+}
+
+double ISurface::Area() const {
+    return Area(GetURange()[0], GetURange()[1], GetVRange()[0], GetVRange()[1]);
+}
+
+double ISurface::Area(const double u_start, const double u_end,
+                      const double v_start, const double v_end,
+                      const i_num::Tolerance& tol) const {
+    // パラメータ範囲の妥当性をチェック
+    if (u_start >= u_end || v_start >= v_end) {
+        throw std::invalid_argument("Invalid parameter range for area calculation."
+            " u_start: " + std::to_string(u_start) +
+            ", u_end: " + std::to_string(u_end) +
+            ", v_start: " + std::to_string(v_start) +
+            ", v_end: " + std::to_string(v_end));
+    } else if (u_start < GetURange()[0] || u_end > GetURange()[1] ||
+               v_start < GetVRange()[0] || v_end > GetVRange()[1]) {
+        throw std::invalid_argument("Parameter range for area calculation is out of bounds."
+            " u_start: " + std::to_string(u_start) +
+            ", u_end: " + std::to_string(u_end) +
+            ", v_start: " + std::to_string(v_start) +
+            ", v_end: " + std::to_string(v_end));
+    }
+    if (std::abs(u_start) == std::numeric_limits<double>::infinity() ||
+        std::abs(u_end) == std::numeric_limits<double>::infinity() ||
+        std::abs(v_start) == std::numeric_limits<double>::infinity() ||
+        std::abs(v_end) == std::numeric_limits<double>::infinity()) {
+        // 無限範囲が含まれる場合、面積は無限大とする
+        return std::numeric_limits<double>::infinity();
+    }
+
+    // 面積を数値積分で計算
+    auto integrand = [this](const double u, const double v) -> double {
+        // 偏導関数を取得
+        auto derivatives = TryGetDerivatives(u, v, 1);
+        if (!derivatives) return 0.0;
+
+        const auto& Su = (*derivatives)(1, 0);
+        const auto& Sv = (*derivatives)(0, 1);
+
+        // 面素の大きさを計算
+        auto cross_product = Su.cross(Sv);
+        return cross_product.norm();
+    };
+
+    // 数値積分を実行
+    try {
+        return i_num::Integrate(integrand, {u_start, u_end, v_start, v_end}, tol);
+    } catch (const std::invalid_argument&) {
+        // パラメータの問題で計算に失敗した場合は0を返す
+        return 0.0;
+    }
 }
 
 

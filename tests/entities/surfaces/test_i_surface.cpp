@@ -9,11 +9,15 @@
 
 #include <array>
 #include <limits>
+#include <memory>
 #include <string>
 #include <tuple>
 
 #include "igesio/numerics/tolerance.h"
 #include "igesio/entities/interfaces/i_surface.h"
+#include "igesio/entities/curves/circular_arc.h"
+#include "igesio/entities/curves/line.h"
+#include "igesio/entities/surfaces/surface_of_revolution.h"
 #include "./surfaces_for_testing.h"
 
 namespace {
@@ -21,6 +25,7 @@ namespace {
 namespace i_ent = igesio::entities;
 namespace i_test = igesio::tests;
 using i_ent::ISurface;
+using igesio::Vector2d;
 using igesio::Vector3d;
 
 /// @brief INSTANTIATE_TEST_SUITE_P用のテストパラメータ構造体
@@ -365,3 +370,75 @@ INSTANTIATE_TEST_SUITE_P(
             TestParamT("UMax_VMax", 1.0, 1.0)),
         testing::PrintToStringParamName()
 );
+
+
+
+// ISurface::Area() のテスト
+TEST(ISurfaceTest, Area) {
+    // テスト用の曲面で計算できることを確認
+    auto surfaces = igesio::tests::CreateAllTestSurfaces();
+    for (const auto& surface : surfaces) {
+        SCOPED_TRACE("Surface: " + surface.name);
+        ASSERT_TRUE(surface.surface != nullptr)
+            << "Surface object is null for surface: " << surface.name;
+
+        double area = -1.0;
+        ASSERT_NO_THROW({
+            area = surface.surface->Area();
+        });
+        ASSERT_GE(area, 0.0);
+    }
+
+    // 解析的に計算できるものについて個別に計算
+    {
+        // Y軸周りに原点中心の1/4円弧を回転させてできる曲面
+        // 半径2の球の1/8面の面積 = 4πr^2 / 8 = 2π
+        auto axis = std::make_shared<i_ent::Line>(
+            Vector3d{0.0, 0.0, 0.0}, Vector3d{0.0, 1.0, 0.0});
+        auto cir_arc = std::make_shared<i_ent::CircularArc>(
+            Vector2d{0.0, 0.0}, Vector2d{2.0, 0.0}, Vector2d{0.0, 2.0});
+        auto surface = std::make_shared<i_ent::SurfaceOfRevolution>(
+            axis, cir_arc, 0.0, igesio::kPi / 2.0);
+
+        auto area = surface->Area();
+        ASSERT_NEAR(area, 2.0 * igesio::kPi, 1e-6)
+            << "Mismatch in area for quarter sphere surface: expected "
+            << (2.0 * igesio::kPi) << ", got " << area;
+    }
+}
+
+// ISurface::Area(start_u, end_u, start_v, end_v) のテスト
+TEST(ISurfaceTest, AreaParameterized) {
+    // テスト用の曲面で計算できることを確認
+    auto surfaces = igesio::tests::CreateAllTestSurfaces();
+    for (const auto& surface : surfaces) {
+        SCOPED_TRACE("Surface: " + surface.name);
+        ASSERT_TRUE(surface.surface != nullptr)
+            << "Surface object is null for surface: " << surface.name;
+
+        // パラメータ範囲を取得
+        auto param_range = surface.surface->GetParameterRange();
+        double u_start = param_range[0];
+        double u_end   = param_range[1];
+        double v_start = param_range[2];
+        double v_end   = param_range[3];
+
+        // 全範囲での面積と一致することを確認
+        double total_area = surface.surface->Area();
+        double param_area = -1.0;
+        ASSERT_NO_THROW({
+            param_area = surface.surface->Area(u_start, u_end, v_start, v_end);
+        });
+        ASSERT_NEAR(param_area, total_area, 1e-6)
+            << "Mismatch in area over full parameter range for surface: " << surface.name;
+
+        // 範囲の一部での面積が計算できることを確認
+        double mid_u = 0.5 * (u_start + u_end);
+        double mid_v = 0.5 * (v_start + v_end);
+        ASSERT_NO_THROW({
+            param_area = surface.surface->Area(u_start, mid_u, v_start, mid_v);
+        });
+        ASSERT_GE(param_area, 0.0)
+            << "Negative area for partial parameter range for surface: " << surface.name;
+    }
+}

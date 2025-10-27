@@ -247,6 +247,16 @@ void TestSurfaceGeometricProperties() {
     }
     std::cout << std::endl;
 
+    // Calculate area of the entire surface
+    double area = surface->Area();
+    std::cout << "Surface area: " << area << std::endl;
+    // Calculate area of a subregion
+    auto u_mid = (u_start + u_end) / 2.0;
+    auto v_mid = (v_start + v_end) / 2.0;
+    area = surface->Area(u_start, u_mid, v_start, v_mid);
+    std::cout << "Surface area in subregion: " << area << std::endl;
+    std::cout << std::endl;
+
     // Calculate Curvatures at midpoint
     auto gaussian_curvature_opt = surface->TryGetGaussianCurvature(u, v);
     auto mean_curvature_opt = surface->TryGetMeanCurvature(u, v);
