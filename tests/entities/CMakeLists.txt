@@ -15,6 +15,7 @@ set(TEST_SOURCES
     # Curves
     curves/test_i_curve.cpp
     curves/test_circular_arc.cpp
+    curves/test_algorithms.cpp
 
     # Surfaces
     surfaces/test_i_surface.cpp

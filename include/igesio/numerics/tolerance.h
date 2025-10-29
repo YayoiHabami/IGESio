@@ -24,6 +24,32 @@ constexpr double kAngleTolerance = 1e-12;
 constexpr double kParameterTolerance
     = std::numeric_limits<double>::epsilon() * 100;
 
+/// @brief 計算の許容誤差
+/// @note 絶対許容誤差と相対許容誤差の両方を指定する
+/// @note 数値積分など、反復計算の収束判定に使用することを想定している
+struct Tolerance {
+    /// @brief 絶対許容誤差
+    /// @note 基本的にはこちらが優先される. 例えば更新前と後との値の差 diff
+    ///       (絶対値)がabs_tol以下であれば収束とみなす.
+    double abs_tol = 1e-4;
+    /// @brief 相対許容誤差
+    /// @note 更新前や後の値が非常に大きい場合（例えば1e14など）には、
+    ///       double型の精度限界によりabs_tol以下の差が出ないことがある.
+    ///       そのような場合にこちらの相対許容誤差を使用する.
+    /// @note 例えば更新前後での値の差 diff (絶対値)が、更新前の値の
+    ///       絶対値 * rel_tol以下であれば収束とみなす.
+    double rel_tol = 1e-10;
+
+    /// @brief デフォルトコンストラクタ
+    Tolerance() : Tolerance(1e-4, 1e-10) {}
+
+    /// @brief コンストラクタ
+    /// @param abs_tol_ 絶対許容誤差
+    /// @param rel_tol_ 相対許容誤差 (デフォルトは1e-10)
+    explicit Tolerance(const double abs_tol_, const double rel_tol_ = 1e-10)
+        : abs_tol(abs_tol_), rel_tol(rel_tol_) {}
+};
+
 /// @brief 値がほぼゼロかどうかを判定する
 /// @param value 判定する値
 /// @param tolerance 許容誤差 (デフォルトはkParameterTolerance)

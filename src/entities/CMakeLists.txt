@@ -45,6 +45,9 @@ add_library(igesio_entities STATIC
 
     structures/color_definition.cpp            # 314
 
+    # Algorithms
+    curves/algorithms.cpp
+
     # Factory
     factory.cpp
 )
