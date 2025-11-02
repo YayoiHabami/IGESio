@@ -238,25 +238,35 @@ target_link_libraries(my_app PRIVATE IGESio::IGESio)
 
 ```
 IGESio/
-├── build.bat, build.sh     # WindowsおよびLinux用のビルドスクリプト
-├── CMakeLists.txt          # メインのCMakeビルドスクリプト
+├── build.bat, build.sh          # WindowsおよびLinux用のビルドスクリプト
+├── CMakeLists.txt               # メインのCMakeビルドスクリプト
 ├── ...
-├── examples/               # 使用例
-│   └── gui/                # GUIを追加した例
-├── include/                # 公開ヘッダファイル
+├── examples/                    # 使用例
+│   └── gui/                     # GUIを追加した例
+│
+├── include/                     # 公開ヘッダファイル
 │   └── igesio/
-├── src/                    # ソースファイル
-│   ├── common/             # 共通モジュール (メタデータ、エラー処理等)
-│   ├── entities/           # エンティティ関連モジュール
-│   ├── graphics/           # 描画関連モジュール (OpenGL; GUIは含まない)
-│   ├── models/             # データモデル関連モジュール
-│   ├── utils/              # ユーティリティモジュール
-│   ├── reader.cpp          # IGESファイル読み込み実装
-│   └── writer.cpp          # IGESファイル書き出し実装
-├── tests/                  # テストコード
-│   └── test_data/          # テスト用データ (IGESファイル等)
-├── docs/                   # ドキュメント
-└── build/                  # ビルド成果物
+│   │   ├── common/              # 共通モジュール (メタデータ、エラー処理等)
+│   │   ├── numerics/            # 数値計算モジュール
+│   │   ├── utils/               # ユーティリティモジュール
+│   │   └── entities/            # エンティティ関連モジュール
+│   │       ├── interfaces/      # -- エンティティ共通インターフェース
+│   │       ├── de/              # -- Directory Entryセクション用のクラス
+│   │       ├── structures/      # -- 構造エンティティ
+│   │       ├── transformations/ # -- Transformation Matrix (Type 124) 用
+│   │       ├── curves/          # -- 曲線エンティティ
+│   │       ├── surfaces/        # -- 曲面エンティティ
+│   │       └── ...
+│   ├── models/                  # データモデル関連モジュール
+│   ├── graphics/                # 描画関連モジュール (OpenGL; GUIは含まない)
+│   ├── reader.cpp               # IGESファイル読み込み実装
+│   └── writer.cpp               # IGESファイル書き出し実装
+│
+├── src/                         # ソースファイル
+├── tests/                       # テストコード
+│   └── test_data/               # テスト用データ (IGESファイル等)
+├── docs/                        # ドキュメント
+└── build/                       # ビルド成果物
 ```
 
 ## ドキュメント

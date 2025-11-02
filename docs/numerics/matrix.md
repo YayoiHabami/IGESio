@@ -26,8 +26,11 @@
     - [Element Access etc.](#element-access-etc)
     - [Size Change/Conversion](#size-changeconversion)
     - [Arithmetic Operations etc.](#arithmetic-operations-etc)
+    - [Element Validation](#element-validation)
     - [Other Calculations](#other-calculations)
     - [Output Features](#output-features)
+  - [Linear Algebra](#linear-algebra)
+    - [Inverse Matrix and Determinant Calculation](#inverse-matrix-and-determinant-calculation)
   - [Other Auxiliary Functions](#other-auxiliary-functions)
     - [Calculation of Rotation Matrix](#calculation-of-rotation-matrix)
 - [Usage Examples](#usage-examples)
@@ -270,6 +273,18 @@ mat3xN.resize(2, 4);
 | Hadamard Product | $M_1 \circ M_2$ | Available when $M_1$ and $M_2$ have the same size<br>Element-wise product of matrices/vectors<br>`m1.cwiseProduct(m2)` |
 | Hadamard Quotient | $M_1 \oslash M_2$ | Available when $M_1$ and $M_2$ have the same size<br>Element-wise division of matrices/vectors<br>`m1.cwiseQuotient(m2)` |
 
+#### Element Validation
+
+The following table lists element validation member functions that return a `bool` value.
+
+| Code Example | Description |
+|:---|---|
+| `v.hasNaN()` <br> `m.hasNaN()` | Checks if the vector or matrix contains any NaN (Not a Number) elements. |
+| `v.allFinite()` <br> `m.allFinite()` | Checks if all elements of the vector or matrix are finite (not ±∞ or NaN). |
+| `v.isConstant(v, tol)` <br> `m.isConstant(v, tol)` | Checks if all elements of the vector or matrix are equal to the specified value `v` within a tolerance `tol`. |
+| `v.isOnes(tol)` <br> `m.isOnes(tol)` | Checks if all elements of the vector or matrix are equal to 1.0 within a tolerance `tol`. |
+| `v.isZero(tol)` <br> `m.isZero(tol)` | Checks if all elements of the vector or matrix are equal to 0.0 within a tolerance `tol`. |
+
 #### Other Calculations
 
 　The following table shows other calculation features supported by the `igesio::Matrix` class. Here, $m_{i,j}$ represents the element in row $i$ and column $j$ of matrix $M$.
@@ -299,6 +314,39 @@ igesio::Matrix2Xd dynMat(2, 3);
 dynMat = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
 std::cout << dynMat << std::endl;
 // Output: ((1, 2, 3), (4, 5, 6))
+```
+
+### Linear Algebra
+
+#### Inverse Matrix and Determinant Calculation
+
+| Return Value | Formula | Description / Code Example |
+|:--:|:--:|---|
+| `Matrix` | $M^{-1}$ | Computes the inverse of a matrix (only for 2x2, 3x3, 4x4 matrices).<br>`m.inverse()` |
+| `double` | $\det(M)$ | Computes the determinant of a matrix (only for 2x2, 3x3, 4x4 matrices).<br>`m.determinant()` |
+
+The `m.inverse()` member function computes the inverse of a square matrix. This function is available for fixed-size 2x2, 3x3, 4x4 matrices and for dynamic-size matrices.
+
+```cpp
+// Inverse of a fixed-size matrix
+igesio::Matrix3d mat = {
+    {4, 7, 2},
+    {3, 6, 1},
+    {2, 5, 3}};
+igesio::Matrix3d inv_mat = mat.inverse();
+
+std::cout << "Inverse matrix:\n" << inv_mat << std::endl;
+std::cout << "Original * Inverse:\n" << mat * inv_mat << std::endl;
+
+// Inverse of a dynamic-size matrix
+igesio::MatrixXd dyn_mat(3, 3);
+dyn_mat = {
+    {4, 7, 2},
+    {3, 6, 1},
+    {2, 5, 3}};
+igesio::MatrixXd inv_dyn_mat = dyn_mat.inverse();
+std::cout << "Inverse matrix:\n" << inv_dyn_mat << std::endl;
+std::cout << "Original * Inverse:\n" << dyn_mat * inv_dyn_mat << std::endl;
 ```
 
 ### Other Auxiliary Functions

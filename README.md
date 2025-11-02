@@ -236,25 +236,35 @@ See [docs/build.md](docs/build.md) for details.
 
 ```
 IGESio/
-├── build.bat, build.sh     # Build scripts for Windows and Linux
-├── CMakeLists.txt          # Main CMake build script
+├── build.bat, build.sh          # Build scripts for Windows and Linux
+├── CMakeLists.txt               # Main CMake build script
 ├── ...
-├── examples/               # Example usage
-│   └── gui/                # Examples with GUI
-├── include/                # Public header files
+├── examples/                    # Example usage
+│   └── gui/                     # Examples with GUI
+│
+├── include/                     # Public header files
 │   └── igesio/
-├── src/                    # Source files
-│   ├── common/             # Common modules (metadata, error handling, etc.)
-│   ├── entities/           # Entity-related modules
-│   ├── graphics/           # Graphics-related modules (OpenGL; does not include GUI)
-│   ├── models/             # Data model modules
-│   ├── utils/              # Utility modules
-│   ├── reader.cpp          # IGES file reading implementation
-│   └── writer.cpp          # IGES file writing implementation
-├── tests/                  # Test code
-│   └── test_data/          # Test data (IGES files, etc.)
-├── docs/                   # Documentation
-└── build/                  # Build artifacts (generated)
+│   │   ├── common/              # Common modules (metadata, error handling, etc.)
+│   │   ├── numerics/            # Numerical computation modules
+│   │   ├── utils/               # Utility modules
+│   │   └── entities/            # Entity-related modules
+│   │       ├── interfaces/      # -- Common entity interfaces
+│   │       ├── de/              # -- Classes for Directory Entry section
+│   │       ├── structures/      # -- Structure entities
+│   │       ├── transformations/ # -- For Transformation Matrix (Type 124)
+│   │       ├── curves/          # -- Curve entities
+│   │       ├── surfaces/        # -- Surface entities
+│   │       └── ...
+│   ├── models/                  # Data model modules
+│   ├── graphics/                # Graphics-related modules (OpenGL; does not include GUI)
+│   ├── reader.cpp               # IGES file reading implementation
+│   └── writer.cpp               # IGES file writing implementation
+│
+├── src/                         # Source files
+├── tests/                       # Test code
+│   └── test_data/               # Test data (IGES files, etc.)
+├── docs/                        # Documentation
+└── build/                       # Build artifacts
 ```
 
 ## Documentation

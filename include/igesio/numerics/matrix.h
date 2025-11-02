@@ -1329,9 +1329,70 @@ class Matrix {
         return result;
     }
 
+
+
+    /**
+     * 要素の検証 (戻り値がbool)
+     */
+
+    /// @brief NaNを含むかどうか
+    /// @return 1つでもNaNが含まれていればtrue、そうでなければfalse
+    bool hasNaN() const {
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                if (std::isnan((*this)(i, j))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// @brief すべての要素が有限値かどうか
+    /// @return 1つでも±∞やNaNが含まれていればfalse、すべて有限値ならtrue
+    bool allFinite() const {
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                if (!std::isfinite((*this)(i, j))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /// @brief すべての要素がvに近しいか
+    /// @param v 比較する値
+    /// @param tol 許容誤差
+    /// @return すべての要素がvにtol以内であればtrue、そうでなければfalse
+    bool isConstant(T v, T tol = static_cast<T>(1e-6)) const {
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                if (std::abs((*this)(i, j) - v) > tol) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    /// @brief すべての要素が1に近しいか
+    bool isOnes(T tol = static_cast<T>(1e-6)) const {
+        return isConstant(static_cast<T>(1), tol);
+    }
+    /// @brief すべての要素が0に近しいか
+    bool isZero(T tol = static_cast<T>(1e-6)) const {
+        return isConstant(static_cast<T>(0), tol);
+    }
+
+
+
+    /**
+     * 逆行列・行列式
+     */
+
     /// @brief 行列式の計算
     /// @return 行列式の値
-    /// @note 2x2行列と3x3行列のみサポート
+    /// @note 2x2, 3x3, 4x4行列のみサポート
     /// @throw std::invalid_argument 行列が正方行列でない場合
     T determinant() const {
         auto& m = *this;
@@ -1363,6 +1424,99 @@ class Matrix {
         }
     }
 
+    /// @brief 逆行列の計算
+    /// @return 逆行列
+    /// @note 2x2, 3x3, 4x4行列のみサポート
+    /// @throw std::invalid_argument 行列が正方行列でない場合
+    Matrix<T, N, M> inverse() const {
+        auto& m = *this;
+        Matrix<T, N, M> result;
+        if (N == Dynamic || M == Dynamic) {
+            // 動的サイズの場合は要素確保
+            result.resize(rows(), cols());
+        }
+
+        T det = determinant();
+        if (det == 0) {
+            throw std::invalid_argument("Matrix is singular and cannot be inverted");
+        }
+        if (rows() == 2 && cols() == 2) {
+            result(0, 0) =  m(1, 1);
+            result(0, 1) = -m(0, 1);
+            result(1, 0) = -m(1, 0);
+            result(1, 1) =  m(0, 0);
+        } else if (rows() == 3 && cols() == 3) {
+            result(0, 0) = m(1, 1)*m(2, 2) - m(1, 2)*m(2, 1);
+            result(0, 1) = m(0, 2)*m(2, 1) - m(0, 1)*m(2, 2);
+            result(0, 2) = m(0, 1)*m(1, 2) - m(0, 2)*m(1, 1);
+            result(1, 0) = m(1, 2)*m(2, 0) - m(1, 0)*m(2, 2);
+            result(1, 1) = m(0, 0)*m(2, 2) - m(0, 2)*m(2, 0);
+            result(1, 2) = m(0, 2)*m(1, 0) - m(0, 0)*m(1, 2);
+            result(2, 0) = m(1, 0)*m(2, 1) - m(1, 1)*m(2, 0);
+            result(2, 1) = m(0, 1)*m(2, 0) - m(0, 0)*m(2, 1);
+            result(2, 2) = m(0, 0)*m(1, 1) - m(0, 1)*m(1, 0);
+        } else if (rows() == 4 && cols() == 4) {
+            result(0, 0) = + m(1, 1)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           - m(1, 2)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           + m(1, 3)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1));
+            result(0, 1) = - m(0, 1)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           + m(0, 2)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           - m(0, 3)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1));
+            result(0, 2) = + m(0, 1)*(m(1, 2)*m(3, 3) - m(1, 3)*m(3, 2))
+                           - m(0, 2)*(m(1, 1)*m(3, 3) - m(1, 3)*m(3, 1))
+                           + m(0, 3)*(m(1, 1)*m(3, 2) - m(1, 2)*m(3, 1));
+            result(0, 3) = - m(0, 1)*(m(1, 2)*m(2, 3) - m(1, 3)*m(2, 2))
+                           + m(0, 2)*(m(1, 1)*m(2, 3) - m(1, 3)*m(2, 1))
+                           - m(0, 3)*(m(1, 1)*m(2, 2) - m(1, 2)*m(2, 1));
+
+            result(1, 0) = - m(1, 0)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           + m(1, 2)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           - m(1, 3)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0));
+            result(1, 1) = + m(0, 0)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           - m(0, 2)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           + m(0, 3)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0));
+            result(1, 2) = - m(0, 0)*(m(1, 2)*m(3, 3) - m(1, 3)*m(3, 2))
+                           + m(0, 2)*(m(1, 0)*m(3, 3) - m(1, 3)*m(3, 0))
+                           - m(0, 3)*(m(1, 0)*m(3, 2) - m(1, 2)*m(3, 0));
+            result(1, 3) = + m(0, 0)*(m(1, 2)*m(2, 3) - m(1, 3)*m(2, 2))
+                           - m(0, 2)*(m(1, 0)*m(2, 3) - m(1, 3)*m(2, 0))
+                           + m(0, 3)*(m(1, 0)*m(2, 2) - m(1, 2)*m(2, 0));
+
+            result(2, 0) = + m(1, 0)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           - m(1, 1)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           + m(1, 3)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(2, 1) = - m(0, 0)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           + m(0, 1)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           - m(0, 3)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(2, 2) = + m(0, 0)*(m(1, 1)*m(3, 3) - m(1, 3)*m(3, 1))
+                           - m(0, 1)*(m(1, 0)*m(3, 3) - m(1, 3)*m(3, 0))
+                           + m(0, 3)*(m(1, 0)*m(3, 1) - m(1, 1)*m(3, 0));
+            result(2, 3) = - m(0, 0)*(m(1, 1)*m(2, 3) - m(1, 3)*m(2, 1))
+                           + m(0, 1)*(m(1, 0)*m(2, 3) - m(1, 3)*m(2, 0))
+                           - m(0, 3)*(m(1, 0)*m(2, 1) - m(1, 1)*m(2, 0));
+
+            result(3, 0) = - m(1, 0)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1))
+                           + m(1, 1)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0))
+                           - m(1, 2)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(3, 1) = + m(0, 0)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1))
+                           - m(0, 1)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0))
+                           + m(0, 2)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(3, 2) = - m(0, 0)*(m(1, 1)*m(3, 2) - m(1, 2)*m(3, 1))
+                           + m(0, 1)*(m(1, 0)*m(3, 2) - m(1, 2)*m(3, 0))
+                           - m(0, 2)*(m(1, 0)*m(3, 1) - m(1, 1)*m(3, 0));
+            result(3, 3) = + m(0, 0)*(m(1, 1)*m(2, 2) - m(1, 2)*m(2, 1))
+                           - m(0, 1)*(m(1, 0)*m(2, 2) - m(1, 2)*m(2, 0))
+                           + m(0, 2)*(m(1, 0)*m(2, 1) - m(1, 1)*m(2, 0));
+        } else if (rows() != cols()) {
+            // 正方行列のみサポート
+            throw std::invalid_argument("Inverse is only implemented for square matrices");
+        } else {
+            throw NotImplementedError(
+                    "Inverse is only implemented for 2x2, 3x3 and 4x4 matrices");
+        }
+
+        return result / det;
+    }
 
 
     /**

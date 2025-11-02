@@ -77,6 +77,8 @@ Individual entity class documents are as follows. Currently, they include mathem
 ### numerics module
 
 - **[Matrix](numerics/matrix.md)**: Fixed/dynamic size matrix classes
+- **[Bounding Box](numerics/bounding_box.md)**: Oriented Bounding Box (OBB) class
+  - Explanation of the bounding box returned by the `GetBoundingBox` function defined in `IGeometry` derived classes (curve and surface entity classes)
 
 ### utils module
 

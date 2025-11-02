@@ -78,6 +78,8 @@
 ### numericsモジュール
 
 - **[Matrix](numerics/matrix_ja.md)**: 固定/動的サイズの行列クラス
+- **[Bounding Box](numerics/bounding_box_ja.md)**: 直交バウンディングボックス (OBB) クラス
+  - `IGeometry`派生クラス（曲線・曲面エンティティクラス）において定義される、`GetBoundingBox`関数で返されるバウンディングボックスの説明
 
 ### utilsモジュール
 

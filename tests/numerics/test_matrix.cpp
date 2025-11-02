@@ -9,12 +9,16 @@
 #include <gtest/gtest.h>
 
 #include <initializer_list>
+#include <limits>
 #include <string>
 
 #include "igesio/numerics/matrix.h"
+#include "igesio/numerics/tolerance.h"
 
 
 namespace {
+
+namespace i_num = igesio::numerics;
 
 using InitMatrix = std::initializer_list<std::initializer_list<double>>;
 using InitVector = std::initializer_list<double>;
@@ -1093,4 +1097,598 @@ TEST(MatrixTypeAliasTest, NonMemberFunctions) {
     auto mat3x3 = igesio::Matrix3d::Constant(2.0);
     auto result2 = 3.0 * mat3x3;
     ValidateMatrixElements(result2, {{6.0, 6.0, 6.0}, {6.0, 6.0, 6.0}, {6.0, 6.0, 6.0}});
+}
+
+
+
+/**
+ * 要素の検証のテスト
+ */
+
+// hasNaN()のテスト
+TEST(MatrixValidationTest, HasNaN) {
+    const auto nan = std::numeric_limits<double>::quiet_NaN();
+    const auto inf = std::numeric_limits<double>::infinity();
+
+    // NaNを含まない行列
+    igesio::Matrix23d mat2x3 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_FALSE(mat2x3.hasNaN());
+
+    // NaNを含む行列（1つだけ）
+    mat2x3(0, 0) = nan;
+    EXPECT_TRUE(mat2x3.hasNaN());
+
+    // すべてNaN
+    igesio::Matrix2d mat2x2 = {{nan, nan}, {nan, nan}};
+    EXPECT_TRUE(mat2x2.hasNaN());
+
+    // ゼロ行列（NaNを含まない）
+    auto zero_mat = igesio::Matrix23d::Zero();
+    EXPECT_FALSE(zero_mat.hasNaN());
+
+    // 無限大を含むがNaNは含まない
+    igesio::Matrix2d mat_inf = {{1.0, inf},
+                                {3.0, 4.0}};
+    EXPECT_FALSE(mat_inf.hasNaN());
+
+    // ベクトルでのテスト
+    igesio::Vector3d vec3 = {1.0, 2.0, 3.0};
+    EXPECT_FALSE(vec3.hasNaN());
+    vec3(1) = nan;
+    EXPECT_TRUE(vec3.hasNaN());
+
+    // 動的サイズ行列
+    igesio::Matrix2Xd matDyn = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_FALSE(matDyn.hasNaN());
+    matDyn(1, 2) = nan;
+    EXPECT_TRUE(matDyn.hasNaN());
+
+    // 空の動的行列
+    igesio::Matrix2Xd empty_mat(2, 0);
+    EXPECT_FALSE(empty_mat.hasNaN());
+}
+
+// allFinite()のテスト
+TEST(MatrixValidationTest, AllFinite) {
+    const auto nan = std::numeric_limits<double>::quiet_NaN();
+    const auto inf = std::numeric_limits<double>::infinity();
+
+    // すべて有限値の行列
+    igesio::Matrix23d mat2x3 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_TRUE(mat2x3.allFinite());
+
+    // 正の無限大を含む
+    mat2x3(0, 0) = inf;
+    EXPECT_FALSE(mat2x3.allFinite());
+
+    // 負の無限大を含む
+    mat2x3 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    mat2x3(1, 2) = -inf;
+    EXPECT_FALSE(mat2x3.allFinite());
+
+    // NaNを含む
+    mat2x3 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    mat2x3(0, 1) = nan;
+    EXPECT_FALSE(mat2x3.allFinite());
+
+    // すべて無限大
+    igesio::Matrix2d mat_all_inf = {{inf, inf},
+                                    {inf, inf}};
+    EXPECT_FALSE(mat_all_inf.allFinite());
+
+    // ゼロ行列（すべて有限値）
+    auto zero_mat = igesio::Matrix23d::Zero();
+    EXPECT_TRUE(zero_mat.allFinite());
+
+    // 単位行列（すべて有限値）
+    auto identity_mat = igesio::Matrix3d::Identity();
+    EXPECT_TRUE(identity_mat.allFinite());
+
+    // ベクトルでのテスト
+    igesio::Vector3d vec3 = {1.0, 2.0, 3.0};
+    EXPECT_TRUE(vec3.allFinite());
+    vec3(0) = inf;
+    EXPECT_FALSE(vec3.allFinite());
+
+    // 動的サイズ行列
+    igesio::Matrix2Xd matDyn = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_TRUE(matDyn.allFinite());
+    matDyn(0, 0) = -inf;
+    EXPECT_FALSE(matDyn.allFinite());
+
+    // 空の動的行列
+    igesio::Matrix2Xd empty_mat(2, 0);
+    EXPECT_TRUE(empty_mat.allFinite());
+
+    // 非常に大きな値（有限値）
+    igesio::Matrix2d mat_large = {{1e308, -1e308}, {1e-308, -1e-308}};
+    EXPECT_TRUE(mat_large.allFinite());
+}
+
+// isConstant()のテスト
+TEST(MatrixValidationTest, IsConstant) {
+    // すべて同じ値の行列
+    auto mat2x3 = igesio::Matrix23d::Constant(5.0);
+    EXPECT_TRUE(mat2x3.isConstant(5.0));
+    EXPECT_FALSE(mat2x3.isConstant(6.0));
+
+    // わずかに異なる値を含む行列（許容誤差内）
+    igesio::Matrix2d mat2x2 = {{1.0, 1.0000001}, {0.9999999, 1.0}};
+    EXPECT_TRUE(mat2x2.isConstant(1.0, 1e-5));
+    EXPECT_FALSE(mat2x2.isConstant(1.0, 1e-8));
+
+    // 異なる値を含む行列
+    igesio::Matrix23d mat_mixed = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_FALSE(mat_mixed.isConstant(3.0));
+
+    // ゼロ行列
+    auto zero_mat = igesio::Matrix23d::Zero();
+    EXPECT_TRUE(zero_mat.isConstant(0.0));
+    EXPECT_FALSE(zero_mat.isConstant(1.0));
+
+    // ベクトルでのテスト
+    igesio::Vector3d vec_const = {2.5, 2.5, 2.5};
+    EXPECT_TRUE(vec_const.isConstant(2.5));
+    vec_const(1) = 2.500001;
+    EXPECT_TRUE(vec_const.isConstant(2.5, 1e-5));
+    EXPECT_FALSE(vec_const.isConstant(2.5, 1e-7));
+
+    // 動的サイズ行列
+    auto matDyn = igesio::Matrix2Xd::Constant(2, 3, -3.5);
+    EXPECT_TRUE(matDyn.isConstant(-3.5));
+    EXPECT_FALSE(matDyn.isConstant(-3.6));
+
+    // 空の動的行列（すべての値が定数と見なされる）
+    igesio::Matrix2Xd empty_mat(2, 0);
+    EXPECT_TRUE(empty_mat.isConstant(0.0));
+    EXPECT_TRUE(empty_mat.isConstant(100.0));
+
+    // カスタム許容誤差
+    igesio::Matrix2d mat_tol = {{1.0, 1.1}, {0.9, 1.05}};
+    EXPECT_TRUE(mat_tol.isConstant(1.0, 0.15));
+    EXPECT_FALSE(mat_tol.isConstant(1.0, 0.05));
+}
+
+// isOnes()のテスト
+TEST(MatrixValidationTest, IsOnes) {
+    // すべて1の行列
+    auto mat2x3 = igesio::Matrix23d::Constant(1.0);
+    EXPECT_TRUE(mat2x3.isOnes());
+
+    // わずかに異なる値を含む行列（許容誤差内）
+    igesio::Matrix2d mat2x2 = {{1.0, 1.0000001}, {0.9999999, 1.0}};
+    EXPECT_TRUE(mat2x2.isOnes(1e-5));
+    EXPECT_FALSE(mat2x2.isOnes(1e-8));
+
+    // 異なる値を含む行列
+    igesio::Matrix23d mat_mixed = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_FALSE(mat_mixed.isOnes());
+
+    // ゼロ行列
+    auto zero_mat = igesio::Matrix23d::Zero();
+    EXPECT_FALSE(zero_mat.isOnes());
+
+    // 単位行列（対角成分のみ1、他は0）
+    auto identity_mat = igesio::Matrix3d::Identity();
+    EXPECT_FALSE(identity_mat.isOnes());
+
+    // ベクトルでのテスト
+    igesio::Vector3d vec_ones = {1.0, 1.0, 1.0};
+    EXPECT_TRUE(vec_ones.isOnes());
+    vec_ones(0) = 1.1;
+    EXPECT_FALSE(vec_ones.isOnes());
+    EXPECT_TRUE(vec_ones.isOnes(0.15));
+
+    // 動的サイズ行列
+    auto matDyn = igesio::Matrix2Xd::Constant(2, 3, 1.0);
+    EXPECT_TRUE(matDyn.isOnes());
+    matDyn(0, 0) = 1.5;
+    EXPECT_FALSE(matDyn.isOnes());
+
+    // 空の動的行列
+    igesio::Matrix2Xd empty_mat(2, 0);
+    EXPECT_TRUE(empty_mat.isOnes());
+
+    // カスタム許容誤差
+    igesio::Matrix2d mat_tol = {{1.0, 1.05}, {0.95, 1.02}};
+    EXPECT_TRUE(mat_tol.isOnes(0.1));
+    EXPECT_FALSE(mat_tol.isOnes(0.01));
+}
+
+// isZero()のテスト
+TEST(MatrixValidationTest, IsZero) {
+    // ゼロ行列
+    auto zero_mat = igesio::Matrix23d::Zero();
+    EXPECT_TRUE(zero_mat.isZero());
+
+    // わずかに異なる値を含む行列（許容誤差内）
+    igesio::Matrix2d mat2x2 = {{0.0, 0.0000001}, {-0.0000001, 0.0}};
+    EXPECT_TRUE(mat2x2.isZero(1e-5));
+    EXPECT_FALSE(mat2x2.isZero(1e-8));
+
+    // 異なる値を含む行列
+    igesio::Matrix23d mat_mixed = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_FALSE(mat_mixed.isZero());
+
+    // すべて1の行列
+    auto ones_mat = igesio::Matrix23d::Constant(1.0);
+    EXPECT_FALSE(ones_mat.isZero());
+
+    // 単位行列（対角成分が1、他は0）
+    auto identity_mat = igesio::Matrix3d::Identity();
+    EXPECT_FALSE(identity_mat.isZero());
+
+    // ベクトルでのテスト
+    igesio::Vector3d vec_zero = {0.0, 0.0, 0.0};
+    EXPECT_TRUE(vec_zero.isZero());
+    vec_zero(1) = 0.001;
+    EXPECT_FALSE(vec_zero.isZero());
+    EXPECT_TRUE(vec_zero.isZero(0.01));
+
+    // 動的サイズ行列
+    auto matDyn = igesio::Matrix2Xd::Zero(2, 3);
+    EXPECT_TRUE(matDyn.isZero());
+    matDyn(1, 2) = 0.5;
+    EXPECT_FALSE(matDyn.isZero());
+
+    // 空の動的行列
+    igesio::Matrix2Xd empty_mat(2, 0);
+    EXPECT_TRUE(empty_mat.isZero());
+
+    // カスタム許容誤差
+    igesio::Matrix2d mat_tol = {{0.0, 0.05}, {-0.05, 0.02}};
+    EXPECT_TRUE(mat_tol.isZero(0.1));
+    EXPECT_FALSE(mat_tol.isZero(0.01));
+
+    // 負のゼロ
+    igesio::Vector2d vec_neg_zero = {-0.0, 0.0};
+    EXPECT_TRUE(vec_neg_zero.isZero());
+}
+
+
+
+/**
+ * 行列式・逆行列
+ */
+
+// 2x2行列の行列式のテスト
+TEST(MatrixLinearAlgebraTest, Determinant2x2) {
+    // 一般の行列
+    igesio::Matrix2d mat2x2 = {{4.0, 3.0}, {6.0, 3.0}};
+    double det2x2 = mat2x2.determinant();
+    EXPECT_DOUBLE_EQ(det2x2, -6.0);  // 4*3 - 3*6 = -6
+    // 一般の行列 (動的行列)
+    igesio::MatrixXd matDyn = igesio::MatrixXd(2, 2);
+    matDyn << 7.0, 2.0, 5.0, 1.0;
+    double detDyn = matDyn.determinant();
+    EXPECT_DOUBLE_EQ(detDyn, -3.0);  // 7*1 - 2*5 = -3
+
+    // 特異行列
+    mat2x2 = {{2.0, 4.0}, {1.0, 2.0}};
+    det2x2 = mat2x2.determinant();
+    EXPECT_DOUBLE_EQ(det2x2, 0.0);  // 2*2 - 4*1 = 0
+    // 同じ行・列を持つ行列
+    mat2x2 = {{1.0, 2.0}, {1.0, 2.0}};
+    det2x2 = mat2x2.determinant();
+    EXPECT_DOUBLE_EQ(det2x2, 0.0);  // 1*2 - 2*1 = 0
+    mat2x2 = {{3.0, 3.0}, {4.0, 4.0}};
+    det2x2 = mat2x2.determinant();
+    EXPECT_DOUBLE_EQ(det2x2, 0.0);  // 3*4 - 3*4 = 0
+
+    // 単位行列の行列式は1
+    mat2x2 = igesio::Matrix2d::Identity();
+    det2x2 = mat2x2.determinant();
+    EXPECT_DOUBLE_EQ(det2x2, 1.0);
+
+    // ゼロ行列の行列式は0
+    mat2x2 = igesio::Matrix2d::Zero();
+    det2x2 = mat2x2.determinant();
+    EXPECT_DOUBLE_EQ(det2x2, 0.0);
+
+    // 非正方行列 -> std::invalid_argument
+    igesio::Matrix23d mat2x3 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_THROW(mat2x3.determinant(), std::invalid_argument);
+    igesio::Matrix32d mat3x2 = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+    EXPECT_THROW(mat3x2.determinant(), std::invalid_argument);
+}
+
+// 3x3行列の行列式のテスト
+TEST(MatrixLinearAlgebraTest, Determinant3x3) {
+    // 一般の行列
+    igesio::Matrix3d mat3x3 = {
+        {1.0, 2.0,  3.0},
+        {4.0, 5.0,  6.0},
+        {7.0, 8.0, 10.0}
+    };
+    double det3x3 = mat3x3.determinant();
+    EXPECT_DOUBLE_EQ(det3x3, -3.0);
+    // 一般の行列 (動的行列)
+    igesio::MatrixXd matDyn = igesio::MatrixXd(3, 3);
+    matDyn << 2.0, 1.0, 3.0,
+              1.0, 4.0, 2.0,
+              3.0, 1.0, 5.0;
+    double detDyn = matDyn.determinant();
+    EXPECT_DOUBLE_EQ(detDyn, 4.0);
+
+    // 特異行列（行列式が0）
+    mat3x3 = {{1.0, 2.0, 3.0},
+              {2.0, 4.0, 6.0},
+              {3.0, 6.0, 9.0}};
+    det3x3 = mat3x3.determinant();
+    EXPECT_DOUBLE_EQ(det3x3, 0.0);
+    // 同じ行を持つ行列
+    mat3x3 = {{1.0, 2.0, 3.0},
+              {1.0, 2.0, 3.0},
+              {4.0, 5.0, 6.0}};
+    det3x3 = mat3x3.determinant();
+    EXPECT_DOUBLE_EQ(det3x3, 0.0);
+    // 同じ列を持つ行列
+    mat3x3 = {{1.0, 1.0, 3.0},
+              {2.0, 2.0, 4.0},
+              {3.0, 3.0, 5.0}};
+    det3x3 = mat3x3.determinant();
+    EXPECT_DOUBLE_EQ(det3x3, 0.0);
+
+    // 単位行列の行列式は1
+    mat3x3 = igesio::Matrix3d::Identity();
+    det3x3 = mat3x3.determinant();
+    EXPECT_DOUBLE_EQ(det3x3, 1.0);
+
+    // ゼロ行列の行列式は0
+    mat3x3 = igesio::Matrix3d::Zero();
+    det3x3 = mat3x3.determinant();
+    EXPECT_DOUBLE_EQ(det3x3, 0.0);
+
+    // 非正方行列 -> std::invalid_argument
+    igesio::Matrix34d mat3x4 = {{1.0,  2.0,  3.0,  4.0},
+                                {5.0,  6.0,  7.0,  8.0},
+                                {9.0, 10.0, 11.0, 12.0}};
+    EXPECT_THROW(mat3x4.determinant(), std::invalid_argument);
+    igesio::Matrix23d mat2x3 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_THROW(mat2x3.determinant(), std::invalid_argument);
+}
+
+// 4x4行列の行列式のテスト
+TEST(MatrixLinearAlgebraTest, Determinant4x4) {
+    // 一般の行列
+    igesio::Matrix4d mat4x4 = {
+        { 1.0,  2.0,  4.0,  4.0},
+        { 5.0,  6.0,  7.0,  8.0},
+        { 9.0, 10.0, -5.0,  2.0},
+        {13.0, -2.0, 15.0,  3.0}
+    };
+    double det4x4 = mat4x4.determinant();
+    EXPECT_DOUBLE_EQ(det4x4, -60.0);
+    // 一般の行列 (動的行列)
+    igesio::MatrixXd matDyn = igesio::MatrixXd(4, 4);
+    matDyn << 2.0, 1.0, 3.0, 4.0,
+              1.0, 2.0, 1.0, 3.0,
+              3.0, 1.0, 4.0, 2.0,
+              4.0, 3.0, 2.0, 1.0;
+    double detDyn = matDyn.determinant();
+    EXPECT_DOUBLE_EQ(detDyn, -25.0);
+
+    // 特異行列（行列式が0）
+    mat4x4 = {
+        {1.0, 2.0, 3.0, 4.0},
+        {2.0, 4.0, 6.0, 8.0},
+        {3.0, 6.0, 9.0, 12.0},
+        {5.0, 6.0, 7.0, 8.0}
+    };
+    det4x4 = mat4x4.determinant();
+    EXPECT_DOUBLE_EQ(det4x4, 0.0);
+    // 同じ行を持つ行列
+    mat4x4 = {
+        {1.0, 2.0, 3.0, 4.0},
+        {1.0, 2.0, 3.0, 4.0},
+        {5.0, 6.0, 7.0, 8.0},
+        {9.0, 10.0, 11.0, 12.0}
+    };
+    det4x4 = mat4x4.determinant();
+    EXPECT_DOUBLE_EQ(det4x4, 0.0);
+    // 同じ列を持つ行列
+    mat4x4 = {
+        {1.0, 1.0, 3.0, 4.0},
+        {2.0, 2.0, 5.0, 6.0},
+        {3.0, 3.0, 7.0, 10.0},
+        {4.0, 4.0, 9.0, 10.0}
+    };
+    det4x4 = mat4x4.determinant();
+    EXPECT_DOUBLE_EQ(det4x4, 0.0);
+
+    // 単位行列の行列式は1
+    mat4x4 = igesio::Matrix4d::Identity();
+    det4x4 = mat4x4.determinant();
+    EXPECT_DOUBLE_EQ(det4x4, 1.0);
+
+    // ゼロ行列の行列式は0
+    mat4x4 = igesio::Matrix4d::Zero();
+    det4x4 = mat4x4.determinant();
+    EXPECT_DOUBLE_EQ(det4x4, 0.0);
+
+    // 非正方行列 -> std::invalid_argument
+    igesio::MatrixXd mat4x3 = igesio::MatrixXd(4, 3);
+    mat4x3 << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0;
+    EXPECT_THROW(mat4x3.determinant(), std::invalid_argument);
+    igesio::Matrix34d mat3x4 = {{1.0, 2.0, 3.0, 4.0},
+                                {5.0, 6.0, 7.0, 8.0},
+                                {9.0, 10.0, 11.0, 12.0}};
+    EXPECT_THROW(mat3x4.determinant(), std::invalid_argument);
+}
+
+// 2x2行列の逆行列のテスト
+TEST(MatrixLinearAlgebraTest, Inverse2x2) {
+    // 一般の行列
+    igesio::Matrix2d mat2x2 = {{4.0, 7.0},
+                               {2.0, 6.0}};
+    igesio::Matrix2d inv2x2 = mat2x2.inverse();
+    igesio::Matrix2d expected = {{0.6, -0.7},
+                                 {-0.2, 0.4}};
+    EXPECT_TRUE(i_num::IsApproxEqual(inv2x2, expected));
+    EXPECT_TRUE(i_num::IsApproxEqual(mat2x2 * inv2x2, igesio::Matrix2d::Identity()));
+
+    // 一般の行列 (動的行列)
+    igesio::MatrixXd matDyn = igesio::MatrixXd(2, 2);
+    matDyn << 1.0, -2.0,
+              3.0,  4.0;
+    igesio::MatrixXd invDyn = matDyn.inverse();
+    igesio::MatrixXd expectedDyn(2, 2);
+    expectedDyn << 0.4, 0.2,
+                  -0.3, 0.1;
+    EXPECT_TRUE(i_num::IsApproxEqual(invDyn, expectedDyn));
+    EXPECT_TRUE(i_num::IsApproxEqual(matDyn * invDyn, igesio::MatrixXd::Identity(2, 2)));
+
+    // 特異行列（逆行列が存在しない）
+    mat2x2 = {{1.0, 2.0},
+              {2.0, 4.0}};
+    EXPECT_THROW(mat2x2.inverse(), std::invalid_argument);
+    // 同じ行・列を持つ行列
+    mat2x2 = {{1.0, 2.0},
+              {1.0, 2.0}};
+    EXPECT_THROW(mat2x2.inverse(), std::invalid_argument);
+    mat2x2 = {{3.0, 3.0},
+              {4.0, 4.0}};
+    EXPECT_THROW(mat2x2.inverse(), std::invalid_argument);
+
+    // 単位行列
+    mat2x2 = igesio::Matrix2d::Identity();
+    inv2x2 = mat2x2.inverse();
+    EXPECT_TRUE(i_num::IsApproxEqual(inv2x2, igesio::Matrix2d::Identity()));
+    EXPECT_TRUE(i_num::IsApproxEqual(mat2x2 * inv2x2, igesio::Matrix2d::Identity()));
+
+    // ゼロ行列（逆行列が存在しない）
+    mat2x2 = igesio::Matrix2d::Zero();
+    EXPECT_THROW(mat2x2.inverse(), std::invalid_argument);
+
+    // 非正方行列 -> std::invalid_argument
+    igesio::Matrix23d mat2x3 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    EXPECT_THROW(mat2x3.inverse(), std::invalid_argument);
+    igesio::Matrix32d mat3x2 = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+    EXPECT_THROW(mat3x2.inverse(), std::invalid_argument);
+}
+
+// 3x3行列の逆行列のテスト
+TEST(MatrixLinearAlgebraTest, Inverse3x3) {
+    // 一般の行列
+    igesio::Matrix3d mat3x3 = {{2.0, 1.0, 1.0},
+                               {1.0, 2.0, 1.0},
+                               {1.0, 1.0, 2.0}};
+    igesio::Matrix3d inv3x3 = mat3x3.inverse();
+    igesio::Matrix3d expected = {{0.75, -0.25, -0.25},
+                                 {-0.25, 0.75, -0.25},
+                                 {-0.25, -0.25, 0.75}};
+    EXPECT_TRUE(i_num::IsApproxEqual(inv3x3, expected));
+    EXPECT_TRUE(i_num::IsApproxEqual(mat3x3 * inv3x3, igesio::Matrix3d::Identity()));
+
+    // 一般の行列 (動的行列)
+    igesio::MatrixXd matDyn = igesio::MatrixXd(3, 3);
+    matDyn << 1.0,  2.0, 3.0,
+              0.0,  1.0, 4.0,
+              5.0, -5.0, 0.0;
+    igesio::MatrixXd invDyn = matDyn.inverse();
+    igesio::MatrixXd expectedDyn(3, 3);
+    expectedDyn <<  0.44444444444444, -0.33333333333333,  0.11111111111111,
+                    0.44444444444444, -0.33333333333333, -0.088888888888889,
+                   -0.11111111111111,  0.33333333333333,  0.022222222222222;
+    EXPECT_TRUE(i_num::IsApproxEqual(invDyn, expectedDyn));
+    EXPECT_TRUE(i_num::IsApproxEqual(matDyn * invDyn, igesio::MatrixXd::Identity(3, 3)));
+
+    // 特異行列（逆行列が存在しない）
+    mat3x3 = {{1.0, 2.0, 3.0},
+              {2.0, 4.0, 6.0},
+              {3.0, 6.0, 9.0}};
+    EXPECT_THROW(mat3x3.inverse(), std::invalid_argument);
+    // 同じ行・列を持つ行列
+    mat3x3 = {{1.0, 2.0, 3.0},
+              {1.0, 2.0, 3.0},
+              {4.0, 5.0, 6.0}};
+    EXPECT_THROW(mat3x3.inverse(), std::invalid_argument);
+    mat3x3 = {{3.0, 3.0, 1.0},
+              {4.0, 4.0, 2.0},
+              {5.0, 5.0, 3.0}};
+    EXPECT_THROW(mat3x3.inverse(), std::invalid_argument);
+
+    // 単位行列
+    mat3x3 = igesio::Matrix3d::Identity();
+    inv3x3 = mat3x3.inverse();
+    EXPECT_TRUE(i_num::IsApproxEqual(inv3x3, igesio::Matrix3d::Identity()));
+    EXPECT_TRUE(i_num::IsApproxEqual(mat3x3 * inv3x3, igesio::Matrix3d::Identity()));
+
+    // ゼロ行列（逆行列が存在しない）
+    mat3x3 = igesio::Matrix3d::Zero();
+    EXPECT_THROW(mat3x3.inverse(), std::invalid_argument);
+
+    // 非正方行列 -> std::invalid_argument
+    igesio::Matrix34d mat3x4 = {{1.0,  2.0,  3.0,  4.0},
+                                {5.0,  6.0,  7.0,  8.0},
+                                {9.0, 10.0, 11.0, 12.0}};
+    EXPECT_THROW(mat3x4.inverse(), std::invalid_argument);
+    igesio::Matrix43d mat4x3 = {{ 1.0,  2.0,  3.0},
+                                { 4.0,  5.0,  6.0},
+                                { 7.0,  8.0,  9.0},
+                                {10.0, 11.0, 12.0}};
+    EXPECT_THROW(mat4x3.inverse(), std::invalid_argument);
+}
+
+// 4x4行列の逆行列のテスト
+TEST(MatrixLinearAlgebraTest, Inverse4x4) {
+    // 一般の行列
+    igesio::Matrix4d mat4x4 = {
+        { 1.0, 2.0,  3.0, -2.0},
+        {-3.0, 4.0,  6.0,  1.0},
+        { 3.0, 0.0, -4.0,  0.0},
+        { 6.0, 2.0,  2.0,  1.0}
+    };
+    igesio::Matrix4d inv4x4 = mat4x4.inverse();
+    igesio::Matrix4d expected = {
+        { 0.027586206896552, -0.082758620689655, -0.03448275862069,  0.13793103448276},
+        { 0.082758620689655,  0.25172413793103,   0.39655172413793, -0.086206896551724},
+        { 0.020689655172414, -0.062068965517241, -0.27586206896552,  0.10344827586207},
+        {-0.37241379310345,   0.11724137931035,  -0.03448275862069,  0.13793103448276}
+    };
+    EXPECT_TRUE(i_num::IsApproxEqual(inv4x4, expected));
+    EXPECT_TRUE(i_num::IsApproxEqual(mat4x4 * inv4x4, igesio::Matrix4d::Identity()));
+
+    // 一般の行列 (動的行列)
+    igesio::MatrixXd matDyn = igesio::MatrixXd(4, 4);
+    matDyn << 1.0, 0.0, 2.0, 0.0,
+              0.0, 3.0, 0.0, 1.0,
+              0.0, 0.0, 1.0, 0.0,
+              2.0, 2.0, 0.0, 1.0;
+    igesio::MatrixXd invDyn = matDyn.inverse();
+    igesio::MatrixXd expectedDyn(4, 4);
+    expectedDyn << 1.0,  0.0, -2.0,  0.0,
+                   2.0,  1.0, -4.0, -1.0,
+                   0.0,  0.0,  1.0,  0.0,
+                  -6.0, -2.0, 12.0,  3.0;
+    EXPECT_TRUE(i_num::IsApproxEqual(invDyn, expectedDyn));
+    EXPECT_TRUE(i_num::IsApproxEqual(matDyn * invDyn, igesio::MatrixXd::Identity(4, 4)));
+
+    // 特異行列（逆行列が存在しない）
+    mat4x4 = {{1.0, 2.0, 3.0, 4.0},
+              {2.0, 4.0, 6.0, 8.0},
+              {3.0, 6.0, 9.0, 12.0},
+              {4.0, 8.0, 12.0, 16.0}};
+    EXPECT_THROW(mat4x4.inverse(), std::invalid_argument);
+    // 同じ行・列を持つ行列
+    mat4x4 = {{1.0, 2.0, 3.0, 4.0},
+              {1.0, 2.0, 3.0, 4.0},
+              {5.0, 6.0, 7.0, 8.0},
+              {9.0, 10.0, 11.0, 12.0}};
+    EXPECT_THROW(mat4x4.inverse(), std::invalid_argument);
+    mat4x4 = {{3.0, 3.0, 1.0, 2.0},
+              {4.0, 4.0, 2.0, 3.0},
+              {5.0, 5.0, 3.0, 4.0},
+              {6.0, 6.0, 4.0, 5.0}};
+    EXPECT_THROW(mat4x4.inverse(), std::invalid_argument);
+
+    // 単位行列
+    mat4x4 = igesio::Matrix4d::Identity();
+    inv4x4 = mat4x4.inverse();
+    EXPECT_TRUE(i_num::IsApproxEqual(inv4x4, igesio::Matrix4d::Identity()));
+    EXPECT_TRUE(i_num::IsApproxEqual(mat4x4 * inv4x4, igesio::Matrix4d::Identity()));
+
+    // ゼロ行列（逆行列が存在しない）
+    mat4x4 = igesio::Matrix4d::Zero();
+    EXPECT_THROW(mat4x4.inverse(), std::invalid_argument);
 }

@@ -3,6 +3,7 @@ set (TEST_SOURCES
     test_tolerance.cpp
     test_constexpr_math.cpp
     test_combinatorics.cpp
+    test_bounding_box.cpp
     test_integration.cpp
 )
 
