@@ -453,6 +453,19 @@ RationalBSplineSurface::TryGetDerivatives(
     return result;
 }
 
+i_num::BoundingBox RationalBSplineSurface::GetDefinedBoundingBox() const {
+    Vector3d min_pt = Vector3d::Constant(std::numeric_limits<double>::infinity());
+    Vector3d max_pt = Vector3d::Constant(-std::numeric_limits<double>::infinity());
+
+    // 制御点を走査して最小・最大座標を更新
+    for (int i = 0; i < control_points_.cols(); ++i) {
+        Vector3d pt = control_points_.col(i);
+        min_pt = min_pt.cwiseMin(pt);
+        max_pt = max_pt.cwiseMax(pt);
+    }
+    return i_num::BoundingBox(min_pt, max_pt);
+}
+
 
 
 /**

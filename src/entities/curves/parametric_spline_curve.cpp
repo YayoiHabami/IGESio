@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/parametric_spline_curve.h"
 
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -381,6 +382,69 @@ ParametricSplineCurve::TryGetDerivatives(const double t, const unsigned int n) c
     }
 
     return result;
+}
+
+i_num::BoundingBox ParametricSplineCurve::GetDefinedBoundingBox() const {
+    // 計算の詳細については[docs/entities/curves/112_parametric_spline_curve_ja.md]を参照
+    auto inf = std::numeric_limits<double>::infinity();
+    Vector3d min_pt(inf, inf, inf),  max_pt(-inf, -inf, -inf);
+
+    // 各セグメントごとに、始点/終点の座標値と、極値の座標値を計算
+    Matrix34d coef;
+    const unsigned int n_segments = NumberOfSegments();
+    for (unsigned int i = 0; i < n_segments; ++i) {
+        coef = Coefficients(i);
+
+        // セグメントの始点
+        auto start_pt = ComputeSegmentValue(coef, 0.0, 0);
+        min_pt = min_pt.cwiseMin(start_pt);
+        max_pt = max_pt.cwiseMax(start_pt);
+
+        // 各座標軸ごとに極値を計算
+        for (unsigned int j = 0; j < 3; ++j) {
+            const double b = coef(j, 1);
+            const double c = coef(j, 2);
+            const double d = coef(j, 3);
+            const double segment_length = breakpoints_[i + 1] - breakpoints_[i];
+
+            if (d != 0.0) {
+                // 3次式: 導関数が2次式 3ds^2 + 2cs + b = 0
+                const double discriminant = c * c - 3.0 * b * d;
+                if (discriminant >= 0.0) {
+                    const double sqrt_d = std::sqrt(discriminant);
+                    const double s1 = (-c + sqrt_d) / (3.0 * d);
+                    const double s2 = (-c - sqrt_d) / (3.0 * d);
+
+                    if (s1 > 0.0 && s1 < segment_length) {
+                        auto pt = ComputeSegmentValue(coef, s1, 0);
+                        min_pt = min_pt.cwiseMin(pt);
+                        max_pt = max_pt.cwiseMax(pt);
+                    }
+                    if (s2 > 0.0 && s2 < segment_length) {
+                        auto pt = ComputeSegmentValue(coef, s2, 0);
+                        min_pt = min_pt.cwiseMin(pt);
+                        max_pt = max_pt.cwiseMax(pt);
+                    }
+                }
+            } else if (c != 0.0) {
+                // 2次式: 導関数が1次式 2cs + b = 0
+                const double s = -b / (2.0 * c);
+                if (s > 0.0 && s < segment_length) {
+                    auto pt = ComputeSegmentValue(coef, s, 0);
+                    min_pt = min_pt.cwiseMin(pt);
+                    max_pt = max_pt.cwiseMax(pt);
+                }
+            }
+            // 1次式または定数の場合、極値は区間内部にない
+        }
+    }
+    // 最後のセグメントの終点
+    auto end_pt = ComputeSegmentValue(coef,
+            breakpoints_.back() - breakpoints_[n_segments - 1], 0);
+    min_pt = min_pt.cwiseMin(end_pt);
+    max_pt = max_pt.cwiseMax(end_pt);
+
+    return i_num::BoundingBox(min_pt, max_pt);
 }
 
 

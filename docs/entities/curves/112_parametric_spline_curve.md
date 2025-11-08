@@ -11,6 +11,9 @@ Defined at [curves/parametric_spline_curve.h](./../../../include/igesio/entities
   - [Curve Definition](#curve-definition)
     - [Curve $C(t)$](#curve-ct)
     - [Derivatives $C'(t), C''(t)$](#derivatives-ct-ct)
+- [Bounding Box](#bounding-box)
+  - [Segment-wise AABB Calculation](#segment-wise-aabb-calculation)
+  - [Overall Curve AABB](#overall-curve-aabb)
 
 ## Parameters
 
@@ -81,3 +84,36 @@ $$C_i'(t) = A_i \begin{bmatrix} 0 \\\ 1 \\\ 2s \\\ 3s^2 \end{bmatrix}, \quad C_i
 The domain and combination over the entire curve follow the definition of the curve $C(t)$.
 
 For various features calculated from the curve $C(t)$ and the derivatives $C'(t), C''(t)$, please refer to [Geometric Properties](./../geometric_properties.md).
+
+## Bounding Box
+
+The axis-aligned bounding box (AABB) of a Parametric Spline Curve is defined by the minimum and maximum values of the $x$, $y$, and $z$ coordinates over the entire curve:
+
+$$P_{min} = (x_{min}, y_{min}, z_{min}), \quad P_{max} = (x_{max}, y_{max}, z_{max})$$
+
+Since the curve $C(t)$ consists of $n$ polynomial segments $C_i(t)$, the AABB is computed by first determining the AABB for each segment, then combining them to obtain the overall bounding box.
+
+### Segment-wise AABB Calculation
+
+Each coordinate component of a segment $C_i(t)$ is a polynomial of degree up to 3 in the local parameter $s$ ($s \in [0, L_i]$, where $L_i = T(i+1) - T(i)$). For example, the $x$ coordinate is given by $x_i(s) = a_{x,i} + b_{x,i} s + c_{x,i} s^2 + d_{x,i} s^3$.
+
+To find the minimum and maximum values in the interval $[0, L_i]$, evaluate $x_i(s)$ at the following candidate points:
+
+1. **Endpoints**: $s = 0$ and $s = L_i$
+2. **Interior extrema**: Points $s \in (0, L_i)$ where the derivative $x_i'(s) = b_{x,i} + 2c_{x,i} s + 3d_{x,i} s^2 = 0$
+
+The roots of the derivative are found analytically as follows:
+
+- **If $d_{x,i} \neq 0$**: Compute the discriminant $D = c_{x,i}^2 - 3b_{x,i}d_{x,i}$. If $D \geq 0$, then $s = \frac{-c_{x,i} \pm \sqrt{D}}{3d_{x,i}}$ are solutions. Only solutions within $(0, L_i)$ are considered.
+- **If $d_{x,i} = 0, c_{x,i} \neq 0$**: $s = -\frac{b_{x,i}}{2c_{x,i}}$ is a solution. Include it if it lies within the interval.
+- **If $d_{x,i} = c_{x,i} = 0$**: The function is monotonic or constant; no interior extrema.
+
+Evaluate $x_i(s)$ at all candidate points $S_{x,i}$ to determine $\min(x_i)$ and $\max(x_i)$. Repeat this process for $y$ and $z$ coordinates to obtain the AABB for segment $i$.
+
+### Overall Curve AABB
+
+The overall AABB is determined by taking the minimum and maximum values across all segments $i = 0, \ldots, n-1$:
+
+$$x_{min} = \min_{i} (\min(x_i)), \quad x_{max} = \max_{i} (\max(x_i))$$
+
+Apply the same procedure for $y$ and $z$ coordinates. The final AABB is defined by $P_{min} = (x_{min}, y_{min}, z_{min})$ and $P_{max} = (x_{max}, y_{max}, z_{max})$.

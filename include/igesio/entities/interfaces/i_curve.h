@@ -61,6 +61,7 @@ struct CurveDerivatives {
 ///         - `GetParameterRange`
 ///         - `TryGetDerivatives`
 ///         - `Transform` (protected): IGeometry由来
+///         - `GetDefinedBoundingBox`: IGeometry由来
 class ICurve : public virtual IEntityIdentifier,
                public virtual IGeometry {
  public:

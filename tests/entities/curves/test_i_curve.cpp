@@ -7,6 +7,7 @@
  */
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <string>
@@ -421,5 +422,67 @@ TEST(ICurveTest, LengthWithRange) {
                                          end - std::sqrt(10.0) / 2.0);
         ASSERT_TRUE(i_num::IsApproxEqual(expected, actual, tol))
                 << "Expected: " << expected << ", Actual: " << actual;
+    }
+}
+
+// ICurve::GetBoundingBox() のテスト
+TEST(ICurveTest, GetBoundingBox) {
+    auto curves = igesio::tests::CreateAllTestCurves();
+    auto n_segs = 100;  // 境界ボックス計算用の分割数
+
+    for (const auto& curve : curves) {
+        SCOPED_TRACE("Curve: " + curve.name);
+        ASSERT_TRUE(curve.curve != nullptr)
+                << "Curve '" << curve.name << "' is nullptr.";
+
+        auto bbox = curve.curve->GetBoundingBox();
+        ASSERT_TRUE(!bbox.IsEmpty())
+                << "Bounding box is invalid for curve '" << curve.name << "'.";
+
+        if (curve.is_2d) {
+            // 2D曲線の場合、ボックスも2Dであることを確認
+            EXPECT_TRUE(bbox.Is2D()) << "Bounding box should be 2D.";
+            if (curve.is_on_xy_plane) {
+                // 特にZ=0平面上の曲線の場合、ボックスもZ=0平面上であることを確認
+                EXPECT_TRUE(bbox.IsOnZPlane()) << "Bounding box should be on XY plane.";
+            }
+        } else {
+            // 3D曲線の場合、ボックスも3Dであることを確認
+            EXPECT_FALSE(bbox.Is2D()) << "Bounding box should be 3D.";
+        }
+
+        // 曲線の範囲において点がすべてボックス内に収まることを確認
+        auto [tmin, tmax] = curve.curve->GetParameterRange();
+        if (tmin == -std::numeric_limits<double>::infinity()) tmin = -1e8;
+        if (tmax == std::numeric_limits<double>::infinity()) tmax = 1e8;
+
+        int failures = 0;
+        double max_distance = 0.0;
+        for (int i = 0; i <= n_segs; ++i) {
+            double t = tmin + (tmax - tmin) * (static_cast<double>(i) / n_segs);
+            auto pt_opt = curve.curve->TryGetPointAt(t);
+            ASSERT_TRUE(pt_opt.has_value())
+                    << "TryGetPointAt returned std::nullopt at t = " << t;
+            auto pt = *pt_opt;
+            auto success = bbox.Contains(pt);
+            if (failures == 0) {
+                // 最初の失敗時にのみ詳細を出力
+                EXPECT_TRUE(success)
+                    << "Point at t = " << t << " is outside the bounding box."
+                    << "\n  Point: " << pt.transpose() << " (distance to box: "
+                    << bbox.DistanceTo(pt)  << ")"
+                    << "\n  Bounding Box (p0: " << bbox.GetControl().transpose()
+                    << ", sizes: [" << bbox.GetSizes()[0] << ", "
+                    << bbox.GetSizes()[1] << ", " << bbox.GetSizes()[2] << "], "
+                    << "\n                directions: [" << bbox.GetDirections()[0].transpose()
+                    << ", " << bbox.GetDirections()[1].transpose() << ", "
+                    << bbox.GetDirections()[2].transpose() << "]";
+            }
+            failures += success ? 0 : 1;
+            max_distance = std::max(max_distance, bbox.DistanceTo(pt));
+        }
+        // すべての点がボックス内に収まることを確認
+        EXPECT_EQ(failures, 0) << "Some points are outside the bounding box. "
+                << "Max distance to box: " << max_distance;
     }
 }

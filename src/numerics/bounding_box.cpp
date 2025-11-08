@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -74,6 +75,68 @@ BoundingBox::BoundingBox(const Vector3d& control,
                       {Vector3d::UnitX(), Vector3d::UnitY()},
                       sizes, is_line) {}
 
+BoundingBox::BoundingBox(const Vector3d& point1,
+                         const Vector3d& point2) {
+    // point1またはpoint2に無限大の成分が含まれる場合はエラー
+    if (!point1.allFinite() || !point2.allFinite()) {
+        throw std::invalid_argument(
+            "BoundingBox: Points cannot have infinite components, "
+            "but got point1 = " + ToString(point1.transpose()) +
+            ", point2 = " + ToString(point2.transpose()));
+    }
+    if (IsApproxEqual(point1, point2)) {
+        throw std::invalid_argument(
+            "BoundingBox: Points must be different, "
+            "but got point1 = point2 = " + ToString(point1.transpose()));
+    }
+
+    // 最小の点 (基点P0) とサイズを計算
+    auto min_point = point1.cwiseMin(point2);
+    auto max_point = point1.cwiseMax(point2);
+    auto size = max_point - min_point;
+
+    // 2つ以上のsize[i]が0である場合はエラー
+    int zero_index = -1;
+    for (size_t i = 0; i < 3; ++i) {
+        if (i_num::IsApproxZero(size[i])) {
+            if (zero_index != -1) {
+                throw std::invalid_argument(
+                    "BoundingBox: At least two dimensions are zero, "
+                    "which is not allowed, got sizes = " +
+                    ToString(size.transpose()));
+            }
+            zero_index = i;
+        }
+    }
+
+    // 延伸方向とそのサイズを設定
+    std::array<Vector3d, 3> directions =
+            {Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
+    std::array<double, 3> sizes = {size[0], size[1], size[2]};
+    // 2次元の場合 (zero_index >= 0) はサイズがゼロの方向をD2として扱い、
+    // D0×D1=D2となるようにD0, D1を設定
+    switch (zero_index) {
+        case 0:   // x方向がゼロ
+            directions = {Vector3d::UnitY(), Vector3d::UnitZ(), Vector3d::UnitX()};
+            sizes = {size[1], size[2], 0.0};
+            break;
+        case 1:   // y方向がゼロ
+            directions = {Vector3d::UnitZ(), Vector3d::UnitX(), Vector3d::UnitY()};
+            sizes = {size[0], size[2], 0.0};
+            break;
+        case 2:   // z方向がゼロの場合、directionsはデフォルトのまま
+            sizes = {size[0], size[1], 0.0};
+            break;
+        default:  // z方向がゼロの場合はデフォルトのまま
+            break;
+    }
+
+    // パラメータを設定 (サイズについてはすべて有限)
+    SetControl(min_point);
+    SetDirections(directions);
+    SetSizes(sizes, {false, false, false});
+}
+
 
 
 /**
@@ -82,12 +145,10 @@ BoundingBox::BoundingBox(const Vector3d& control,
 
 void BoundingBox::SetControl(const Vector3d& control) {
     // controlが無限大の成分を持つ場合はエラー
-    for (int i = 0; i < 3; ++i) {
-        if (std::isinf(control(i))) {
-            throw std::invalid_argument(
-                "BoundingBox: Control point cannot have infinite components, "
-                "but got " + ToString(control.transpose()));
-        }
+    if (!control.allFinite()) {
+        throw std::invalid_argument(
+            "BoundingBox: Control point cannot have infinite components, "
+            "but got " + ToString(control.transpose()));
     }
     control_ = control;
 }
@@ -149,8 +210,15 @@ std::array<double, 3> BoundingBox::GetSizes() const {
 
 void BoundingBox::SetSizes(const std::array<double, 3>& sizes,
                            const std::array<bool, 3>& is_line) {
-    for (size_t i = 0; i < 3; ++i) {
-        SetSize(i, sizes[i], is_line[i]);
+    try {
+        for (size_t i = 0; i < 3; ++i) {
+            SetSize(i, sizes[i], is_line[i]);
+        }
+    } catch (const std::invalid_argument& e) {
+        throw std::invalid_argument(std::string(e.what()) + " (sizes = (" +
+            std::to_string(sizes[0]) + ", " +
+            std::to_string(sizes[1]) + ", " +
+            std::to_string(sizes[2]) + "))");
     }
 }
 
@@ -539,6 +607,34 @@ bool BoundingBox::Intersects(const Vector3d& start_w, const Vector3d& end_w,
     double t_final_max = std::min(t_inf_max, t_range.second);
 
     return IsApproxLEQ(t_final_min, t_final_max);
+}
+
+double BoundingBox::DistanceTo(const Vector3d& point) const {
+    if (Contains(point))  return 0.0;
+
+    Vector3d local_point;
+    if (!IsAxisAligned()) {
+        auto w2l = GetWorldToLocalRotation();
+        local_point = w2l * (point - control_);
+    } else {
+        local_point = point - control_;
+    }
+
+    // 各軸方向の距離を計算
+    double sq_distance = 0.0;
+    auto sizes = GetSizes();
+    for (size_t i = 0; i < 3; ++i) {
+        double coord = local_point(i);
+        double size = sizes[i];
+
+        if (coord < 0.0) {
+            sq_distance += coord * coord;
+        } else if (coord > size) {
+            double diff = coord - size;
+            sq_distance += diff * diff;
+        }
+    }
+    return std::sqrt(sq_distance);
 }
 
 

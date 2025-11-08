@@ -193,6 +193,9 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     std::optional<SurfaceDerivatives>
     TryGetDerivatives(const double, const double, const unsigned int) const override;
 
+    /// @brief 定義空間における曲面のバウンディングボックスを取得する
+    numerics::BoundingBox GetDefinedBoundingBox() const override;
+
 
 
  protected:

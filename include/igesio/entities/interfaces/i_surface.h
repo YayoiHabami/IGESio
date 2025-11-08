@@ -77,6 +77,8 @@ class SurfaceDerivatives {
 ///         - `IsVClosed`
 ///         - `GetParameterRange`
 ///         - `TryGetDerivatives`
+///         - `Transform` (protected): IGeometry由来
+///         - `GetDefinedBoundingBox`: IGeometry由来
 class ISurface : public virtual IEntityIdentifier,
                  public virtual IGeometry {
  public:

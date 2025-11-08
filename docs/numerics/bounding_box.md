@@ -50,6 +50,7 @@ The class defines a bounding box using the following four types of parameters:
 | `BoundingBox()` | Default constructor. Creates an empty bounding box with the control point at the origin and size of 0. |
 | `BoundingBox(control, directions, sizes, is_line)` | Creates a bounding box in arbitrary directions (2D or 3D).<br> - `control`: Control point $P_0$<br> - `directions`: Array of extension directions (2 elements for 2D, 3 for 3D; each element is a unit vector)<br> - `sizes`: Size along each direction<br> - `is_line`: Array indicating whether each direction is kLine (defaults to all `false`)<br> ※Overloaded for 2D/3D. |
 | `BoundingBox(control, sizes, is_line)` | Creates a bounding box aligned with the x, y, z axes (or x, y axes).<br> - `control`: Control point $P_0$<br> - `sizes`: Size along each direction (3 elements for 3D, 2 for 2D)<br> - `is_line`: Array indicating whether each direction is kLine (defaults to all `false`) |
+| `BoundingBox(point1, point2)` | Creates a bounding box that contains two points.<br> - `point1`, `point2`: Two points contained in the bounding box<br> - Automatically generates a bounding box aligned with the x, y, z axes based on the coordinate values of the two points<br> - If one axis has the same coordinate value, it is treated as a 2D bounding box (the zero-size direction is treated as $D_2$) <br> - Example: If $x_1=x_2$, then $D_0=e_y, D_1=e_z, D_2=e_x$ |
 
 ### Setting, Getting, and Modifying Parameters
 
@@ -80,6 +81,7 @@ The class defines a bounding box using the following four types of parameters:
 | `Contains(point)` | Check if a point `point` in 3D space is contained |
 | `Contains(box)` | Check if another `BoundingBox` (`box`) is fully contained <br> Returns `false` if any part extends outside |
 | `Intersects(start, end, type)` | Check if a line (including line segments and rays) intersects <br> `type` is one of `BoundingBox::DirectionType` |
+| `DistanceTo(point)` | Calculate the shortest distance to a point <br> Returns 0 if the point is inside the bounding box |
 
 ## Appendix
 
@@ -100,7 +102,7 @@ The `BoundingBox` class defines a bounding box using the following four types of
     - `kRay`: Half-infinite line (extends infinitely from the starting point)
     - `kLine`: Infinite line (extends infinitely in both directions)
 
-> When nothing is specified in the constructor (default constructor), the edge lengths satisfy $s_0 = s_1 = s_2 = 0$. This is a special case where `BoundingBox::IsEmpty()` returns `true`. Although not explicitly handled below, in this case `BoundingBox::Merge(box)` returns `box`, `BoundingBox::Contains(point)` always returns `false`, etc.
+> When nothing is specified in the constructor (default constructor), the edge lengths satisfy $s_0 = s_1 = s_2 = 0$. This is a special case where `BoundingBox::IsEmpty()` returns `true`. Although not explicitly handled below, in this case `BoundingBox::Contains(point)` always returns `false`, etc.
 >
 > Including this case, in `BoundingBox::GetDirectionTypes()`, $\text{type}_i$ is calculated as follows:
 >
@@ -171,7 +173,7 @@ $$\begin{aligned}
 
 #### Merging BoundingBoxes
 
-Consider the two bounding boxes $\mathcal{B}_A$ and $\mathcal{B}_B$ described in the [previous section](#containment-test-between-boundingboxes). The operation `box_a.Merge(box_b)` is defined as expanding the caller $\mathcal{B}_A$ to fully contain the argument $\mathcal{B}_B$. Note that this operation is **not commutative**. That is, `box_a.Merge(box_b)` and `box_b.Merge(box_a)` generally return different results.
+Consider the two bounding boxes $\mathcal{B}_A$ and $\mathcal{B}_B$ described in the [previous section](#containment-test-between-boundingboxes). The operation `box_a.ExpandToInclude(box_b)` is defined as expanding the caller $\mathcal{B}_A$ to fully contain the argument $\mathcal{B}_B$. Note that this operation is **not commutative**. That is, `box_a.ExpandToInclude(box_b)` and `box_b.ExpandToInclude(box_a)` generally return different results.
 
 The merged bounding box $\mathcal{B}\_M$ has the same extension directions as $\mathcal{B}\_A$: $D_{0,M} = D_{0,A}, D_{1,M} = D_{1,A}, D_{2,M} = D_{2,A}$, but the control point $P_{0,M}$ and edge lengths $s_{0,M}, s_{1,M}, s_{2,M}$ change.
 
@@ -215,7 +217,7 @@ $$\begin{aligned}
 
 **Computing the Control Point and Edge Lengths of $\mathcal{B}_M$**
 
-Finally, the control point $P_{0,M}$ and edge lengths $s_{0,M}, s_{1,M}, s_{2,M}$ of $\mathcal{B}\_M$ are calculated as follows. Note that in the program, if any $s_{i,M}$ becomes `undefined`, `box_a.Merge(box_b)` throws an exception (because the basis vectors would need to be changed).
+Finally, the control point $P_{0,M}$ and edge lengths $s_{0,M}, s_{1,M}, s_{2,M}$ of $\mathcal{B}\_M$ are calculated as follows. Note that in the program, if any $s_{i,M}$ becomes `undefined`, `box_a.ExpandToInclude(box_b)` throws an exception (because the basis vectors would need to be changed).
 
 $$\begin{aligned}
     P_{0,M} &= P_{0,A} + x_{\text{min},M} D_{0,A} + y_{\text{min},M} D_{1,A} + z_{\text{min},M} D_{2,A} \\\

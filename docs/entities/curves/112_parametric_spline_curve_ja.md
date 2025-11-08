@@ -11,6 +11,9 @@ Defined at [curves/parametric_spline_curve.h](./../../../include/igesio/entities
   - [曲線の定義](#曲線の定義)
     - [曲線 $C(t)$](#曲線-ct)
     - [導関数 $C'(t), C''(t)$](#導関数-ct-ct)
+- [Bounding Box](#bounding-box)
+  - [セグメントごとのAABB計算](#セグメントごとのaabb計算)
+  - [曲線全体のAABB](#曲線全体のaabb)
 
 ## Parameters
 
@@ -81,3 +84,36 @@ $$C_i'(t) = A_i \begin{bmatrix} 0 \\\ 1 \\\ 2s \\\ 3s^2 \end{bmatrix}, \quad C_i
 定義域、曲線全体での結合に関しては、曲線 $C(t)$ の定義に準じます。
 
 　曲線 $C(t)$ および導関数 $C'(t), C''(t)$ から計算される各種特徴量については、[Geometric Properties (曲線の幾何学的性質)](./../geometric_properties_ja.md) を参照してください。
+
+## Bounding Box
+
+　Parametric Spline Curveの軸平行バウンディングボックス（AABB）は、曲線全体の $x, y, z$ 各座標の最小値と最大値によって定義されます。
+
+$$P_{min} = (x_{min}, y_{min}, z_{min}), \quad P_{max} = (x_{max}, y_{max}, z_{max})$$
+
+　曲線 $C(t)$ は $n$ 個のセグメント $C_i(t)$ で構成されているため、まず各セグメントのAABBを求め、次にすべてのセグメントのAABBを包含するAABBを計算します。
+
+### セグメントごとのAABB計算
+
+　各セグメント $C_i(t)$ の各座標成分は、局所パラメータ $s$ ($s \in [0, L_i]$、ただし $L_i = T(i+1) - T(i)$) に関する最大3次の多項式です。例えば $x$ 座標は $x_i(s) = a_{x,i} + b_{x,i} s + c_{x,i} s^2 + d_{x,i} s^3$ と表されます。
+
+　区間 $[0, L_i]$ における最小値・最大値を求めるため、以下の候補点における値を調べます。
+
+1. **区間の両端**: $s = 0$ および $s = L_i$
+2. **区間内部の極値**: $s \in (0, L_i)$ において導関数 $x_i'(s) = b_{x,i} + 2c_{x,i} s + 3d_{x,i} s^2 = 0$ を満たす点
+
+　導関数が0になる $s$ は、以下の場合分けで解析的に求められます。
+
+- **$d_{x,i} \neq 0$ の場合**: 判別式 $D = c_{x,i}^2 - 3b_{x,i}d_{x,i}$ を計算し、$D \geq 0$ ならば $s = \frac{-c_{x,i} \pm \sqrt{D}}{3d_{x,i}}$ が解。区間 $(0, L_i)$ 内の解のみを候補点に追加
+- **$d_{x,i} = 0, c_{x,i} \neq 0$ の場合**: $s = -\frac{b_{x,i}}{2c_{x,i}}$ が解。区間内ならば候補点に追加
+- **$d_{x,i} = c_{x,i} = 0$ の場合**: 単調関数または定数関数のため、区間内部に極値なし
+
+　候補点の集合 $S_{x,i}$ における $x_i(s)$ の値から $\min(x_i), \max(x_i)$ を求めます。$y, z$ 座標についても同様に計算し、セグメント $i$ のAABBを決定します。
+
+### 曲線全体のAABB
+
+　すべてのセグメント $i = 0, \ldots, n-1$ のAABBから、最小値・最大値を取ることで曲線全体のAABBが得られます。
+
+$$x_{min} = \min_{i} (\min(x_i)), \quad x_{max} = \max_{i} (\max(x_i))$$
+
+$y, z$ 座標についても同様に計算し、最終的なAABBは $P_{min} = (x_{min}, y_{min}, z_{min})$ と $P_{max} = (x_{max}, y_{max}, z_{max})$ によって定義されます。

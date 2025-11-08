@@ -80,8 +80,8 @@ igesio::IGESParameterVector RationalBSplineCurve::GetMainPDParameters() const {
 
     // PROP1 ~ PROP4
     params.push_back(is_planar_ ? 1 : 0);
-    params.push_back(is_closed_ ? 1 : 0);
-    params.push_back(is_polynomial_ ? 1 : 0);
+    params.push_back(IsClosed() ? 1 : 0);
+    params.push_back(IsPolynomial() ? 1 : 0);
     params.push_back(is_periodic_ ? 1 : 0);
 
     // ノットベクトル T
@@ -154,8 +154,8 @@ size_t RationalBSplineCurve::SetMainPDParameters(const pointer2ID& de2id) {
 
     // PROP1 ~ PROP4
     is_planar_ = pd.access_as<bool>(2);
-    is_closed_ = pd.access_as<bool>(3);
-    is_polynomial_ = pd.access_as<bool>(4);
+    // is_closed_ = pd.access_as<bool>(3);  NOTE: 閉じているかは制御パラメータから判断
+    // is_polynomial_ = pd.access_as<bool>(4); NOTE: 多項式形式かは制御パラメータから判断
     is_periodic_ = pd.access_as<bool>(5);
 
     // 必要なパラメータの総数を計算
@@ -252,16 +252,6 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
     }
     if (weights_.empty()) {
         errors.emplace_back("Weights vector cannot be empty.");
-    } else if (is_polynomial_) {
-        // polynomial形式の場合、全ての重みが等しいことを確認
-        for (const auto& weight : weights_) {
-            if (!i_num::IsApproxEqual(weight, weights_[0])) {
-                errors.emplace_back("All weights must be equal for polynomial form. "
-                        "Got weights: " + std::to_string(weights_[0]) + " and " +
-                        std::to_string(weight) + ".");
-                break;
-            }
-        }
     }
 
     // 制御点の検証
@@ -297,7 +287,29 @@ std::array<double, 2> RationalBSplineCurve::GetParameterRange() const {
 }
 
 bool RationalBSplineCurve::IsClosed() const {
-    return is_closed_;
+    // ノットベクトルの両端degree_+1個の値が等しいかを確認
+    bool is_clamped = true;
+    double knot0 = knots_[0];
+    double knotN = knots_[knots_.size() - 1];
+    for (unsigned int i = 1; i <= degree_; ++i) {
+        if (!i_num::IsApproxEqual(knots_[i], knot0) ||
+            !i_num::IsApproxEqual(knots_[knots_.size() - 1 - i], knotN)) {
+            is_clamped = false;
+        }
+    }
+
+    if (is_clamped) {
+        // クランプされている場合、最初と最後の制御点が一致するかを確認
+        auto first_cp = control_points_.col(0);
+        auto last_cp = control_points_.col(control_points_.cols() - 1);
+        return i_num::IsApproxEqual(first_cp, last_cp);
+    } else {
+        // クランプされていない場合、始点と終点を計算して評価
+        auto start_opt = TryGetDefinedStartPoint();
+        auto end_opt = TryGetDefinedEndPoint();
+        if (!start_opt || !end_opt)  return false;
+        return i_num::IsApproxEqual(*start_opt, *end_opt);
+    }
 }
 
 std::optional<i_ent::CurveDerivatives>
@@ -342,4 +354,34 @@ RationalBSplineCurve::TryGetDerivatives(const double t, const unsigned int n) co
     }
 
     return derivatives;
+}
+
+i_num::BoundingBox RationalBSplineCurve::GetDefinedBoundingBox() const {
+    // 制御点をすべて含むバウンディングボックスを計算
+    // 制御点から構成される凸包は有理Bスプライン曲線を包含するため
+    auto min = control_points_.col(0);
+    auto max = control_points_.col(0);
+    for (int i = 1; i < control_points_.cols(); ++i) {
+        min = min.cwiseMin(control_points_.col(i));
+        max = max.cwiseMax(control_points_.col(i));
+    }
+
+    return i_num::BoundingBox(min, max);
+}
+
+
+
+/**
+ * 描画
+ */
+
+bool RationalBSplineCurve::IsPolynomial() const {
+    // すべての重みが等しい場合、polynomial形式とみなす
+    auto w0 = weights_.front();
+    for (const auto& w : weights_) {
+        if (!i_num::IsApproxEqual(w, w0)) {
+            return false;
+        }
+    }
+    return true;
 }

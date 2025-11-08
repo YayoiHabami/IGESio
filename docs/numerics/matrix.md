@@ -294,12 +294,14 @@ The following table lists element validation member functions that return a `boo
 | `Matrix` | $1 / m_{i,j}$ | Calculates element-wise reciprocal.<br>`m.cwiseInverse()` |
 | `Matrix` | $\sqrt{m_{i,j}}$ | Calculates element-wise square root.<br>`m.cwiseSqrt()` |
 | `Matrix` | $\|m_{i,j}\|$ | Calculates element-wise absolute value.<br>`m.cwiseAbs()` |
-| `Matrix` |  | Normalizes a vector (converts to a unit vector).<br>`m.normalized()` |
+| `Matrix` | $\max(m_{i,j}, \text{val})$ <br> $\min(m_{i,j}, \text{val})$ | Calculates element-wise maximum/minimum values.<br>`m.cwiseMax(val)`<br>`m.cwiseMin(val)` |
+| `Matrix` | $\max(m_{1,i,j}, m_{2,i,j})$ <br> $\min(m_{i,j}, m_{k,l})$ | Calculates element-wise maximum/minimum values.<br>`m1.cwiseMax(m2)`<br>`m1.cwiseMin(m2)` |
+| `Matrix` | $m / \|m\|$ | Normalizes a vector (converts to a unit vector).<br>`m.normalized()` |
 | `double` | $\sum m_{i,j}^2$ | Calculates the sum of squares of matrix elements.<br>`m.squaredNorm()` |
 | `double` | $\sqrt{\sum m_{i,j}^2}$ | Calculates the norm (Euclidean distance) of matrix elements.<br>`m.norm()` |
 | `double` | $\sum m_{i,j}$ | Calculates the sum of matrix elements.<br>`m.sum()` |
 | `double` | $\prod m_{i,j}$ | Calculates the product of matrix elements.<br>`m.prod()` |
-| `double` |  | Calculates the determinant (only for 2x2, 3x3, 4x4 matrices).<br>`m.determinant()` |
+| `double` | $\det(M)$ | Calculates the determinant (only for 2x2, 3x3, 4x4 matrices).<br>`m.determinant()` |
 
 #### Output Features
 

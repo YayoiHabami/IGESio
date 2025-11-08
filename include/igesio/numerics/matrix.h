@@ -1256,6 +1256,86 @@ class Matrix {
         return result;
     }
 
+    /// @brief 各要素の最小値を返す
+    /// @param value 比較するスカラー値
+    /// @return 各要素の最小値を集めた行列
+    /// @note 例えば (0, 2, 3) と 1 の最小値は (0, 1, 1)
+    Matrix<T, N, M> cwiseMin(T value) const {
+        Matrix<T, N, M> result;
+        result.resize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::min((*this)(i, j), value);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 各要素の最小値を返す
+    /// @param other 比較する行列
+    /// @return 各要素の最小値を集めた行列
+    /// @note 例えば (0, 2, 3) と (1, 1, 4) の最小値は (0, 1, 3)
+    /// @throw std::invalid_argument 動的列数で列数が一致しない場合
+    template<int N2, int M2, typename = enable_if_addable_t<N2, M2>>
+    AddReturnType<N2, M2> cwiseMin(const Matrix<T, N2, M2>& other) const {
+        if (rows() != other.rows() || cols() != other.cols()) {
+            throw std::invalid_argument("Matrix dimensions must match for cwiseMin");
+        }
+
+        AddReturnType<N2, M2> result;
+        result.conservativeResize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::min((*this)(i, j), other(i, j));
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 各要素の最大値を返す
+    /// @param value 比較するスカラー値
+    /// @return 各要素の最大値を集めた行列
+    /// @note 例えば (0, 2, 3) と 1 の最大値は (1, 2, 3)
+    Matrix<T, N, M> cwiseMax(T value) const {
+        Matrix<T, N, M> result;
+        result.resize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::max((*this)(i, j), value);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 各要素の最大値を返す
+    /// @param other 比較する行列
+    /// @return 各要素の最大値を集めた行列
+    /// @note 例えば (0, 2, 3) と (1, 1, 4) の最大値は (1, 2, 4)
+    /// @throw std::invalid_argument 動的列数で列数が一致しない場合
+    template<int N2, int M2, typename = enable_if_addable_t<N2, M2>>
+    AddReturnType<N2, M2> cwiseMax(const Matrix<T, N2, M2>& other) const {
+        if (rows() != other.rows() || cols() != other.cols()) {
+            throw std::invalid_argument("Matrix dimensions must match for cwiseMax");
+        }
+
+        AddReturnType<N2, M2> result;
+        result.conservativeResize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::max((*this)(i, j), other(i, j));
+            }
+        }
+
+        return result;
+    }
+
     /// @brief 正規化されたベクトルを返す
     /// @return 大きさが1のベクトル
     /// @throw std::invalid_argument ゼロベクトルの正規化を試みた場合、

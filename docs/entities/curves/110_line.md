@@ -19,6 +19,7 @@ Defined at [curves/line.h](./../../../include/igesio/entities/curves/line.h)
 | Member Function | Description |
 |---|---|
 | `GetLineType()` <br> (`LineType`) | Type of line segment |
+| `GetDefinedAnchorPoints()` <br> (`std::pair<Vector3d, Vector3d>`) | Start point $P_1$ and end point $P_2$ of the line segment in the defined space |
 | `GetAnchorPoints()` <br> (`std::pair<Vector3d, Vector3d>`) | Start point $P_1$ and end point $P_2$ of the line segment |
 
 #### `LineType`

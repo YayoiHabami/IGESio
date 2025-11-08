@@ -4,6 +4,7 @@ add_library(igesio_entities STATIC
     entity_type.cpp
 
     # Interfaces
+    interfaces/i_geometry.cpp
     interfaces/i_curve.cpp
     interfaces/i_surface.cpp
 

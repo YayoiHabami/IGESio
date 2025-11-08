@@ -50,6 +50,7 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 | `BoundingBox()` | デフォルトコンストラクタ。基準点が原点、大きさが0の空のバウンディングボックスを生成します。 |
 | `BoundingBox(control, directions, sizes, is_line)` | 任意方向（2Dまたは3D）のバウンディングボックスを生成します。<br> - `control`: 基準点 $P_0$<br> - `directions`: 延伸方向の配列（2D:2要素, 3D:3要素、各要素は単位ベクトル）<br> - `sizes`: 各方向のサイズ<br> - `is_line`: 各方向がkLineかどうかを示す配列（省略時は全て`false`）<br> ※2D/3Dでオーバーロードあり。 |
 | `BoundingBox(control, sizes, is_line)` | x,y,z軸（またはx,y軸）に平行なバウンディングボックスを生成します。<br> - `control`: 基準点 $P_0$<br> - `sizes`: 各方向のサイズ（3D:3要素, 2D:2要素）<br> - `is_line`: 各方向がkLineかどうかを示す配列（省略時は全て`false`） |
+| `BoundingBox(point1, point2)` | 2点を含むバウンディングボックスを生成します。<br> - `point1`, `point2`: バウンディングボックスに含まれる2点<br> - 2点の座標値から、x,y,z軸に平行なバウンディングボックスを自動的に生成<br> - 同じ座標値を持つ軸が1つの場合は2Dバウンディングボックス（サイズ0の方向を $D_2$ として扱う）<br> - 例: $x_1=x_2$ の場合は $D_0=e_y, D_1=e_z, D_2=e_x$ |
 
 ### パラメータの設定・取得・変更
 
@@ -80,6 +81,7 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 | `Contains(point)` | 3次元空間上の点 `point` を含むかを判定 |
 | `Contains(box)` | 他の`BoundingBox`(`box`) を完全に含むかを判定 <br> 一部でも外側に出ている場合は`false`を返す |
 | `Intersects(start, end, type)` | 直線（線分、半直線を含む）と交差するか判定する <br> `type`は`BoundingBox::DirectionType`のいずれか |
+| `DistanceTo(point)` | 点との最短距離を計算する <br> 点がバウンディングボックス内にある場合は0を返す |
 
 ## Appendix
 
@@ -100,7 +102,7 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
   - `kRay` : 半無限線（始点から無限に延びる）
   - `kLine` : 無限線（両方向に無限に延びる）
 
-> コンストラクタで何も指定しない場合（デフォルトコンストラクタ）、辺の長さは $s_0 = s_1 = s_2 = 0$ を満たします。これは`BoundingBox::IsEmpty()`は`true`となる特殊ケースです。以下では明示的には扱いませんが、この場合`BoundingBox::Merge(box)`は`box`を返す、`BoundingBox::Contains(point)`は常に`false`を返す、などの動作をします。
+> コンストラクタで何も指定しない場合（デフォルトコンストラクタ）、辺の長さは $s_0 = s_1 = s_2 = 0$ を満たします。これは`BoundingBox::IsEmpty()`は`true`となる特殊ケースです。以下では明示的には扱いませんが、`BoundingBox::Contains(point)`は常に`false`を返す、などの動作をします。
 >
 > このケースを含め、`BoundingBox::GetDirectionTypes()`において $\text{type}_i$ は以下のように計算されます
 >
@@ -171,7 +173,7 @@ $$\begin{aligned}
 
 #### BoundingBoxの統合
 
-　[前節](#boundingbox間の包含判定)で述べた2つのバウンディングボックス $\mathcal{B}_A$ と $\mathcal{B}_B$ を考えます。`box_a.Merge(box_b)`という操作は、呼び出し元の $\mathcal{B}_A$ を、引数の $\mathcal{B}_B$ を完全には違法するように拡張する操作として定義します。注意点として、この操作は**可換ではありません**。つまり、`box_a.Merge(box_b)` と `box_b.Merge(box_a)` は一般に異なる結果を返します。
+　[前節](#boundingbox間の包含判定)で述べた2つのバウンディングボックス $\mathcal{B}_A$ と $\mathcal{B}_B$ を考えます。`box_a.ExpandToInclude(box_b)`という操作は、呼び出し元の $\mathcal{B}_A$ を、引数の $\mathcal{B}_B$ を完全には違法するように拡張する操作として定義します。注意点として、この操作は**可換ではありません**。つまり、`box_a.ExpandToInclude(box_b)` と `box_b.ExpandToInclude(box_a)` は一般に異なる結果を返します。
 
 　統合後のバウンディングボックス $\mathcal{B}\_M$ は, $\mathcal{B}\_A$ と同じ延伸方向 $D_{0,M} = D_{0,A}, D_{1,M} = D_{1,A}, D_{2,M} = D_{2,A}$ を持ちますが、基点 $P_{0,M}$ と辺の長さ $s_{0,M}, s_{1,M}, s_{2,M}$ は変化します。
 
@@ -215,7 +217,7 @@ $$\begin{aligned}
 
 **$\mathcal{B}_M$ の基点と辺の長さの計算**
 
-　最後に、$\mathcal{B}\_M$ の基点 $P_{0,M}$ と辺の長さ $s_{0,M}, s_{1,M}, s_{2,M}$ は以下のように計算されます。ただし、プログラム上では, $s_{i,M}$ のいずれかが`undefined`となる場合、`box_a.Merge(box_b)`は例外を投げます（基底ベクトルを変更する必要があるため）。
+　最後に、$\mathcal{B}\_M$ の基点 $P_{0,M}$ と辺の長さ $s_{0,M}, s_{1,M}, s_{2,M}$ は以下のように計算されます。ただし、プログラム上では, $s_{i,M}$ のいずれかが`undefined`となる場合、`box_a.ExpandToInclude(box_b)`は例外を投げます（基底ベクトルを変更する必要があるため）。
 
 $$\begin{aligned}
     P_{0,M} &= P_{0,A} + x_{\text{min},M} D_{0,A} + y_{\text{min},M} D_{1,A} + z_{\text{min},M} D_{2,A} \\\

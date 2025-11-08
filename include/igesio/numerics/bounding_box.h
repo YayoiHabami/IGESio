@@ -103,6 +103,19 @@ class BoundingBox {
     BoundingBox(const Vector3d&, const std::array<double, 2>&,
                 const std::array<bool, 2>& = {false, false});
 
+    /// @brief コンストラクタ (2/3次元共通; 2点指定)
+    /// @param point1 バウンディングボックスに含まれる点1
+    /// @param point2 バウンディングボックスに含まれる点2
+    /// @throw std::invalid_argument point1またはpoint2に無限大の成分が含まれる場合、
+    ///        point1とpoint2の2つ以上の座標値が等しい ((1,2,3)と(1,2,4)など) 場合、
+    ///        またはpoint1とpoint2が同じ点の場合
+    /// @note point1とpoint2が同じ座標値を持つ軸が1つの場合は2次元のバウンディングボックスを、
+    ///       2つの場合は1次元のバウンディングボックスを作成する. 基本的にはD1,D2,D3を
+    ///       x,y,z軸方向の単位ベクトルとするが、2次元の場合はサイズが0の方向をD2として扱い、
+    ///       D0×D1=D2となるようにD0,D1を設定する (x1=x2の場合はD0=y軸,D1=z軸,D2=x軸、
+    ///       y1=y2の場合はD0=z軸,D1=x軸,D2=y軸).
+    BoundingBox(const Vector3d&, const Vector3d&);
+
 
 
     /**
@@ -253,6 +266,12 @@ class BoundingBox {
     /// @throw std::invalid_argument startとendが同じ点の場合、
     ///        start/endに無限大やNaNの成分が含まれる場合
     bool Intersects(const Vector3d&, const Vector3d&, const DirectionType) const;
+
+    /// @brief 点との最短距離を計算する
+    /// @param point 判定する点
+    /// @return pointとバウンディングボックスの最短距離
+    /// @note pointがバウンディングボックス内にある場合は0を返す
+    double DistanceTo(const Vector3d&) const;
 
 
 

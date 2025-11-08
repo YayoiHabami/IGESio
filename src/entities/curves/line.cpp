@@ -16,6 +16,7 @@
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using Line = i_ent::Line;
 using Vector3d = igesio::Vector3d;
@@ -184,12 +185,60 @@ double Line::Length(const double start, const double end) const {
     return (terminate_point_ - start_point_).norm() * (end - start);
 }
 
+i_num::BoundingBox Line::GetDefinedBoundingBox() const {
+    auto start = start_point_;
+    auto end = terminate_point_;
+    auto dir = terminate_point_ - start_point_;
+    auto type = GetLineType();
+    auto eps = 1e-10;  // 2軸方向の長さがゼロの場合に1軸に設定する微小値
+
+    // 各軸方向の移動量を確認し、非ゼロかつkRay,kLineであれば無限大に設定
+    std::array<double, 3> sizes = {
+        std::abs(dir[0]), std::abs(dir[1]), std::abs(dir[2])};
+    std::array<bool, 3> is_line = {false, false, false};
+    for (size_t i = 0; i < 3; ++i) {
+        if (i_num::IsApproxZero(sizes[i])) sizes[i] = 0.0;
+
+        if (sizes[i] > 0.0 && type == LineType::kRay) {
+            // 半直線
+            sizes[i] = std::numeric_limits<double>::infinity();
+        } else if (sizes[i] > 0.0 && type == LineType::kLine) {
+            // 直線
+            sizes[i] = std::numeric_limits<double>::infinity();
+            is_line[i] = true;
+        }
+    }
+
+    // 非ゼロの成分が1軸のみの場合
+    if (sizes[0] == 0.0 && sizes[1] == 0.0) {
+        // Z軸方向 -> D0をZ軸、D1をX軸、D2をY軸に変更
+        std::array<Vector3d, 3> dirs =
+                {Vector3d::UnitZ(), Vector3d::UnitX(), Vector3d::UnitY()};
+        sizes = {sizes[2], eps, 0.0};
+        is_line = {is_line[2], false, false};
+        return i_num::BoundingBox(start, dirs, sizes, is_line);
+    } else if ((sizes[1] == 0.0 && sizes[2] == 0.0) ||
+               (sizes[2] == 0.0 && sizes[0] == 0.0)) {
+        // XorY軸方向 -> YorX方向にepsを設定
+        sizes = {std::max(sizes[0], eps), std::max(sizes[1], eps), 0.0};
+    }
+
+    auto min = start.cwiseMin(end);
+    return i_num::BoundingBox(min, sizes, is_line);
+}
+
+
 
 
 /**
  * 描画用
  */
 
-std::pair<const Vector3d&, const Vector3d&> Line::GetAnchorPoints() const {
+std::pair<const Vector3d&, const Vector3d&> Line::GetDefinedAnchorPoints() const {
     return {start_point_, terminate_point_};
+}
+
+std::pair<const Vector3d, const Vector3d> Line::GetAnchorPoints() const {
+    return {Transform(start_point_, true).value(),
+            Transform(terminate_point_, true).value()};
 }

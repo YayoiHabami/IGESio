@@ -62,6 +62,11 @@ class CopiousData : public CopiousDataBase,
     /// @note 常にゼロ（連続な曲線ではなく、離散な点列であるため）
     double Length(const double start, const double end) const override { return 0; }
 
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    numerics::BoundingBox GetDefinedBoundingBox() const override {
+        return CopiousDataBase::GetDefinedBoundingBoxImpl();
+    }
+
 
 
  protected:

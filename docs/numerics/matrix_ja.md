@@ -295,12 +295,14 @@ mat3xN.resize(2, 4);
 | `Matrix` | $1 / m_{i,j}$ | 要素ごとの逆数を計算します。<br>`m.cwiseInverse()` |
 | `Matrix` | $\sqrt{m_{i,j}}$ | 要素ごとの平方根を計算します。<br>`m.cwiseSqrt()` |
 | `Matrix` | $\|m_{i,j}\|$ | 要素ごとの絶対値を計算します。<br>`m.cwiseAbs()` |
-| `Matrix` |  | ベクトルの正規化 (単位ベクトル化) を行います。<br>`m.normalized()` |
+| `Matrix` | $\max(m_{i,j}, \text{val})$ <br> $\min(m_{i,j}, \text{val})$ | 要素ごとの最大値/最小値を計算します。<br>`m.cwiseMax(val)`<br>`m.cwiseMin(val)` |
+| `Matrix` | $\max(m_{1,i,j}, m_{2,i,j})$ <br> $\min(m_{i,j}, m_{k,l})$ | 要素ごとの最大値/最小値を計算します。<br>`m1.cwiseMax(m2)`<br>`m1.cwiseMin(m2)` |
+| `Matrix` | $m / \|m\|$ | ベクトルの正規化 (単位ベクトル化) を行います。<br>`m.normalized()` |
 | `double` | $\sum m_{i,j}^2$ | 行列の要素の二乗和を計算します。<br>`m.squaredNorm()` |
 | `double` | $\sqrt{\sum m_{i,j}^2}$ | 行列の要素のノルム（ユークリッド距離）を計算します。<br>`m.norm()` |
 | `double` | $\sum m_{i,j}$ | 行列の要素の総和を計算します。<br>`m.sum()` |
 | `double` | $\prod m_{i,j}$ | 行列の要素の積を計算します。<br>`m.prod()` |
-| `double` |  | 行列式を計算します (2x2, 3x3, 4x4行列のみ)。<br>`m.determinant()` |
+| `double` | $\det(M)$ | 行列式を計算します (2x2, 3x3, 4x4行列のみ)。<br>`m.determinant()` |
 
 #### 出力機能
 

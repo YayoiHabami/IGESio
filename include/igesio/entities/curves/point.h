@@ -137,6 +137,16 @@ class Point : public EntityBase, public virtual IGeometry {
 
 
 
+    /**
+     * IGeometry implementation
+     */
+
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    /// @return 基点がposition_、各方向のサイズが0のバウンディングボックス
+    numerics::BoundingBox GetDefinedBoundingBox() const override;
+
+
+
  protected:
     /// @brief エンティティ自身が参照する変換行列に従い、座標orベクトルを変換する
     /// @param input 変換前の座標orベクトル v

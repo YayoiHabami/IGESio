@@ -98,8 +98,8 @@ void SegmentGraphics::Synchronize() {
 
     // 端点を計算
     // 直線/半直線の場合は、無限遠点側を`far_length_`だけ延長する
-    auto start = entity_->GetAnchorPoints().first;
-    auto end = entity_->GetAnchorPoints().second;
+    auto start = entity_->GetDefinedAnchorPoints().first;
+    auto end = entity_->GetDefinedAnchorPoints().second;
     if (entity_->GetLineType() == i_ent::LineType::kRay) {
         end = end + (end - start).normalized() * far_length_;
     }
@@ -216,8 +216,8 @@ void LineGraphics::Synchronize() {
     // 既存のリソースを開放
     Cleanup();
 
-    auto start = entity_->GetAnchorPoints().first;
-    auto end = entity_->GetAnchorPoints().second;
+    auto start = entity_->GetDefinedAnchorPoints().first;
+    auto end = entity_->GetDefinedAnchorPoints().second;
     auto dir = (end - start).normalized();
 
     std::vector<float> vertices;

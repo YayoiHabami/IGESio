@@ -7,6 +7,7 @@
  */
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <memory>
@@ -440,5 +441,56 @@ TEST(ISurfaceTest, AreaParameterized) {
         });
         ASSERT_GE(param_area, 0.0)
             << "Negative area for partial parameter range for surface: " << surface.name;
+    }
+}
+
+// ISurface::GetBoundingBox() のテスト
+TEST(ISurfaceTest, GetBoundingBox) {
+    // テスト用の曲面で計算できることを確認
+    auto surfaces = igesio::tests::CreateAllTestSurfaces();
+    int n_segs = 30;
+
+    for (const auto& surface : surfaces) {
+        SCOPED_TRACE("Surface: " + surface.name);
+        ASSERT_TRUE(surface.surface != nullptr)
+            << "Surface object is null for surface: " << surface.name;
+
+        igesio::numerics::BoundingBox bbox;
+        ASSERT_NO_THROW({
+            bbox = surface.surface->GetBoundingBox();
+        });
+
+        // 曲面の範囲において点がすべてボックス内に収まることを確認
+        auto [umin, umax, vmin, vmax] = surface.surface->GetParameterRange();
+        if (umin == -std::numeric_limits<double>::infinity()) umin = -1e8;
+        if (umax ==  std::numeric_limits<double>::infinity()) umax =  1e8;
+        if (vmin == -std::numeric_limits<double>::infinity()) vmin = -1e8;
+        if (vmax ==  std::numeric_limits<double>::infinity()) vmax =  1e8;
+
+        int failures = 0;
+        double max_distance = 0.0;
+        for (int ui = 0; ui <= n_segs; ++ui) {
+            for (int vi = 0; vi <= n_segs; ++vi) {
+                double u = umin + (umax - umin) * ui / n_segs;
+                double v = vmin + (vmax - vmin) * vi / n_segs;
+                auto pt_opt = surface.surface->TryGetPointAt(u, v);
+                if (!pt_opt.has_value()) continue;
+
+                auto pt = *pt_opt;
+                auto success = bbox.Contains(pt);
+                if (failures == 0) {
+                    EXPECT_TRUE(success)
+                        << "Point at (u,v) = (" << u << ", " << v << ") is outside "
+                        << "the bounding box."
+                        << "\n  Point: " << pt.transpose() << " (distance to box: "
+                        << bbox.DistanceTo(pt) << ")";
+                }
+                failures += success ? 0 : 1;
+                max_distance = std::max(max_distance, bbox.DistanceTo(pt));
+            }
+        }
+        // すべての点がボックス内に収まることを確認
+        EXPECT_EQ(failures, 0) << "Some points are outside the bounding box. "
+                << "Max distance to box: " << max_distance;
     }
 }

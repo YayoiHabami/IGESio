@@ -889,6 +889,176 @@ TEST(MatrixElementwiseOperationsTest, CwiseAbs) {
     ValidateMatrixElements(result7, {{0.5, 0.7}, {1.2, 2.3}});
 }
 
+// 要素ごとの最小値（スカラー）のテスト
+TEST(MatrixElementwiseOperationsTest, CwiseMinScalar) {
+    // 固定サイズ行列とスカラーの最小値
+    igesio::Matrix23d mat1 = {{0.0, 2.0, 3.0}, {-1.0, 5.0, 1.5}};
+    auto result = mat1.cwiseMin(1.0);
+    ValidateMatrixElements(result, {{0.0, 1.0, 1.0}, {-1.0, 1.0, 1.0}});
+
+    // 動的サイズ行列とスカラーの最小値
+    igesio::Matrix2Xd mat2 = {{4.0, -2.0, 0.0}, {3.0, 1.0, -5.0}};
+    auto result2 = mat2.cwiseMin(2.0);
+    ValidateMatrixElements(result2, {{2.0, -2.0, 0.0}, {2.0, 1.0, -5.0}});
+
+    // ベクトルとスカラーの最小値
+    igesio::Vector3d vec1 = {5.0, 3.0, -1.0};
+    auto result3 = vec1.cwiseMin(2.0);
+    ValidateColVectorElements(result3, {2.0, 2.0, -1.0});
+
+    // 全要素がスカラーより小さい場合
+    igesio::Matrix2d mat3 = {{-1.0, -2.0}, {-3.0, -4.0}};
+    auto result4 = mat3.cwiseMin(0.0);
+    ValidateMatrixElements(result4, {{-1.0, -2.0}, {-3.0, -4.0}});
+
+    // 全要素がスカラーより大きい場合
+    igesio::Matrix2d mat4 = {{5.0, 6.0}, {7.0, 8.0}};
+    auto result5 = mat4.cwiseMin(3.0);
+    ValidateMatrixElements(result5, {{3.0, 3.0}, {3.0, 3.0}});
+
+    // ゼロ行列とスカラーの最小値
+    auto zero_mat = igesio::Matrix23d::Zero();
+    auto result6 = zero_mat.cwiseMin(1.0);
+    ValidateMatrixElements(result6, {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}});
+
+    // 負のスカラー値
+    igesio::Matrix2d mat5 = {{-1.0, 2.0}, {3.0, -4.0}};
+    auto result7 = mat5.cwiseMin(-2.0);
+    ValidateMatrixElements(result7, {{-2.0, -2.0}, {-2.0, -4.0}});
+}
+
+// 要素ごとの最小値（行列）のテスト
+TEST(MatrixElementwiseOperationsTest, CwiseMinMatrix) {
+    // 固定サイズ行列同士の最小値
+    igesio::Matrix23d mat1 = {{0.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    igesio::Matrix23d mat2 = {{1.0, 1.0, 4.0}, {3.0, 6.0, 5.0}};
+    auto result = mat1.cwiseMin(mat2);
+    ValidateMatrixElements(result, {{0.0, 1.0, 3.0}, {3.0, 5.0, 5.0}});
+
+    // 動的サイズ行列同士の最小値
+    igesio::Matrix2Xd mat3 = {{5.0, -2.0, 3.0}, {1.0, 4.0, -1.0}};
+    igesio::Matrix2Xd mat4 = {{3.0, 0.0, 2.0}, {2.0, 3.0, -2.0}};
+    auto result2 = mat3.cwiseMin(mat4);
+    ValidateMatrixElements(result2, {{3.0, -2.0, 2.0}, {1.0, 3.0, -2.0}});
+
+    // ベクトル同士の最小値
+    igesio::Vector3d vec1 = {1.0, 5.0, 3.0};
+    igesio::Vector3d vec2 = {2.0, 4.0, 4.0};
+    auto result3 = vec1.cwiseMin(vec2);
+    ValidateColVectorElements(result3, {1.0, 4.0, 3.0});
+
+    // 同じ行列同士の最小値（元の行列と同じ）
+    auto result4 = mat1.cwiseMin(mat1);
+    ValidateMatrixElements(result4, {{0.0, 2.0, 3.0}, {4.0, 5.0, 6.0}});
+
+    // ゼロ行列との最小値
+    auto zero_mat = igesio::Matrix23d::Zero();
+    igesio::Matrix23d mat5 = {{-1.0, 2.0, -3.0}, {4.0, -5.0, 6.0}};
+    auto result5 = mat5.cwiseMin(zero_mat);
+    ValidateMatrixElements(result5, {{-1.0, 0.0, -3.0}, {0.0, -5.0, 0.0}});
+
+    // 負数を含む行列同士
+    igesio::Matrix2d mat6 = {{-1.0, 2.0}, {-3.0, 4.0}};
+    igesio::Matrix2d mat7 = {{-2.0, 3.0}, {-1.0, 2.0}};
+    auto result6 = mat6.cwiseMin(mat7);
+    ValidateMatrixElements(result6, {{-2.0, 2.0}, {-3.0, 2.0}});
+
+    // 列数不一致エラー（動的サイズ）
+    igesio::Matrix2Xd mat8(2, 2);
+    igesio::Matrix2Xd mat9(2, 3);
+    EXPECT_THROW(mat8.cwiseMin(mat9), std::invalid_argument);
+
+    // 行数不一致エラー
+    igesio::MatrixXd mat10(2, 3);
+    igesio::MatrixXd mat11(3, 3);
+    EXPECT_THROW(mat10.cwiseMin(mat11), std::invalid_argument);
+}
+
+// 要素ごとの最大値（スカラー）のテスト
+TEST(MatrixElementwiseOperationsTest, CwiseMaxScalar) {
+    // 固定サイズ行列とスカラーの最大値
+    igesio::Matrix23d mat1 = {{0.0, 2.0, 3.0}, {-1.0, 5.0, 1.5}};
+    auto result = mat1.cwiseMax(1.0);
+    ValidateMatrixElements(result, {{1.0, 2.0, 3.0}, {1.0, 5.0, 1.5}});
+
+    // 動的サイズ行列とスカラーの最大値
+    igesio::Matrix2Xd mat2 = {{4.0, -2.0, 0.0}, {3.0, 1.0, -5.0}};
+    auto result2 = mat2.cwiseMax(2.0);
+    ValidateMatrixElements(result2, {{4.0, 2.0, 2.0}, {3.0, 2.0, 2.0}});
+
+    // ベクトルとスカラーの最大値
+    igesio::Vector3d vec1 = {5.0, 3.0, -1.0};
+    auto result3 = vec1.cwiseMax(2.0);
+    ValidateColVectorElements(result3, {5.0, 3.0, 2.0});
+
+    // 全要素がスカラーより大きい場合
+    igesio::Matrix2d mat3 = {{5.0, 6.0}, {7.0, 8.0}};
+    auto result4 = mat3.cwiseMax(3.0);
+    ValidateMatrixElements(result4, {{5.0, 6.0}, {7.0, 8.0}});
+
+    // 全要素がスカラーより小さい場合
+    igesio::Matrix2d mat4 = {{-1.0, -2.0}, {-3.0, -4.0}};
+    auto result5 = mat4.cwiseMax(0.0);
+    ValidateMatrixElements(result5, {{0.0, 0.0}, {0.0, 0.0}});
+
+    // ゼロ行列とスカラーの最大値
+    auto zero_mat = igesio::Matrix23d::Zero();
+    auto result6 = zero_mat.cwiseMax(1.0);
+    ValidateMatrixElements(result6, {{1.0, 1.0, 1.0}, {1.0, 1.0, 1.0}});
+
+    // 負のスカラー値
+    igesio::Matrix2d mat5 = {{-1.0, 2.0}, {3.0, -4.0}};
+    auto result7 = mat5.cwiseMax(-2.0);
+    ValidateMatrixElements(result7, {{-1.0, 2.0}, {3.0, -2.0}});
+}
+
+// 要素ごとの最大値（行列）のテスト
+TEST(MatrixElementwiseOperationsTest, CwiseMaxMatrix) {
+    // 固定サイズ行列同士の最大値
+    igesio::Matrix23d mat1 = {{0.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+    igesio::Matrix23d mat2 = {{1.0, 1.0, 4.0}, {3.0, 6.0, 5.0}};
+    auto result = mat1.cwiseMax(mat2);
+    ValidateMatrixElements(result, {{1.0, 2.0, 4.0}, {4.0, 6.0, 6.0}});
+
+    // 動的サイズ行列同士の最大値
+    igesio::Matrix2Xd mat3 = {{5.0, -2.0, 3.0}, {1.0, 4.0, -1.0}};
+    igesio::Matrix2Xd mat4 = {{3.0, 0.0, 2.0}, {2.0, 3.0, -2.0}};
+    auto result2 = mat3.cwiseMax(mat4);
+    ValidateMatrixElements(result2, {{5.0, 0.0, 3.0}, {2.0, 4.0, -1.0}});
+
+    // ベクトル同士の最大値
+    igesio::Vector3d vec1 = {1.0, 5.0, 3.0};
+    igesio::Vector3d vec2 = {2.0, 4.0, 4.0};
+    auto result3 = vec1.cwiseMax(vec2);
+    ValidateColVectorElements(result3, {2.0, 5.0, 4.0});
+
+    // 同じ行列同士の最大値（元の行列と同じ）
+    auto result4 = mat1.cwiseMax(mat1);
+    ValidateMatrixElements(result4, {{0.0, 2.0, 3.0}, {4.0, 5.0, 6.0}});
+
+    // ゼロ行列との最大値
+    auto zero_mat = igesio::Matrix23d::Zero();
+    igesio::Matrix23d mat5 = {{-1.0, 2.0, -3.0}, {4.0, -5.0, 6.0}};
+    auto result5 = mat5.cwiseMax(zero_mat);
+    ValidateMatrixElements(result5, {{0.0, 2.0, 0.0}, {4.0, 0.0, 6.0}});
+
+    // 負数を含む行列同士
+    igesio::Matrix2d mat6 = {{-1.0, 2.0}, {-3.0, 4.0}};
+    igesio::Matrix2d mat7 = {{-2.0, 3.0}, {-1.0, 2.0}};
+    auto result6 = mat6.cwiseMax(mat7);
+    ValidateMatrixElements(result6, {{-1.0, 3.0}, {-1.0, 4.0}});
+
+    // 列数不一致エラー（動的サイズ）
+    igesio::Matrix2Xd mat8(2, 2);
+    igesio::Matrix2Xd mat9(2, 3);
+    EXPECT_THROW(mat8.cwiseMax(mat9), std::invalid_argument);
+
+    // 行数不一致エラー
+    igesio::MatrixXd mat10(2, 3);
+    igesio::MatrixXd mat11(3, 3);
+    EXPECT_THROW(mat10.cwiseMax(mat11), std::invalid_argument);
+}
+
 
 
 /**

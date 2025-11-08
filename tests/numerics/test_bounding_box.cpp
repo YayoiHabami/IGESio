@@ -295,6 +295,94 @@ TEST(BoundingBoxTest, Constructor_InfiniteTypes) {
     ExpectArray3ApproxEqual(retrieved_sizes, {10.0, kInf, kInf});
 }
 
+TEST(BoundingBoxTest, ConstructorFromTwoPoints_Valid) {
+    // 3Dケース
+    {
+        SCOPED_TRACE("3D case");
+        Vector3d p1(0, 0, 0);
+        Vector3d p2(10, 20, 30);
+        BoundingBox box(p1, p2);
+
+        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p1));
+        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 20.0, 30.0});
+        auto dirs = box.GetDirections();
+        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()});
+        EXPECT_TRUE(box.Is3D());
+    }
+
+    // 3Dケース (point1 > point2)
+    {
+        SCOPED_TRACE("3D case, reversed points");
+        Vector3d p1(10, 20, 30);
+        Vector3d p2(0, 0, 0);
+        BoundingBox box(p1, p2);
+
+        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p2));
+        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 20.0, 30.0});
+        auto dirs = box.GetDirections();
+        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()});
+    }
+
+    // 2Dケース (zが同じ)
+    {
+        SCOPED_TRACE("2D case, z-plane");
+        Vector3d p1(1, 2, 5);
+        Vector3d p2(11, 12, 5);
+        BoundingBox box(p1, p2);
+
+        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p1));
+        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 10.0, 0.0});
+        auto dirs = box.GetDirections();
+        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()});
+        EXPECT_TRUE(box.Is2D());
+    }
+
+    // 2Dケース (yが同じ)
+    {
+        SCOPED_TRACE("2D case, y-plane");
+        Vector3d p1(1, 5, 2);
+        Vector3d p2(11, 5, 12);
+        BoundingBox box(p1, p2);
+
+        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p1));
+        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 10.0, 0.0});
+        auto dirs = box.GetDirections();
+        // D0=z, D1=x, D2=y
+        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitZ(), Vector3d::UnitX(), Vector3d::UnitY()});
+        EXPECT_TRUE(box.Is2D());
+    }
+
+    // 2Dケース (xが同じ)
+    {
+        SCOPED_TRACE("2D case, x-plane");
+        Vector3d p1(5, 1, 2);
+        Vector3d p2(5, 11, 12);
+        BoundingBox box(p1, p2);
+
+        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p1));
+        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 10.0, 0.0});
+        auto dirs = box.GetDirections();
+        // D0=y, D1=z, D2=x
+        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitY(), Vector3d::UnitZ(), Vector3d::UnitX()});
+        EXPECT_TRUE(box.Is2D());
+    }
+}
+
+TEST(BoundingBoxTest, ConstructorFromTwoPoints_Invalid) {
+    // point1とpoint2が同じ
+    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(1, 2, 3)), std::invalid_argument);
+
+    // 2つ以上の座標値が同じ (1Dになるケース)
+    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(1, 2, 4)), std::invalid_argument);
+    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(1, 4, 3)), std::invalid_argument);
+    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(4, 2, 3)), std::invalid_argument);
+
+    // 無限大の成分を持つ
+    EXPECT_THROW(BoundingBox(Vector3d(kInf, 2, 3), Vector3d(4, 5, 6)), std::invalid_argument);
+    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(4, -kInf, 6)), std::invalid_argument);
+    EXPECT_THROW(BoundingBox(Vector3d(1, 2, kInf), Vector3d(4, 5, -kInf)), std::invalid_argument);
+}
+
 
 
 /**
@@ -706,6 +794,54 @@ TEST(BoundingBoxTest, ExpandToInclude) {
     }
 }
 
+// サイズがゼロのバウンディングボックスの/による拡張
+TEST(BoundingBoxTest, ExpandToInclude_ZeroSizeBox) {
+    // サイズがゼロのボックス2つ
+    {
+        auto box1 = BoundingBox();
+        auto box2 = BoundingBox();
+        EXPECT_NO_THROW(box1.ExpandToInclude(box2));
+        EXPECT_TRUE(box1.IsEmpty());
+        EXPECT_TRUE(i_num::IsApproxEqual(box1.GetControl(), Vector3d::Zero()));
+
+        // p_{0,1} = (0,0,0), p_{0,2} = (1,1,1) -> サイズが(1,1,1)のボックスに拡大
+        box2.SetControl(Vector3d(1.0, 1.0, 1.0));
+        EXPECT_NO_THROW(box1.ExpandToInclude(box2));
+        EXPECT_FALSE(box1.IsEmpty());
+        EXPECT_TRUE(i_num::IsApproxEqual(box1.GetControl(), Vector3d::Zero()));
+        ExpectArray3ApproxEqual(box1.GetSizes(), {1.0, 1.0, 1.0});
+    }
+
+    // 通常のボックスをサイズがゼロのボックスで拡張
+    {
+        // サイズが非ゼロのボックス内にゼロサイズボックスがある場合
+        auto null_box = BoundingBox();
+        auto sizes = std::array<double, 3>{10.0, 20.0, 30.0};
+        auto box = BoundingBox(Vector3d::Zero(), sizes);
+        EXPECT_NO_THROW(box.ExpandToInclude(null_box));
+        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), Vector3d::Zero()));
+        ExpectArray3ApproxEqual(box.GetSizes(), sizes);
+
+        // サイズが非ゼロのボックス外にゼロサイズボックスがある場合
+        auto new_control = Vector3d(-1, -1, -1);
+        null_box.SetControl(new_control);
+        EXPECT_NO_THROW(box.ExpandToInclude(null_box));
+        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), new_control));
+        ExpectArray3ApproxEqual(box.GetSizes(), std::array<double, 3>{11.0, 21.0, 31.0});
+    }
+
+    // ゼロサイズボックスを通常のボックスで拡張
+    {
+        auto null_box = BoundingBox();
+        auto sizes = std::array<double, 3>{10.0, 20.0, 30.0};
+        auto box = BoundingBox(Vector3d(5.0, 5.0, 5.0), sizes);
+        EXPECT_NO_THROW(null_box.ExpandToInclude(box));
+        EXPECT_TRUE(i_num::IsApproxEqual(null_box.GetControl(), Vector3d::Zero()));
+        ExpectArray3ApproxEqual(null_box.GetSizes(),
+                                std::array<double, 3>{15.0, 25.0, 35.0});
+    }
+}
+
 
 
 /**
@@ -717,7 +853,7 @@ TEST(BoundingBoxTest, IsEmpty) {
     EXPECT_TRUE(box_empty.IsEmpty());
 
     Vector3d p0(1.0, 2.0, 3.0);
-    BoundingBox box_3d(p0, {10.0, 20.0, 30.0});
+    BoundingBox box_3d(p0, std::array<double, 3>{10.0, 20.0, 30.0});
     EXPECT_FALSE(box_3d.IsEmpty());
 
     BoundingBox box_2d(p0, std::array<double, 2>{10.0, 20.0});
@@ -740,12 +876,12 @@ TEST(BoundingBoxTest, Is2DIs3D) {
     EXPECT_FALSE(box_empty.Is3D());
 
     // 3D (s2 > 0)
-    BoundingBox box_3d(p0, {10.0, 20.0, 30.0});
+    BoundingBox box_3d(p0, std::array<double, 3>{10.0, 20.0, 30.0});
     EXPECT_FALSE(box_3d.Is2D());
     EXPECT_TRUE(box_3d.Is3D());
 
     // 2D (s2 = 0)
-    BoundingBox box_2d_s3(p0, {10.0, 20.0, 0.0});
+    BoundingBox box_2d_s3(p0, std::array<double, 3>{10.0, 20.0, 0.0});
     EXPECT_TRUE(box_2d_s3.Is2D());
     EXPECT_FALSE(box_2d_s3.Is3D());
 
@@ -755,7 +891,7 @@ TEST(BoundingBoxTest, Is2DIs3D) {
     EXPECT_FALSE(box_2d.Is3D());
 
     // 3D 無限 (s2 = +Inf)
-    BoundingBox box_inf_3d(p0, {10.0, 20.0, kInf});
+    BoundingBox box_inf_3d(p0, std::array<double, 3>{10.0, 20.0, kInf});
     EXPECT_FALSE(box_inf_3d.Is2D());
     EXPECT_TRUE(box_inf_3d.Is3D());
 
@@ -866,7 +1002,7 @@ TEST(BoundingBoxTest, IsFinite) {
     EXPECT_TRUE(box_empty.IsFinite());
 
     // 3D Segment
-    BoundingBox box_3d(p0, {10.0, 20.0, 30.0});
+    BoundingBox box_3d(p0, std::array<double, 3>{10.0, 20.0, 30.0});
     EXPECT_TRUE(box_3d.IsFinite());
 
     // 2D Segment
@@ -900,7 +1036,7 @@ TEST(BoundingBoxTest, GetVerticesFinite) {
     Vector3d d2 = Vector3d::UnitZ();
 
     // --- 3D AABB ---
-    BoundingBox box_3d(p0, {s0, s1, s2});
+    BoundingBox box_3d(p0, std::array<double, 3>{s0, s1, s2});
     auto vertices_3d = box_3d.GetVertices();
     EXPECT_EQ(vertices_3d.size(), 8);
 
@@ -987,7 +1123,7 @@ TEST(BoundingBoxTest, GetFiniteVertices) {
     Vector3d p0(1.0, 2.0, 3.0);
 
     // --- 3D Finite ---
-    BoundingBox box_3d(p0, {10.0, 20.0, 30.0});
+    BoundingBox box_3d(p0, std::array<double, 3>{10.0, 20.0, 30.0});
     EXPECT_TRUE(box_3d.IsFinite());
     auto vertices_3d = box_3d.GetFiniteVertices();
     auto vertices_3d_all = box_3d.GetVertices();

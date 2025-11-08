@@ -295,6 +295,20 @@ TabulatedCylinder::TryGetDerivatives(
     return s_deriv;
 }
 
+i_num::BoundingBox TabulatedCylinder::GetDefinedBoundingBox() const {
+    // ポインタの確認
+    if (!directrix_.IsPointerSet()) {
+        return i_num::BoundingBox();
+    }
+    auto directrix = GetDirectrix();
+
+    // 元のbboxと母線方向に延伸したbboxを結合
+    auto bbox = directrix->GetBoundingBox();
+    bbox.Translate(GetDirection());
+    bbox.ExpandToInclude(directrix->GetBoundingBox());
+    return bbox;
+}
+
 
 
 /**

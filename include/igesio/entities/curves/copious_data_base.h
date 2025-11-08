@@ -16,6 +16,7 @@
 
 #include <utility>
 
+#include "igesio/numerics/bounding_box.h"
 #include "igesio/entities/entity_base.h"
 
 
@@ -220,6 +221,14 @@ class CopiousDataBase : public EntityBase {
     ///         範囲外の場合は距離をinfinityとする
     /// @note kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
     std::pair<size_t, double> GetNearestVertexAt(const double) const;
+
+
+
+ protected:
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    /// @note 1次元的な広がりしか持たない場合 (n=2のときなど) は、
+    ///       明示的に2次元のバウンディングボックスを生成する
+    numerics::BoundingBox GetDefinedBoundingBoxImpl() const;
 };
 
 }  // namespace igesio::entities

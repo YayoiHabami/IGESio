@@ -19,6 +19,7 @@ Defined at [curves/line.h](./../../../include/igesio/entities/curves/line.h)
 | メンバ関数 | 説明 |
 |---|---|
 | `GetLineType()` <br> (`LineType`) | 線分の種類 |
+| `GetDefinedAnchorPoints()` <br> (`std::pair<Vector3d, Vector3d>`) | 定義空間における, 線分の始点 $P_1$ と終点 $P_2$ |
 | `GetAnchorPoints()` <br> (`std::pair<Vector3d, Vector3d>`) | 線分の始点 $P_1$ と終点 $P_2$ |
 
 #### `LineType`

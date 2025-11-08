@@ -126,6 +126,9 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     ///        startまたはendがパラメータ範囲外の場合
     double Length(const double, const double) const override;
 
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    numerics::BoundingBox GetDefinedBoundingBox() const override;
+
 
 
     /**

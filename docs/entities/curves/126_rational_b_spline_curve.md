@@ -28,6 +28,7 @@ Defined in [curves/rational_b_spline_curve.h](./../../../include/igesio/entities
 | `ControlPoints()` <br> (`Matrix3Xd`) | Control points $P_i = (x_i, y_i, z_i)\ (i = 0, 1, \ldots, k)$ |
 | `Knots()` <br> (`std::vector<double>`) | Knot vector $t_{-m}, \ldots, t_{1+k}$ |
 | `Weights()` <br> (`std::vector<double>`) | Weights $w_i\ (i = 0, 1, \ldots, k)$ |
+| `IsPolynomial()` <br> (`bool`) | Whether it is in polynomial form <br> (true if all control point weights are equal) |
 
 #### `RationalBSplineCurveType`
 

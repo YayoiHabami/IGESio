@@ -367,6 +367,18 @@ double CompositeCurve::Length(const double start, const double end) const {
     return total_length;
 }
 
+i_num::BoundingBox CompositeCurve::GetDefinedBoundingBox() const {
+    auto bbox = i_num::BoundingBox();
+
+    for (const auto& curve_container : curves_) {
+        if (auto curve = curve_container.GetEntity<ICurve>()) {
+            auto curve_bbox = curve->GetDefinedBoundingBox();
+            bbox.ExpandToInclude(curve_bbox);
+        }
+    }
+    return bbox;
+}
+
 
 
 /**
