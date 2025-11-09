@@ -24,6 +24,9 @@
 #include "igesio/entities/curves/parametric_spline_curve.h"
 #include "igesio/entities/curves/point.h"
 #include "igesio/entities/curves/rational_b_spline_curve.h"
+#include "igesio/entities/curves/curve_on_a_parametric_surface.h"
+
+#include "igesio/entities/surfaces/rational_b_spline_surface.h"  // for curve on surface
 
 
 namespace igesio::tests {
@@ -315,6 +318,102 @@ inline curve_vec CreateRationalBSplineCurve() {
     return {nurbs_c_2d, nurbs_closed_2d, nurbs_c};
 }
 
+inline curve_vec CreateCurveOnAParametricSurface() {
+    // Create NURBS surface
+    auto param = igesio::IGESParameterVector{
+        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
+        3, 3,  // M1, M2 (Degree in U and V)
+        false, false, true, false, false,         // PROP1-5
+        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
+        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
+        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
+        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
+        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
+        // Control points (36 points, each with x, y, z)
+        -25., -25., -10.,  // Control point (0,0)
+        -25., -15., -5.,   // Control point (0,1)
+        -25., -5., 0.,     // Control point (0,2)
+        -25., 5., 0.,      // Control point (0,3)
+        -25., 15., -5.,    // Control point (0,4)
+        -25., 25., -10.,   // Control point (0,5)
+        -15., -25., -8.,   // Control point (1,0)
+        -15., -15., -4.,   // Control point (1,1)
+        -15., -5., -4.,    // Control point (1,2)
+        -15., 5., -4.,     // Control point (1,3)
+        -15., 15., -4.,    // Control point (1,4)
+        -15., 25., -8.,    // Control point (1,5)
+        -5., -25., -5.,    // Control point (2,0)
+        -5., -15., -3.,    // Control point (2,1)
+        -5., -5., -8.,     // Control point (2,2)
+        -5., 5., -8.,      // Control point (2,3)
+        -5., 15., -3.,     // Control point (2,4)
+        -5., 25., -5.,     // Control point (2,5)
+        5., -25., -3.,     // Control point (3,0)
+        5., -15., -2.,     // Control point (3,1)
+        5., -5., -8.,      // Control point (3,2)
+        5., 5., -8.,       // Control point (3,3)
+        5., 15., -2.,      // Control point (3,4)
+        5., 25., -3.,      // Control point (3,5)
+        15., -25., -8.,    // Control point (4,0)
+        15., -15., -4.,    // Control point (4,1)
+        15., -5., -4.,     // Control point (4,2)
+        15., 5., -4.,      // Control point (4,3)
+        15., 15., -4.,     // Control point (4,4)
+        15., 25., -8.,     // Control point (4,5)
+        25., -25., -10.,   // Control point (5,0)
+        25., -15., -5.,    // Control point (5,1)
+        25., -5., 2.,      // Control point (5,2)
+        25., 5., 2.,       // Control point (5,3)
+        25., 15., -5.,     // Control point (5,4)
+        25., 25., -10.,    // Control point (5,5)
+        0., 3., 0., 3.     // Parameter range in U and V
+    };
+    auto nurbs_s = std::make_shared<entities::RationalBSplineSurface>(param);
+
+    // Create curve on the surface
+    TestCurve curve_on_surface("open curve on a parametric surface", 2);
+    param = igesio::IGESParameterVector{
+        4,  // number of control points - 1
+        3,  // degree
+        false, false, true, false,  // non-periodic open NURBS curve
+        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
+        1., 1., 1., 1., 1.,  // weights
+         0.0,  0.0,  0.0,    // control point P(0)
+         0.0,  4.0,  0.0,    // control point P(1)
+         2.0, -2.0,  0.0,    // control point P(2)
+         1.5,  2.0,  0.0,    // control point P(3)
+         3.0,  3.0,  0.0,    // control point P(4)
+        0.0, 1.0,            // parameter range V(0), V(1)
+        0.0, 0.0, 1.0        // normal vector of the defining plane
+    };
+    auto nurbs_c = std::make_shared<entities::RationalBSplineCurve>(param);
+    auto [open_curve, _] = entities::MakeCurveOnAParametricSurface(nurbs_s, nurbs_c);
+    curve_on_surface.curve = open_curve;
+
+    TestCurve closed_curve_on_surface("closed curve on a parametric surface", 2);
+    param = igesio::IGESParameterVector{
+        4,  // number of control points - 1
+        3,  // degree
+        false, false, true, false,  // non-periodic open NURBS curve
+        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
+        1., 1., 1., 1., 1.,  // weights
+         1.5,  0.5,  0.0,    // control point P(0)
+         0.0,  0.5,  0.0,    // control point P(1)
+         2.0,  4.0,  0.0,    // control point P(2)
+         3.0,  0.5,  0.0,    // control point P(3)
+         1.5,  0.5,  0.0,    // control point P(4)
+        0.0, 1.0,            // parameter range V(0), V(1)
+        0.0, 0.0, 1.0        // normal vector of the defining plane
+    };
+    auto nurbs_cc = std::make_shared<entities::RationalBSplineCurve>(param);
+    auto [closed_curve, __] = entities::MakeCurveOnAParametricSurface(nurbs_s, nurbs_cc);
+    closed_curve_on_surface.curve = closed_curve;
+
+    return {curve_on_surface, closed_curve_on_surface};
+}
+
+
+
 /// @brief すべてのテスト用曲線エンティティを作成
 inline curve_vec CreateAllTestCurves() {
     curve_vec all_curves;
@@ -341,6 +440,11 @@ inline curve_vec CreateAllTestCurves() {
     auto rational_bspline_curves = CreateRationalBSplineCurve();
     all_curves.insert(all_curves.end(),
                       rational_bspline_curves.begin(), rational_bspline_curves.end());
+
+    auto curves_on_parametric_surface = CreateCurveOnAParametricSurface();
+    all_curves.insert(all_curves.end(),
+                      curves_on_parametric_surface.begin(),
+                      curves_on_parametric_surface.end());
 
     return all_curves;
 }

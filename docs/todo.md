@@ -37,7 +37,7 @@
   - [x] 3-2. エンティティの登録・管理機能の実装
   - [ ] 3-3. 登録状態の削除・リセット機能の実装
 - [ ] **4. Trimmed Surface (144) の実装**
-  - [ ] 4-1. Curve on a Parametric Surface (142) の実装
+  - [x] 4-1. Curve on a Parametric Surface (142) の実装
   - [ ] 4-2. Trimmed Surface (144) の実装
   - [ ] 4-3. 上記の描画サポート
   - [ ] 4-4. 固有のシェーダーコードを使用したグラフィックスクラスの作成

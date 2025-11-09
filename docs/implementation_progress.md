@@ -23,7 +23,7 @@
 |Centerline                   | ^ |20~21|An.|❌|❌
 |Section                      | ^ |31~38| ^ |❌|❌
 |Witness Line                 | ^ |  40 | ^ |❌|❌
-|Planar Curve                 | ^ |  63 |C&S|❌|❌
+|Closed Planar Loop           | ^ |  63 |C&S|✅|⚠️
 |Plane                        |108|  0  | ^ |❌|❌
 | ^                           |108|-1, 1| ^ |❌|❌
 |Line                         |110|  0  |C&S|✅|✅
@@ -47,7 +47,7 @@
 |Nodal<br>Displacement<br>and Rotation|138|  0  | ^ |-|-
 |Offset Surface                       |140|  0  |C&S|❌|❌
 |Boundary                             |141|  0  | ^ |❌|❌
-|Curve on a<br>Parametric<br>Surface  |142|  0  | ^ |❌|❌
+|Curve on a<br>Parametric<br>Surface  |142|  0  | ^ |✅|✅
 |Bounded<br>Surface                   |143|  0  | ^ |❌|❌
 |Trimmed<br>Surface                   |144|  0  | ^ |❌|❌
 |Nodal Results                        |‡146|0~34|St.|-|-

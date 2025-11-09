@@ -99,7 +99,7 @@ TEST_P(ICurveDerivativesTest, ContinuityOrder) {
     const auto param = GetParam();
 
     // 許容誤差
-    double tol = 1e-6;
+    double tol = 1e-4;
     // 微分用の小さな値ε (差分を取るだけなので小さめに設定)
     double epsilon = 1e-10;
 

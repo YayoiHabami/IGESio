@@ -63,7 +63,19 @@ IEntityGraphics& IEntityGraphics::operator=(IEntityGraphics&& other) noexcept {
 
 void IEntityGraphics::SetGlobalParam(
         const std::shared_ptr<const models::GraphicsGlobalParam> global_param) {
-    global_param_ = global_param;
+    // 編集のためにコピーを作成
+    auto copy = std::make_shared<models::GraphicsGlobalParam>(*global_param);
+
+    if (copy->max_line_weight <= 1) {
+        // 線の最大太さが1(多くのデフォルト)の場合、本ライブラリの仕様に合わせて拡張する
+        copy->max_line_weight = models::kDefaultMaxLineWeight;
+    }
+    if (copy->line_weight_gradations <= 1) {
+        // 線の太さの最大数が1(IGES仕様のデフォルト)の場合、本ライブラリの仕様に合わせて拡張する
+        copy->line_weight_gradations = models::kDefaultLineWeightGradations;
+    }
+
+    global_param_ = copy;
 }
 
 void IEntityGraphics::SetWorldTransform(const igesio::Matrix4f& matrix) {

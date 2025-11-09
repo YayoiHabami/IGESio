@@ -149,6 +149,8 @@ class BoundingBox {
     ///       正の有限値を返す. s2のみ0も許容する.
     /// @note privateメンバのsizes_とは異なる (kLineの場合も+∞を返す)
     std::array<double, 3> GetSizes() const;
+    /// @brief 各方向がkLineかどうかを示す配列を取得する
+    std::array<bool, 3> GetIsLines() const;
     /// @brief 各方向のサイズ s0, s1, s2 を設定する
     /// @param sizes 新しい各方向のサイズ s0, s1, s2
     /// @param is_line 各方向がkLineかどうかを示す配列

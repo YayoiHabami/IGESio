@@ -25,7 +25,8 @@
 namespace igesio::graphics {
 
 /// @brief デフォルトの線の表示太さ [px]
-constexpr double kDefaultLineWidth = 1.0;
+constexpr double kDefaultLineWidth =
+        models::kDefaultMaxLineWeight / models::kDefaultLineWeightGradations;
 
 /// @brief シェーダーのタイプ
 /// @note この列挙体の値に基づき、どのシェーダープログラムを使用するかを決定する

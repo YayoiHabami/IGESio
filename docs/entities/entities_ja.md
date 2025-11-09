@@ -30,6 +30,7 @@
   - [`ParametricSplineCurve` (type 112)](#parametricsplinecurve-type-112)
   - [`Point` (type 116)](#point-type-116)
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
+  - [`CurveOnAParametricSurface` (type 142)](#curveonaparametricsurface-type-142)
 - [Surfaces](#surfaces)
   - [`RuledSurface` (type 118)](#ruledsurface-type-118)
   - [`SurfaceOfRevolution` (type 120)](#surfaceofrevolution-type-120)
@@ -510,6 +511,77 @@ auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
 <img src="./images/rational_b_spline_curve.png" width=400px alt="RationalBSplineCurve Example" />
 
 **図: RationalBSplineCurveエンティティの例**
+
+### `CurveOnAParametricSurface` (type 142)
+
+> Defined at [curve_on_a_parametric_surface.h](../../include/igesio/entities/curves/curve_on_a_parametric_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬────────────────────────── EntityBase <─┬─ CurveOnAParametricSurface
+>                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
+> ```
+
+　`CurveOnAParametricSurface`は、パラメトリック曲面 $S(u,v)$ 上に定義されたパラメトリック曲線 $C(t)$ を表現するためのクラスです。任意の[曲面クラス](#surfaces)を基底曲面 $S$ として指定でき、そのパラメータ範囲 $D: u \in [u_{\text{min}}, u_{\text{max}}], v \in [v_{\text{min}}, v_{\text{max}}]$ 上において定義された任意の[曲線クラス](#curves)を基底曲線 $B$ として指定できます。
+
+　$D$ 上に定義されたパラメトリック曲線 $B(t)$ が次のように与えられるとします。ここで、曲線 $B$ は、サーフェス $S$ の領域である2次元空間 $D$ 上に位置するため、平面上に定義された曲線である必要があります。本ライブラリでは、`SetCurves(B)`で指定された曲線の $x,y$ 成分をそれぞれ $u,v$ 成分として扱います。
+
+$$B(t) = \begin{bmatrix} u(t) \\\ v(t) \end{bmatrix}, \quad t \in [t_{\text{min}}, t_{\text{max}}]$$
+
+　このとき、パラメトリックサーフェス上の曲線エンティティが表すパラメトリック曲線 $C(t)$ は、次のように定義されます。
+
+$$\begin{aligned}
+        C(t) &= S \circ B(t) \\
+        &= S(u(t), v(t)) \\
+        &= \begin{bmatrix} x(u(t), v(t)) \\\ y(u(t), v(t)) \\\ z(u(t), v(t)) \end{bmatrix}, \quad t \in [t_{\text{min}}, t_{\text{max}}]
+\end{aligned}$$
+
+　以下のコード例は、[RationalBSplineSurface](#rationalbsplinesurface-type-128)上に定義された本エンティティを生成します（図参照）。パラメータの詳細については、[examples/sample_curves.cpp](../../examples/sample_curves.cpp)の`CreateCurveOnAParametricSurface`関数を参照してください。
+
+　`MakeCurveOnAParametricSurface`関数は、`CurveOnAParametricSurface`エンティティと、3次元空間上での曲線表現である`ICurve`エンティティのペアを返します。これは、`CurveOnAParametricSurface`クラスはパラメトリック曲線として定義されますが、IGES 5.3の仕様上、3次元空間上での曲線表現（エンティティ）も必要となるためです。
+
+```cpp
+// Create NURBS surface
+auto param_s = igesio::IGESParameterVector{
+        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
+        3, 3,  // M1, M2 (Degree in U and V)
+        false, false, true, false, false,         // PROP1-5
+        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
+        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
+        // ... (Weights and Control Points are omitted for brevity)
+        0., 3., 0., 3.     // Parameter range in U and V
+};
+auto nurbs_s = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
+nurbs_s->OverwriteColor(i_ent::ColorNumber::kGreen);
+
+// Create a curve in the parameter space (u,v) of the surface
+auto param_c = igesio::IGESParameterVector{
+        4,  // number of control points - 1
+        3,  // degree
+        false, false, true, false,  // non-periodic open NURBS curve
+        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
+        1., 1., 1., 1., 1.,  // weights
+         0.0,  0.0,  0.0,    // control point P(0)
+         0.0,  4.0,  0.0,    // control point P(1)
+         2.0, -2.0,  0.0,    // control point P(2)
+         1.5,  2.0,  0.0,    // control point P(3)
+         3.0,  3.0,  0.0,    // control point P(4)
+        0.0, 1.0,            // parameter range V(0), V(1)
+        0.0, 0.0, 1.0        // normal vector of the defining plane
+};
+auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(param_c);
+
+// Create CurveOnAParametricSurface entity
+// This returns a pair of entities:
+// 1. CurveOnAParametricSurface (Type 142)
+// 2. ICurve entity representing the curve in model space (C(t) = S(u(t), v(t)))
+auto [open_curve, open_cons] = i_ent::MakeCurveOnAParametricSurface(nurbs_s, nurbs_c);
+open_curve->SetLineWeightNumber(2);
+```
+
+<img src="./images/curve_on_a_parametric_surface.png" width=400px alt="CurveOnAParametricSurface Example" />
+
+**図: CurveOnAParametricSurfaceエンティティの例**
 
 ## Surfaces
 

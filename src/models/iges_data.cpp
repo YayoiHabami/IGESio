@@ -24,7 +24,7 @@ using IgesData = i_models::IgesData;
 i_models::GlobalParam i_models::GetDefaultGlobalParam() {
     GlobalParam param = {};
     param.units_flag = UnitFlag::kMillimeter;
-    param.max_line_weight = 1.0;
+    param.max_line_weight = kDefaultMaxLineWeight;
     param.min_resolution = 0.001;
     return param;
 }

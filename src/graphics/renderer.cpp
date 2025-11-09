@@ -29,7 +29,7 @@ EntityRenderer::EntityRenderer(std::shared_ptr<IOpenGL> gl,
     default_global_param_ = std::make_shared<const models::GraphicsGlobalParam>(
             igesio::models::kDefaultModelSpaceScale,
             igesio::models::kDefaultLineWeightGradations,
-            igesio::models::kDefaultLineWeightGradations);
+            igesio::models::kDefaultMaxLineWeight);
 }
 
 

@@ -60,6 +60,7 @@ The class defines a bounding box using the following four types of parameters:
 | `GetDirections()` <br> `SetDirections(directions, types)` | Get and set the extension directions $D_0, D_1, D_2$ <br> (`types` is an array of `BoundingBox::DirectionType`) |
 | `GetSizes()` <br> `SetSizes(sizes, is_line)` <br> `SetSize(index, size, is_line)` | Get and set the edge lengths $s_0, s_1, s_2$ <br> For `kRay` and `kLine`, specify $+\infty$; for `kSegment`, specify a value in $[0, +\infty)$ <br> If `is_line` is `true`, treated as `kLine`; if `false`, treated as `kRay` or `kSegment` |
 | `GetDirectionTypes()` | Get the edge types $\text{type}_0, \text{type}_1, \text{type}_2$ <br> (`types` is an array of `BoundingBox::DirectionType`) |
+| `GetIsLines()` | Get an array of boolean values indicating whether each edge is `kLine` |
 | `Translate(vector)` <br> `Rotate(matrix)` <br> `Transform(matrix, vector)` | Transform the bounding box <br> - Translation by vector `vector`: $P_0 \leftarrow P_0 + \text{vector}$ <br> - Rotation by matrix `matrix`: $D_i \leftarrow \text{matrix} D_i$ |
 | `ExpandToInclude(box)` | Expand to fully contain another `BoundingBox` (`box`) <br> The basis vectors $D_0, D_1, D_2$ remain unchanged; only the control point $P_0$ and edge lengths $s_0, s_1, s_2$ are modified |
 

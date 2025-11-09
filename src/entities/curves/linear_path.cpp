@@ -55,7 +55,7 @@ LinearPath::LinearPath(const std::vector<Vector3d>& coordinates)
                           Matrix3Xd(3, coordinates.size())) {
     // 座標値を3xNの行列に変換して格納
     for (size_t i = 0; i < coordinates.size(); ++i) {
-        coordinates_.col(i) = coordinates[i];
+        coordinates_.block<3, 1>(0, i) = coordinates[i];
     }
 }
 
@@ -126,7 +126,8 @@ double LinearPath::Length(const double start, const double end) const {
     }
     auto [t_start, t_end] = GetParameterRange();
     if (start < t_start || end > t_end) {
-        throw std::invalid_argument("Parameters out of range: [" +
+        throw std::invalid_argument("Parameters start=" + std::to_string(start)
+            + ", end=" + std::to_string(end) + " out of range: [" +
             std::to_string(t_start) + ", " + std::to_string(t_end) + "].");
     } else if (numerics::IsApproxEqual(start, t_start) &&
                numerics::IsApproxEqual(end, t_end)) {
@@ -138,8 +139,9 @@ double LinearPath::Length(const double start, const double end) const {
     auto start_index = GetSegmentIndexAt(start);
     auto end_index = GetSegmentIndexAt(end);
     if (!start_index.has_value() || !end_index.has_value()) {
-        throw std::invalid_argument("Parameters out of range: [" +
-            std::to_string(t_start) + ", " +  std::to_string(t_end) + "].");
+        throw std::invalid_argument("Parameters start=" + std::to_string(start)
+            + ", end=" + std::to_string(end) + " out of index range: [" +
+            std::to_string(t_start) + ", " + std::to_string(t_end) + "].");
     }
     // 対応するセグメントが存在していれば、セグメントの長さはend-startに相当
     return end - start;

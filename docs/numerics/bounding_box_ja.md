@@ -60,6 +60,7 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 |  `GetDirections()` <br> `SetDirections(directions, types)` | 延伸方向 $D_0, D_1, D_2$ の設定および取得 <br> （`types`は`BoundingBox::DirectionType`の配列） |
 | `GetSizes()` <br> `SetSizes(sizes, is_line)` <br> `SetSize(index, size, is_line)` | 辺の長さ $s_0, s_1, s_2$ の設定および取得 <br> `kRay`および`kLine`の場合は $+\infty$, `kSegment`の場合は $[0, +\infty)$ の値を指定 <br> `is_line`が`true`の場合は`kLine`、`false`の場合は`kRay`または`kSegment`として扱う |
 | `GetDirectionTypes()` | 辺の種類 $\text{type}_0, \text{type}_1, \text{type}_2$ の取得 <br> （`types`は`BoundingBox::DirectionType`の配列） |
+| `GetIsLines()` | 各辺が`kLine`かどうかの真偽値配列の取得 |
 | `Translate(vector)` <br> `Rotate(matrix)` <br> `Transform(matrix, vector)` | バウンディングボックスの変換 <br> - 平行移動ベクトル`vector`による基点の移動: $P_0 \leftarrow P_0 + \text{vector}$ <br> - 回転行列`matrix`による基点・延伸方向の回転: $D_i \leftarrow \text{matrix} D_i$ |
 | `ExpandToInclude(box)` | 他の`BoundingBox`(`box`)を完全に包含するように拡張する <br> 基底 $D_0, D_1, D_2$ は変更されず、基準点 $P_0$ と辺の長さ $s_0, s_1, s_2$ のみが変更される |
 

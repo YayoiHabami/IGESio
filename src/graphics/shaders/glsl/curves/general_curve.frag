@@ -10,4 +10,8 @@ uniform vec4 mainColor;
 
 void main() {
     FragColor = mainColor;
+
+    // Slightly adjust depth to avoid z-fighting
+    // assuming curves are rendered on top of surfaces
+    gl_FragDepth = gl_FragCoord.z - 0.0001;
 }

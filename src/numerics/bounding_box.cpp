@@ -208,6 +208,14 @@ std::array<double, 3> BoundingBox::GetSizes() const {
     return result;
 }
 
+std::array<bool, 3> BoundingBox::GetIsLines() const {
+    std::array<bool, 3> is_lines;
+    for (size_t i = 0; i < 3; ++i) {
+        is_lines[i] = (sizes_[i] == -kInf);
+    }
+    return is_lines;
+}
+
 void BoundingBox::SetSizes(const std::array<double, 3>& sizes,
                            const std::array<bool, 3>& is_line) {
     try {

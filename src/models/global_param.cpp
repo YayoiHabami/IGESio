@@ -255,7 +255,7 @@ i_model::GlobalParam i_model::SetGlobalSectionParams(
         gs.units_flag = GetUnitFlag(prm[i], prm[i+1]);
         i += 2;
         gs.line_weight_gradations = iio::FromIgesInteger(prm[i++], kDefaultLineWeightGradations);
-        gs.max_line_weight = iio::FromIgesReal(prm[i++], std::nullopt);
+        gs.max_line_weight = iio::FromIgesReal(prm[i++], kDefaultMaxLineWeight);
         gs.date_time_generation = iio::FromIgesString(prm[i++], std::nullopt);
         gs.min_resolution = iio::FromIgesReal(prm[i++], std::nullopt);
         gs.max_coordinate = iio::FromIgesReal(prm[i++], kDefaultMaxCoordinate);

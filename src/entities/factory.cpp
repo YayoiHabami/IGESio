@@ -26,6 +26,7 @@
 #include "igesio/entities/transformations/transformation_matrix.h"  // type 124
 #include "igesio/entities/curves/rational_b_spline_curve.h"         // type 126
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"     // type 128
+#include "igesio/entities/curves/curve_on_a_parametric_surface.h"   // type 142
 #include "igesio/entities/structures/color_definition.h"            // type 314
 
 
@@ -124,6 +125,11 @@ void i_ent::EntityFactory::Initialize() {
     creators_[ET::kRationalBSplineSurface] = [](const DE& de, const IVec& p,
                                                 const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::RationalBSplineSurface>(de, p, d2i, iid);
+    };
+    // 142 - Curve on A Parametric Surface
+    creators_[ET::kCurveOnAParametricSurface] = [](const DE& de, const IVec& p,
+                                                   const p2I& d2i, const ObjectID& iid) {
+        return std::make_shared<i_ent::CurveOnAParametricSurface>(de, p, d2i, iid);
     };
 
     // 314 - Color Definition
