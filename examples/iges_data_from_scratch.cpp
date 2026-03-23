@@ -90,9 +90,9 @@ int main() {
 
     // Create a Transformation Matrix entity
     // (90-degree rotation around Y-axis and translation (0, 0, 1))
+    auto rotation = igesio::AngleAxisd(igesio::kPi/2, igesio::Vector3d::UnitY());
     auto transformation = std::make_shared<TransMatrix>(
-            igesio::AngleAxisd(igesio::kPi/2, igesio::Vector3d::UnitY()),
-            igesio::Vector3d{0, 0, 1});
+            rotation.toRotationMatrix(), igesio::Vector3d{0, 0, 1});
     auto trans_params = transformation->GetParameters();
     std::cout << std::endl << "TransformationMatrix parameters: " << trans_params << std::endl;
     // Transform arc

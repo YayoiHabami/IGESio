@@ -323,7 +323,8 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
         if (!i_num::IsApproxEqual(value_k_m1, value_k)) {
             errors.emplace_back("Discontinuity in function value at breakpoint T("
                 + std::to_string(k + 1) + ") = " + std::to_string(t_k) + "; "
-                + ToString(value_k_m1, true) + " != " + ToString(value_k, true) + ".");
+                + igesio::ToString(value_k_m1, true) + " != "
+                + igesio::ToString(value_k, true) + ".");
         }
 
         // 接線の連続性 (H >= 1)
@@ -331,8 +332,8 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
             if (!i_num::IsApproxEqual(first_derivative_k_m1, first_derivative_k)) {
                 errors.emplace_back("Discontinuity in tangent vector at breakpoint T("
                     + std::to_string(k + 1) + ") = " + std::to_string(t_k)
-                    + "; " + ToString(first_derivative_k_m1, true) + " != "
-                    + ToString(first_derivative_k, true) + " for degree H >= 1.");
+                    + "; " + igesio::ToString(first_derivative_k_m1, true) + " != "
+                    + igesio::ToString(first_derivative_k, true) + " for degree H >= 1.");
             }
         }
         // 曲率の連続性 (H >= 2)
@@ -340,8 +341,8 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
             if (!i_num::IsApproxEqual(second_derivative_k_m1, second_derivative_k)) {
                 errors.emplace_back("Discontinuity in curvature vector at breakpoint T("
                     + std::to_string(k + 1) + ") = " + std::to_string(t_k)
-                    + "; " + ToString(second_derivative_k_m1, true) + " != "
-                    + ToString(second_derivative_k, true) + " for degree H >= 2.");
+                    + "; " + igesio::ToString(second_derivative_k_m1, true) + " != "
+                    + igesio::ToString(second_derivative_k, true) + " for degree H >= 2.");
             }
         }
     }

@@ -122,16 +122,16 @@ BoundingBox MakeBox2D(
 TEST(BoundingBoxTest, DefaultConstructor) {
     BoundingBox bbox;
 
-    EXPECT_TRUE(i_num::IsApproxEqual(bbox.GetControl(), Vector3d::Zero()));
+    EXPECT_TRUE(i_num::IsApproxConstant(bbox.GetControl(), 0));
 
     auto sizes = bbox.GetSizes();
     ExpectArray3ApproxEqual(sizes, {0.0, 0.0, 0.0});
 
     // デフォルトのdirectionsが軸平行であることを確認
     auto dirs = bbox.GetDirections();
-    EXPECT_TRUE(i_num::IsApproxEqual(dirs[0], Vector3d::UnitX()));
-    EXPECT_TRUE(i_num::IsApproxEqual(dirs[1], Vector3d::UnitY()));
-    EXPECT_TRUE(i_num::IsApproxEqual(dirs[2], Vector3d::UnitZ()));
+    EXPECT_TRUE(i_num::IsApproxUnitVector(dirs[0], 0));
+    EXPECT_TRUE(i_num::IsApproxUnitVector(dirs[1], 1));
+    EXPECT_TRUE(i_num::IsApproxUnitVector(dirs[2], 2));
 
     auto types = bbox.GetDirectionTypes();
     ExpectArray3ApproxEqual(
@@ -199,9 +199,9 @@ TEST(BoundingBoxTest, Constructor3DAABB_Valid) {
 
     EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p0));
     auto dirs = box.GetDirections();
-    EXPECT_TRUE(i_num::IsApproxEqual(dirs[0], Vector3d::UnitX()));
-    EXPECT_TRUE(i_num::IsApproxEqual(dirs[1], Vector3d::UnitY()));
-    EXPECT_TRUE(i_num::IsApproxEqual(dirs[2], Vector3d::UnitZ()));
+    EXPECT_TRUE(i_num::IsApproxUnitVector(dirs[0], 0));
+    EXPECT_TRUE(i_num::IsApproxUnitVector(dirs[1], 1));
+    EXPECT_TRUE(i_num::IsApproxUnitVector(dirs[2], 2));
     ExpectArray3ApproxEqual(box.GetSizes(), sizes);
 }
 
@@ -270,7 +270,7 @@ TEST(BoundingBoxTest, Constructor2DAABB_Valid) {
     BoundingBox box(p0, sizes_2d);
 
     EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p0));
-    EXPECT_TRUE(i_num::IsApproxEqual(box.GetDirections()[0], Vector3d::UnitX()));
+    EXPECT_TRUE(i_num::IsApproxUnitVector(box.GetDirections()[0], 0));
     auto sizes = box.GetSizes();
     ExpectArray3ApproxEqual(sizes, {sizes_2d[0], sizes_2d[1], 0.0});
 }
@@ -625,7 +625,7 @@ TEST(BoundingBoxTest, Rotate) {
     auto original_sizes = box.GetSizes();
 
     // Z軸周りに90度回転
-    auto rot = igesio::AngleAxisd(igesio::kPi / 2.0, Vector3d::UnitZ());
+    auto rot = igesio::AngleAxisd(igesio::kPi / 2.0, Vector3d::UnitZ()).toRotationMatrix();
 
     EXPECT_NO_THROW(box.Rotate(rot));
 
@@ -655,7 +655,7 @@ TEST(BoundingBoxTest, Transform) {
     auto original_sizes = box.GetSizes();
 
     // Z軸周りに90度回転
-    auto rot = igesio::AngleAxisd(igesio::kPi / 2.0, Vector3d::UnitZ());
+    auto rot = igesio::AngleAxisd(igesio::kPi / 2.0, Vector3d::UnitZ()).toRotationMatrix();
     Vector3d vec(100.0, -50.0, 10.0);
 
     EXPECT_NO_THROW(box.Transform(rot, vec));
@@ -759,19 +759,20 @@ TEST(BoundingBoxTest, ExpandToInclude) {
     // 回転したboxについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
     for (const auto& c : cases) {
         SCOPED_TRACE("回転後: " + description + "; " + c.description);
 
         // boxをリセット
         BoundingBox test_box(p0, sizes);
         BoundingBox other_box(c.other_p0, c.other_sizes);
-        test_box.Rotate(rotation, Vector3d::Zero());
-        other_box.Rotate(rotation, Vector3d::Zero());
+        test_box.Rotate(rot_matrix, Vector3d::Zero());
+        other_box.Rotate(rot_matrix, Vector3d::Zero());
 
         EXPECT_NO_THROW(test_box.ExpandToInclude(other_box));
 
         // 拡大後のboxの位置・サイズを検証
-        auto expected_p0 = rotation * c.expected_p0;
+        Vector3d expected_p0 = rotation * c.expected_p0;
         EXPECT_TRUE(i_num::IsApproxEqual(test_box.GetControl(), expected_p0))
             << "Expected p0: " << expected_p0.transpose()
             << ", Got: " << test_box.GetControl().transpose();
@@ -785,7 +786,7 @@ TEST(BoundingBoxTest, ExpandToInclude) {
             << other_box.GetSizes()[0] << "," << other_box.GetSizes()[1]
             << "," << other_box.GetSizes()[2] << ")";
         auto original_box_rotated = BoundingBox(p0, sizes);
-        original_box_rotated.Rotate(rotation, Vector3d::Zero());
+        original_box_rotated.Rotate(rot_matrix, Vector3d::Zero());
         EXPECT_TRUE(test_box.Contains(original_box_rotated))
             << "Expanded box should contain original box: p0="
             << test_box.GetControl().transpose() << ", sizes=("
@@ -802,13 +803,13 @@ TEST(BoundingBoxTest, ExpandToInclude_ZeroSizeBox) {
         auto box2 = BoundingBox();
         EXPECT_NO_THROW(box1.ExpandToInclude(box2));
         EXPECT_TRUE(box1.IsEmpty());
-        EXPECT_TRUE(i_num::IsApproxEqual(box1.GetControl(), Vector3d::Zero()));
+        EXPECT_TRUE(i_num::IsApproxConstant(box1.GetControl(), 0));
 
         // p_{0,1} = (0,0,0), p_{0,2} = (1,1,1) -> サイズが(1,1,1)のボックスに拡大
         box2.SetControl(Vector3d(1.0, 1.0, 1.0));
         EXPECT_NO_THROW(box1.ExpandToInclude(box2));
         EXPECT_FALSE(box1.IsEmpty());
-        EXPECT_TRUE(i_num::IsApproxEqual(box1.GetControl(), Vector3d::Zero()));
+        EXPECT_TRUE(i_num::IsApproxConstant(box1.GetControl(), 0));
         ExpectArray3ApproxEqual(box1.GetSizes(), {1.0, 1.0, 1.0});
     }
 
@@ -819,7 +820,7 @@ TEST(BoundingBoxTest, ExpandToInclude_ZeroSizeBox) {
         auto sizes = std::array<double, 3>{10.0, 20.0, 30.0};
         auto box = BoundingBox(Vector3d::Zero(), sizes);
         EXPECT_NO_THROW(box.ExpandToInclude(null_box));
-        EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), Vector3d::Zero()));
+        EXPECT_TRUE(i_num::IsApproxConstant(box.GetControl(), 0));
         ExpectArray3ApproxEqual(box.GetSizes(), sizes);
 
         // サイズが非ゼロのボックス外にゼロサイズボックスがある場合
@@ -836,7 +837,7 @@ TEST(BoundingBoxTest, ExpandToInclude_ZeroSizeBox) {
         auto sizes = std::array<double, 3>{10.0, 20.0, 30.0};
         auto box = BoundingBox(Vector3d(5.0, 5.0, 5.0), sizes);
         EXPECT_NO_THROW(null_box.ExpandToInclude(box));
-        EXPECT_TRUE(i_num::IsApproxEqual(null_box.GetControl(), Vector3d::Zero()));
+        EXPECT_TRUE(i_num::IsApproxConstant(null_box.GetControl(), 0));
         ExpectArray3ApproxEqual(null_box.GetSizes(),
                                 std::array<double, 3>{15.0, 25.0, 35.0});
     }
@@ -1066,10 +1067,10 @@ TEST(BoundingBoxTest, GetVerticesFinite) {
     auto vertices_empty = box_empty.GetVertices();
     EXPECT_EQ(vertices_empty.size(), 4);  // Is2D() が true のため
     EXPECT_TRUE(ContainsVertex(vertices_empty, Vector3d::Zero()));
-    EXPECT_TRUE(i_num::IsApproxEqual(vertices_empty[0], Vector3d::Zero()));
-    EXPECT_TRUE(i_num::IsApproxEqual(vertices_empty[1], Vector3d::Zero()));
-    EXPECT_TRUE(i_num::IsApproxEqual(vertices_empty[2], Vector3d::Zero()));
-    EXPECT_TRUE(i_num::IsApproxEqual(vertices_empty[3], Vector3d::Zero()));
+    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[0], 0.0));
+    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[1], 0.0));
+    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[2], 0.0));
+    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[3], 0.0));
 }
 
 TEST(BoundingBoxTest, GetVerticesInfinite) {
@@ -1143,7 +1144,7 @@ TEST(BoundingBoxTest, GetFiniteVertices) {
     EXPECT_TRUE(box_empty.IsFinite());
     auto vertices_empty = box_empty.GetFiniteVertices();
     EXPECT_EQ(vertices_empty.size(), 4);
-    EXPECT_TRUE(i_num::IsApproxEqual(vertices_empty[0], Vector3d::Zero()));
+    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[0], 0.0));
 
     // --- Infinite (Ray) ---
     BoundingBox box_ray(p0, {kInf, 20.0, 30.0}, {false, false, false});
@@ -1205,11 +1206,12 @@ TEST(BoundingBoxTest, ContainsPoint_Finite3D) {
     // 回転したボックスについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
-    box.Rotate(rotation);
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    box.Rotate(rot_matrix);
     p0 = box.GetControl();
     for (const auto& [point, expected, description] : test_cases) {
         SCOPED_TRACE("回転後: " + description);
-        auto rotated_point = rotation * (point - p0) + p0;
+        Vector3d rotated_point = rotation * (point - p0) + p0;
         EXPECT_EQ(box.Contains(rotated_point), expected)
             << "point: " << rotated_point.transpose();
     }
@@ -1250,11 +1252,12 @@ TEST(BoundingBoxTest, ContainsPoint_Finite2D) {
 
     // 回転したボックスについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
-    box.Rotate(rotation);
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    box.Rotate(rot_matrix);
     p0 = box.GetControl();
     for (const auto& [point, expected, description] : test_cases) {
         SCOPED_TRACE("回転後: " + description);
-        auto rotated_point = rotation * (point - p0) + p0;
+        Vector3d rotated_point = rotation * (point - p0) + p0;
         EXPECT_EQ(box.Contains(rotated_point), expected)
             << "point: " << rotated_point.transpose();
     }
@@ -1299,7 +1302,8 @@ TEST(BoundingBoxTest, ContainsPoint_InfiniteRay3D) {
     // 回転したボックスについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
-    box.Rotate(rotation);
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    box.Rotate(rot_matrix);
     p0 = box.GetControl();
     for (const auto& [point, expected, description] : test_cases) {
         if (!point.allFinite()) {
@@ -1308,7 +1312,7 @@ TEST(BoundingBoxTest, ContainsPoint_InfiniteRay3D) {
         }
 
         SCOPED_TRACE("回転後: " + description);
-        auto rotated_point = rotation * (point - p0) + p0;
+        Vector3d rotated_point = rotation * (point - p0) + p0;
         EXPECT_EQ(box.Contains(rotated_point), expected)
             << "point: " << rotated_point.transpose();
     }
@@ -1353,7 +1357,8 @@ TEST(BoundingBoxTest, ContainsPoint_InfiniteLine3D) {
     // 回転したボックスについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
-    box.Rotate(rotation);
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    box.Rotate(rot_matrix);
     p0 = box.GetControl();
     for (const auto& [point, expected, description] : test_cases) {
         if (!point.allFinite()) {
@@ -1362,7 +1367,7 @@ TEST(BoundingBoxTest, ContainsPoint_InfiniteLine3D) {
         }
 
         SCOPED_TRACE("回転後: " + description);
-        auto rotated_point = rotation * (point - p0) + p0;
+        Vector3d rotated_point = rotation * (point - p0) + p0;
         EXPECT_EQ(box.Contains(rotated_point), expected)
             << "point: " << rotated_point.transpose();
     }
@@ -1418,11 +1423,13 @@ TEST(BoundingBoxTest, ContainsBox_Finite3D) {
     // 回転したboxについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
-    A.Rotate(rotation, Vector3d::Zero());
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    Vector3d zero_vec = Vector3d::Zero();
+    A.Rotate(rot_matrix, zero_vec);
     for (const auto& c : cases) {
         SCOPED_TRACE("回転後: " + c.desc);
         BoundingBox B(c.pB, c.sB);
-        B.Rotate(rotation, Vector3d::Zero());
+        B.Rotate(rot_matrix, zero_vec);
         auto b_sizes = B.GetSizes();
         EXPECT_EQ(A.Contains(B), c.expected)
             << "A.Contains(B) for rotated B at " << B.GetControl().transpose()
@@ -1476,11 +1483,13 @@ TEST(BoundingBoxTest, ContainsBox_Finite2D) {
     // 回転したboxについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
-    A.Rotate(rotation, Vector3d::Zero());
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    Vector3d zero_vec = Vector3d::Zero();
+    A.Rotate(rot_matrix, zero_vec);
     for (const auto& c : cases) {
         SCOPED_TRACE("回転後: " + c.desc);
         BoundingBox B(c.pB, c.sB);
-        B.Rotate(rotation, Vector3d::Zero());
+        B.Rotate(rot_matrix, zero_vec);
         auto b_sizes = B.GetSizes();
         EXPECT_EQ(A.Contains(B), c.expected)
             << "A.Contains(B) for rotated B at " << B.GetControl().transpose()
@@ -1543,7 +1552,9 @@ TEST(BoundingBoxTest, ContainsBox_InfiniteRay3D) {
     // 回転したboxについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
-    A.Rotate(rotation, Vector3d::Zero());
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    Vector3d zero_vec = Vector3d::Zero();
+    A.Rotate(rot_matrix, zero_vec);
     for (const auto& c : cases) {
         if (!std::all_of(c.sB.begin(), c.sB.end(), [](double v) { return std::isfinite(v); })) {
             // TODO: 正しく判定できるようにする
@@ -1552,7 +1563,7 @@ TEST(BoundingBoxTest, ContainsBox_InfiniteRay3D) {
 
         SCOPED_TRACE("回転後: " + c.desc);
         BoundingBox B(c.pB, c.sB, c.is_line_B);
-        B.Rotate(rotation, Vector3d::Zero());
+        B.Rotate(rot_matrix, zero_vec);
         auto b_sizes = B.GetSizes();
         EXPECT_EQ(A.Contains(B), c.expected)
             << "A.Contains(B) for rotated B at " << B.GetControl().transpose()
@@ -1615,7 +1626,9 @@ TEST(BoundingBoxTest, ContainsBox_InfiniteLine3D) {
     // 回転したboxについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
-    A.Rotate(rotation, Vector3d::Zero());
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
+    Vector3d zero_vec = Vector3d::Zero();
+    A.Rotate(rot_matrix, zero_vec);
     for (const auto& c : cases) {
         if (!std::all_of(c.sB.begin(), c.sB.end(), [](double v) { return std::isfinite(v); })) {
             // TODO: 正しく判定できるようにする
@@ -1624,7 +1637,7 @@ TEST(BoundingBoxTest, ContainsBox_InfiniteLine3D) {
 
         SCOPED_TRACE("回転後: " + c.desc);
         BoundingBox B(c.pB, c.sB, c.is_line_B);
-        B.Rotate(rotation, Vector3d::Zero());
+        B.Rotate(rot_matrix, zero_vec);
         auto b_sizes = B.GetSizes();
         EXPECT_EQ(A.Contains(B), c.expected)
             << "A.Contains(B) for rotated B at " << B.GetControl().transpose()
@@ -1772,16 +1785,17 @@ TEST(BoundingBoxTest, IntersectsLine) {
     // 回転したboxについても検証
     auto rotation = igesio::AngleAxisd(igesio::kPi / 4.0, Vector3d::UnitZ());
     rotation = rotation * igesio::AngleAxisd(igesio::kPi / 6.0, Vector3d::UnitY());
+    Matrix3d rot_matrix = rotation.toRotationMatrix();
     for (size_t i_box = 0; i_box < boxes.size(); ++i_box) {
         // boxを回転
         auto [box, box_name] = boxes[i_box];
-        box.Rotate(rotation);
+        box.Rotate(rot_matrix);
         auto ctr = box.GetControl();
 
         for (const auto& tc : test_cases) {
             // 線分の両端点を回転
-            auto rotated_start = rotation * (tc.start - ctr) + ctr;
-            auto rotated_end = rotation * (tc.end - ctr) + ctr;
+            Vector3d rotated_start = rotation * (tc.start - ctr) + ctr;
+            Vector3d rotated_end = rotation * (tc.end - ctr) + ctr;
 
             for (size_t i_type = 0; i_type < types.size(); ++i_type) {
                 SCOPED_TRACE(box_name + " (回転後), " + type_names[i_type] + ": " + tc.description);

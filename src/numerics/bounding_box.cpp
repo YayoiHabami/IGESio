@@ -81,19 +81,19 @@ BoundingBox::BoundingBox(const Vector3d& point1,
     if (!point1.allFinite() || !point2.allFinite()) {
         throw std::invalid_argument(
             "BoundingBox: Points cannot have infinite components, "
-            "but got point1 = " + ToString(point1.transpose()) +
-            ", point2 = " + ToString(point2.transpose()));
+            "but got point1 = " + ToString(point1, /*transpose=*/true) +
+            ", point2 = " + ToString(point2, /*transpose=*/true));
     }
     if (IsApproxEqual(point1, point2)) {
         throw std::invalid_argument(
-            "BoundingBox: Points must be different, "
-            "but got point1 = point2 = " + ToString(point1.transpose()));
+            "BoundingBox: Points must be different, but got "
+            "point1 = point2 = " + ToString(point1, /*transpose=*/true));
     }
 
     // 最小の点 (基点P0) とサイズを計算
     auto min_point = point1.cwiseMin(point2);
     auto max_point = point1.cwiseMax(point2);
-    auto size = max_point - min_point;
+    Vector3d size = max_point - min_point;
 
     // 2つ以上のsize[i]が0である場合はエラー
     int zero_index = -1;
@@ -103,7 +103,7 @@ BoundingBox::BoundingBox(const Vector3d& point1,
                 throw std::invalid_argument(
                     "BoundingBox: At least two dimensions are zero, "
                     "which is not allowed, got sizes = " +
-                    ToString(size.transpose()));
+                    ToString(size, /*transpose=*/true));
             }
             zero_index = i;
         }
@@ -148,7 +148,7 @@ void BoundingBox::SetControl(const Vector3d& control) {
     if (!control.allFinite()) {
         throw std::invalid_argument(
             "BoundingBox: Control point cannot have infinite components, "
-            "but got " + ToString(control.transpose()));
+            "but got " + ToString(control, /*transpose=*/true));
     }
     control_ = control;
 }
@@ -172,8 +172,8 @@ void BoundingBox::SetDirections(const std::array<Vector3d, 3>& directions) {
         // D0とD1は非ゼロかつ必ず直交していること
         throw std::invalid_argument(
             "BoundingBox: Directions D0 and D1 must be non-zero and orthogonal, "
-            "but got D0 = " + ToString(d0.transpose()) +
-            ", D1 = " + ToString(d1.transpose()));
+            "but got D0 = " + ToString(d0, /*transpose=*/true) +
+            ", D1 = " + ToString(d1, /*transpose=*/true));
     }
     directions_[0] = d0.normalized();
     directions_[1] = d1.normalized();
@@ -183,7 +183,7 @@ void BoundingBox::SetDirections(const std::array<Vector3d, 3>& directions) {
     if (!i_num::IsApproxEqual(d0xd1, d2)) {
         throw std::invalid_argument(
             "BoundingBox: Direction D2 must be parallel to D0 x D1 with positive scale, "
-            "but got D2 = " + ToString(d2.transpose()));
+            "but got D2 = " + ToString(d2, /*transpose=*/true));
     }
     directions_[2] = d2;
 }
@@ -284,7 +284,7 @@ void BoundingBox::Translate(const Vector3d& vec) {
     if (std::isinf(vec.norm())) {
         throw std::invalid_argument(
             "BoundingBox: Translation vector cannot have infinite components, "
-            "but got " + ToString(vec.transpose()));
+            "but got " + ToString(vec, /*transpose=*/true));
     }
 
     control_ += vec;
@@ -296,11 +296,11 @@ void BoundingBox::Rotate(const Matrix3d& rot) {
 
 void BoundingBox::Rotate(const Matrix3d& rot, const Vector3d& center) {
     // rotがほぼIdentityであれば何もしない
-    if (IsApproxEqual(rot, Matrix3d::Identity()))  return;
+    if (IsApproxIdentity(rot))  return;
 
     // 回転行列の検証 (直交行列かつ行列式が1)
-    auto should_be_identity = rot * rot.transpose();
-    if (!i_num::IsApproxEqual(should_be_identity, Matrix3d::Identity()) ||
+    Eigen::Matrix3d should_be_identity = rot * rot.transpose();
+    if (!i_num::IsApproxIdentity(should_be_identity) ||
         !i_num::IsApproxEqual(rot.determinant(), 1.0)) {
         throw std::invalid_argument(
             "BoundingBox: Rotation matrix must be orthogonal with determinant 1, "
@@ -311,7 +311,7 @@ void BoundingBox::Rotate(const Matrix3d& rot, const Vector3d& center) {
     if (!center.allFinite()) {
         throw std::invalid_argument(
             "BoundingBox: Rotation center cannot have infinite components, "
-            "but got " + ToString(center.transpose()));
+            "but got " + ToString(center, /*transpose=*/true));
     }
 
     // centerを中心に回転
@@ -523,7 +523,7 @@ bool BoundingBox::Contains(const BoundingBox& other) const {
 
     // すべての頂点が包含されているか確認
     for (const auto& vertex_w : other.GetVertices()) {
-        auto vertex = vertex_w - control_;
+        Vector3d vertex = vertex_w - control_;
         if (!IsAxisAligned()) {
             vertex = w2l * vertex;
         }
@@ -540,13 +540,13 @@ bool BoundingBox::Intersects(const Vector3d& start_w, const Vector3d& end_w,
     if (!start_w.allFinite() || !end_w.allFinite()) {
         throw std::invalid_argument(
             "BoundingBox: Start and end points cannot have infinite components or NaN values, "
-            "but got start " + ToString(start_w.transpose()) +
-            ", end " + ToString(end_w.transpose()));
+            "but got start " + ToString(start_w, /*transpose=*/true) +
+            ", end " + ToString(end_w, /*transpose=*/true));
     }
     if (i_num::IsApproxEqual(start_w, end_w)) {
         throw std::invalid_argument(
             "BoundingBox: Start and end points cannot be the same, "
-            "but got " + ToString(start_w.transpose()));
+            "but got " + ToString(start_w, /*transpose=*/true));
     }
 
     // 直線の方向ベクトルと L(t) の値域を計算
@@ -652,9 +652,9 @@ double BoundingBox::DistanceTo(const Vector3d& point) const {
  */
 
 bool BoundingBox::IsAxisAligned() const {
-    return IsApproxEqual(directions_[0], Vector3d::UnitX()) &&
-           IsApproxEqual(directions_[1], Vector3d::UnitY()) &&
-           IsApproxEqual(directions_[2], Vector3d::UnitZ());
+    return IsApproxUnitVector(directions_[0], 0) &&
+           IsApproxUnitVector(directions_[1], 1) &&
+           IsApproxUnitVector(directions_[2], 2);
 }
 
 igesio::Matrix3d BoundingBox::GetLocalToWorldRotation() const {

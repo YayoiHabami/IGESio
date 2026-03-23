@@ -300,8 +300,8 @@ bool RationalBSplineCurve::IsClosed() const {
 
     if (is_clamped) {
         // クランプされている場合、最初と最後の制御点が一致するかを確認
-        auto first_cp = control_points_.col(0);
-        auto last_cp = control_points_.col(control_points_.cols() - 1);
+        Vector3d first_cp = control_points_.col(0);
+        Vector3d last_cp = control_points_.col(control_points_.cols() - 1);
         return i_num::IsApproxEqual(first_cp, last_cp);
     } else {
         // クランプされていない場合、始点と終点を計算して評価
@@ -359,8 +359,8 @@ RationalBSplineCurve::TryGetDerivatives(const double t, const unsigned int n) co
 i_num::BoundingBox RationalBSplineCurve::GetDefinedBoundingBox() const {
     // 制御点をすべて含むバウンディングボックスを計算
     // 制御点から構成される凸包は有理Bスプライン曲線を包含するため
-    auto min = control_points_.col(0);
-    auto max = control_points_.col(0);
+    Vector3d min = control_points_.col(0);
+    Vector3d max = control_points_.col(0);
     for (int i = 1; i < control_points_.cols(); ++i) {
         min = min.cwiseMin(control_points_.col(i));
         max = max.cwiseMax(control_points_.col(i));

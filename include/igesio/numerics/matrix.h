@@ -49,16 +49,16 @@ using RowVector = Eigen::Matrix<T, 1, M>;
 
 // float
 using Eigen::Matrix2f;
-using Eigen::Matrix23f;
-using Eigen::Matrix24f;
+using Matrix23f = Eigen::Matrix<float, 2, 3>;
+using Matrix24f = Eigen::Matrix<float, 2, 4>;
 using Eigen::Matrix2Xf;
 using Eigen::Matrix3f;
-using Eigen::Matrix32f;
-using Eigen::Matrix34f;
+using Matrix32f = Eigen::Matrix<float, 3, 2>;
+using Matrix34f = Eigen::Matrix<float, 3, 4>;
 using Eigen::Matrix3Xf;
 using Eigen::Matrix4f;
-using Eigen::Matrix42f;
-using Eigen::Matrix43f;
+using Matrix42f = Eigen::Matrix<float, 4, 2>;
+using Matrix43f = Eigen::Matrix<float, 4, 3>;
 using Eigen::Matrix4Xf;
 using Eigen::MatrixX2f;
 using Eigen::MatrixX3f;
@@ -75,16 +75,16 @@ using Eigen::RowVectorXf;
 
 // double
 using Eigen::Matrix2d;
-using Eigen::Matrix23d;
-using Eigen::Matrix24d;
+using Matrix23d = Eigen::Matrix<double, 2, 3>;
+using Matrix24d = Eigen::Matrix<double, 2, 4>;
 using Eigen::Matrix2Xd;
 using Eigen::Matrix3d;
-using Eigen::Matrix32d;
-using Eigen::Matrix34d;
+using Matrix32d = Eigen::Matrix<double, 3, 2>;
+using Matrix34d = Eigen::Matrix<double, 3, 4>;
 using Eigen::Matrix3Xd;
 using Eigen::Matrix4d;
-using Eigen::Matrix42d;
-using Eigen::Matrix43d;
+using Matrix42d = Eigen::Matrix<double, 4, 2>;
+using Matrix43d = Eigen::Matrix<double, 4, 3>;
 using Eigen::Matrix4Xd;
 using Eigen::MatrixX2d;
 using Eigen::MatrixX3d;

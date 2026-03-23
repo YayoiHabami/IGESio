@@ -128,24 +128,28 @@ void CheckSurfaceDerivativesContinuity(
         std::string prefix = "Discontinuity detected in derivative S^(" +
                              std::to_string(nu) + "," + std::to_string(nv) + ") at S(u,v)= S(" +
                              std::to_string(u) + ", " + std::to_string(v) + ") = " +
-                             ToString(d_center(nu, nv).transpose()) + " / ";
+                             igesio::ToString(d_center(nu, nv), /*transpose=*/true) + " / ";
         std::string suffix = " for surface: " + surface.name;
 
         double dist = (d_right(nu, nv) - d_center(nu, nv)).norm();
         EXPECT_LE(dist, tol) << prefix << "S(u+ε, v) = S(" << u_plus << ", " << v << ") = "
-            << ToString(d_right(nu, nv).transpose()) << " (dist = " << dist << ")" << suffix;
+            << igesio::ToString(d_right(nu, nv), /*transpose=*/true)
+            << " (dist = " << dist << ")" << suffix;
 
         dist = (d_left(nu, nv) - d_center(nu, nv)).norm();
         EXPECT_LE(dist, tol) << prefix << "S(u-ε, v) = S(" << u_minus << ", " << v << ") = "
-            << ToString(d_left(nu, nv).transpose()) << " (dist = " << dist << ")" << suffix;
+            << igesio::ToString(d_left(nu, nv), /*transpose=*/true)
+            << " (dist = " << dist << ")" << suffix;
 
         dist = (d_up(nu, nv) - d_center(nu, nv)).norm();
         EXPECT_LE(dist, tol) << prefix << "S(u, v+ε) = S(" << u << ", " << v_plus << ") = "
-            << ToString(d_up(nu, nv).transpose()) << " (dist = " << dist << ")" << suffix;
+            << igesio::ToString(d_up(nu, nv), /*transpose=*/true)
+            << " (dist = " << dist << ")" << suffix;
 
         dist = (d_down(nu, nv) - d_center(nu, nv)).norm();
         EXPECT_LE(dist, tol) << prefix << "S(u, v-ε) = S(" << u << ", " << v_minus << ") = "
-            << ToString(d_down(nu, nv).transpose()) << " (dist = " << dist << ")" << suffix;
+            << igesio::ToString(d_down(nu, nv), /*transpose=*/true)
+            << " (dist = " << dist << ")" << suffix;
     }
 }
 

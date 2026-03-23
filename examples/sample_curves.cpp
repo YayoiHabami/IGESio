@@ -67,8 +67,9 @@ ent_vec CreateCircularArc() {
 ///       3. Circular arc: center (-0.5, 1), radius 1.5, start (1, 1), end (-2, 1)
 ent_vec CreateCompositeCurve() {
     // 1. circular arc with transformation
+    auto rotation = igesio::AngleAxisd(kPi, Vector3d::UnitY());
     auto comp_1_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::AngleAxisd(kPi, Vector3d::UnitY()), Vector3d{0.5, -1.0, 0.0});
+            rotation.toRotationMatrix(), Vector3d{0.5, -1.0, 0.0});
     auto comp_1 = std::make_shared<i_ent::CircularArc>(
             Vector2d{0.0, 0.0}, Vector2d{-1.5, 0.0}, Vector2d{1.5, 0.0});
     comp_1->OverwriteTransformationMatrix(comp_1_trans);
