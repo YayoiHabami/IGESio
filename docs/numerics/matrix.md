@@ -160,8 +160,6 @@ class Matrix {
 | `Matrix()` | Default constructor. For fixed row and column counts, it is initialized with the specified size. If either the row or column count is dynamic, it is initialized as empty. Element values are undefined. If you want to initialize with values set, use static member functions such as `Matrix::Zero()`. |
 | `Matrix(rows, cols)` | Can be used for matrices with dynamic row or column counts. `rows` specifies the number of rows, and `cols` specifies the number of columns. Element values are undefined. If you want to initialize with values set, use static member functions such as `Matrix::Zero()`. |
 | `Matrix{args...}` | Constructor using variable-length arguments. Use it like `Vector3d vec(1.0, 2.0, 3.0);` or `RowVector3d row_vec(1.0, 2.0, 3.0);`. The number of arguments specified must match either the number of rows or columns. |
-| `Matrix{init_list}` | Constructor using an initializer list (for vectors). Use it like `Vector2d v = {1.0, 2.0}`. The number of elements in the initializer list must match the vector's row count `N`. |
-| `Matrix{init_list}` | Constructor using an initializer list. Use it like `Matrix2d m = {{1, 2}, {3, 4}}`. The number of rows must match N, and the number of columns must match M if the column count is fixed. |
 
 　Also, the following static member functions allow easy creation of zero matrices and identity matrices.
 
@@ -233,9 +231,9 @@ dyn_mat.block(1, 1, 2, 2) = igesio::MatrixXd::Zero(2, 2);
 ```cpp
 // Creating a 3-row x dynamic-column matrix
 igesio::Matrix3Xd mat3xN(3, 5);  // 3 rows, 5 columns
-mat3xN = {{ 1.0,  2.0,  3.0,  4.0,  5.0},
-      { 6.0,  7.0,  8.0,  9.0, 10.0},
-      {11.0, 12.0, 13.0, 14.0, 15.0}};
+mat3xN << 1.0,   2.0,  3.0,  4.0,  5.0,
+          6.0,   7.0,  8.0,  9.0, 10.0,
+          11.0, 12.0, 13.0, 14.0, 15.0;
 
 // Resize to 3 rows x 8 columns (keep data)
 // [ 1  2  3  4  5  0  0  0]
@@ -307,13 +305,16 @@ The following table lists element validation member functions that return a `boo
 
 ```cpp
 // Matrix output
-igesio::Matrix2d mat = {{1.0, 2.0}, {3.0, 4.0}};
+igesio::Matrix2d mat;
+mat << 1.0, 2.0,
+       3.0, 4.0;
 std::cout << mat << std::endl;
 // Output: ((1, 2), (3, 4))
 
 // Dynamic size matrix output
 igesio::Matrix2Xd dynMat(2, 3);
-dynMat = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+dynMat << 1.0, 2.0, 3.0,
+          4.0, 5.0, 6.0;
 std::cout << dynMat << std::endl;
 // Output: ((1, 2, 3), (4, 5, 6))
 ```
@@ -331,10 +332,10 @@ The `m.inverse()` member function computes the inverse of a square matrix. This 
 
 ```cpp
 // Inverse of a fixed-size matrix
-igesio::Matrix3d mat = {
-    {4, 7, 2},
-    {3, 6, 1},
-    {2, 5, 3}};
+igesio::Matrix3d mat;
+mat << 4, 7, 2,
+       3, 6, 1,
+       2, 5, 3;
 igesio::Matrix3d inv_mat = mat.inverse();
 
 std::cout << "Inverse matrix:\n" << inv_mat << std::endl;
@@ -342,10 +343,9 @@ std::cout << "Original * Inverse:\n" << mat * inv_mat << std::endl;
 
 // Inverse of a dynamic-size matrix
 igesio::MatrixXd dyn_mat(3, 3);
-dyn_mat = {
-    {4, 7, 2},
-    {3, 6, 1},
-    {2, 5, 3}};
+dyn_mat << 4, 7, 2,
+           3, 6, 1,
+           2, 5, 3;
 igesio::MatrixXd inv_dyn_mat = dyn_mat.inverse();
 std::cout << "Inverse matrix:\n" << inv_dyn_mat << std::endl;
 std::cout << "Original * Inverse:\n" << dyn_mat * inv_dyn_mat << std::endl;
@@ -391,8 +391,9 @@ int main() {
 
         // Creating a 2×2 rotation matrix
         double angle = M_PI / 4;  // 45 degrees
-        Matrix2d rotation{{std::cos(angle), -std::sin(angle)},
-                                            {std::sin(angle),  std::cos(angle)}};
+        Matrix2d rotation;
+        rotation << std::cos(angle), -std::sin(angle),
+                    std::sin(angle),  std::cos(angle);
 
         // Creating a 2D point
         Vector2d point{1.0, 0.0};
@@ -433,10 +434,10 @@ igesio::Matrix2d mat2x2;
 mat2x2(0, 0) = 1.0; mat2x2(0, 1) = 2.0;
 mat2x2(1, 0) = 3.0; mat2x2(1, 1) = 4.0;
 
-// Initialization using initializer list is also possible
 // [3 4]
 // [5 6]
-mat2x2 = {{3, 4}, {5, 6}};
+mat2x2 << 3, 4,
+          5, 6;
 
 // Creating a 3D vector
 // [1 2 3]^T
@@ -457,9 +458,9 @@ vec3d = {1.0, 2.0, 3.0};
 ```cpp
 // Creating a 3 rows × dynamic columns matrix
 igesio::Matrix3Xd mat3xN(3, 5);  // 3 rows, 5 columns
-mat3xN = {{ 1.0,  2.0,  3.0,  4.0,  5.0},
-                    { 6.0,  7.0,  8.0,  9.0,  10.0},
-                    {11.0, 12.0, 13.0, 14.0, 15.0}};
+mat3xN << 1.0,   2.0,  3.0,  4.0,  5.0,
+          6.0,   7.0,  8.0,  9.0, 10.0,
+          11.0, 12.0, 13.0, 14.0, 15.0;
 
 // Resize to 3 rows, 8 columns
 // [ 1  2  3  4  5  0  0  0]
@@ -549,20 +550,25 @@ $$\begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \end{bmatrix} \begin{bmatrix} 7 & 8 \\ 
 ```cpp
 // Matrix-matrix product (both fixed size)
 // => Result is a fixed size 2x2 matrix
-igesio::Matrix23d mat23 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
-igesio::Matrix32d mat32 = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
+igesio::Matrix23d mat23;
+mat23 << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0;
+igesio::Matrix32d mat32;
+mat32 << 7.0, 8.0, 9.0, 10.0, 11.0, 12.0;
 igesio::Matrix2d result1 = mat23 * mat32;
 
 // Matrix-matrix product (left side is dynamic size)
 // => Result is a fixed size 2x2 matrix
 igesio::Matrix2Xd mat2xN(2, 3);  // 2 rows, 3 columns dynamic size matrix
-mat2xN = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+mat2xN << 1.0, 2.0, 3.0,
+          4.0, 5.0, 6.0;
 igesio::Matrix2d result2 = mat2xN * mat32;
 
 // Matrix-matrix product (right side is dynamic size)
 // => Result is a dynamic size 2x2 matrix
 igesio::Matrix3Xd mat3xN(3, 2);  // 3 rows, 2 columns dynamic size matrix
-mat3xN = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
+mat3xN << 7.0, 8.0,
+          9.0, 10.0,
+          11.0, 12.0;
 igesio::Matrix2Xd result3 = mat23 * mat3xN;
 ```
 

@@ -38,6 +38,7 @@ namespace igesio {
 
 using Eigen::Dynamic;
 using Eigen::NoChange;
+using Eigen::Index;
 
 template<typename T, int N, int M>
 using Matrix = Eigen::Matrix<T, N, M>;
@@ -1608,14 +1609,13 @@ class Matrix {
     /// @param new_cols 列数
     /// @param value 初期化する値
     /// @return 初期化された行列
-    /// @throw std::invalid_argument new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
+    /// @note assert: new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
     template<int N_ = N>
     static typename std::enable_if_t<N_ == Dynamic || M == Dynamic, Matrix<T, N, M>>
     Constant(size_t new_rows, size_t new_cols, T value) {
-        if ((N != Dynamic && static_cast<size_t>(N) != new_rows) ||
-            (M != Dynamic && static_cast<size_t>(M) != new_cols)) {
-            throw std::invalid_argument("Incompatible matrix dimensions");
-        }
+        assert((N == Dynamic || static_cast<size_t>(N) == new_rows) &&
+            (M == Dynamic || static_cast<size_t>(M) == new_cols) &&
+            "Incompatible matrix dimensions");
 
         Matrix<T, N, M> result(new_rows, new_cols);
         for (size_t j = 0; j < new_cols; ++j) {
@@ -1645,7 +1645,7 @@ class Matrix {
     /// @param new_rows 行数
     /// @param new_cols 列数
     /// @return ゼロ行列
-    /// @throw std::invalid_argument new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
+    /// @note assert: new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
     template<int N_ = N>
     static typename std::enable_if_t<N_ == Dynamic || M == Dynamic, Matrix<T, N, M>>
     Zero(size_t new_rows, size_t new_cols) {
@@ -1662,6 +1662,7 @@ class Matrix {
     /// @param new_rows 行数
     /// @param new_cols 列数
     /// @return 単位行列
+    /// @note assert: new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
     template<int N_ = N>
     static typename std::enable_if_t<N_ == Dynamic || M == Dynamic, Matrix<T, N, M>>
     Identity(size_t new_rows, size_t new_cols) {

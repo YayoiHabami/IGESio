@@ -670,6 +670,14 @@ igesio::Matrix3d BoundingBox::GetWorldToLocalRotation() const {
     rot.block<3, 1>(0, 0) = directions_[0];
     rot.block<3, 1>(0, 1) = directions_[1];
     rot.block<3, 1>(0, 2) = directions_[2];
+
+    // 行列が特異でないかを確認
+    if (std::abs(rot.determinant()) < kGeometryTolerance) {
+        throw std::runtime_error(
+            "BoundingBox: Cannot compute world-to-local rotation because "
+            "the direction matrix is singular:\n" + ToString(rot));
+    }
+
     return rot.inverse();
 }
 
