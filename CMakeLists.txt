@@ -200,6 +200,24 @@ if(IGESIO_BUILD_TESTING)
   )
   FetchContent_MakeAvailable(googletest)
 
+  # Set Google Test include directories as SYSTEM to suppress warnings from third-party code
+  get_target_property(GTEST_INC gtest INTERFACE_INCLUDE_DIRECTORIES)
+  if(GTEST_INC)
+    set_target_properties(gtest PROPERTIES
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${GTEST_INC}"
+    )
+  endif()
+  get_target_property(GTEST_MAIN_INC gtest_main INTERFACE_INCLUDE_DIRECTORIES)
+  if(GTEST_MAIN_INC)
+    set_target_properties(gtest_main PROPERTIES
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${GTEST_MAIN_INC}"
+    )
+  endif()
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(gtest PRIVATE -Wno-implicit-int-float-conversion)
+    target_compile_options(gtest_main PRIVATE -Wno-implicit-int-float-conversion)
+  endif()
+
   # Google Test configuration
   enable_testing()
 
