@@ -122,14 +122,14 @@ CopiousDataBase::ValidatePD() const {
 
     if (ip == 1) {
         // IP=1の場合: すべてのZ座標値が同じであること
-        auto z_value = coordinates_(2, 0);
+        double z_value = coordinates_(2, 0);
         for (size_t i = 1; i < coordinates_.cols(); ++i) {
-            if (!i_num::IsApproxEqual(coordinates_(2, i), z_value,
-                                      i_num::kGeometryTolerance)) {
+            double z_i = coordinates_(2, i);
+            if (!i_num::IsApproxEqual(z_i, z_value, i_num::kGeometryTolerance)) {
                 errors.emplace_back(
                     "All Z coordinates must be the same for CopiousDataType with IP=1."
                     "index " + std::to_string(i) + " has Z=" +
-                    std::to_string(coordinates_(2, i)) + ", expected " +
+                    std::to_string(z_i) + ", expected " +
                     std::to_string(z_value) + ".");
                 break;
             }

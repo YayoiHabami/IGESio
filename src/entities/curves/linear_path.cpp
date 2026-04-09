@@ -42,7 +42,7 @@ igesio::ValidationResult LinearPath::ValidatePD() const {
 LinearPath::LinearPath(const std::vector<Vector2d>& coordinates, const bool is_closed)
         : CopiousDataBase(is_closed ? CopiousDataType::kPlanarLoop
                                     : CopiousDataType::kPlanarPolyline,
-                          Matrix3Xd(3, coordinates.size())) {
+                          Matrix3Xd::Zero(3, coordinates.size())) {
     // 座標値を3xNの行列に変換して格納
     for (size_t i = 0; i < coordinates.size(); ++i) {
         coordinates_.block<2, 1>(0, i) = coordinates[i];

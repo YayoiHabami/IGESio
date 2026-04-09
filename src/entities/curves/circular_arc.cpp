@@ -223,13 +223,9 @@ i_num::BoundingBox CircularArc::GetDefinedBoundingBox() const {
 
     // 円弧のパラメータ範囲を取得
     auto [start, end] = GetParameterRange();
-    // 始点と終点を考慮
-    auto start_point = center_ +
-        Vector3d{r * std::cos(start), r * std::sin(start), 0.0};
-    auto end_point = center_ +
-        Vector3d{r * std::cos(end), r * std::sin(end), 0.0};
-    min = min.cwiseMin(start_point).cwiseMin(end_point);
-    max = max.cwiseMax(start_point).cwiseMax(end_point);
+    // 始点と終点を考慮 (角度の往復変換誤差を避けるため保存済みの点を直接使用)
+    min = min.cwiseMin(start_point_).cwiseMin(terminate_point_);
+    max = max.cwiseMax(start_point_).cwiseMax(terminate_point_);
 
     // [start, end]の間にある主要な角度 (0, π/2, π, 3π/2) をチェック
     auto offset = static_cast<int>(std::floor(start / (kPi / 2.0)));
