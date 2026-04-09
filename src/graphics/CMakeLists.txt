@@ -11,10 +11,11 @@ add_library(igesio_graphics STATIC
     curves/copious_data_graphics.cpp     # 106
     curves/line_graphics.cpp             # 110
     curves/point_graphics.cpp            # 116
-    curves/rational_b_spline_curve_graphics.cpp      # 126
+    curves/rational_b_spline_curve_graphics.cpp        # 126
+    curves/curve_on_a_parametric_surface_graphics.cpp  # 142
 
-    surfaces/i_surface_graphics.cpp                  # general surfaces
-    surfaces/rational_b_spline_surface_graphics.cpp  # 128
+    surfaces/i_surface_graphics.cpp                    # general surfaces
+    surfaces/rational_b_spline_surface_graphics.cpp    # 128
 
     factory.cpp
 

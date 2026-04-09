@@ -18,8 +18,13 @@ target_include_directories(igesio_common PUBLIC
 
 # Handle Eigen dependency if enabled
 if(IGESIO_ENABLE_EIGEN)
-    target_link_libraries(igesio_common PUBLIC Eigen3::Eigen)
+    target_link_libraries(igesio_common PUBLIC
+        $<BUILD_INTERFACE:Eigen3::Eigen>
+    )
     target_compile_definitions(igesio_common PUBLIC IGESIO_ENABLE_EIGEN)
+    target_include_directories(igesio_common PUBLIC
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
 endif()
 
 # Create an alias for the common library

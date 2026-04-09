@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/copious_data_base.h"
 
+#include <algorithm>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -121,14 +122,14 @@ CopiousDataBase::ValidatePD() const {
 
     if (ip == 1) {
         // IP=1の場合: すべてのZ座標値が同じであること
-        auto z_value = coordinates_(2, 0);
+        double z_value = coordinates_(2, 0);
         for (size_t i = 1; i < coordinates_.cols(); ++i) {
-            if (!i_num::IsApproxEqual(coordinates_(2, i), z_value,
-                                      i_num::kGeometryTolerance)) {
+            double z_i = coordinates_(2, i);
+            if (!i_num::IsApproxEqual(z_i, z_value, i_num::kGeometryTolerance)) {
                 errors.emplace_back(
                     "All Z coordinates must be the same for CopiousDataType with IP=1."
                     "index " + std::to_string(i) + " has Z=" +
-                    std::to_string(coordinates_(2, i)) + ", expected " +
+                    std::to_string(z_i) + ", expected " +
                     std::to_string(z_value) + ".");
                 break;
             }
@@ -394,4 +395,37 @@ CopiousDataBase::GetNearestVertexAt(const double length) const {
 
     // 終点より後の場合
     return {coordinates_.cols() - 1, std::numeric_limits<double>::infinity()};
+}
+
+i_num::BoundingBox CopiousDataBase::GetDefinedBoundingBoxImpl() const {
+    Vector3d min_point = coordinates_.col(0);
+    Vector3d max_point = coordinates_.col(0);
+    for (size_t i = 1; i < coordinates_.cols(); ++i) {
+        min_point = min_point.cwiseMin(coordinates_.col(i));
+        max_point = max_point.cwiseMax(coordinates_.col(i));
+    }
+
+    // minとmaxの2つ以上の座標値が同じ場合は
+    // - xmin!=xmax: D0=x軸, D1=y軸, D2=z軸
+    // - ymin!=ymax: D0=x軸, D1=y軸, D2=z軸
+    // - zmin!=zmax: D0=z軸, D1=x軸, D2=y軸
+    auto size = max_point - min_point;
+    int nonzero_count = 0;
+    for (int i = 0; i < 3; ++i) {
+        if (!i_num::IsApproxZero(size(i))) ++nonzero_count;
+    }
+    if (nonzero_count < 2) {
+        // 1次元的な広がりしか持たない場合は明示的に2次元で生成
+        std::array<double, 2> sizes;
+        double eps = 0.1;  // 最小の広がり
+        if (size(2) > 0.0) {
+            // z軸方向に広がりがある場合
+            sizes = {size(2), eps};
+        } else {
+            sizes = {std::max(size(0), eps), std::max(size(1), eps)};
+        }
+        return i_num::BoundingBox(min_point, sizes, {false, false});
+    }
+
+    return i_num::BoundingBox(min_point, max_point);
 }

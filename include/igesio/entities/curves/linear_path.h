@@ -80,6 +80,11 @@ class LinearPath : public CopiousDataBase,
     ///       ただし、kPlanarLoopのみ、末端 P_{n-1} と先頭 P_0 を結ぶ線分も加える
     double Length(const double, const double) const override;
 
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    numerics::BoundingBox GetDefinedBoundingBox() const override {
+        return CopiousDataBase::GetDefinedBoundingBoxImpl();
+    }
+
 
 
  protected:

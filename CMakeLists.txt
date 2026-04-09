@@ -9,7 +9,9 @@
 #     - this option requires python environment and jinja2 installed
 #   - IGESIO_BUILD_TESTING: Build the tests (default: OFF)
 #   - IGESIO_ENABLE_COVERAGE: Enable coverage reporting (default: OFF)
-#   - IGESIO_ENABLE_EIGEN: Enable Eigen support (default: OFF)
+#   - IGESIO_ENABLE_EIGEN: Enable Eigen support (default: ON)
+#       - Eigen is currently required for the project, so this option cannot be set to OFF.
+#       - This option is provided for future flexibility in case we want to make Eigen optional later on, but for now it must be ON.
 #   - IGESIO_ENABLE_GRAPHICS: Enable OpenGL (glad) support (default: OFF)
 #   - IGESIO_ENABLE_TEXTURE_IO: Enable texture I/O support (default: OFF)
 cmake_minimum_required(VERSION 3.14)
@@ -99,16 +101,23 @@ configure_file(
 
 
 # Option to enable Eigen support
-option(IGESIO_ENABLE_EIGEN "Enable Eigen support" OFF)
-
-# Fetch Eigen if enabled
-if(IGESIO_ENABLE_EIGEN)
+option(IGESIO_ENABLE_EIGEN "Enable Eigen support" ON)
+# Currently, Eigen is required for the project
+if (NOT IGESIO_ENABLE_EIGEN)
+    message(FATAL_ERROR "Eigen support is currently required for IGESio. Please enable IGESIO_ENABLE_EIGEN option.")
+else()
+  # Fetch Eigen if enabled
   include(FetchContent)
+
+  # Disable Eigen's internal testing and documentation to speed up the build process
+  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(EIGEN_BUILD_DOC     OFF CACHE BOOL "" FORCE)
+  set(BUILD_TESTING       OFF CACHE BOOL "" FORCE)
 
   # Fetch Eigen
   FetchContent_Declare(
     Eigen
-    URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip
+    URL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.zip
     ${DOWNLOAD_EXTRACT_TIMESTAMP_OPTION}
   )
   FetchContent_MakeAvailable(Eigen)
@@ -190,6 +199,24 @@ if(IGESIO_BUILD_TESTING)
     ${DOWNLOAD_EXTRACT_TIMESTAMP_OPTION}
   )
   FetchContent_MakeAvailable(googletest)
+
+  # Set Google Test include directories as SYSTEM to suppress warnings from third-party code
+  get_target_property(GTEST_INC gtest INTERFACE_INCLUDE_DIRECTORIES)
+  if(GTEST_INC)
+    set_target_properties(gtest PROPERTIES
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${GTEST_INC}"
+    )
+  endif()
+  get_target_property(GTEST_MAIN_INC gtest_main INTERFACE_INCLUDE_DIRECTORIES)
+  if(GTEST_MAIN_INC)
+    set_target_properties(gtest_main PROPERTIES
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${GTEST_MAIN_INC}"
+    )
+  endif()
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(gtest PRIVATE -Wno-implicit-int-float-conversion)
+    target_compile_options(gtest_main PRIVATE -Wno-implicit-int-float-conversion)
+  endif()
 
   # Google Test configuration
   enable_testing()

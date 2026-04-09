@@ -26,8 +26,11 @@
     - [Element Access etc.](#element-access-etc)
     - [Size Change/Conversion](#size-changeconversion)
     - [Arithmetic Operations etc.](#arithmetic-operations-etc)
+    - [Element Validation](#element-validation)
     - [Other Calculations](#other-calculations)
     - [Output Features](#output-features)
+  - [Linear Algebra](#linear-algebra)
+    - [Inverse Matrix and Determinant Calculation](#inverse-matrix-and-determinant-calculation)
   - [Other Auxiliary Functions](#other-auxiliary-functions)
     - [Calculation of Rotation Matrix](#calculation-of-rotation-matrix)
 - [Usage Examples](#usage-examples)
@@ -157,8 +160,6 @@ class Matrix {
 | `Matrix()` | Default constructor. For fixed row and column counts, it is initialized with the specified size. If either the row or column count is dynamic, it is initialized as empty. Element values are undefined. If you want to initialize with values set, use static member functions such as `Matrix::Zero()`. |
 | `Matrix(rows, cols)` | Can be used for matrices with dynamic row or column counts. `rows` specifies the number of rows, and `cols` specifies the number of columns. Element values are undefined. If you want to initialize with values set, use static member functions such as `Matrix::Zero()`. |
 | `Matrix{args...}` | Constructor using variable-length arguments. Use it like `Vector3d vec(1.0, 2.0, 3.0);` or `RowVector3d row_vec(1.0, 2.0, 3.0);`. The number of arguments specified must match either the number of rows or columns. |
-| `Matrix{init_list}` | Constructor using an initializer list (for vectors). Use it like `Vector2d v = {1.0, 2.0}`. The number of elements in the initializer list must match the vector's row count `N`. |
-| `Matrix{init_list}` | Constructor using an initializer list. Use it like `Matrix2d m = {{1, 2}, {3, 4}}`. The number of rows must match N, and the number of columns must match M if the column count is fixed. |
 
 　Also, the following static member functions allow easy creation of zero matrices and identity matrices.
 
@@ -230,9 +231,9 @@ dyn_mat.block(1, 1, 2, 2) = igesio::MatrixXd::Zero(2, 2);
 ```cpp
 // Creating a 3-row x dynamic-column matrix
 igesio::Matrix3Xd mat3xN(3, 5);  // 3 rows, 5 columns
-mat3xN = {{ 1.0,  2.0,  3.0,  4.0,  5.0},
-      { 6.0,  7.0,  8.0,  9.0, 10.0},
-      {11.0, 12.0, 13.0, 14.0, 15.0}};
+mat3xN << 1.0,   2.0,  3.0,  4.0,  5.0,
+          6.0,   7.0,  8.0,  9.0, 10.0,
+          11.0, 12.0, 13.0, 14.0, 15.0;
 
 // Resize to 3 rows x 8 columns (keep data)
 // [ 1  2  3  4  5  0  0  0]
@@ -270,6 +271,18 @@ mat3xN.resize(2, 4);
 | Hadamard Product | $M_1 \circ M_2$ | Available when $M_1$ and $M_2$ have the same size<br>Element-wise product of matrices/vectors<br>`m1.cwiseProduct(m2)` |
 | Hadamard Quotient | $M_1 \oslash M_2$ | Available when $M_1$ and $M_2$ have the same size<br>Element-wise division of matrices/vectors<br>`m1.cwiseQuotient(m2)` |
 
+#### Element Validation
+
+The following table lists element validation member functions that return a `bool` value.
+
+| Code Example | Description |
+|:---|---|
+| `v.hasNaN()` <br> `m.hasNaN()` | Checks if the vector or matrix contains any NaN (Not a Number) elements. |
+| `v.allFinite()` <br> `m.allFinite()` | Checks if all elements of the vector or matrix are finite (not ±∞ or NaN). |
+| `v.isConstant(v, tol)` <br> `m.isConstant(v, tol)` | Checks if all elements of the vector or matrix are equal to the specified value `v` within a tolerance `tol`. |
+| `v.isOnes(tol)` <br> `m.isOnes(tol)` | Checks if all elements of the vector or matrix are equal to 1.0 within a tolerance `tol`. |
+| `v.isZero(tol)` <br> `m.isZero(tol)` | Checks if all elements of the vector or matrix are equal to 0.0 within a tolerance `tol`. |
+
 #### Other Calculations
 
 　The following table shows other calculation features supported by the `igesio::Matrix` class. Here, $m_{i,j}$ represents the element in row $i$ and column $j$ of matrix $M$.
@@ -279,26 +292,63 @@ mat3xN.resize(2, 4);
 | `Matrix` | $1 / m_{i,j}$ | Calculates element-wise reciprocal.<br>`m.cwiseInverse()` |
 | `Matrix` | $\sqrt{m_{i,j}}$ | Calculates element-wise square root.<br>`m.cwiseSqrt()` |
 | `Matrix` | $\|m_{i,j}\|$ | Calculates element-wise absolute value.<br>`m.cwiseAbs()` |
-| `Matrix` |  | Normalizes a vector (converts to a unit vector).<br>`m.normalized()` |
+| `Matrix` | $\max(m_{i,j}, \text{val})$ <br> $\min(m_{i,j}, \text{val})$ | Calculates element-wise maximum/minimum values.<br>`m.cwiseMax(val)`<br>`m.cwiseMin(val)` |
+| `Matrix` | $\max(m_{1,i,j}, m_{2,i,j})$ <br> $\min(m_{i,j}, m_{k,l})$ | Calculates element-wise maximum/minimum values.<br>`m1.cwiseMax(m2)`<br>`m1.cwiseMin(m2)` |
+| `Matrix` | $m / \|m\|$ | Normalizes a vector (converts to a unit vector).<br>`m.normalized()` |
 | `double` | $\sum m_{i,j}^2$ | Calculates the sum of squares of matrix elements.<br>`m.squaredNorm()` |
 | `double` | $\sqrt{\sum m_{i,j}^2}$ | Calculates the norm (Euclidean distance) of matrix elements.<br>`m.norm()` |
 | `double` | $\sum m_{i,j}$ | Calculates the sum of matrix elements.<br>`m.sum()` |
 | `double` | $\prod m_{i,j}$ | Calculates the product of matrix elements.<br>`m.prod()` |
-| `double` |  | Calculates the determinant (only for 2x2, 3x3, 4x4 matrices).<br>`m.determinant()` |
+| `double` | $\det(M)$ | Calculates the determinant (only for 2x2, 3x3, 4x4 matrices).<br>`m.determinant()` |
 
 #### Output Features
 
 ```cpp
 // Matrix output
-igesio::Matrix2d mat = {{1.0, 2.0}, {3.0, 4.0}};
+igesio::Matrix2d mat;
+mat << 1.0, 2.0,
+       3.0, 4.0;
 std::cout << mat << std::endl;
 // Output: ((1, 2), (3, 4))
 
 // Dynamic size matrix output
 igesio::Matrix2Xd dynMat(2, 3);
-dynMat = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+dynMat << 1.0, 2.0, 3.0,
+          4.0, 5.0, 6.0;
 std::cout << dynMat << std::endl;
 // Output: ((1, 2, 3), (4, 5, 6))
+```
+
+### Linear Algebra
+
+#### Inverse Matrix and Determinant Calculation
+
+| Return Value | Formula | Description / Code Example |
+|:--:|:--:|---|
+| `Matrix` | $M^{-1}$ | Computes the inverse of a matrix (only for 2x2, 3x3, 4x4 matrices).<br>`m.inverse()` |
+| `double` | $\det(M)$ | Computes the determinant of a matrix (only for 2x2, 3x3, 4x4 matrices).<br>`m.determinant()` |
+
+The `m.inverse()` member function computes the inverse of a square matrix. This function is available for fixed-size 2x2, 3x3, 4x4 matrices and for dynamic-size matrices.
+
+```cpp
+// Inverse of a fixed-size matrix
+igesio::Matrix3d mat;
+mat << 4, 7, 2,
+       3, 6, 1,
+       2, 5, 3;
+igesio::Matrix3d inv_mat = mat.inverse();
+
+std::cout << "Inverse matrix:\n" << inv_mat << std::endl;
+std::cout << "Original * Inverse:\n" << mat * inv_mat << std::endl;
+
+// Inverse of a dynamic-size matrix
+igesio::MatrixXd dyn_mat(3, 3);
+dyn_mat << 4, 7, 2,
+           3, 6, 1,
+           2, 5, 3;
+igesio::MatrixXd inv_dyn_mat = dyn_mat.inverse();
+std::cout << "Inverse matrix:\n" << inv_dyn_mat << std::endl;
+std::cout << "Original * Inverse:\n" << dyn_mat * inv_dyn_mat << std::endl;
 ```
 
 ### Other Auxiliary Functions
@@ -341,8 +391,9 @@ int main() {
 
         // Creating a 2×2 rotation matrix
         double angle = M_PI / 4;  // 45 degrees
-        Matrix2d rotation{{std::cos(angle), -std::sin(angle)},
-                                            {std::sin(angle),  std::cos(angle)}};
+        Matrix2d rotation;
+        rotation << std::cos(angle), -std::sin(angle),
+                    std::sin(angle),  std::cos(angle);
 
         // Creating a 2D point
         Vector2d point{1.0, 0.0};
@@ -383,10 +434,10 @@ igesio::Matrix2d mat2x2;
 mat2x2(0, 0) = 1.0; mat2x2(0, 1) = 2.0;
 mat2x2(1, 0) = 3.0; mat2x2(1, 1) = 4.0;
 
-// Initialization using initializer list is also possible
 // [3 4]
 // [5 6]
-mat2x2 = {{3, 4}, {5, 6}};
+mat2x2 << 3, 4,
+          5, 6;
 
 // Creating a 3D vector
 // [1 2 3]^T
@@ -407,9 +458,9 @@ vec3d = {1.0, 2.0, 3.0};
 ```cpp
 // Creating a 3 rows × dynamic columns matrix
 igesio::Matrix3Xd mat3xN(3, 5);  // 3 rows, 5 columns
-mat3xN = {{ 1.0,  2.0,  3.0,  4.0,  5.0},
-                    { 6.0,  7.0,  8.0,  9.0,  10.0},
-                    {11.0, 12.0, 13.0, 14.0, 15.0}};
+mat3xN << 1.0,   2.0,  3.0,  4.0,  5.0,
+          6.0,   7.0,  8.0,  9.0, 10.0,
+          11.0, 12.0, 13.0, 14.0, 15.0;
 
 // Resize to 3 rows, 8 columns
 // [ 1  2  3  4  5  0  0  0]
@@ -499,20 +550,25 @@ $$\begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \end{bmatrix} \begin{bmatrix} 7 & 8 \\ 
 ```cpp
 // Matrix-matrix product (both fixed size)
 // => Result is a fixed size 2x2 matrix
-igesio::Matrix23d mat23 = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
-igesio::Matrix32d mat32 = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
+igesio::Matrix23d mat23;
+mat23 << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0;
+igesio::Matrix32d mat32;
+mat32 << 7.0, 8.0, 9.0, 10.0, 11.0, 12.0;
 igesio::Matrix2d result1 = mat23 * mat32;
 
 // Matrix-matrix product (left side is dynamic size)
 // => Result is a fixed size 2x2 matrix
 igesio::Matrix2Xd mat2xN(2, 3);  // 2 rows, 3 columns dynamic size matrix
-mat2xN = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+mat2xN << 1.0, 2.0, 3.0,
+          4.0, 5.0, 6.0;
 igesio::Matrix2d result2 = mat2xN * mat32;
 
 // Matrix-matrix product (right side is dynamic size)
 // => Result is a dynamic size 2x2 matrix
 igesio::Matrix3Xd mat3xN(3, 2);  // 3 rows, 2 columns dynamic size matrix
-mat3xN = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
+mat3xN << 7.0, 8.0,
+          9.0, 10.0,
+          11.0, 12.0;
 igesio::Matrix2Xd result3 = mat23 * mat3xN;
 ```
 

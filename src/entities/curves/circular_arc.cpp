@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/circular_arc.h"
 
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -213,6 +214,32 @@ CircularArc::TryGetDerivatives(const double t, const unsigned int n) const {
     }
 
     return result;
+}
+
+i_num::BoundingBox CircularArc::GetDefinedBoundingBox() const {
+    Vector3d min = Center();
+    Vector3d max = Center();
+    auto r = Radius();
+
+    // 円弧のパラメータ範囲を取得
+    auto [start, end] = GetParameterRange();
+    // 始点と終点を考慮 (角度の往復変換誤差を避けるため保存済みの点を直接使用)
+    min = min.cwiseMin(start_point_).cwiseMin(terminate_point_);
+    max = max.cwiseMax(start_point_).cwiseMax(terminate_point_);
+
+    // [start, end]の間にある主要な角度 (0, π/2, π, 3π/2) をチェック
+    auto offset = static_cast<int>(std::floor(start / (kPi / 2.0)));
+    for (int i = 0; i < 4; ++i) {
+        double angle = (offset + i) * (kPi / 2.0);
+        if (i_num::IsApproxLEQ(start, angle) && i_num::IsApproxLEQ(angle, end)) {
+            Vector3d point = center_ +
+                Vector3d{r * std::cos(angle), r * std::sin(angle), 0.0};
+            min = min.cwiseMin(point);
+            max = max.cwiseMax(point);
+        }
+    }
+
+    return i_num::BoundingBox(min, max);
 }
 
 

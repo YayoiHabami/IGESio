@@ -4,6 +4,7 @@ add_library(igesio_entities STATIC
     entity_type.cpp
 
     # Interfaces
+    interfaces/i_geometry.cpp
     interfaces/i_curve.cpp
     interfaces/i_surface.cpp
 
@@ -42,8 +43,12 @@ add_library(igesio_entities STATIC
     transformations/transformation_matrix.cpp  # 124
     curves/rational_b_spline_curve.cpp         # 126
     surfaces/rational_b_spline_surface.cpp     # 128
+    curves/curve_on_a_parametric_surface.cpp   # 142
 
     structures/color_definition.cpp            # 314
+
+    # Algorithms
+    curves/algorithms.cpp
 
     # Factory
     factory.cpp

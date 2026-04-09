@@ -39,6 +39,17 @@ if(IGESIO_BUILD_GUI)
         ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
     )
+    add_library(imgui_lib STATIC ${IMGUI_SOURCES})
+    target_include_directories(imgui_lib SYSTEM PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+    )
+    target_link_libraries(imgui_lib PUBLIC glfw)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(imgui_lib PRIVATE
+            -Wno-nontrivial-memcall
+        )
+    endif()
 
     message(STATUS "GUI support enabled with GLFW and ImGui")
 else()
@@ -53,7 +64,6 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
     add_executable(${EXAMPLE_NAME}
         ${EXAMPLE_SOURCE}
         iges_viewer_gui.cpp   # Include the GUI viewer source
-        ${IMGUI_SOURCES}      # Include ImGui sources
     )
 
     target_link_options(${EXAMPLE_NAME} PRIVATE
@@ -72,5 +82,6 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
         glfw
         glad_gl_core_33
         OpenGL::GL
+        imgui_lib
     )
 endforeach()

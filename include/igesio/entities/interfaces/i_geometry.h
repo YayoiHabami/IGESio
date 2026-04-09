@@ -9,6 +9,7 @@
 #define IGESIO_ENTITIES_INTERFACES_I_GEOMETRY_H_
 
 #include "igesio/numerics/matrix.h"
+#include "igesio/numerics/bounding_box.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 
 
@@ -19,6 +20,7 @@ namespace igesio::entities {
 /// @note 派生クラスにおいては、以下のメンバ関数をオーバーライドすること
 ///       - `Transform` (protected): 常にオーバライドが必要
 ///       - `NDim` (public): 定義空間が2次元のエンティティの場合のみ
+///       - `GetDefinedBoundingBox` (public): 常にオーバーライドが必要
 class IGeometry : public virtual IEntityIdentifier {
  public:
     /// @brief デストラクタ
@@ -38,11 +40,12 @@ class IGeometry : public virtual IEntityIdentifier {
      * 描画に関する情報
      */
 
-    /** TODO: 以下の関数を実装する
-    /// @brief サーフェスのバウンディングボックス（軸平行な最小の直方体）を取得する
-    /// @return サーフェスのバウンディングボックスを表す`BoundingBox`オブジェクト
-    virtual BoundingBox GetBoundingBox() const = 0;
-     */
+    /// @brief （定義空間における）バウンディングボックス（軸平行な最小の直方体）を取得する
+    virtual numerics::BoundingBox GetDefinedBoundingBox() const = 0;
+
+    /// @brief バウンディングボックスを取得する
+    /// @return 自身の持つ変換行列を適用した後のバウンディングボックス
+    numerics::BoundingBox GetBoundingBox() const;
 
 
 

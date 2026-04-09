@@ -94,10 +94,10 @@ size_t TransMatrix::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 回転行列の要素を取得
-    rotation_ = {
-        {pd.access_as<double>(0), pd.access_as<double>(1), pd.access_as<double>(2)},
-        {pd.access_as<double>(4), pd.access_as<double>(5), pd.access_as<double>(6)},
-        {pd.access_as<double>(8), pd.access_as<double>(9), pd.access_as<double>(10)}};
+    rotation_ <<
+        pd.access_as<double>(0), pd.access_as<double>(1),  pd.access_as<double>(2),
+        pd.access_as<double>(4), pd.access_as<double>(5),  pd.access_as<double>(6),
+        pd.access_as<double>(8), pd.access_as<double>(9),  pd.access_as<double>(10);
     // 平行移動ベクトルを取得
     translation_ =
         {pd.access_as<double>(3), pd.access_as<double>(7), pd.access_as<double>(11)};
@@ -153,16 +153,15 @@ igesio::ValidationResult TransMatrix::ValidatePD() const {
 
         case 10:  // 直交座標系 - Rは単位行列であるべき
             // 各要素が単位行列と一致するか確認
-            if (i_num::IsApproxEqual(rot, Matrix3d::Identity(),
-                                     i_num::kGeometryTolerance)) {
+            if (i_num::IsApproxIdentity(rot, i_num::kGeometryTolerance)) {
                 errors.emplace_back("For form 10, rotation matrix must be identity.");
             }
             break;
 
-        case 11:  // 円筒座標系
+        case 11: {  // 円筒座標系
             // 第3列が[0, 0, 1]であること
-            if (i_num::IsApproxEqual(rot.col(2), Vector3d::UnitZ(),
-                                     i_num::kGeometryTolerance)) {
+            Vector3d col_2 = rot.col(2);
+            if (i_num::IsApproxUnitVector(col_2, 2, i_num::kGeometryTolerance)) {
                 errors.emplace_back("For form 11, third column must be [0, 0, 1].");
             }
 
@@ -178,7 +177,7 @@ igesio::ValidationResult TransMatrix::ValidatePD() const {
                                     "must follow cylindrical coordinate structure.");
             }
             break;
-
+        }
         case 12:  // 球座標系
             // 第3列の第3成分が0であること
             if (i_num::IsApproxZero(rot(2, 2))) {

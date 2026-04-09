@@ -125,6 +125,9 @@ class ConicArc : public EntityBase, public virtual ICurve2D {
     std::optional<CurveDerivatives>
     TryGetDerivatives(const double, const unsigned int) const override;
 
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    numerics::BoundingBox GetDefinedBoundingBox() const override;
+
 
 
     /**

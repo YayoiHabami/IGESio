@@ -18,6 +18,7 @@
 #include "igesio/graphics/curves/line_graphics.h"
 #include "igesio/graphics/curves/point_graphics.h"
 #include "igesio/graphics/curves/rational_b_spline_curve_graphics.h"
+#include "igesio/graphics/curves/curve_on_a_parametric_surface_graphics.h"
 
 #include "igesio/graphics/surfaces/i_surface_graphics.h"
 #include "igesio/graphics/surfaces/rational_b_spline_surface_graphics.h"
@@ -93,6 +94,10 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
                const i_ent::RationalBSplineCurve>(entity)) {
         // Type 126: RationalBSplineCurveの描画オブジェクトを作成
         return std::make_unique<i_graph::RationalBSplineCurveGraphics>(r_bspline, gl);
+    } else if (auto curve_on_surf = std::dynamic_pointer_cast<
+               const i_ent::CurveOnAParametricSurface>(entity)) {
+        // Type 142: CurveOnAParametricSurfaceの描画オブジェクトを作成
+        return std::make_unique<i_graph::CurveOnAParametricSurfaceGraphics>(curve_on_surf, gl);
     }
 
     // いずれにも当てはまらない場合はICurveGraphicsを作成

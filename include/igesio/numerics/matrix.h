@@ -38,6 +38,7 @@ namespace igesio {
 
 using Eigen::Dynamic;
 using Eigen::NoChange;
+using Eigen::Index;
 
 template<typename T, int N, int M>
 using Matrix = Eigen::Matrix<T, N, M>;
@@ -49,16 +50,16 @@ using RowVector = Eigen::Matrix<T, 1, M>;
 
 // float
 using Eigen::Matrix2f;
-using Eigen::Matrix23f;
-using Eigen::Matrix24f;
+using Matrix23f = Eigen::Matrix<float, 2, 3>;
+using Matrix24f = Eigen::Matrix<float, 2, 4>;
 using Eigen::Matrix2Xf;
 using Eigen::Matrix3f;
-using Eigen::Matrix32f;
-using Eigen::Matrix34f;
+using Matrix32f = Eigen::Matrix<float, 3, 2>;
+using Matrix34f = Eigen::Matrix<float, 3, 4>;
 using Eigen::Matrix3Xf;
 using Eigen::Matrix4f;
-using Eigen::Matrix42f;
-using Eigen::Matrix43f;
+using Matrix42f = Eigen::Matrix<float, 4, 2>;
+using Matrix43f = Eigen::Matrix<float, 4, 3>;
 using Eigen::Matrix4Xf;
 using Eigen::MatrixX2f;
 using Eigen::MatrixX3f;
@@ -75,16 +76,16 @@ using Eigen::RowVectorXf;
 
 // double
 using Eigen::Matrix2d;
-using Eigen::Matrix23d;
-using Eigen::Matrix24d;
+using Matrix23d = Eigen::Matrix<double, 2, 3>;
+using Matrix24d = Eigen::Matrix<double, 2, 4>;
 using Eigen::Matrix2Xd;
 using Eigen::Matrix3d;
-using Eigen::Matrix32d;
-using Eigen::Matrix34d;
+using Matrix32d = Eigen::Matrix<double, 3, 2>;
+using Matrix34d = Eigen::Matrix<double, 3, 4>;
 using Eigen::Matrix3Xd;
 using Eigen::Matrix4d;
-using Eigen::Matrix42d;
-using Eigen::Matrix43d;
+using Matrix42d = Eigen::Matrix<double, 4, 2>;
+using Matrix43d = Eigen::Matrix<double, 4, 3>;
 using Eigen::Matrix4Xd;
 using Eigen::MatrixX2d;
 using Eigen::MatrixX3d;
@@ -1256,6 +1257,86 @@ class Matrix {
         return result;
     }
 
+    /// @brief 各要素の最小値を返す
+    /// @param value 比較するスカラー値
+    /// @return 各要素の最小値を集めた行列
+    /// @note 例えば (0, 2, 3) と 1 の最小値は (0, 1, 1)
+    Matrix<T, N, M> cwiseMin(T value) const {
+        Matrix<T, N, M> result;
+        result.resize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::min((*this)(i, j), value);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 各要素の最小値を返す
+    /// @param other 比較する行列
+    /// @return 各要素の最小値を集めた行列
+    /// @note 例えば (0, 2, 3) と (1, 1, 4) の最小値は (0, 1, 3)
+    /// @throw std::invalid_argument 動的列数で列数が一致しない場合
+    template<int N2, int M2, typename = enable_if_addable_t<N2, M2>>
+    AddReturnType<N2, M2> cwiseMin(const Matrix<T, N2, M2>& other) const {
+        if (rows() != other.rows() || cols() != other.cols()) {
+            throw std::invalid_argument("Matrix dimensions must match for cwiseMin");
+        }
+
+        AddReturnType<N2, M2> result;
+        result.conservativeResize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::min((*this)(i, j), other(i, j));
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 各要素の最大値を返す
+    /// @param value 比較するスカラー値
+    /// @return 各要素の最大値を集めた行列
+    /// @note 例えば (0, 2, 3) と 1 の最大値は (1, 2, 3)
+    Matrix<T, N, M> cwiseMax(T value) const {
+        Matrix<T, N, M> result;
+        result.resize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::max((*this)(i, j), value);
+            }
+        }
+
+        return result;
+    }
+
+    /// @brief 各要素の最大値を返す
+    /// @param other 比較する行列
+    /// @return 各要素の最大値を集めた行列
+    /// @note 例えば (0, 2, 3) と (1, 1, 4) の最大値は (1, 2, 4)
+    /// @throw std::invalid_argument 動的列数で列数が一致しない場合
+    template<int N2, int M2, typename = enable_if_addable_t<N2, M2>>
+    AddReturnType<N2, M2> cwiseMax(const Matrix<T, N2, M2>& other) const {
+        if (rows() != other.rows() || cols() != other.cols()) {
+            throw std::invalid_argument("Matrix dimensions must match for cwiseMax");
+        }
+
+        AddReturnType<N2, M2> result;
+        result.conservativeResize(rows(), cols());
+
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                result(i, j) = std::max((*this)(i, j), other(i, j));
+            }
+        }
+
+        return result;
+    }
+
     /// @brief 正規化されたベクトルを返す
     /// @return 大きさが1のベクトル
     /// @throw std::invalid_argument ゼロベクトルの正規化を試みた場合、
@@ -1329,9 +1410,70 @@ class Matrix {
         return result;
     }
 
+
+
+    /**
+     * 要素の検証 (戻り値がbool)
+     */
+
+    /// @brief NaNを含むかどうか
+    /// @return 1つでもNaNが含まれていればtrue、そうでなければfalse
+    bool hasNaN() const {
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                if (std::isnan((*this)(i, j))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// @brief すべての要素が有限値かどうか
+    /// @return 1つでも±∞やNaNが含まれていればfalse、すべて有限値ならtrue
+    bool allFinite() const {
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                if (!std::isfinite((*this)(i, j))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /// @brief すべての要素がvに近しいか
+    /// @param v 比較する値
+    /// @param tol 許容誤差
+    /// @return すべての要素がvにtol以内であればtrue、そうでなければfalse
+    bool isConstant(T v, T tol = static_cast<T>(1e-6)) const {
+        for (size_t j = 0; j < cols(); ++j) {
+            for (size_t i = 0; i < rows(); ++i) {
+                if (std::abs((*this)(i, j) - v) > tol) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    /// @brief すべての要素が1に近しいか
+    bool isOnes(T tol = static_cast<T>(1e-6)) const {
+        return isConstant(static_cast<T>(1), tol);
+    }
+    /// @brief すべての要素が0に近しいか
+    bool isZero(T tol = static_cast<T>(1e-6)) const {
+        return isConstant(static_cast<T>(0), tol);
+    }
+
+
+
+    /**
+     * 逆行列・行列式
+     */
+
     /// @brief 行列式の計算
     /// @return 行列式の値
-    /// @note 2x2行列と3x3行列のみサポート
+    /// @note 2x2, 3x3, 4x4行列のみサポート
     /// @throw std::invalid_argument 行列が正方行列でない場合
     T determinant() const {
         auto& m = *this;
@@ -1363,6 +1505,99 @@ class Matrix {
         }
     }
 
+    /// @brief 逆行列の計算
+    /// @return 逆行列
+    /// @note 2x2, 3x3, 4x4行列のみサポート
+    /// @throw std::invalid_argument 行列が正方行列でない場合
+    Matrix<T, N, M> inverse() const {
+        auto& m = *this;
+        Matrix<T, N, M> result;
+        if (N == Dynamic || M == Dynamic) {
+            // 動的サイズの場合は要素確保
+            result.resize(rows(), cols());
+        }
+
+        T det = determinant();
+        if (det == 0) {
+            throw std::invalid_argument("Matrix is singular and cannot be inverted");
+        }
+        if (rows() == 2 && cols() == 2) {
+            result(0, 0) =  m(1, 1);
+            result(0, 1) = -m(0, 1);
+            result(1, 0) = -m(1, 0);
+            result(1, 1) =  m(0, 0);
+        } else if (rows() == 3 && cols() == 3) {
+            result(0, 0) = m(1, 1)*m(2, 2) - m(1, 2)*m(2, 1);
+            result(0, 1) = m(0, 2)*m(2, 1) - m(0, 1)*m(2, 2);
+            result(0, 2) = m(0, 1)*m(1, 2) - m(0, 2)*m(1, 1);
+            result(1, 0) = m(1, 2)*m(2, 0) - m(1, 0)*m(2, 2);
+            result(1, 1) = m(0, 0)*m(2, 2) - m(0, 2)*m(2, 0);
+            result(1, 2) = m(0, 2)*m(1, 0) - m(0, 0)*m(1, 2);
+            result(2, 0) = m(1, 0)*m(2, 1) - m(1, 1)*m(2, 0);
+            result(2, 1) = m(0, 1)*m(2, 0) - m(0, 0)*m(2, 1);
+            result(2, 2) = m(0, 0)*m(1, 1) - m(0, 1)*m(1, 0);
+        } else if (rows() == 4 && cols() == 4) {
+            result(0, 0) = + m(1, 1)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           - m(1, 2)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           + m(1, 3)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1));
+            result(0, 1) = - m(0, 1)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           + m(0, 2)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           - m(0, 3)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1));
+            result(0, 2) = + m(0, 1)*(m(1, 2)*m(3, 3) - m(1, 3)*m(3, 2))
+                           - m(0, 2)*(m(1, 1)*m(3, 3) - m(1, 3)*m(3, 1))
+                           + m(0, 3)*(m(1, 1)*m(3, 2) - m(1, 2)*m(3, 1));
+            result(0, 3) = - m(0, 1)*(m(1, 2)*m(2, 3) - m(1, 3)*m(2, 2))
+                           + m(0, 2)*(m(1, 1)*m(2, 3) - m(1, 3)*m(2, 1))
+                           - m(0, 3)*(m(1, 1)*m(2, 2) - m(1, 2)*m(2, 1));
+
+            result(1, 0) = - m(1, 0)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           + m(1, 2)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           - m(1, 3)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0));
+            result(1, 1) = + m(0, 0)*(m(2, 2)*m(3, 3) - m(2, 3)*m(3, 2))
+                           - m(0, 2)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           + m(0, 3)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0));
+            result(1, 2) = - m(0, 0)*(m(1, 2)*m(3, 3) - m(1, 3)*m(3, 2))
+                           + m(0, 2)*(m(1, 0)*m(3, 3) - m(1, 3)*m(3, 0))
+                           - m(0, 3)*(m(1, 0)*m(3, 2) - m(1, 2)*m(3, 0));
+            result(1, 3) = + m(0, 0)*(m(1, 2)*m(2, 3) - m(1, 3)*m(2, 2))
+                           - m(0, 2)*(m(1, 0)*m(2, 3) - m(1, 3)*m(2, 0))
+                           + m(0, 3)*(m(1, 0)*m(2, 2) - m(1, 2)*m(2, 0));
+
+            result(2, 0) = + m(1, 0)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           - m(1, 1)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           + m(1, 3)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(2, 1) = - m(0, 0)*(m(2, 1)*m(3, 3) - m(2, 3)*m(3, 1))
+                           + m(0, 1)*(m(2, 0)*m(3, 3) - m(2, 3)*m(3, 0))
+                           - m(0, 3)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(2, 2) = + m(0, 0)*(m(1, 1)*m(3, 3) - m(1, 3)*m(3, 1))
+                           - m(0, 1)*(m(1, 0)*m(3, 3) - m(1, 3)*m(3, 0))
+                           + m(0, 3)*(m(1, 0)*m(3, 1) - m(1, 1)*m(3, 0));
+            result(2, 3) = - m(0, 0)*(m(1, 1)*m(2, 3) - m(1, 3)*m(2, 1))
+                           + m(0, 1)*(m(1, 0)*m(2, 3) - m(1, 3)*m(2, 0))
+                           - m(0, 3)*(m(1, 0)*m(2, 1) - m(1, 1)*m(2, 0));
+
+            result(3, 0) = - m(1, 0)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1))
+                           + m(1, 1)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0))
+                           - m(1, 2)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(3, 1) = + m(0, 0)*(m(2, 1)*m(3, 2) - m(2, 2)*m(3, 1))
+                           - m(0, 1)*(m(2, 0)*m(3, 2) - m(2, 2)*m(3, 0))
+                           + m(0, 2)*(m(2, 0)*m(3, 1) - m(2, 1)*m(3, 0));
+            result(3, 2) = - m(0, 0)*(m(1, 1)*m(3, 2) - m(1, 2)*m(3, 1))
+                           + m(0, 1)*(m(1, 0)*m(3, 2) - m(1, 2)*m(3, 0))
+                           - m(0, 2)*(m(1, 0)*m(3, 1) - m(1, 1)*m(3, 0));
+            result(3, 3) = + m(0, 0)*(m(1, 1)*m(2, 2) - m(1, 2)*m(2, 1))
+                           - m(0, 1)*(m(1, 0)*m(2, 2) - m(1, 2)*m(2, 0))
+                           + m(0, 2)*(m(1, 0)*m(2, 1) - m(1, 1)*m(2, 0));
+        } else if (rows() != cols()) {
+            // 正方行列のみサポート
+            throw std::invalid_argument("Inverse is only implemented for square matrices");
+        } else {
+            throw NotImplementedError(
+                    "Inverse is only implemented for 2x2, 3x3 and 4x4 matrices");
+        }
+
+        return result / det;
+    }
 
 
     /**
@@ -1374,14 +1609,13 @@ class Matrix {
     /// @param new_cols 列数
     /// @param value 初期化する値
     /// @return 初期化された行列
-    /// @throw std::invalid_argument new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
+    /// @note assert: new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
     template<int N_ = N>
     static typename std::enable_if_t<N_ == Dynamic || M == Dynamic, Matrix<T, N, M>>
     Constant(size_t new_rows, size_t new_cols, T value) {
-        if ((N != Dynamic && static_cast<size_t>(N) != new_rows) ||
-            (M != Dynamic && static_cast<size_t>(M) != new_cols)) {
-            throw std::invalid_argument("Incompatible matrix dimensions");
-        }
+        assert((N == Dynamic || static_cast<size_t>(N) == new_rows) &&
+            (M == Dynamic || static_cast<size_t>(M) == new_cols) &&
+            "Incompatible matrix dimensions");
 
         Matrix<T, N, M> result(new_rows, new_cols);
         for (size_t j = 0; j < new_cols; ++j) {
@@ -1411,7 +1645,7 @@ class Matrix {
     /// @param new_rows 行数
     /// @param new_cols 列数
     /// @return ゼロ行列
-    /// @throw std::invalid_argument new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
+    /// @note assert: new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
     template<int N_ = N>
     static typename std::enable_if_t<N_ == Dynamic || M == Dynamic, Matrix<T, N, M>>
     Zero(size_t new_rows, size_t new_cols) {
@@ -1428,6 +1662,7 @@ class Matrix {
     /// @param new_rows 行数
     /// @param new_cols 列数
     /// @return 単位行列
+    /// @note assert: new_rowsがNと異なる場合、またはnew_colsがMと異なる場合
     template<int N_ = N>
     static typename std::enable_if_t<N_ == Dynamic || M == Dynamic, Matrix<T, N, M>>
     Identity(size_t new_rows, size_t new_cols) {

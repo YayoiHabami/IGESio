@@ -142,10 +142,11 @@ igesio::Matrix4f Camera::GetViewMatrix() const {
     igesio::Vector3f s = f.cross(up_).normalized();
     igesio::Vector3f u = s.cross(f);
 
-    igesio::Matrix4f res = {{ s(0),  s(1),  s(2), -s.dot(position_)},
-                            { u(0),  u(1),  u(2), -u.dot(position_)},
-                            {-f(0), -f(1), -f(2),  f.dot(position_)},
-                            {    0,     0,     0,                 1}};
+    igesio::Matrix4f res;
+    res << s(0),  s(1),  s(2), -s.dot(position_),
+           u(0),  u(1),  u(2), -u.dot(position_),
+          -f(0), -f(1), -f(2),  f.dot(position_),
+              0,     0,     0,                 1;
     return res;
 }
 

@@ -17,6 +17,7 @@
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::RuledSurface;
 using igesio::Vector3d;
@@ -260,6 +261,19 @@ RuledSurface::TryGetDerivatives(
     }
 
     return s_deriv;
+}
+
+i_num::BoundingBox RuledSurface::GetDefinedBoundingBox() const {
+    // ポインタの確認
+    if (!curve1_.IsPointerSet() || !curve2_.IsPointerSet()) {
+        return i_num::BoundingBox();
+    }
+
+    // 曲線1,2のバウンディングボックスを取得
+    auto bbox1 = GetCurve1()->GetBoundingBox();
+    auto bbox2 = GetCurve2()->GetBoundingBox();
+    bbox1.ExpandToInclude(bbox2);
+    return bbox1;
 }
 
 

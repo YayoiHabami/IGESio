@@ -105,7 +105,7 @@ surface_vec CreateSurfaceOfRevolutions() {
     // Surface of Revolution
     TestSurface rev_full("Surface of Revolution (0 to 2π)");
     rev_full.surface = std::make_shared<entities::SurfaceOfRevolution>(
-            axis_line, generatrix, 0.0, kPi);
+            axis_line, generatrix, 0.0, 2*kPi);
 
     TestSurface rev_half("Surface of Revolution (π/2 to 3π/2)");
     rev_half.surface = std::make_shared<entities::SurfaceOfRevolution>(

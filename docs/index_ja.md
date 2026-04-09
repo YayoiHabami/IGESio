@@ -62,6 +62,7 @@
 |   ^    | [Line (Type 110)](entities/curves/110_line_ja.md) <br> 線分・半直線・直線エンティティ |
 |   ^    | [Parametric Spline Curve (Type 112)](entities/curves/112_parametric_spline_curve_ja.md) <br> 複数の、最大3次の多項式セグメントからなる曲線エンティティ |
 |   ^    | [Rational B-Spline Curve (Type 126)](entities/curves/126_rational_b_spline_curve_ja.md) <br> 有理Bスプライン曲線エンティティ (NURBS曲線を含む) |
+|   ^    | [Curve on a Parametric Surface (Type 142)](entities/curves/142_curve_on_a_parametric_surface_ja.md) <br> パラメトリック曲面上の曲線エンティティ |
 | surfaces | [Ruled Surface (Type 118)](entities/surfaces/118_ruled_surface_ja.md) <br> 2つの曲線を直線で結ぶことで定義されるルールド面エンティティ |
 |    ^     | [Surface of Revolution (Type 120)](entities/surfaces/120_surface_of_revolution_ja.md) <br> 曲線を軸回りに回転させることで定義される回転面エンティティ |
 |    ^     | [Tabulated Cylinder (Type 122)](entities/surfaces/122_tabulated_cylinder_ja.md) <br> 準線(曲線)を一定方向に平行移動させることで定義される曲面エンティティ |
@@ -78,6 +79,8 @@
 ### numericsモジュール
 
 - **[Matrix](numerics/matrix_ja.md)**: 固定/動的サイズの行列クラス
+- **[Bounding Box](numerics/bounding_box_ja.md)**: 直交バウンディングボックス (OBB) クラス
+  - `IGeometry`派生クラス（曲線・曲面エンティティクラス）において定義される、`GetBoundingBox`関数で返されるバウンディングボックスの説明
 
 ### utilsモジュール
 

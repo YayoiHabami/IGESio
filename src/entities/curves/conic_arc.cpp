@@ -302,6 +302,57 @@ ConicArc::TryGetDerivatives(const double t, const unsigned int n) const {
     return std::nullopt;
 }
 
+i_num::BoundingBox ConicArc::GetDefinedBoundingBox() const {
+    // 始点・終点を考慮
+    Vector3d min = start_point_.cwiseMin(terminate_point_);
+    Vector3d max = start_point_.cwiseMax(terminate_point_);
+    auto z_t = start_point_.z();
+
+    switch (GetConicType()) {
+        case ConicType::kEllipse: {
+            // 楕円の場合は原点とθ=0, π/2, π, 3π/2も考慮
+            auto [t_start, t_end] = GetParameterRange();
+            min = min.cwiseMin(EllipseCenter());
+            max = max.cwiseMax(EllipseCenter());
+
+            auto offset = static_cast<int>(std::floor(t_start / (kPi / 2.0)));
+            for (int i = 0; i < 4; ++i) {
+                double angle = (offset + i) * (kPi / 2.0);
+                auto point_opt = TryGetPointAt(angle);
+                if (point_opt.has_value()) {
+                    // angleがパラメータ範囲内の場合のみ考慮
+                    min = min.cwiseMin(*point_opt);
+                    max = max.cwiseMax(*point_opt);
+                }
+            }
+            return i_num::BoundingBox(min, max);
+        }
+        case ConicType::kParabola: {
+            // 放物線の場合は追加で原点を考慮
+            min = min.cwiseMin(Vector3d{0.0, 0.0, z_t});
+            max = max.cwiseMax(Vector3d{0.0, 0.0, z_t});
+            return i_num::BoundingBox(min, max);
+        }
+        case ConicType::kHyperbola: {
+            auto [A, B, C, D, E, F] = coeffs_;
+            if (F * A < 0.0) {
+                // C(t) = (a*sec(t), ±b*tan(t), z_t) -> C(0) を考慮
+                auto a = std::sqrt(-F / A);
+                min = min.cwiseMin(Vector3d{a, 0.0, z_t});
+                max = max.cwiseMax(Vector3d{a, 0.0, z_t});
+            } else {
+                // C(t) = (±a*tan(t), b*sec(t), z_t) -> C(0) を考慮
+                auto b = std::sqrt(-F / C);
+                min = min.cwiseMin(Vector3d{0.0, b, z_t});
+                max = max.cwiseMax(Vector3d{0.0, b, z_t});
+            }
+            return i_num::BoundingBox(min, max);
+        }
+    }
+    throw igesio::ImplementationError(
+            "GetDefinedBoundingBox: Invalid conic type.");
+}
+
 
 
 /**

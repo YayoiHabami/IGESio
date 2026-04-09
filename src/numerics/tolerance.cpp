@@ -10,6 +10,7 @@
 namespace {
 
 namespace i_num = igesio::numerics;
+constexpr double kInf = std::numeric_limits<double>::infinity();
 
 }  // namespace
 
@@ -31,6 +32,20 @@ bool i_num::IsApproxLessThan(const double a, const double b, const double tolera
     return (b - a) > tolerance;  // b - a が許容誤差より大きい場合はtrue
 }
 
+bool i_num::IsApproxLEQ(const double a, const double b, const double tolerance) {
+    if (a == kInf && b == kInf)  return true;
+    if (a == -kInf && b == -kInf)  return true;
+
+    return (a < b) || IsApproxEqual(a, b, tolerance);
+}
+
 bool i_num::IsApproxGreaterThan(const double a, const double b, const double tolerance) {
     return (a - b) > tolerance;  // a - b が許容誤差より大きい場合はtrue
+}
+
+bool i_num::IsApproxGEQ(const double a, const double b, const double tolerance) {
+    if (a == kInf && b == kInf)  return true;
+    if (a == -kInf && b == -kInf)  return true;
+
+    return (a > b) || IsApproxEqual(a, b, tolerance);
 }

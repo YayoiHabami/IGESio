@@ -7,12 +7,14 @@
  */
 #include "igesio/entities/surfaces/surface_of_revolution.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
 #include "igesio/numerics/tolerance.h"
+#include "igesio/entities/curves/algorithms.h"
 
 namespace {
 
@@ -298,6 +300,87 @@ SurfaceOfRevolution::TryGetDerivatives(
     }
 
     return s_deriv;
+}
+
+i_num::BoundingBox SurfaceOfRevolution::GetDefinedBoundingBox() const {
+    // ポインタの確認
+    if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {
+        throw std::runtime_error(
+            "Cannot compute bounding box: Axis or Generatrix pointer is not set.");
+    }
+
+    // 回転軸の始点P0と方向ベクトルDを取得
+    const auto& [P0, end_point] = GetAxis()->GetAnchorPoints();
+    auto D = (end_point - P0).normalized();
+
+    // バウンディングボックスの座標系を定義 (Dが第3軸)
+    std::array<Vector3d, 3> dirs;
+    dirs[2] = D;
+    if (std::abs(D.z()) > 0.9) {
+        dirs[1] = D.cross(Vector3d::UnitX()).normalized();
+    } else {
+        dirs[1] = D.cross(Vector3d::UnitZ()).normalized();
+    }
+    dirs[0] = dirs[1].cross(dirs[2]);
+
+    // 母線のバウンディングボックスの頂点を取得
+    auto curve_bbox = GetGeneratrix()->GetDefinedBoundingBox();
+    auto vertices = curve_bbox.GetVertices();
+    if (vertices.empty()) return i_num::BoundingBox();
+
+    // 新しい座標系での最小/最大座標を計算
+    Vector3d min_local = Vector3d::Constant(std::numeric_limits<double>::infinity());
+    Vector3d max_local = Vector3d::Constant(-std::numeric_limits<double>::infinity());
+
+    // 回転範囲を取得
+    auto range = GetAngleRange();
+    bool is_full_rotation =
+            i_num::IsApproxEqual(std::fmod(range[1] - range[0] + 4*kPi, 2*kPi), 0.0);
+
+    for (const auto& p : vertices) {
+        const Vector3d p_P0 = p - P0;
+        Vector3d local = {p_P0.dot(dirs[0]), p_P0.dot(dirs[1]), p_P0.dot(dirs[2])};
+
+        // 頂点の軸からの距離を計算
+        auto r = std::sqrt(local.x() * local.x() + local.y() * local.y());
+
+        if (is_full_rotation) {
+            // 360°回転した場合の最大/最小座標を計算
+            min_local = min_local.cwiseMin(Vector3d{-r, -r, local.z()});
+            max_local = max_local.cwiseMax(Vector3d{ r,  r, local.z()});
+        } else {
+            // 回転範囲内の主要角度での最大/最小座標を計算
+            auto current_angle = std::atan2(local.y(), local.x());
+            std::vector<double> angles_to_check = {
+                    range[0], range[1],                             // 始点, 終点
+                    0 - current_angle, kPi/2 - current_angle,       // 0°, 90°
+                    kPi - current_angle, 3*kPi/2 - current_angle};  // 180°, 270°
+            for (const auto& angle : angles_to_check) {
+                // 回転角度が範囲内にある場合のみ計算
+                if (!(i_num::IsApproxLEQ(range[0], angle) &&
+                      i_num::IsApproxLEQ(angle, range[1]))) {
+                    continue;
+                }
+
+                auto angle_c = current_angle + angle;
+                Vector3d rotated = {r * std::cos(angle_c), r * std::sin(angle_c), local.z()};
+                min_local = min_local.cwiseMin(rotated);
+                max_local = max_local.cwiseMax(rotated);
+            }
+        }
+    }
+
+    // BoundingBoxの基点、方向、サイズを計算
+    Matrix3d transform;
+    transform.block<3, 1>(0, 0) = dirs[0];
+    transform.block<3, 1>(0, 1) = dirs[1];
+    transform.block<3, 1>(0, 2) = dirs[2];
+
+    auto P0_bbox = P0 + transform * min_local;
+    auto sizes = (max_local - min_local);
+    std::array<double, 3> bbox_sizes = {sizes.x(), sizes.y(), sizes.z()};
+
+    return i_num::BoundingBox(P0_bbox, dirs, bbox_sizes, {false, false, false});
 }
 
 

@@ -14,6 +14,7 @@
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::Point;
 using igesio::Vector3d;
@@ -149,6 +150,18 @@ igesio::ValidationResult Point::ValidatePD() const {
     }
 
     return MakeValidationResult(errors);
+}
+
+
+
+/**
+ * IGeometry implementation
+ */
+
+i_num::BoundingBox Point::GetDefinedBoundingBox() const {
+    auto bbox = numerics::BoundingBox();
+    bbox.SetControl(position_);
+    return bbox;
 }
 
 

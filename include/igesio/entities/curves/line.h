@@ -121,17 +121,25 @@ class Line : public EntityBase, public virtual ICurve3D {
     ///        startまたはendがパラメータ範囲外の場合
     double Length(const double, const double) const override;
 
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    numerics::BoundingBox GetDefinedBoundingBox() const override;
+
 
 
     /**
      * 描画用
      */
 
-    /// @brief 線分/半直線/直線の始点・終点を取得する
+    /// @brief 定義空間における線分/半直線/直線の始点・終点を取得する
     /// @return この線を定義する始点P1と終点P2の座標値 (x, y, z).
     ///         半直線や直線の場合は、定義空間において線が通る点
     ///         P1, P2の座標値を返す. firstがP1、secondがP2
-    std::pair<const Vector3d&, const Vector3d&> GetAnchorPoints() const;
+    std::pair<const Vector3d&, const Vector3d&> GetDefinedAnchorPoints() const;
+    /// @brief 線分/半直線/直線の始点・終点を取得する
+    /// @return この線を定義する始点P1と終点P2の座標値 (x, y, z).
+    ///         半直線や直線の場合は、親の空間において線が通る点
+    ///         P1, P2の座標値を返す. firstがP1、secondがP2
+    std::pair<const Vector3d, const Vector3d> GetAnchorPoints() const;
 
 
 

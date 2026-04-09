@@ -49,12 +49,9 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     unsigned int degree_ = 0;
     /// @brief 曲線が平面的か (PROP1)
     bool is_planar_ = false;
-    /// @brief 曲線が閉じているか (PROP2)
-    bool is_closed_ = false;
-    /// @brief 多項式形式か (PROP3)
-    /// @note falseの場合、rational (すなわちNURBS) 形式で定義される.
-    ///       trueの場合、制御点の重みはすべて等しい値であることが期待される
-    bool is_polynomial_ = false;
+    // NOTE: PROP2 (閉じているか) はIsClosed()で取得可能
+    // NOTE: PROP3 (多項式形式か) はIsPolynomial()で取得可能
+
     /// @brief 周期的か (PROP4)
     bool is_periodic_ = false;
 
@@ -136,7 +133,7 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     /// @note パラメータに問題がある場合は`{0, 0}`を返す
     std::array<double, 2> GetParameterRange() const override;
 
-    /// @brief 曲線が閉じているかどうか
+    /// @brief 曲線が閉じているかどうか (PROP2)
     /// @return 始点と終点が一致する場合は`true`、そうでない場合は`false`
     bool IsClosed() const override;
 
@@ -146,6 +143,10 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     /// @return 導関数 C'(t), C''(t)、計算できない場合は`std::nullopt`
     std::optional<CurveDerivatives>
     TryGetDerivatives(const double, const unsigned int) const override;
+
+    /// @brief 定義空間における曲線のバウンディングボックスを取得する
+    /// @return すべての制御点を含む最小の軸平行バウンディングボックス
+    numerics::BoundingBox GetDefinedBoundingBox() const override;
 
 
 
@@ -164,6 +165,11 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
 
     /// @brief 制御点 P (P(0), ..., P(K)) (P(i) = (x_i, y_i, z_i))
     const Matrix3Xd& ControlPoints() const noexcept { return control_points_; }
+
+    /// @brief 多項式形式か (PROP3)
+    /// @note 制御点の重みがすべて等しい値の場合、trueが返される.
+    ///       falseの場合、rational (すなわちNURBS) 形式で定義される.
+    bool IsPolynomial() const;
 
 
 
