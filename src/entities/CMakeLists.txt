@@ -49,6 +49,7 @@ add_library(igesio_entities STATIC
 
     # Algorithms
     curves/algorithms.cpp
+    curves/algorithms/extremal_polygon.cpp
 
     # Factory
     factory.cpp

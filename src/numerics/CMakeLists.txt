@@ -4,6 +4,7 @@ add_library(igesio_numerics STATIC
     integration.cpp
     combinatorics.cpp
     bounding_box.cpp
+    polygon.cpp
     optimize.cpp
 )
 
