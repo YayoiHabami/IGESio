@@ -5,6 +5,7 @@ set (TEST_SOURCES
     test_combinatorics.cpp
     test_bounding_box.cpp
     test_integration.cpp
+    test_optimization.cpp
 )
 
 add_executable(test_numerics ${TEST_SOURCES})

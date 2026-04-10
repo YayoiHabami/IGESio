@@ -128,6 +128,44 @@ else()
   message(STATUS "Eigen support enabled")
 endif()
 
+# Fetch Boost (Headers only)
+find_package(Boost QUIET)
+if (NOT Boost_FOUND)
+  message(STATUS "Boost not found locally. Fetching via FetchContent...")
+
+  # Use Math library from Boost
+  set(BOOST_INCLUDE_LIBRARIES math)
+  set(BOOST_ENABLE_MPI     OFF CACHE BOOL "" FORCE)
+  set(BOOST_ENABLE_PYTHON  OFF CACHE BOOL "" FORCE)
+  set(BOOST_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
+
+  include(FetchContent)
+  FetchContent_Declare(
+    Boost
+    URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.gz
+    ${DOWNLOAD_EXTRACT_TIMESTAMP_OPTION}
+  )
+  FetchContent_MakeAvailable(Boost)
+  message(STATUS "Boost fetched successfully.")
+else()
+  message(STATUS "Boost found locally: ${Boost_INCLUDE_DIRS}")
+
+  if(NOT TARGET Boost::headers)
+    add_library(Boost::headers INTERFACE IMPORTED)
+    set_target_properties(Boost::headers PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
+    )
+  endif()
+  if(NOT TARGET Boost::math)
+      add_library(Boost::math INTERFACE IMPORTED)
+      set_target_properties(Boost::math PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
+      )
+  endif()
+endif()
+add_compile_definitions(IGESIO_ENABLE_BOOST)
+message(STATUS "Boost support enabled")
+
 
 
 # Option to enable OpenGL (glad) support
