@@ -235,10 +235,10 @@ LinearPath::TryGetDerivatives(const double t, const unsigned int n) const {
     if (n < 1) return result;
 
     // 1階導関数
-    if ((*idx) < GetCount() - 2) {
+    if ((*idx) < GetCount() - 1) {
         // セグメントが始点から終点までの間にある場合
         result[1] = (Coordinate(*idx + 1) - Coordinate(*idx)).normalized();
-    } else if ((*idx) == GetCount() - 2) {
+    } else if ((*idx) == GetCount() - 1) {
         // セグメントが終点と始点を結ぶ線分（kPlanarLoopの場合）にある場合
         result[1] = (Coordinate(0) - Coordinate(*idx)).normalized();
     } else {
