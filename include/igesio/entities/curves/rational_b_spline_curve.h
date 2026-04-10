@@ -125,6 +125,23 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
 
 
     /**
+     * 直線部・角点サポート (ICurve override)
+     */
+
+    /// @brief 直線部のパラメータ区間リストを返す
+    /// @return degree_ == 1 の場合は長さ (> 0) の全ノットスパン.
+    ///         それ以外は空リスト
+    std::vector<std::array<double, 2>> GetLinearSegments() const override;
+
+    /// @brief 角点のパラメータ値リストを返す
+    /// @return 内部ノットのうち重複度 >= degree_ のもの.
+    ///         重複度m, 次数MのノットはC^(M-m)連続のため,
+    ///         m >= M で C^0 (角点) となる
+    std::vector<double> GetCornerParams() const override;
+
+
+
+    /**
      * ICurve implementation
      */
 

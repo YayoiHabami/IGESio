@@ -141,6 +141,17 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
 
 
     /**
+     * 直線部・角点サポート (ICurve override)
+     */
+
+    /// @brief 角点のパラメータ値リストを返す
+    /// @return ベース曲線B(t)の角点パラメータリスト.
+    ///         B(t)の角点では C'(t) = S_u·u' + S_v·v' が不連続になるため
+    std::vector<double> GetCornerParams() const override;
+
+
+
+    /**
      * ICurve implementation
      */
 

@@ -22,6 +22,33 @@ namespace i_ent = igesio::entities;
 using i_ent::CompositeCurve;
 using igesio::Vector3d;
 
+/// @brief 各構成曲線の開始グローバルパラメータを計算する
+/// @param cc CompositeCurveの参照
+/// @return 各曲線の開始グローバルパラメータ (サイズ n+1, 末尾は全体の終端)
+std::vector<double>
+ComputeCurveOffsets(const CompositeCurve& cc) {
+    const size_t n = cc.GetCurveCount();
+    std::vector<double> offsets;
+    offsets.reserve(n + 1);
+    double acc = 0.0;
+    offsets.push_back(0.0);
+    for (size_t i = 0; i < n; ++i) {
+        auto curve = cc.GetCurveAt(i);
+        if (!curve) {
+            offsets.push_back(acc);
+            continue;
+        }
+        const auto range = curve->GetParameterRange();
+        if (!std::isfinite(range[0]) || !std::isfinite(range[1])) {
+            offsets.push_back(acc);
+            continue;
+        }
+        acc += range[1] - range[0];
+        offsets.push_back(acc);
+    }
+    return offsets;
+}
+
 }  // namespace
 
 
@@ -225,6 +252,82 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
     }
 
     return MakeValidationResult(std::move(errors));
+}
+
+
+
+/**
+ * 直線部・角点サポート
+ */
+
+std::vector<std::array<double, 2>> CompositeCurve::GetLinearSegments() const {
+    std::vector<std::array<double, 2>> result;
+    const auto offsets = ComputeCurveOffsets(*this);
+    for (size_t i = 0; i < curves_.size(); ++i) {
+        auto curve = curves_[i].GetEntity<ICurve>();
+        if (!curve) continue;
+        const double offset = offsets[i];
+        const double local_start = curve->GetParameterRange()[0];
+        for (const auto& seg : curve->GetLinearSegments()) {
+            // 構成曲線が直線部を持てば、その区間をグローバルパラメータ空間に
+            // マッピングして追加
+            result.push_back({offset + (seg[0] - local_start),
+                              offset + (seg[1] - local_start)});
+        }
+    }
+    return result;
+}
+
+std::vector<double> CompositeCurve::GetCornerParams() const {
+    std::vector<double> result;
+    const auto offsets = ComputeCurveOffsets(*this);
+    for (size_t i = 0; i < curves_.size(); ++i) {
+        auto curve = curves_[i].GetEntity<ICurve>();
+        if (!curve) continue;
+        const double offset = offsets[i];
+        const double local_start = curve->GetParameterRange()[0];
+        // 接合点を角点として追加 (最初の曲線は除く)
+        if (i > 0) result.push_back(offset);
+        // 構成曲線の角点をグローバルパラメータ空間にマッピング
+        for (const double tc : curve->GetCornerParams()) {
+            result.push_back(offset + (tc - local_start));
+        }
+    }
+    return result;
+}
+
+std::optional<Vector3d> CompositeCurve::LeftTangentAt(const double t) const {
+    const auto offsets = ComputeCurveOffsets(*this);
+    // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
+    for (size_t i = 1; i < curves_.size(); ++i) {
+        if (std::abs(t - offsets[i]) < 1e-9) {
+            // 直前の構成曲線 (i-1) の終端における左接線
+            auto curve = curves_[i - 1].GetEntity<ICurve>();
+            if (!curve) break;
+            return curve->LeftTangentAt(curve->GetParameterRange()[1]);
+        }
+    }
+    // 非接合点: 該当する構成曲線に委譲
+    auto [curve, t_local] = GetCurveAtParameter(t);
+    if (!curve) return std::nullopt;
+    return curve->LeftTangentAt(t_local);
+}
+
+std::optional<Vector3d> CompositeCurve::RightTangentAt(const double t) const {
+    const auto offsets = ComputeCurveOffsets(*this);
+    // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
+    for (size_t i = 1; i < curves_.size(); ++i) {
+        if (std::abs(t - offsets[i]) < 1e-9) {
+            // 直後の構成曲線 (i) の始端における右接線
+            auto curve = curves_[i].GetEntity<ICurve>();
+            if (!curve) break;
+            return curve->RightTangentAt(curve->GetParameterRange()[0]);
+        }
+    }
+    // 非接合点: 該当する構成曲線に委譲
+    auto [curve, t_local] = GetCurveAtParameter(t);
+    if (!curve) return std::nullopt;
+    return curve->RightTangentAt(t_local);
 }
 
 

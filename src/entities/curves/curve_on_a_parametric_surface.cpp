@@ -299,6 +299,19 @@ igesio::ValidationResult CurveOnSurface::ValidatePD() const {
 
 
 /**
+ * 直線部・角点サポート
+ */
+
+std::vector<double> CurveOnSurface::GetCornerParams() const {
+    // B(t) の角点では C(t) = S(B(t)) も接線方向が不連続になる
+    auto bc = base_curve_.TryGetEntity<ICurve>();
+    if (!bc || !bc.value()) return {};
+    return bc.value()->GetCornerParams();
+}
+
+
+
+/**
  * ICurve implementation
  */
 

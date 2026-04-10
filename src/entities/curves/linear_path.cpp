@@ -17,7 +17,36 @@ namespace {
 namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::LinearPath;
+using i_ent::CopiousDataType;
 using igesio::Vector3d;
+
+/// @brief 各頂点における累積弧長を計算する
+/// @param base CopiousDataBaseの参照
+/// @return 頂点ごとの累積弧長 (サイズ n, 先頭は 0.0)
+std::vector<double>
+ComputeVertexLengths(const i_ent::CopiousDataBase& base) {
+    const size_t n = base.GetCount();
+    std::vector<double> lengths(n, 0.0);
+    for (size_t i = 1; i < n; ++i) {
+        lengths[i] = lengths[i - 1]
+            + (base.Coordinate(i) - base.Coordinate(i - 1)).norm();
+    }
+    return lengths;
+}
+
+/// @brief 弧長パラメータ t に対応する頂点インデックスを返す
+/// @param vertex_lengths ComputeVertexLengths の結果
+/// @param t パラメータ値
+/// @param eps 許容誤差
+/// @return 一致する頂点インデックス. 見つからない場合は std::nullopt
+std::optional<size_t>
+FindVertexIndex(const std::vector<double>& vertex_lengths,
+                const double t, const double eps = 1e-9) {
+    for (size_t i = 0; i < vertex_lengths.size(); ++i) {
+        if (std::abs(vertex_lengths[i] - t) < eps) return i;
+    }
+    return std::nullopt;
+}
 
 }  // namespace
 
@@ -57,6 +86,109 @@ LinearPath::LinearPath(const std::vector<Vector3d>& coordinates)
     for (size_t i = 0; i < coordinates.size(); ++i) {
         coordinates_.block<3, 1>(0, i) = coordinates[i];
     }
+}
+
+
+
+/**
+ * 直線部・角点サポート
+ */
+
+std::vector<std::array<double, 2>> LinearPath::GetLinearSegments() const {
+    const size_t n = GetCount();
+    if (n < 2) return {};
+
+    const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
+    const auto vertex_lengths = ComputeVertexLengths(*this);
+
+    std::vector<std::array<double, 2>> segments;
+    segments.reserve(is_loop ? n : n - 1);
+
+    for (size_t i = 0; i + 1 < n; ++i) {
+        segments.push_back({vertex_lengths[i], vertex_lengths[i + 1]});
+    }
+    if (is_loop) {
+        // 末端→先頭の閉鎖辺
+        segments.push_back({vertex_lengths[n - 1], CopiousDataBase::Length()});
+    }
+    return segments;
+}
+
+std::vector<double> LinearPath::GetCornerParams() const {
+    const size_t n = GetCount();
+    if (n < 2) return {};
+
+    const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
+    const auto vertex_lengths = ComputeVertexLengths(*this);
+
+    std::vector<double> corners;
+    if (is_loop) {
+        // 頂点0 (t=0) も閉鎖辺との接続点なので角点
+        corners.push_back(0.0);
+        for (size_t i = 1; i < n; ++i) {
+            corners.push_back(vertex_lengths[i]);
+        }
+    } else {
+        // 内部頂点のみ (始点・終点を除く)
+        for (size_t i = 1; i + 1 < n; ++i) {
+            corners.push_back(vertex_lengths[i]);
+        }
+    }
+    return corners;
+}
+
+std::optional<Vector3d> LinearPath::LeftTangentAt(const double t) const {
+    if (!IsCorner(t)) return ICurve::LeftTangentAt(t);
+
+    const size_t n = GetCount();
+    if (n < 2) return std::nullopt;
+
+    const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
+    const auto vertex_lengths = ComputeVertexLengths(*this);
+
+    const auto idx_opt = FindVertexIndex(vertex_lengths, t);
+    if (!idx_opt.has_value()) return ICurve::LeftTangentAt(t);
+    const size_t idx = *idx_opt;
+
+    // 入射辺: 前の頂点 → 現在の頂点
+    Vector3d prev;
+    if (idx == 0) {
+        if (!is_loop) return std::nullopt;  // 非loop始点は左接線なし
+        prev = Coordinate(n - 1);
+    } else {
+        prev = Coordinate(idx - 1);
+    }
+    const Vector3d curr = Coordinate(idx);
+    const double seg_len = (curr - prev).norm();
+    if (seg_len < 1e-12) return std::nullopt;
+    return (curr - prev) / seg_len;
+}
+
+std::optional<Vector3d> LinearPath::RightTangentAt(const double t) const {
+    if (!IsCorner(t)) return ICurve::RightTangentAt(t);
+
+    const size_t n = GetCount();
+    if (n < 2) return std::nullopt;
+
+    const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
+    const auto vertex_lengths = ComputeVertexLengths(*this);
+
+    const auto idx_opt = FindVertexIndex(vertex_lengths, t);
+    if (!idx_opt.has_value()) return ICurve::RightTangentAt(t);
+    const size_t idx = *idx_opt;
+
+    // 出射辺: 現在の頂点 → 次の頂点
+    const Vector3d curr = Coordinate(idx);
+    Vector3d next;
+    if (idx == n - 1) {
+        if (!is_loop) return std::nullopt;  // 非loop終点は右接線なし
+        next = Coordinate(0);
+    } else {
+        next = Coordinate(idx + 1);
+    }
+    const double seg_len = (next - curr).norm();
+    if (seg_len < 1e-12) return std::nullopt;
+    return (next - curr) / seg_len;
 }
 
 

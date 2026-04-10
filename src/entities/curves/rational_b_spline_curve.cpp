@@ -279,6 +279,60 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
 
 
 /**
+ * 直線部・角点サポート
+ */
+
+std::vector<std::array<double, 2>>
+RationalBSplineCurve::GetLinearSegments() const {
+    // degree_ == 1 のときのみ各ノットスパンが直線
+    if (degree_ != 1) return {};
+    if (knots_.size() < 2) return {};
+
+    std::vector<std::array<double, 2>> segments;
+    for (size_t i = 0; i + 1 < knots_.size(); ++i) {
+        const double a = knots_[i], b = knots_[i + 1];
+        // 重複ノット (スパン長 ≈ 0) を除く
+        if (b - a > 1e-14) segments.push_back({a, b});
+    }
+    return segments;
+}
+
+std::vector<double> RationalBSplineCurve::GetCornerParams() const {
+    // degree_ == 0 は非通常ケース
+    if (degree_ == 0) return {};
+    if (knots_.size() < 2) return {};
+
+    const double v0 = parameter_range_[0];
+    const double v1 = parameter_range_[1];
+    constexpr double eps = 1e-12;
+
+    std::vector<double> corners;
+    size_t i = 0;
+    while (i < knots_.size()) {
+        const double knot_val = knots_[i];
+        // 端点ノット (V(0) または V(1)) は除外
+        if (knot_val <= v0 + eps || knot_val >= v1 - eps) {
+            ++i;
+            continue;
+        }
+        // 重複度を計算
+        size_t mult = 1;
+        while (i + mult < knots_.size() &&
+               std::abs(knots_[i + mult] - knot_val) < eps) {
+            ++mult;
+        }
+        // 重複度 >= degree_ で C^0 (角点)
+        if (mult >= static_cast<size_t>(degree_)) {
+            corners.push_back(knot_val);
+        }
+        i += mult;
+    }
+    return corners;
+}
+
+
+
+/**
  * ICurve implementation
  */
 
