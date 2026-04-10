@@ -93,6 +93,61 @@ class ICurve : public virtual IEntityIdentifier,
 
 
     /**
+     * 直線部・角点サポート
+     */
+
+    /// @brief 直線部のパラメータ区間リストを返す
+    /// @return 直線区間のリスト. 各要素は {u_s, u_e} (u_s < u_e,
+    ///         GetParameterRange() の範囲内)
+    /// @note 直線部を持たない曲線ではデフォルトの空リストが返される.
+    ///       直線部を持つサブクラスでオーバーライドする
+    virtual std::vector<std::array<double, 2>> GetLinearSegments() const;
+
+    /// @brief パラメータ値tが直線部内にあるかどうかを判定する
+    /// @param t パラメータ値
+    /// @param eps 区間端点の許容誤差
+    /// @return t がいずれかの直線区間内にある場合はtrue
+    bool IsInLinearSegment(const double t,
+                           const double eps = 1e-9) const;
+
+    /// @brief 角点のパラメータ値リストを返す
+    /// @return 角点のパラメータ値リスト
+    /// @note 角点を持たない曲線ではデフォルトの空リストが返される.
+    ///       角点を持つサブクラスでオーバーライドする
+    virtual std::vector<double> GetCornerParams() const;
+
+    /// @brief パラメータ値tが角点かどうかを判定する
+    /// @param t パラメータ値
+    /// @param eps 判定の許容誤差
+    /// @return t が角点の場合は`true`
+    bool IsCorner(const double t, const double eps = 1e-9) const;
+
+    /// @brief 角点における左側単位接線ベクトルT⁻(t)を返す
+    /// @param t パラメータ値
+    /// @return 左側単位接線ベクトル. 計算できない場合は`std::nullopt`
+    /// @note デフォルト実装は (t - h) における導関数の方向で近似する.
+    ///       解析的に既知のサブクラスはオーバーライド可能
+    virtual std::optional<Vector3d> LeftTangentAt(const double t) const;
+
+    /// @brief 角点における右側単位接線ベクトルT⁺(t)を返す
+    /// @param t パラメータ値
+    /// @return 右側単位接線ベクトル. 計算できない場合は`std::nullopt`
+    /// @note デフォルト実装は (t + h) における導関数の方向で近似する.
+    ///       解析的に既知のサブクラスはオーバーライド可能
+    virtual std::optional<Vector3d> RightTangentAt(const double t) const;
+
+    /// @brief 角点における外角αを返す
+    /// @param t パラメータ値（角点であること）
+    /// @param reference_normal 符号の基準となる法線ベクトル（正規化不要）
+    /// @return T⁻ から T⁺ への参照法線周りの符号付き回転角 [rad].
+    ///         α > 0: 反時計回り, α < 0: 時計回り.
+    ///         計算できない場合は`std::nullopt`
+    std::optional<double> CornerExteriorAngle(
+        const double t, const Vector3d& reference_normal) const;
+
+
+
+    /**
      * 曲線の導関数（ベクトル）を計算する
      */
 
@@ -125,6 +180,16 @@ class ICurve : public virtual IEntityIdentifier,
     /// @throw std::invalid_argument start >= endの場合、
     ///        startまたはendがパラメータ範囲外の場合
     virtual double Length(const double, const double) const;
+
+    /// @brief 参照法線 n̂ に対する符号付き曲率 κ_s(t) を計算する
+    /// @param t パラメータ値
+    /// @param reference_normal 符号の基準となる法線ベクトル（正規化不要）
+    /// @return κ_s(t) = (C'×C'')·n̂ / |C'|^3.
+    ///         角点では +∞ / -∞ / 0, 直線部では0.
+    ///         計算できない場合（導関数取得失敗・|C'|≈0・法線≈0）は
+    ///         `std::nullopt`
+    std::optional<double> TryGetSignedCurvature(
+        const double t, const Vector3d& reference_normal) const;
 
 
 

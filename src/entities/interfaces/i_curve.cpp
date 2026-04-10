@@ -24,6 +24,9 @@ using i_ent::ICurve2D;
 using i_ent::ICurve3D;
 using i_ent::CurveDerivatives;
 
+/// @brief 左側接線/右側接線を計算する際の微小パラメータ値h
+constexpr double kTangentH = 1e-7;
+
 }  // namespace
 
 
@@ -93,6 +96,105 @@ double ICurve::GetCurvature(const double t) const {
     // κ = |C' × C''| / |C'|^3
     return ((*deriv)[1].cross((*deriv)[2]).norm())
          / std::pow((*deriv)[1].norm(), 3);
+}
+
+
+
+/**
+ * 直線部・角点サポート (ICurve)
+ */
+
+std::vector<std::array<double, 2>> ICurve::GetLinearSegments() const {
+    return {};
+}
+
+bool ICurve::IsInLinearSegment(const double t, const double eps) const {
+    for (const auto& seg : GetLinearSegments()) {
+        if (t >= seg[0] - eps && t <= seg[1] + eps) return true;
+    }
+    return false;
+}
+
+std::vector<double> ICurve::GetCornerParams() const {
+    return {};
+}
+
+bool ICurve::IsCorner(const double t, const double eps) const {
+    for (const auto tc : GetCornerParams()) {
+        if (std::abs(t - tc) < eps) return true;
+    }
+    return false;
+}
+
+std::optional<Vector3d> ICurve::LeftTangentAt(const double t) const {
+    // (t-h)における導関数の方向で近似
+    const double t_eval = std::max(t - kTangentH, GetParameterRange()[0]);
+    auto deriv = TryGetDerivatives(t_eval, 1);
+    if (!deriv.has_value()) return std::nullopt;
+
+    // 導関数がゼロベクトルに近い場合は接線ベクトルを定義できないとみなす
+    const double norm = (*deriv)[1].norm();
+    if (norm < 1e-12) return std::nullopt;
+    return (*deriv)[1] / norm;
+}
+
+std::optional<Vector3d> ICurve::RightTangentAt(const double t) const {
+    // (t+h)における導関数の方向で近似
+    const double t_eval = std::min(t + kTangentH, GetParameterRange()[1]);
+    auto deriv = TryGetDerivatives(t_eval, 1);
+    if (!deriv.has_value()) return std::nullopt;
+
+    // 導関数がゼロベクトルに近い場合は接線ベクトルを定義できないとみなす
+    const double norm = (*deriv)[1].norm();
+    if (norm < 1e-12) return std::nullopt;
+    return (*deriv)[1] / norm;
+}
+
+std::optional<double> ICurve::CornerExteriorAngle(
+        const double t, const Vector3d& reference_normal) const {
+    const double n_norm = reference_normal.norm();
+    if (n_norm < 1e-12) return std::nullopt;
+    const Vector3d n_hat = reference_normal / n_norm;
+
+    auto tm = LeftTangentAt(t);
+    if (!tm.has_value()) return std::nullopt;
+    auto tp = RightTangentAt(t);
+    if (!tp.has_value()) return std::nullopt;
+
+    // (T⁻ × T⁺) · n̂ が符号付き sin 成分に対応
+    const double cross_n = (*tm).cross(*tp).dot(n_hat);
+    const double dot_val = tm->dot(*tp);
+    return std::atan2(cross_n, dot_val);
+}
+
+std::optional<double> ICurve::TryGetSignedCurvature(
+        const double t, const Vector3d& reference_normal) const {
+    const double n_norm = reference_normal.norm();
+    if (n_norm < 1e-12) return std::nullopt;
+    const Vector3d n_hat = reference_normal / n_norm;
+
+    if (IsCorner(t)) {
+        // 角点では、外角αに基づいて符号付き曲率を定義する
+        auto alpha = CornerExteriorAngle(t, n_hat);
+        if (!alpha.has_value()) return std::nullopt;
+        if (*alpha > 0) return  std::numeric_limits<double>::infinity();
+        if (*alpha < 0) return -std::numeric_limits<double>::infinity();
+        return 0.0;
+    }
+
+    // 直線部では曲率は0
+    if (IsInLinearSegment(t)) return 0.0;
+
+    // それ以外の点では、通常の曲率に符号をつける
+    auto deriv = TryGetDerivatives(t, 2);
+    if (!deriv.has_value()) return std::nullopt;
+
+    const auto& c1 = (*deriv)[1];
+    const auto& c2 = (*deriv)[2];
+    const double speed3 = std::pow(c1.norm(), 3);
+    if (speed3 < 1e-14) return std::nullopt;
+
+    return c1.cross(c2).dot(n_hat) / speed3;
 }
 
 double ICurve::Length() const {

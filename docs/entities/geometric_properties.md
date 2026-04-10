@@ -12,6 +12,7 @@ This section also describes the set of functions provided for calculating and ob
   - [Derivative (Curve)](#derivative-curve)
   - [Tangent Vector (Curve)](#tangent-vector-curve)
   - [Curvature (Curve)](#curvature-curve)
+  - [Signed Curvature (Curve)](#signed-curvature-curve)
   - [Length (Curve)](#length-curve)
   - [Frenet Frame](#frenet-frame)
 - [Geometric Properties of Surfaces](#geometric-properties-of-surfaces)
@@ -43,6 +44,7 @@ These are used to define and calculate the following geometric properties:
 | [**Derivative**](#derivative-curve) | $C'(u) = \frac{dC}{du}$ <br> $C''(u) = \frac{d^2C}{du^2}$ | Vectors representing the rate of change of the curve <br> `TryGetDerivatives(u, n_deriv)` |
 | [**Unit Tangent Vector**](#tangent-vector-curve) | $T(u) = \frac{C'(u)}{\|C'(u)\|}$ | Tangent direction of the curve <br> `TryGetTangentAt(u)` |
 | [**Curvature**](#curvature-curve) | $\kappa(u) = \frac{\|C'(u) \times C''(u)\|}{\|C'(u)\|^3}$ | Measure of how much the curve bends <br> `GetCurvature(u)` |
+| [**Signed Curvature**](#signed-curvature-curve) | $\kappa_s(t) = \frac{(C'(t) \times C''(t)) \cdot \hat{n}}{\|C'(t)\|^3}$ | Signed curvature with respect to reference normal $\hat{n}$ (±∞ at corners, 0 on linear segments) <br> `TryGetSignedCurvature(t, n)` |
 | [**Length**](#length-curve) | $L = \int_{u_{\text{start}}}^{u_{\text{end}}} \|C'(t)\| dt$ | Distance between two points on the curve <br> `Length()` <br> `Length(u_start, u_end)` |
 | [**Unit Normal Vector**](#frenet-frame) | $N(u) = \frac{\frac{dT(u)}{du}}{\|\frac{dT(u)}{du}\|}$ <br> ( $=\frac{C''(u)\|C'(u)\|^2 - C'(u)(C'(u)\cdot C''(u))}{\|C'(u)\|^3}$ ) | Direction in which the curve bends <br> `TryGetNormalAt(u)` |
 | [**Binormal Vector**](#frenet-frame) | $B(u) = T(u) \times N(u)$ | Direction of the curve's torsion <br> `TryGetBinormalAt(u)` |
@@ -207,6 +209,58 @@ Output:
 ```
 Curvature kappa(u): 0.178283
 ```
+
+### Signed Curvature (Curve)
+
+The ordinary curvature $\kappa(u) \geq 0$ only represents the magnitude of the curve's bending. In contrast, the **signed curvature** $\kappa_s(t)$ is a curvature that carries the sign of the bending direction relative to a reference normal vector $\hat{n}$.
+
+$$\kappa_s(t) = \frac{(C'(t) \times C''(t)) \cdot \hat{n}}{\|C'(t)\|^3}$$
+
+Here, $\hat{n}$ is a reference normal vector that defines the base direction (normalization is not required). When $\kappa_s > 0$, the curve bends counterclockwise as seen from the $\hat{n}$ direction; when $\kappa_s < 0$, it bends clockwise. For a 2D curve $C(u) = (x(u), y(u))$ with $\hat{n} = (0, 0, 1)$, this reduces to:
+
+$$\kappa_s(u) = \frac{x'(u)\, y''(u) - y'(u)\, x''(u)}{(x'(u)^2 + y'(u)^2)^{3/2}}$$
+
+<!-- omit in toc -->
+#### Value on Linear Segments
+
+On linear segments, $C'(t) \times C''(t) = \mathbf{0}$, so $\kappa_s = 0$.
+
+<!-- omit in toc -->
+#### Extension at Corner Points
+
+A curve may be composed of multiple smooth segments joined together (e.g., `CompositeCurve` (type 102) or `LinearPath` (type 106, forms 11–13)). In such curves, the curve is continuous at the junction points between segments, but the tangent direction changes across the junction, so the derivative does not exist at that point. In this library, such "continuous but non-differentiable points" are called **corner points**.
+
+At a corner point $t = t_c$, the derivative does not exist, so the above formula cannot be applied directly. Instead, we use the unit tangent vector $T^-(t_c)$ approaching from the left ($t < t_c$) and the unit tangent vector $T^+(t_c)$ approaching from the right ($t > t_c$):
+
+$$T^-(t_c) = \lim_{h \to 0^+} \frac{C'(t_c - h)}{\|C'(t_c - h)\|}, \qquad T^+(t_c) = \lim_{h \to 0^+} \frac{C'(t_c + h)}{\|C'(t_c + h)\|}$$
+
+Using these left and right tangent vectors, we define the **exterior angle** $\alpha$, which is the signed rotation angle from $T^-$ to $T^+$ around the reference normal $\hat{n}$:
+
+$$\alpha = \mathrm{atan2}\bigl((T^-(t_c) \times T^+(t_c)) \cdot \hat{n},\; T^-(t_c) \cdot T^+(t_c)\bigr)$$
+
+$\alpha > 0$ indicates a counterclockwise turn, and $\alpha < 0$ indicates a clockwise turn. Based on this sign, the signed curvature at a corner point is defined as:
+
+$$\kappa_s(t_c) = \begin{cases}
++\infty & (\alpha > 0) \\
+-\infty & (\alpha < 0) \\
+0 & (\alpha = 0)
+\end{cases}$$
+
+This extension allows the sign of the signed curvature to be handled uniformly at both smooth points and corner points.
+
+<!-- omit in toc -->
+#### Related Functions
+
+| Function | Return Type | Description |
+|:-|:-:|:-|
+| `GetLinearSegments()` | `vector<array<double,2>>` | Returns a list of parameter intervals $[u_s, u_e]$ for linear segments |
+| `IsInLinearSegment(t)` | `bool` | Determines whether $t$ is within a linear segment |
+| `GetCornerParams()` | `vector<double>` | Returns a list of parameter values at corner points |
+| `IsCorner(t)` | `bool` | Determines whether $t$ is a corner point |
+| `LeftTangentAt(t)` | `optional<Vector3d>` | Returns the left-side unit tangent vector $T^-(t)$ at corner point $t$ |
+| `RightTangentAt(t)` | `optional<Vector3d>` | Returns the right-side unit tangent vector $T^+(t)$ at corner point $t$ |
+| `CornerExteriorAngle(t, n)` | `optional<double>` | Returns the exterior angle $\alpha$ [rad] at corner point $t$ |
+| `TryGetSignedCurvature(t, n)` | `optional<double>` | Returns the signed curvature $\kappa_s(t)$ (including at corners and on linear segments) |
 
 ### Length (Curve)
 
