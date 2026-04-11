@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 
+#include <array>
 #include <utility>
 #include <vector>
 
@@ -19,6 +20,7 @@ namespace {
 namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using RationalBSplineCurve = i_ent::RationalBSplineCurve;
+using Matrix3Xd = igesio::Matrix3Xd;
 using Vector3d = igesio::Vector3d;
 
 /// @brief RationalBSplineCurveに対して、基底関数とその導関数を計算する
@@ -34,6 +36,100 @@ TryComputeBasisFunctions(const double t, const int num_derivatives,
     return i_ent::TryComputeBasisFunctions(
         t, num_derivatives, curve.Degree(), curve.Knots(),
         curve.GetParameterRange());
+}
+
+/// @brief NURBS制御点が平面上にあるかを判定し、法線ベクトルを返す
+/// @param cp  制御点行列（3 × (k+1)）
+/// @param k   制御点の最大インデックス
+/// @return 平面の正規化法線ベクトル、または平面でない場合（3点未満・
+///         全点が一直線上・全点が同一平面上でない）は std::nullopt
+std::optional<Vector3d> ComputePlaneNormal(const Matrix3Xd& cp, int k) {
+    if (k < 2) return std::nullopt;
+
+    const Vector3d p0 = cp.col(0);
+
+    // p0から始まる最初の非零ベクトルをv1とする
+    Vector3d v1 = Vector3d::Zero();
+    for (int i = 1; i <= k; ++i) {
+        v1 = cp.col(i) - p0;
+        if (v1.norm() > i_num::kGeometryTolerance) break;
+    }
+    if (v1.norm() <= i_num::kGeometryTolerance) return std::nullopt;
+    v1.normalize();
+
+    // v1と線形独立なベクトルを探し、外積から法線を計算する
+    std::optional<Vector3d> normal;
+    for (int i = 2; i <= k; ++i) {
+        const Vector3d vi = cp.col(i) - p0;
+        const Vector3d cross = v1.cross(vi);
+        if (cross.norm() > i_num::kGeometryTolerance) {
+            normal = cross.normalized();
+            break;
+        }
+    }
+    if (!normal) return std::nullopt;  // 全点が一直線上
+
+    // 残りの制御点が同一平面上にあるか確認
+    for (int i = 1; i <= k; ++i) {
+        const double dist = normal->dot(cp.col(i) - p0);
+        if (!i_num::IsApproxZero(dist, i_num::kGeometryTolerance)) {
+            return std::nullopt;
+        }
+    }
+    return normal;
+}
+
+/// @brief NURBS曲線パラメータからIGESParameterVectorを構築する
+/// @param k           制御点の最大インデックス
+/// @param m           曲線の次数
+/// @param knots       ノットベクトル T（サイズ k+m+2）
+/// @param weights     重み W（サイズ k+1）
+/// @param cp          制御点行列（3 × (k+1)）
+/// @param param_range パラメータ範囲 { V(0), V(1) }
+/// @param is_periodic 周期的か
+/// @return 構築された IGESParameterVector
+igesio::IGESParameterVector BuildNurbsParamVector(
+        unsigned int k, unsigned int m,
+        const std::vector<double>& knots,
+        const std::vector<double>& weights,
+        const Matrix3Xd& cp,
+        const std::array<double, 2>& param_range,
+        bool is_periodic) {
+    // PROP1/normal_vector: 平面性を判定
+    const auto normal = ComputePlaneNormal(cp, static_cast<int>(k));
+
+    igesio::IGESParameterVector params;
+    params.push_back(static_cast<int>(k));
+    params.push_back(static_cast<int>(m));
+    // PROP1: 法線が定まれば平面的
+    params.push_back(normal.has_value());
+    // PROP2（is_closed）: SetMainPDParametersでは参照されないためfalseを設定
+    params.push_back(false);
+    // PROP3（is_polynomial）: 同上
+    params.push_back(false);
+    params.push_back(is_periodic);
+
+    for (const auto& t : knots)   params.push_back(t);
+    for (const auto& w : weights) params.push_back(w);
+    for (int i = 0; i <= static_cast<int>(k); ++i) {
+        params.push_back(cp(0, i));
+        params.push_back(cp(1, i));
+        params.push_back(cp(2, i));
+    }
+    params.push_back(param_range[0]);
+    params.push_back(param_range[1]);
+
+    // 平面的な場合は法線ベクトルを設定、そうでない場合は零ベクトル
+    if (normal) {
+        params.push_back(normal->x());
+        params.push_back(normal->y());
+        params.push_back(normal->z());
+    } else {
+        params.push_back(0.0);
+        params.push_back(0.0);
+        params.push_back(0.0);
+    }
+    return params;
 }
 
 }  // namespace
@@ -57,6 +153,17 @@ RationalBSplineCurve::RationalBSplineCurve(
             RawEntityDE::ByDefault(i_ent::EntityType::kRationalBSplineCurve),
             parameters, {}, IDGenerator::UnsetID()) {}
 
+RationalBSplineCurve::RationalBSplineCurve(
+        unsigned int k, unsigned int m,
+        const std::vector<double>& knots,
+        const std::vector<double>& weights,
+        const Matrix3Xd& control_points,
+        const std::array<double, 2>& parameter_range,
+        bool is_periodic)
+        : RationalBSplineCurve(
+            BuildNurbsParamVector(k, m, knots, weights, control_points,
+                                  parameter_range, is_periodic)) {}
+
 i_ent::RationalBSplineCurveType RationalBSplineCurve::GetCurveType() const {
     return static_cast<RationalBSplineCurveType>(form_number_);
 }
@@ -68,53 +175,18 @@ i_ent::RationalBSplineCurveType RationalBSplineCurve::GetCurveType() const {
  */
 
 igesio::IGESParameterVector RationalBSplineCurve::GetMainPDParameters() const {
-    IGESParameterVector params;
-
     // 制御点の数 (K + 1)
     const int k = control_points_.cols() - 1;
-    params.push_back(k);
 
-    // 次数 M
-    const unsigned int m = degree_;
-    params.push_back(static_cast<int>(m));
+    // NURBSパラメータからIGESParameterVectorを構築
+    IGESParameterVector params = BuildNurbsParamVector(
+        k, Degree(), Knots(), Weights(), ControlPoints(), GetParameterRange(),
+        is_periodic_);
 
-    // PROP1 ~ PROP4
-    params.push_back(is_planar_ ? 1 : 0);
-    params.push_back(IsClosed() ? 1 : 0);
-    params.push_back(IsPolynomial() ? 1 : 0);
-    params.push_back(is_periodic_ ? 1 : 0);
-
-    // ノットベクトル T
-    for (const auto& knot : knots_) {
-        params.push_back(knot);
-    }
-
-    // 重み W
-    for (const auto& weight : weights_) {
-        params.push_back(weight);
-    }
-
-    // 制御点 P = (x_i, y_i, z_i)
-    for (int i = 0; i <= k; ++i) {
-        params.push_back(control_points_(0, i));  // X
-        params.push_back(control_points_(1, i));  // Y
-        params.push_back(control_points_(2, i));  // Z
-    }
-
-    // パラメータ範囲 V = {V(0), V(1)}
-    params.push_back(parameter_range_[0]);
-    params.push_back(parameter_range_[1]);
-
-    // 法線ベクトル (平面的でない場合は{0, 0, 0})
-    if (normal_vector_) {
-        params.push_back(normal_vector_->x());
-        params.push_back(normal_vector_->y());
-        params.push_back(normal_vector_->z());
-    } else {
-        params.push_back(0.0);
-        params.push_back(0.0);
-        params.push_back(0.0);
-    }
+    // PROP2は未設定のため実際の閉曲線判定に基づいて上書き
+    params.set(3, IsClosed());
+    // PROP3は未設定のため実際の多項式形式判定に基づいて上書き
+    params.set(4, IsPolynomial());
 
     // サイズが同じ場合に限り、元のフォーマット情報を適用
     if (params.size() == pd_parameters_.size()) {

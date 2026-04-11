@@ -63,15 +63,15 @@ constexpr double kTol = 1e-9;
 /// LeftTangentAt(1-h) = RightTangentAt(1+h) = (1,0,0) (直線上なので外角=0)
 std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_Straight() {
     const auto param = igesio::IGESParameterVector{
-        2, 1,                          // K=2, M=1
-        false, false, true, false,     // PROP1-4
-        0.0, 0.0, 1.0, 2.0, 2.0,     // ノット (K+M+2=5 個)
-        1.0, 1.0, 1.0,                // 重み (K+1=3 個)
-        0.0, 0.0, 0.0,                // P0 = (0,0,0)
-        1.0, 0.0, 0.0,                // P1 = (1,0,0)
-        2.0, 0.0, 0.0,                // P2 = (2,0,0)
-        0.0, 2.0,                     // V(0)=0, V(1)=2
-        0.0, 0.0, 1.0                 // 法線
+        2, 1,                       // K=2, M=1
+        false, false, true, false,  // PROP1-4
+        0.0, 0.0, 1.0, 2.0, 2.0,    // ノット (K+M+2=5 個)
+        1.0, 1.0, 1.0,              // 重み (K+1=3 個)
+        0.0, 0.0, 0.0,              // P0 = (0,0,0)
+        1.0, 0.0, 0.0,              // P1 = (1,0,0)
+        2.0, 0.0, 0.0,              // P2 = (2,0,0)
+        0.0, 2.0,                   // V(0)=0, V(1)=2
+        0.0, 0.0, 1.0               // 法線
     };
     return std::make_shared<RationalBSplineCurve>(param);
 }
@@ -84,15 +84,15 @@ std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_Straight() {
 /// CornerExteriorAngle(1.0, n=(0,0,1)) = +π/2 → TryGetSignedCurvature = +∞
 std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_LeftTurn() {
     const auto param = igesio::IGESParameterVector{
-        2, 1,                          // K=2, M=1
-        false, false, true, false,     // PROP1-4
+        2, 1,                        // K=2, M=1
+        false, false, true, false,   // PROP1-4
         0.0, 0.0, 1.0, 2.0, 2.0,     // ノット
-        1.0, 1.0, 1.0,                // 重み
-        0.0, 0.0, 0.0,                // P0 = (0,0,0)
-        1.0, 0.0, 0.0,                // P1 = (1,0,0)
-        1.0, 1.0, 0.0,                // P2 = (1,1,0)
-        0.0, 2.0,                     // V=[0,2]
-        0.0, 0.0, 1.0                 // 法線
+        1.0, 1.0, 1.0,               // 重み
+        0.0, 0.0, 0.0,               // P0 = (0,0,0)
+        1.0, 0.0, 0.0,               // P1 = (1,0,0)
+        1.0, 1.0, 0.0,               // P2 = (1,1,0)
+        0.0, 2.0,                    // V=[0,2]
+        0.0, 0.0, 1.0                // 法線
     };
     return std::make_shared<RationalBSplineCurve>(param);
 }
@@ -104,16 +104,16 @@ std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_LeftTurn() {
 /// GetCornerParams:   [0.5] (mult=2 >= degree=1)
 std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_RepeatedKnot() {
     const auto param = igesio::IGESParameterVector{
-        3, 1,                              // K=3, M=1
-        false, false, true, false,         // PROP1-4
-        0.0, 0.0, 0.5, 0.5, 1.0, 1.0,   // ノット (K+M+2=6 個)
-        1.0, 1.0, 1.0, 1.0,               // 重み (K+1=4 個)
-        0.0, 0.0, 0.0,                    // P0
-        0.5, 0.0, 0.0,                    // P1
-        0.5, 0.5, 0.0,                    // P2
-        1.0, 0.5, 0.0,                    // P3
-        0.0, 1.0,                         // V=[0,1]
-        0.0, 0.0, 1.0                     // 法線
+        3, 1,                          // K=3, M=1
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.5, 0.5, 1.0, 1.0,  // ノット (K+M+2=6 個)
+        1.0, 1.0, 1.0, 1.0,            // 重み (K+1=4 個)
+        0.0, 0.0, 0.0,                 // P0
+        0.5, 0.0, 0.0,                 // P1
+        0.5, 0.5, 0.0,                 // P2
+        1.0, 0.5, 0.0,                 // P3
+        0.0, 1.0,                      // V=[0,1]
+        0.0, 0.0, 1.0                  // 法線
     };
     return std::make_shared<RationalBSplineCurve>(param);
 }
@@ -124,15 +124,15 @@ std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_RepeatedKnot() {
 /// GetCornerParams:   [] (内部ノットなし)
 std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg2_Bezier() {
     const auto param = igesio::IGESParameterVector{
-        2, 2,                              // K=2, M=2
-        false, false, true, false,         // PROP1-4
-        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,   // ノット (K+M+2=6 個)
-        1.0, 1.0, 1.0,                    // 重み (K+1=3 個)
-        0.0, 0.0, 0.0,                    // P0
-        1.0, 1.0, 0.0,                    // P1
-        2.0, 0.0, 0.0,                    // P2
-        0.0, 1.0,                         // V=[0,1]
-        0.0, 0.0, 1.0                     // 法線
+        2, 2,                          // K=2, M=2
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット (K+M+2=6 個)
+        1.0, 1.0, 1.0,                 // 重み (K+1=3 個)
+        0.0, 0.0, 0.0,  // P0
+        1.0, 1.0, 0.0,  // P1
+        2.0, 0.0, 0.0,  // P2
+        0.0, 1.0,       // V=[0,1]
+        0.0, 0.0, 1.0   // 法線
     };
     return std::make_shared<RationalBSplineCurve>(param);
 }
@@ -145,15 +145,15 @@ std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg2_FullMult() {
     const auto param = igesio::IGESParameterVector{
         4, 2,                                    // K=4, M=2
         false, false, true, false,               // PROP1-4
-        0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 2.0, // ノット (K+M+2=8 個)
-        1.0, 1.0, 1.0, 1.0, 1.0,               // 重み (K+1=5 個)
-        0.0, 0.0, 0.0,                          // P0
-        0.5, 0.5, 0.0,                          // P1
-        1.0, 0.0, 0.0,                          // P2 (内部ノット t=1 に対応)
-        1.5, 0.5, 0.0,                          // P3
-        2.0, 0.0, 0.0,                          // P4
-        0.0, 2.0,                               // V=[0,2]
-        0.0, 0.0, 1.0                           // 法線
+        0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 2.0,  // ノット (K+M+2=8 個)
+        1.0, 1.0, 1.0, 1.0, 1.0,                 // 重み (K+1=5 個)
+        0.0, 0.0, 0.0,  // P0
+        0.5, 0.5, 0.0,  // P1
+        1.0, 0.0, 0.0,  // P2 (内部ノット t=1 に対応)
+        1.5, 0.5, 0.0,  // P3
+        2.0, 0.0, 0.0,  // P4
+        0.0, 2.0,       // V=[0,2]
+        0.0, 0.0, 1.0   // 法線
     };
     return std::make_shared<RationalBSplineCurve>(param);
 }
@@ -164,18 +164,32 @@ std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg2_FullMult() {
 /// GetCornerParams:   [] (mult=1 < degree=2 → C^1, 角点でない)
 std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg2_PartialMult() {
     const auto param = igesio::IGESParameterVector{
-        3, 2,                                    // K=3, M=2
-        false, false, true, false,               // PROP1-4
-        0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0,    // ノット (K+M+2=7 個)
-        1.0, 1.0, 1.0, 1.0,                    // 重み (K+1=4 個)
-        0.0, 0.0, 0.0,                          // P0
-        0.5, 0.5, 0.0,                          // P1
-        1.5, 0.5, 0.0,                          // P2
-        2.0, 0.0, 0.0,                          // P3
-        0.0, 2.0,                               // V=[0,2]
-        0.0, 0.0, 1.0                           // 法線
+        3, 2,                               // K=3, M=2
+        false, false, true, false,          // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0,  // ノット (K+M+2=7 個)
+        1.0, 1.0, 1.0, 1.0,                 // 重み (K+1=4 個)
+        0.0, 0.0, 0.0,  // P0
+        0.5, 0.5, 0.0,  // P1
+        1.5, 0.5, 0.0,  // P2
+        2.0, 0.0, 0.0,  // P3
+        0.0, 2.0,       // V=[0,2]
+        0.0, 0.0, 1.0   // 法線
     };
     return std::make_shared<RationalBSplineCurve>(param);
+}
+
+/// @brief {x0,y0,z0, x1,y1,z1, ...} から Matrix3Xd を構築するヘルパー
+/// @param coords 制御点座標の列（x, y, z の順）
+igesio::Matrix3Xd MakeCPs(std::initializer_list<double> coords) {
+    const int n = static_cast<int>(coords.size()) / 3;
+    igesio::Matrix3Xd cp(3, n);
+    auto it = coords.begin();
+    for (int i = 0; i < n; ++i) {
+        cp(0, i) = *it++;
+        cp(1, i) = *it++;
+        cp(2, i) = *it++;
+    }
+    return cp;
 }
 
 }  // namespace
@@ -402,4 +416,220 @@ TEST(RationalBSplineCurveSignedCurvatureTest, LinearSegment_StartEnd_Zero) {
     ASSERT_TRUE(kappa_end.has_value());
     EXPECT_NEAR(*kappa_start, 0.0, kTol);
     EXPECT_NEAR(*kappa_end,   0.0, kTol);
+}
+
+
+
+/**
+ * NURBSパラメータコンストラクタのテスト
+ *
+ * RationalBSplineCurve(k, m, knots, weights, control_points,
+ *                      parameter_range, is_periodic) の検証.
+ *
+ * 確認項目:
+ *   1. 保存値 — Degree, Knots, Weights, ControlPoints, GetParameterRange
+ *   2. 点評価の等価性 — IGESParameterVector コンストラクタと同一結果
+ *   3. 平面性の整合 — ValidatePD() を通じた間接確認
+ *   4. IsPolynomial / IsPeriodic
+ *   5. GetLinearSegments / GetCornerParams との統合
+ */
+
+// 保存値が正しく設定されているか確認
+// K=2, M=2 のクランプ Bezier で全フィールドを検証する
+TEST(RationalBSplineCurveNurbsCtorTest, StoredValues_Degree2Bezier) {
+    // MakeNURBS_Deg2_Bezier と同一パラメータ
+    const unsigned int k = 2, m = 2;
+    const std::vector<double> knots   = {0.0, 0.0, 0.0, 1.0, 1.0, 1.0};
+    const std::vector<double> weights = {1.0, 1.0, 1.0};
+    const auto cp = MakeCPs({
+        0.0, 0.0, 0.0,   // P0
+        1.0, 1.0, 0.0,   // P1
+        2.0, 0.0, 0.0,   // P2
+    });
+    const std::array<double, 2> param_range = {0.0, 1.0};
+
+    const RationalBSplineCurve nurbs(k, m, knots, weights, cp, param_range);
+
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+    EXPECT_EQ(nurbs.Degree(), static_cast<int>(m));
+
+    ASSERT_EQ(nurbs.Knots().size(), knots.size());
+    for (size_t i = 0; i < knots.size(); ++i) {
+        EXPECT_NEAR(nurbs.Knots()[i], knots[i], kTol);
+    }
+
+    ASSERT_EQ(nurbs.Weights().size(), weights.size());
+    for (size_t i = 0; i < weights.size(); ++i) {
+        EXPECT_NEAR(nurbs.Weights()[i], weights[i], kTol);
+    }
+
+    // 制御点の各列を確認
+    ASSERT_EQ(nurbs.ControlPoints().cols(), static_cast<int>(k + 1));
+    for (int i = 0; i <= static_cast<int>(k); ++i) {
+        EXPECT_NEAR(nurbs.ControlPoints()(0, i), cp(0, i), kTol);
+        EXPECT_NEAR(nurbs.ControlPoints()(1, i), cp(1, i), kTol);
+        EXPECT_NEAR(nurbs.ControlPoints()(2, i), cp(2, i), kTol);
+    }
+
+    const auto range = nurbs.GetParameterRange();
+    EXPECT_NEAR(range[0], param_range[0], kTol);
+    EXPECT_NEAR(range[1], param_range[1], kTol);
+}
+
+// 新コンストラクタによる点評価が IGESParameterVector 版と一致するか
+// t = 0, 0.25, 0.5, 0.75, 1.0 の各点で比較する
+TEST(RationalBSplineCurveNurbsCtorTest, PointEval_MatchesIGESVectorCtor) {
+    const RationalBSplineCurve nurbs_new(
+        2u, 2u,
+        std::vector<double>{0.0, 0.0, 0.0, 1.0, 1.0, 1.0},
+        std::vector<double>{1.0, 1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 1.0, 0.0,   2.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 1.0});
+
+    const auto ref = MakeNURBS_Deg2_Bezier();
+
+    for (double t : {0.0, 0.25, 0.5, 0.75, 1.0}) {
+        const auto d_new = nurbs_new.TryGetDerivatives(t, 0);
+        const auto d_ref = ref->TryGetDerivatives(t, 0);
+        ASSERT_TRUE(d_new.has_value()) << "t=" << t;
+        ASSERT_TRUE(d_ref.has_value()) << "t=" << t;
+        EXPECT_NEAR((*d_new)[0].x(), (*d_ref)[0].x(), kTol) << "t=" << t;
+        EXPECT_NEAR((*d_new)[0].y(), (*d_ref)[0].y(), kTol) << "t=" << t;
+        EXPECT_NEAR((*d_new)[0].z(), (*d_ref)[0].z(), kTol) << "t=" << t;
+    }
+}
+
+// XY 平面上の非共線3点 → ComputePlaneNormal が法線を返し ValidatePD が通る
+TEST(RationalBSplineCurveNurbsCtorTest, PlanarXYPlane_IsValid) {
+    // P0,P1,P2 が z=0 かつ非共線
+    const RationalBSplineCurve nurbs(
+        2u, 2u,
+        std::vector<double>{0.0, 0.0, 0.0, 1.0, 1.0, 1.0},
+        std::vector<double>{1.0, 1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0, 0.0}),
+        std::array<double, 2>{0.0, 1.0});
+
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// 非平面の制御点 → is_planar=false でも ValidatePD が通る
+TEST(RationalBSplineCurveNurbsCtorTest, NonPlanar_IsValid) {
+    // P3=(0,1,1) が XY 平面から外れており4点は非共面
+    const RationalBSplineCurve nurbs(
+        3u, 2u,
+        std::vector<double>{0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0},
+        std::vector<double>{1.0, 1.0, 1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 0.0, 0.0,
+                 1.0, 1.0, 0.0,   0.0, 1.0, 1.0}),
+        std::array<double, 2>{0.0, 1.0});
+
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// 全制御点が一直線上 → 法線が定まらず non-planar 扱いでも ValidatePD が通る
+TEST(RationalBSplineCurveNurbsCtorTest, Collinear_IsValid) {
+    // MakeNURBS_Deg1_Straight と同一の共線制御点
+    const RationalBSplineCurve nurbs(
+        2u, 1u,
+        std::vector<double>{0.0, 0.0, 1.0, 2.0, 2.0},
+        std::vector<double>{1.0, 1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 0.0, 0.0,   2.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 2.0});
+
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// k=1（制御点2点）→ ComputePlaneNormal が即 nullopt を返し ValidatePD が通る
+TEST(RationalBSplineCurveNurbsCtorTest, TwoControlPoints_IsValid) {
+    const RationalBSplineCurve nurbs(
+        1u, 1u,
+        std::vector<double>{0.0, 0.0, 1.0, 1.0},
+        std::vector<double>{1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 1.0});
+
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// 全重みが等しい → IsPolynomial() == true
+TEST(RationalBSplineCurveNurbsCtorTest, IsPolynomial_EqualWeights) {
+    const RationalBSplineCurve nurbs(
+        2u, 2u,
+        std::vector<double>{0.0, 0.0, 0.0, 1.0, 1.0, 1.0},
+        std::vector<double>{1.0, 1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 1.0, 0.0,   2.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 1.0});
+
+    EXPECT_TRUE(nurbs.IsPolynomial());
+}
+
+// 重みが不均等 → IsPolynomial() == false
+TEST(RationalBSplineCurveNurbsCtorTest, IsPolynomial_UnequalWeights) {
+    const RationalBSplineCurve nurbs(
+        2u, 2u,
+        std::vector<double>{0.0, 0.0, 0.0, 1.0, 1.0, 1.0},
+        std::vector<double>{1.0, 0.7, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 1.0, 0.0,   2.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 1.0});
+
+    EXPECT_FALSE(nurbs.IsPolynomial());
+}
+
+// degree=1, 内部ノット1個 → GetLinearSegments が2セグメントを返す
+TEST(RationalBSplineCurveNurbsCtorTest, LinearSegments_Degree1) {
+    // MakeNURBS_Deg1_Straight と同一パラメータ
+    const RationalBSplineCurve nurbs(
+        2u, 1u,
+        std::vector<double>{0.0, 0.0, 1.0, 2.0, 2.0},
+        std::vector<double>{1.0, 1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 0.0, 0.0,   2.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 2.0});
+
+    const auto segs = nurbs.GetLinearSegments();
+    ASSERT_EQ(segs.size(), 2u);
+    EXPECT_NEAR(segs[0][0], 0.0, kTol);
+    EXPECT_NEAR(segs[0][1], 1.0, kTol);
+    EXPECT_NEAR(segs[1][0], 1.0, kTol);
+    EXPECT_NEAR(segs[1][1], 2.0, kTol);
+}
+
+// degree=2, 内部ノット重複度=2 → GetCornerParams が {1.0} を返す
+TEST(RationalBSplineCurveNurbsCtorTest, CornerParams_Degree2FullMult) {
+    // MakeNURBS_Deg2_FullMult と同一パラメータ
+    const RationalBSplineCurve nurbs(
+        4u, 2u,
+        std::vector<double>{0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 2.0},
+        std::vector<double>{1.0, 1.0, 1.0, 1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   0.5, 0.5, 0.0,   1.0, 0.0, 0.0,
+                 1.5, 0.5, 0.0,   2.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 2.0});
+
+    const auto corners = nurbs.GetCornerParams();
+    ASSERT_EQ(corners.size(), 1u);
+    EXPECT_NEAR(corners[0], 1.0, kTol);
+}
+
+// is_periodic のデフォルトは false
+TEST(RationalBSplineCurveNurbsCtorTest, IsPeriodic_Default_False) {
+    const RationalBSplineCurve nurbs(
+        1u, 1u,
+        std::vector<double>{0.0, 0.0, 1.0, 1.0},
+        std::vector<double>{1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 1.0});
+
+    EXPECT_FALSE(nurbs.IsPeriodic());
+}
+
+// is_periodic=true を指定した場合に正しく反映される
+TEST(RationalBSplineCurveNurbsCtorTest, IsPeriodic_True) {
+    const RationalBSplineCurve nurbs(
+        1u, 1u,
+        std::vector<double>{0.0, 0.0, 1.0, 1.0},
+        std::vector<double>{1.0, 1.0},
+        MakeCPs({0.0, 0.0, 0.0,   1.0, 0.0, 0.0}),
+        std::array<double, 2>{0.0, 1.0},
+        /*is_periodic=*/true);
+
+    EXPECT_TRUE(nurbs.IsPeriodic());
 }
