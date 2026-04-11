@@ -50,6 +50,8 @@ add_library(igesio_entities STATIC
     # Algorithms
     curves/algorithms.cpp
     curves/algorithms/extremal_polygon.cpp
+    curves/algorithms/polygonal_approximation.cpp
+    curves/nurbs_algorithms.cpp
 
     # Factory
     factory.cpp
