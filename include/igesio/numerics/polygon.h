@@ -53,6 +53,28 @@ struct PolygonData {
     std::pair<int, int> GetCurveParamIndex(int edge_index) const;
 };
 
+/// @brief 閉曲線C(t)の内包・外包・近似多角形を保持するデータ構造
+struct CurveContainmentPolygons {
+    /// @brief 外包多角形
+    PolygonData circumscribed;
+    /// @brief 内包多角形
+    PolygonData inscribed;
+    /// @brief 近似多角形 (全頂点 on_curve=true)
+    PolygonData approximate;
+};
+
+/// @brief 閉曲線C(u)に対して、点が曲線内部に存在するかを判定する
+///
+/// CurveContainmentPolygons に格納された外包多角形・内包多角形・近似多角形を
+/// 利用して内外判定を行う. 内外判定は Non-Zero Winding 則を使用する.
+///
+/// @param point 判定する点 (x, y 成分のみ使用)
+/// @param polygons 閉曲線C(u)の内包・外包・近似多角形
+/// @return 点が曲線C(u)の内部に存在する場合 true
+bool IsPointInPolygon(
+    const Vector3d& point,
+    const CurveContainmentPolygons& polygons);
+
 }  // namespace igesio::numerics
 
 #endif  // IGESIO_NUMERICS_POLYGON_H_

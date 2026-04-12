@@ -812,14 +812,11 @@ i_num::PolygonData BuildPolygonVertices(
 /// @param eps 曲率判定の閾値
 /// @return 多角形データ
 i_num::PolygonData ComputeExtremalPolygon(
-        const std::shared_ptr<const i_ent::ICurve>& curve,
+        const i_ent::ICurve& curve,
         int n_vert,
         bool circumscribed,
         const Vector3d& normal,
         double eps) {
-    if (!curve) {
-        throw std::invalid_argument("curve は nullptr であってはなりません");
-    }
     if (n_vert < 3) {
         throw std::invalid_argument(
             "n_vert は 3 以上でなければなりません。n_vert: "
@@ -828,30 +825,30 @@ i_num::PolygonData ComputeExtremalPolygon(
 
     // 均等サンプリング (CheckCurveProperties と FindCurvatureExtrema で共用)
     constexpr int kNInit = 500;
-    const auto [t0, t1] = curve->GetParameterRange();
+    const auto [t0, t1] = curve.GetParameterRange();
     const double period = t1 - t0;
 
     std::vector<double> t_uniform(kNInit);
     std::vector<Vector3d> pts_uniform(kNInit);
     for (int i = 0; i < kNInit; ++i) {
         t_uniform[i] = t0 + period * i / kNInit;
-        pts_uniform[i] = curve->GetPointAt(t_uniform[i]);
+        pts_uniform[i] = curve.GetPointAt(t_uniform[i]);
     }
 
     // 閉曲線チェック・向き符号計算・自己交差チェック
     const double orient_sign = CheckCurveProperties(
-        *curve, pts_uniform, normal);
+        curve, pts_uniform, normal);
 
     // 多角形構築のためのサンプル点を生成する
     const auto [ts, pts] = SamplePoints(
-        *curve, normal, t_uniform, n_vert);
+        curve, normal, t_uniform, n_vert);
 
     // 各点を頂点/接点に分類する
     const auto is_contact = ClassifyPoints(
-        *curve, ts, circumscribed, normal, orient_sign, eps);
+        curve, ts, circumscribed, normal, orient_sign, eps);
 
     // 多角形頂点列を構築する
-    return BuildPolygonVertices(*curve, ts, pts, is_contact, normal);
+    return BuildPolygonVertices(curve, ts, pts, is_contact, normal);
 }
 
 }  // namespace
@@ -861,7 +858,7 @@ i_num::PolygonData ComputeExtremalPolygon(
 namespace igesio::entities {
 
 i_num::PolygonData ComputeCircumscribedPolygon(
-        const std::shared_ptr<const ICurve>& curve,
+        const ICurve& curve,
         int n_vert,
         const Vector3d& reference_normal,
         double eps) {
@@ -870,7 +867,7 @@ i_num::PolygonData ComputeCircumscribedPolygon(
 }
 
 i_num::PolygonData ComputeInscribedPolygon(
-        const std::shared_ptr<const ICurve>& curve,
+        const ICurve& curve,
         int n_vert,
         const Vector3d& reference_normal,
         double eps) {

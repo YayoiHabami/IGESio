@@ -33,7 +33,7 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
         const std::shared_ptr<const i_ent::ISurface>& surface,
         const std::shared_ptr<const i_ent::ICurve>& base_curve) {
     // 曲面上の曲線 C(t) を折れ線近似で生成
-    auto polygon = i_ent::ComputeApproximatePolygon(base_curve, {}, {},
+    auto polygon = i_ent::ComputeApproximatePolygon(*base_curve, {}, {},
                                                     kDiscretizationTol);
     const auto& vertices = polygon.vertices;
 
@@ -472,9 +472,12 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
         const std::shared_ptr<ICurve>& base_curve, const std::shared_ptr<ICurve>& curve) {
     SetBaseCurve(base_curve);
     // 基底曲線のentity use flagを5 (k2DParametric) に設定
+    // 併せてSubordinateEntitySwitchをkPhysicallyDependentに設定
     auto base_curve_entity = std::dynamic_pointer_cast<EntityBase>(base_curve);
     if (base_curve_entity) {
         base_curve_entity->SetEntityUseFlag(i_ent::EntityUseFlag::k2DParametric);
+        base_curve_entity->SetSubordinateEntitySwitch(
+            i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
     }
 
     // 曲線 C(t) を設定: 未指定であれば折れ線近似のもと生成する
@@ -489,6 +492,13 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
 
         // 投射した頂点から3D曲線を生成
         generated_curve = CreateCurveOnSurface(surf, base_curve);
+        // SubordinateEntitySwitchをkPhysicallyDependentに設定
+        if (auto entity_base =
+                std::dynamic_pointer_cast<EntityBase>(generated_curve)) {
+            entity_base->SetSubordinateEntitySwitch(
+                SubordinateEntitySwitch::kPhysicallyDependent);
+        }
+
         // S(B(t)) から C(t) を生成したので、優先表現を S(B(t)) に設定
         SetPreferredRepresentation(PreferredRepresentation::kSofB);
         curve_.OverwritePointer(generated_curve);

@@ -12,8 +12,6 @@
 #ifndef SRC_ENTITIES_CURVES_ALGORITHMS_EXTREMAL_POLYGON_H_
 #define SRC_ENTITIES_CURVES_ALGORITHMS_EXTREMAL_POLYGON_H_
 
-#include <memory>
-
 #include "igesio/numerics/matrix.h"
 #include "igesio/numerics/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
@@ -35,7 +33,7 @@ namespace igesio::entities {
 /// @throws std::invalid_argument curve が閉曲線でない場合、自己交差が検出された場合
 /// @throws std::runtime_error 接線・曲率の計算に失敗した場合
 numerics::PolygonData ComputeCircumscribedPolygon(
-    const std::shared_ptr<const ICurve>& curve,
+    const ICurve& curve,
     int n_vert,
     const Vector3d& reference_normal,
     double eps = 1e-9);
@@ -53,7 +51,7 @@ numerics::PolygonData ComputeCircumscribedPolygon(
 /// @throws std::invalid_argument curve が閉曲線でない場合、自己交差が検出された場合
 /// @throws std::runtime_error 接線・曲率の計算に失敗した場合
 numerics::PolygonData ComputeInscribedPolygon(
-    const std::shared_ptr<const ICurve>& curve,
+    const ICurve& curve,
     int n_vert,
     const Vector3d& reference_normal,
     double eps = 1e-9);

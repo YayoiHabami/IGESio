@@ -9,8 +9,6 @@
 #ifndef SRC_ENTITIES_CURVES_ALGORITHMS_POLYGONAL_APPROXIMATION_H_
 #define SRC_ENTITIES_CURVES_ALGORITHMS_POLYGONAL_APPROXIMATION_H_
 
-#include <memory>
-
 #include "igesio/numerics/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 
@@ -33,7 +31,7 @@ namespace igesio::entities {
 /// @note inscribed, circumscribedの両者に{}を渡した場合、curveは開曲線であっても
 ///       正しく処理され、単にcurveを許容距離epsを満たすように離散化した折れ線が返る.
 numerics::PolygonData ComputeApproximatePolygon(
-    const std::shared_ptr<const ICurve>& curve,
+    const ICurve& curve,
     const numerics::PolygonData& inscribed,
     const numerics::PolygonData& circumscribed,
     double eps,

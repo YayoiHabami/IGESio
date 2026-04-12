@@ -52,7 +52,7 @@ bool IsIntervalInLinearSegment(
 /// @param max_depth 最大スタック深度
 /// @return u_aからu_bまでのパラメータ列 (両端を含む)
 std::vector<double> SubdivideWithParams(
-        const std::shared_ptr<const i_ent::ICurve>& curve,
+        const i_ent::ICurve& curve,
         double u_a, double u_b,
         const std::vector<std::array<double, 2>>& linear_segments,
         double eps, int max_depth) {
@@ -73,9 +73,9 @@ std::vector<double> SubdivideWithParams(
 
         // 終了条件2: 中点距離が許容値以下
         double u_mid = 0.5 * (ua + ub);
-        auto pa_opt = curve->TryGetPointAt(ua);
-        auto pb_opt = curve->TryGetPointAt(ub);
-        auto pm_opt = curve->TryGetPointAt(u_mid);
+        auto pa_opt = curve.TryGetPointAt(ua);
+        auto pb_opt = curve.TryGetPointAt(ub);
+        auto pm_opt = curve.TryGetPointAt(u_mid);
         if (!pa_opt || !pb_opt || !pm_opt) {
             // 計算失敗時は分割を打ち切る
             confirmed.push_back(ub);
@@ -108,13 +108,13 @@ std::vector<double> SubdivideWithParams(
 
 
 i_num::PolygonData i_ent::ComputeApproximatePolygon(
-        const std::shared_ptr<const ICurve>& curve,
+        const ICurve& curve,
         const i_num::PolygonData& inscribed,
         const i_num::PolygonData& circumscribed,
         double eps,
         int max_depth) {
-    auto [t_min, t_max] = curve->GetParameterRange();
-    auto linear_segments = curve->GetLinearSegments();
+    auto [t_min, t_max] = curve.GetParameterRange();
+    auto linear_segments = curve.GetLinearSegments();
 
     // Step 1: 固定点パラメータの収集・ソート・重複除去
     // inscribed/circumscribedのon_curve=trueの頂点とt_min/t_maxを固定点とする
@@ -153,7 +153,7 @@ i_num::PolygonData i_ent::ComputeApproximatePolygon(
     }
 
     // 閉曲線の場合、末尾のt_max (= t_min と同一点) を除去する
-    if (curve->IsClosed() && result_params.size() > 1 &&
+    if (curve.IsClosed() && result_params.size() > 1 &&
             i_num::IsApproxEqual(result_params.back(), t_max)) {
         result_params.pop_back();
     }
@@ -162,7 +162,7 @@ i_num::PolygonData i_ent::ComputeApproximatePolygon(
     std::vector<Vector3d> vertices;
     vertices.reserve(result_params.size());
     for (double u : result_params) {
-        vertices.push_back(curve->GetPointAt(u));
+        vertices.push_back(curve.GetPointAt(u));
     }
     const std::vector<bool> on_curve(result_params.size(), true);
 
