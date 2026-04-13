@@ -69,7 +69,7 @@ struct EndpointDerivatives {
 NormalizedCurve NormalizeParam(
         const i_ent::ICurve& curve,
         const std::array<double, 2>& range) {
-    const double t_min = range[0];
+    const double t_min = range[0], t_max = range[1];
     const double dt    = range[1] - range[0];
 
     // 利用可能な微分階数を確認する
@@ -80,17 +80,32 @@ NormalizedCurve NormalizeParam(
         max_order = 1;
     }
 
-    // curve への参照と t_min, dt を値キャプチャしてラムダを構成する
-    auto eval = [&curve, t_min, dt](double s, unsigned int n) -> Vector3d {
-        const auto d = curve.TryGetDerivatives(t_min + s * dt, n);
-        return d ? (*d)[n] : Vector3d::Zero();
-    };
-
     NormalizedCurve F;
     F.max_deriv_order = max_order;
-    F.point  = [eval](double s) { return eval(s, 0); };
-    F.deriv1 = [eval, dt](double s) { return eval(s, 1) * dt; };
-    F.deriv2 = [eval, dt](double s) { return eval(s, 2) * (dt * dt); };
+
+    // evalを介さず、各std::functionに直接ロジックを記述する
+    // (clangのreleaseビルドで計算結果が異なる問題への対策)
+    F.point = [&curve, t_min, t_max, dt](double s) {
+        double t = std::clamp(t_min + s * dt, t_min, t_max);  // 精度誤差対策
+        auto d = curve.TryGetDerivatives(t, 0);
+        return d ? (*d)[0] : Vector3d::Zero();
+    };
+
+    F.deriv1 = [&curve, t_min, t_max, dt](double s) -> Vector3d {
+        const double t = std::clamp(t_min + s * dt, t_min, t_max);
+        const auto d = curve.TryGetDerivatives(t, 1);
+        if (!d) return Vector3d::Zero();
+        return (*d)[1] * dt;
+    };
+
+    if (max_order >= 2) {
+        F.deriv2 = [&curve, t_min, t_max, dt](double s) -> Vector3d {
+            const double t = std::clamp(t_min + s * dt, t_min, t_max);
+            const auto d = curve.TryGetDerivatives(t, 2);
+            if (!d) return Vector3d::Zero();
+            return ((*d)[2] * dt) * dt;
+        };
+    }
     return F;
 }
 
@@ -181,10 +196,16 @@ EndpointDerivatives ComputeEndpointDerivatives(
         L * L * (1.0 - 2.0 * t_bar[t_bar.size() - 2]
                      + t_bar[t_bar.size() - 3]);
 
-    D.d2_start =
-        (F.deriv2(0.0) - sigma0pp * D.d1_start) / (sigma0 * sigma0);
-    D.d2_end =
-        (F.deriv2(1.0) - sigmaLpp * D.d1_end) / (sigmaL * sigmaL);
+    // スケール因子dt^2が大きい場合、d2 が巨大になりすぎるのを防ぐ
+    // 座標系のスケール（サンプルのバウンディングボックス等）と比較して
+    // 異常に大きい場合は、2階微分の拘束を放棄するかクランプする
+    Vector3d d2s = (F.deriv2(0.0) - sigma0pp * D.d1_start) / (sigma0 * sigma0);
+    Vector3d d2e = (F.deriv2(1.0) - sigmaLpp * D.d1_end) / (sigmaL * sigmaL);
+
+    // 数値的安定性のための簡易的なガード（必要に応じて閾値を調整）
+    if (d2s.norm() < 1e10) D.d2_start = d2s;
+    if (d2e.norm() < 1e10) D.d2_end = d2e;
+
     return D;
 }
 
@@ -486,27 +507,6 @@ MatrixXd BuildBasisMatrix(
     return B_hat;
 }
 
-/// @brief 最小二乗正規方程式 (B̂ᵀB̂)X = B̂ᵀR を Cholesky 分解で解く
-/// @param B_hat (L-1)×(k-2r+1) の基底行列
-/// @param R     (L-1)×3 の残差行列
-/// @return 内部制御点行列 3×(k-2r+1)
-Matrix3Xd SolveLeastSquares(
-        const MatrixXd& B_hat, const MatrixXd& R) {
-    MatrixXd BtB = B_hat.transpose() * B_hat;
-    const MatrixXd BtR = B_hat.transpose() * R;
-
-    // 悪条件対策: Tikhonov正則化
-    const double lambda = 1e-8 * BtB.norm();
-    BtB += lambda * MatrixXd::Identity(BtB.rows(), BtB.cols());
-
-    const Eigen::LLT<MatrixXd> llt(BtB);
-    if (llt.info() != Eigen::Success) {
-        // フォールバック: LDLT分解
-        return BtB.ldlt().solve(BtR).transpose();
-    }
-    return llt.solve(BtR).transpose();  // 3×(k-2r+1)
-}
-
 /// @brief 端点制御点と内部制御点を合成して全制御点行列を返す
 /// @param P_fixed 端点制御点（端点インデックスのみ有効）
 /// @param X_free  内部制御点 3×(k-2r+1)
@@ -643,9 +643,10 @@ void RunApproxLoop(
         // Step 5
         const MatrixXd B_hat =
             BuildBasisMatrix(m, k, r, t_bar, knots);
-        const MatrixXd Rmat =
+        const MatrixXd R_mat =
             ComputeResidual(samples, t_bar, P_fixed, m, k, r, knots);
-        const Matrix3Xd X_free = SolveLeastSquares(B_hat, Rmat);
+        const Matrix3Xd X_free =
+            B_hat.colPivHouseholderQr().solve(R_mat).transpose();
         const Matrix3Xd P =
             MergeControlPoints(P_fixed, X_free, k, r);
 
