@@ -96,6 +96,36 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
 
 
     /**
+     * 直線部・角点サポート (ICurve override)
+     */
+
+    /// @brief 直線部のパラメータ区間リストを返す
+    /// @return 各構成曲線の直線区間をComposite Curveのパラメータ空間に
+    ///         マッピングしたリスト (例えばn個目の構成曲線が直線かつt∈[t1, t2]
+    ///         であれば、n-1個目までの曲線のパラメータ長を累積してt1, t2に
+    ///         加算した区間が返される)
+    std::vector<std::array<double, 2>> GetLinearSegments() const override;
+
+    /// @brief 角点のパラメータ値リストを返す
+    /// @return 構成曲線間の接合点、および各構成曲線の角点を
+    ///         Composite Curveのパラメータ空間にマッピングしたリスト
+    std::vector<double> GetCornerParams() const override;
+
+    /// @brief 角点における左側単位接線ベクトルを返す
+    /// @param t パラメータ値
+    /// @return 接合点では直前の構成曲線の終端接線を返す.
+    ///         それ以外は構成曲線のLeftTangentAtに委譲
+    std::optional<Vector3d> LeftTangentAt(const double t) const override;
+
+    /// @brief 角点における右側単位接線ベクトルを返す
+    /// @param t パラメータ値
+    /// @return 接合点では直後の構成曲線の始端接線を返す.
+    ///         それ以外は構成曲線のRightTangentAtに委譲
+    std::optional<Vector3d> RightTangentAt(const double t) const override;
+
+
+
+    /**
      * ICurve implementation
      */
 

@@ -16,6 +16,12 @@ set(TEST_SOURCES
     curves/test_i_curve.cpp
     curves/test_circular_arc.cpp
     curves/test_algorithms.cpp
+    curves/test_nurbs_approximation_algorithms.cpp
+    curves/test_composite_curve.cpp
+    curves/test_linear_path.cpp
+    curves/test_parametric_spline_curve.cpp
+    curves/test_rational_b_spline_curve.cpp
+    curves/test_signed_curvature.cpp
 
     # Surfaces
     surfaces/test_i_surface.cpp

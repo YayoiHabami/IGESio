@@ -11,11 +11,9 @@
 #ifndef IGESIO_ENTITIES_CURVES_ALGORITHMS_H_
 #define IGESIO_ENTITIES_CURVES_ALGORITHMS_H_
 
-#include <memory>
 #include <utility>
-#include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 
 
@@ -38,16 +36,21 @@ double PointLineDistance(
         const Vector3d&, const Vector3d&, const Vector3d&,
         const std::pair<bool, bool>& = {false, false});
 
-/// @brief 曲線を折れ線近似する
-/// @param curve 折れ線近似する曲線オブジェクト
-/// @param tol 折れ線近似の許容誤差
-/// @param initial_subdivisions 折れ線近似の初期分割数
-/// @return 折れ線近似された点列
-/// @throw std::invalid_argument 引数が不正な場合
-std::vector<Vector3d>
-DiscretizeCurve(const std::shared_ptr<const ICurve>&,
-                const numerics::Tolerance& = numerics::Tolerance(),
-                const unsigned int = 10);
+/// @brief 閉曲線の内包・外包・近似多角形を計算する
+/// @param curve 対象の閉曲線 (自己交差なし)
+/// @param n_vert 内包・外包多角形の初期分割数
+/// @param reference_normal 曲線が乗る平面の法線ベクトル
+/// @param curvature_eps 曲率判定の閾値
+/// @param distance_eps 近似多角形の許容距離
+/// @return 内包・外包・近似多角形を保持するデータ構造
+/// @throws std::invalid_argument curve が閉曲線でない場合、自己交差が検出された場合
+/// @throws std::runtime_error 接線・曲率の計算に失敗した場合
+numerics::CurveContainmentPolygons ComputeContainmentPolygons(
+    const ICurve& curve,
+    int n_vert,
+    const Vector3d& reference_normal,
+    double curvature_eps = 1e-3,
+    double distance_eps = 1e-3);
 
 }  // namespace igesio::entities
 

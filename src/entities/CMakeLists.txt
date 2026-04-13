@@ -44,11 +44,15 @@ add_library(igesio_entities STATIC
     curves/rational_b_spline_curve.cpp         # 126
     surfaces/rational_b_spline_surface.cpp     # 128
     curves/curve_on_a_parametric_surface.cpp   # 142
+    surfaces/trimmed_surface.cpp               # 144
 
     structures/color_definition.cpp            # 314
 
     # Algorithms
     curves/algorithms.cpp
+    curves/algorithms/extremal_polygon.cpp
+    curves/algorithms/polygonal_approximation.cpp
+    curves/nurbs_algorithms.cpp
 
     # Factory
     factory.cpp

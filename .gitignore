@@ -1,6 +1,14 @@
-# VSCode settings
-.vscode/
-.crossnote/
+# Ignore all settings file/folders
+/.*/
+# Except .github/ and its contents
+!/.github/
+!/.github/**
+/.github/prompts/
+
+/**.md
+!/README**.md
+!/**LICENSE**.md
+
 docs/blueprint.cpp
 
 # Build directories

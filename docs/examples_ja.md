@@ -14,6 +14,7 @@
   - [iges\_data\_io.cpp](#iges_data_iocpp)
   - [intermediate\_data\_io.cpp](#intermediate_data_iocpp)
   - [sample\_curves.cpp](#sample_curvescpp)
+  - [sample\_surfaces.cpp](#sample_surfacescpp)
 
 ## GUIアプリケーション
 
@@ -125,3 +126,9 @@ Trimmed Surface                144    No         7
 　本ライブラリで実装済みの曲線エンティティを作成し、IGESファイルに書き出すサンプルコードです。[entities](./entities/entities_ja.md)における各曲線エンティティの作成方法の例として参照してください。また、当該ドキュメントの各図は、このサンプルコードで生成したIGESファイルを[IGES Viewer](#guiアプリケーション)で表示したものです。
 
 　通常、コマンドライン出力はなく、`sample_curves.igs`というIGESファイルが生成されます。
+
+### sample_surfaces.cpp
+
+　本ライブラリで実装済みの曲面エンティティを作成し、IGESファイルに書き出すサンプルコードです。実装済みの曲面エンティティの作成方法の例として参照してください。また、当該ドキュメントの各図は、このサンプルコードで生成したIGESファイルを[IGES Viewer](#guiアプリケーション)で表示したものです。
+
+　通常、コマンドライン出力はなく、`sample_surfaces.igs`というIGESファイルが生成されます。

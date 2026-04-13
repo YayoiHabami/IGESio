@@ -109,6 +109,27 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     ///        de_record.sequence_numberがReservedされていない場合
     explicit RationalBSplineCurve(const IGESParameterVector&);
 
+    /// @brief NURBS曲線パラメータから直接構築するコンストラクタ
+    /// @param k               制御点の最大インデックス（制御点数 = k+1）
+    /// @param m               曲線の次数
+    /// @param knots           ノットベクトル T（サイズ k+m+2）
+    /// @param weights         重み W（サイズ k+1）
+    /// @param control_points  制御点 P（3 × (k+1)）
+    /// @param parameter_range パラメータ範囲 { V(0), V(1) }
+    /// @param is_periodic     PROP4: 周期的か（default: false）
+    /// @note PROP1（is_planar）および normal_vector は制御点から自動計算する.
+    ///       制御点が平面的でない場合、または法線が一意に定まらない場合は
+    ///       non-planar として扱う.
+    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    RationalBSplineCurve(
+        unsigned int k,
+        unsigned int m,
+        const std::vector<double>& knots,
+        const std::vector<double>& weights,
+        const Matrix3Xd& control_points,
+        const std::array<double, 2>& parameter_range,
+        bool is_periodic = false);
+
     /// @brief 曲線の種類
     /// @return 曲線の種類 (RationalBSplineCurveType)
     RationalBSplineCurveType GetCurveType() const;
@@ -121,6 +142,23 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
 
     /// @brief PDレコードのパラメータが規格に適合しているかを確認する
     ValidationResult ValidatePD() const override;
+
+
+
+    /**
+     * 直線部・角点サポート (ICurve override)
+     */
+
+    /// @brief 直線部のパラメータ区間リストを返す
+    /// @return degree_ == 1 の場合は長さ (> 0) の全ノットスパン.
+    ///         それ以外は空リスト
+    std::vector<std::array<double, 2>> GetLinearSegments() const override;
+
+    /// @brief 角点のパラメータ値リストを返す
+    /// @return 内部ノットのうち重複度 >= degree_ のもの.
+    ///         重複度m, 次数MのノットはC^(M-m)連続のため,
+    ///         m >= M で C^0 (角点) となる
+    std::vector<double> GetCornerParams() const override;
 
 
 
@@ -170,6 +208,11 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     /// @note 制御点の重みがすべて等しい値の場合、trueが返される.
     ///       falseの場合、rational (すなわちNURBS) 形式で定義される.
     bool IsPolynomial() const;
+
+    /// @brief 曲線が周期的か (PROP4)
+    /// @note IGESにおいて定義される、確認用のパラメータであり、
+    ///       trueであっても特別な処理は行わない
+    bool IsPeriodic() const noexcept { return is_periodic_; }
 
 
 

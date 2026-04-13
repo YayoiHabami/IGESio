@@ -131,6 +131,21 @@ class ParametricSplineCurve : public EntityBase, public virtual ICurve3D {
 
 
     /**
+     * 直線部・角点サポート (ICurve override)
+     */
+
+    /// @brief 直線部のパラメータ区間リストを返す
+    /// @return kLinear (CTYPE=1) の場合は全セグメント区間. それ以外は空リスト
+    std::vector<std::array<double, 2>> GetLinearSegments() const override;
+
+    /// @brief 角点のパラメータ値リストを返す
+    /// @return degree_ (H) == 0 (C^0のみ保証) の場合は内部ブレークポイント.
+    ///         degree_ >= 1 は C^1 以上なので空リスト
+    std::vector<double> GetCornerParams() const override;
+
+
+
+    /**
      * ICurve implementation
      */
 

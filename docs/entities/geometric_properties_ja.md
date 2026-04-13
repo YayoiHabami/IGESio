@@ -12,6 +12,7 @@
   - [導関数 (曲線)](#導関数-曲線)
   - [接線ベクトル (曲線)](#接線ベクトル-曲線)
   - [曲率 (曲線)](#曲率-曲線)
+  - [符号付き曲率 (曲線)](#符号付き曲率-曲線)
   - [長さ (曲線)](#長さ-曲線)
   - [フレネ標構](#フレネ標構)
 - [曲面の幾何学的特性](#曲面の幾何学的特性)
@@ -44,6 +45,7 @@ $$C(u) \in \mathbb{R}^3 \quad (u \in [u_{\text{min}}, u_{\text{max}}])$$
 | [**導関数**](#導関数-曲線) <br> (Derivative) | $C'(u) = \frac{dC}{du}$ <br> $C''(u) = \frac{d^2C}{du^2}$ | 曲線の変化率を表すベクトル <br> `TryGetDerivatives(u, n_deriv)` |
 | [**単位接線ベクトル**](#接線ベクトル-曲線) <br> (Tangent) | $T(u) = \frac{C'(u)}{\|C'(u)\|}$ | 曲線の接線方向 <br> `TryGetTangentAt(u)` |
 | [**曲率**](#曲率-曲線) <br> (Curvature) | $\kappa(u) = \frac{\|C'(u) \times C''(u)\|}{\|C'(u)\|^3}$ | 曲線の曲がり具合を表す尺度 <br> `GetCurvature(u)` |
+| [**符号付き曲率**](#符号付き曲率-曲線) <br> (Signed Curvature) | $\kappa_s(t) = \frac{(C'(t) \times C''(t)) \cdot \hat{n}}{\|C'(t)\|^3}$ | 参照法線 $\hat{n}$ に対する符号付き曲率（角点では $\pm\infty$, 直線部では0） <br> `TryGetSignedCurvature(t, n)` |
 | [**長さ**](#長さ-曲線) <br> (Length) | $L = \int_{u_{\text{start}}}^{u_{\text{end}}} \|C'(t)\| dt$ | 曲線の2点間の距離 <br> `Length()` <br> `Length(start, end)` |
 | [**単位法線ベクトル**](#フレネ標構) <br> (Normal) | $N(u) = \frac{\frac{dT(u)}{du}}{\|\frac{dT(u)}{du}\|}$ <br> ( $=\frac{C''(u)\|C'(u)\|^2 - C'(u)(C'(u)\cdot C''(u))}{\|C'(u)\|^3}$ )| 曲線の曲がる方向 <br> `TryGetNormalAt(u)` |
 | [**従法線ベクトル**](#フレネ標構) <br> (Binormal) | $B(u) = T(u) \times N(u)$ | 曲線のねじれ方向 <br> `TryGetBinormalAt(u)` |
@@ -209,6 +211,60 @@ if (curvature >= 0.0) {
 ```
 Curvature kappa(u): 0.178283
 ```
+
+### 符号付き曲率 (曲線)
+
+　通常の曲率 $\kappa(u) \geq 0$ は曲線の曲がり具合の大きさのみを表す。これに対し、**符号付き曲率** $\kappa_s(t)$ は、参照法線ベクトル $\hat{n}$ に対して曲がる方向の符号をもつ曲率である。
+
+$$\kappa_s(t) = \frac{(C'(t) \times C''(t)) \cdot \hat{n}}{\|C'(t)\|^3}$$
+
+ここで $\hat{n}$ は基準方向を定める参照法線ベクトル（正規化不要）である。 $\kappa_s > 0$ のとき曲線は $\hat{n}$ 方向から見て反時計回りに曲がり, $\kappa_s < 0$ のとき時計回りに曲がる。2次元曲線 $C(u) = (x(u), y(u))$ に対して $\hat{n} = (0, 0, 1)$ とすると、
+
+$$\kappa_s(u) = \frac{x'(u)\, y''(u) - y'(u)\, x''(u)}{(x'(u)^2 + y'(u)^2)^{3/2}}$$
+
+と一致する。
+
+<!-- omit in toc -->
+#### 直線部における値
+
+　直線部では $C'(t) \times C''(t) = \mathbf{0}$ となるため、 $\kappa_s = 0$ である。
+
+<!-- omit in toc -->
+#### 角点における拡張
+
+　曲線は、複数の滑らかな区間を繋ぎ合わせて構成される場合がある（`CompositeCurve`（type 102）や`LinearPath`（type 106, forms 11-13）など）。そのような曲線では、区間の接続点において曲線は連続であるが、接続前後で接線方向が変わるため、その点では微分が存在しない。本ライブラリでは、このような「連続だが微分不可能な点」を**角点**（corner point）と呼ぶ。
+
+　角点 $t = t_c$ においては導関数が存在しないため、上式を直接適用できない。ここでは、左側（ $t < t_c$ ）から近づくときの単位接線ベクトル $T^-(t_c)$ と、右側（ $t > t_c$ ）から近づくときの単位接線ベクトル $T^+(t_c)$ を用いる。
+
+$$T^-(t_c) = \lim_{h \to 0^+} \frac{C'(t_c - h)}{\|C'(t_c - h)\|}, \qquad T^+(t_c) = \lim_{h \to 0^+} \frac{C'(t_c + h)}{\|C'(t_c + h)\|}$$
+
+　これら左右の接線ベクトルを用いて, $T^-$ から $T^+$ への参照法線 $\hat{n}$ 周りの符号付き回転角である**外角** $\alpha$ を定義する。
+
+$$\alpha = \mathrm{atan2}\bigl((T^-(t_c) \times T^+(t_c)) \cdot \hat{n},\; T^-(t_c) \cdot T^+(t_c)\bigr)$$
+
+$\alpha > 0$ は反時計回りへの折れ, $\alpha < 0$ は時計回りへの折れを表す。この符号に基づき、角点における符号付き曲率を次のように定める。
+
+$$\kappa_s(t_c) = \begin{cases}
++\infty & (\alpha > 0) \\
+-\infty & (\alpha < 0) \\
+0 & (\alpha = 0)
+\end{cases}$$
+
+この拡張により、符号付き曲率の符号判定は滑らかな点と角点で統一的に扱うことができる。
+
+<!-- omit in toc -->
+#### 関連する関数
+
+| 関数 | 戻り値 | 説明 |
+|:-|:-:|:-|
+| `GetLinearSegments()` | `vector<array<double,2>>` | 直線部のパラメータ区間 $[u_s, u_e]$ のリストを返す |
+| `IsInLinearSegment(t)` | `bool` | $t$ が直線部に含まれるかを判定する |
+| `GetCornerParams()` | `vector<double>` | 角点のパラメータ値のリストを返す |
+| `IsCorner(t)` | `bool` | $t$ が角点かどうかを判定する |
+| `LeftTangentAt(t)` | `optional<Vector3d>` | 角点 $t$ における左側単位接線ベクトル $T^-(t)$ を返す |
+| `RightTangentAt(t)` | `optional<Vector3d>` | 角点 $t$ における右側単位接線ベクトル $T^+(t)$ を返す |
+| `CornerExteriorAngle(t, n)` | `optional<double>` | 角点 $t$ における外角 $\alpha$ [rad] を返す |
+| `TryGetSignedCurvature(t, n)` | `optional<double>` | 符号付き曲率 $\kappa_s(t)$ を返す（角点・直線部も含む） |
 
 ### 長さ (曲線)
 

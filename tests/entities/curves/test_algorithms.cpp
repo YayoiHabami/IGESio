@@ -181,31 +181,7 @@ TEST(PointLineDistanceTest, InfiniteLine) {
  * DiscretizeCurveのテスト
  */
 
-// エラーケース
-// 一般の曲線（C1連続以上）のテスト
-// CopiousData, Line以外
-TEST(DiscretizeCurveTest, ErrorCases) {
-    auto curve = i_test::CreateCircularArcs()[0].curve;
-    ASSERT_TRUE(curve != nullptr);
-
-    // nullptrを指定した場合はエラー
-    EXPECT_THROW(i_ent::DiscretizeCurve(nullptr),
-                 std::invalid_argument);
-
-    // 負のトレランスは不許可
-    EXPECT_THROW({i_ent::DiscretizeCurve(nullptr, i_num::Tolerance(-1));},
-                 std::invalid_argument);
-
-    // 分割数1未満はNG
-    EXPECT_THROW({i_ent::DiscretizeCurve(nullptr, i_num::Tolerance(), 0);},
-                 std::invalid_argument);
-
-    // 閉じた曲線について、3以下の分割数は不許可
-    ASSERT_TRUE(curve->IsClosed());
-    EXPECT_THROW({i_ent::DiscretizeCurve(nullptr, i_num::Tolerance(), 2);},
-                 std::invalid_argument);
-}
-
+/*
 // 一般の曲線（C1連続以上）のテスト
 // CopiousData, Line以外
 TEST(DiscretizeCurveTest, GeneralCurves) {
@@ -336,3 +312,4 @@ TEST(DiscretizeCurveTest, Line) {
     }
 }
 
+*/

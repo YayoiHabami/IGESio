@@ -175,24 +175,24 @@ ninja --version
 
 ### Third-Party Dependencies
 
-このライブラリには、互換性のあるライセンスを持つオプションの依存関係が含まれています：
+このライブラリはCMakeのFetchContentを使ってサードパーティ依存関係を取得します（ソースコードは本リポジトリに含まれていません）。Eigen3を除くすべての依存関係はオプションであり、対応するCMakeオプションを無効にすることで依存関係なしのビルドも可能です。
 
-| ライブラリ | ライセンス | 用途 | オプション |
-|-----------|-----------|------|-----------|
-| [Eigen3](https://eigen.tuxfamily.org/) | MPL-2.0 | 線形代数演算 | Yes (`-DIGESIO_ENABLE_EIGEN=OFF` で無効化) |
-| [Google Test](https://github.com/google/googletest) | BSD-3-Clause | 単体テスト | Yes (`IGESIO_BUILD_TESTING` 有効時のみ) |
-| [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0 | OpenGLローダー | Yes (`IGESIO_ENABLE_GRAPHICS` または `IGESIO_BUILD_GUI` 有効時のみ) |
-| [glfw](https://www.glfw.org/) | Zlib | ウィンドウ作成と入力処理 | Yes (`IGESIO_BUILD_GUI` 有効時のみ) |
-| [imgui](https://github.com/ocornut/imgui) | MIT | GUI作成 | Yes (`IGESIO_BUILD_GUI` 有効時のみ) |
-| [stb](https://github.com/nothings/stb) | MIT | 画像読み込み・書き出し | Yes (`IGESIO_ENABLE_TEXTURE_IO` 有効時のみ) |
+| ライブラリ | ライセンス | 用途 | 必須 | 有効化条件 |
+|-----------|-----------|------|:----:|-----------|
+| [Boost](https://www.boost.org/) | BSL-1.0 | 最適化など | ✓ | 常時 |
+| [Eigen3](https://eigen.tuxfamily.org/) | MPL-2.0 | 線形代数演算 | ✓ | 常時（※1） |
+| [Google Test](https://github.com/google/googletest) | BSD-3-Clause | 単体テスト | - | `IGESIO_BUILD_TESTING` |
+| [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0（※2） | OpenGLローダー | - | `IGESIO_ENABLE_GRAPHICS` or `IGESIO_BUILD_GUI` |
+| [GLFW](https://www.glfw.org/) | Zlib | ウィンドウ作成・入力処理 | - | `IGESIO_BUILD_GUI` |
+| [Dear ImGui](https://github.com/ocornut/imgui) | MIT | GUI | - | `IGESIO_BUILD_GUI` |
+| [stb](https://github.com/nothings/stb) | MIT | 画像読み込み・書き出し | - | `IGESIO_ENABLE_TEXTURE_IO` |
 
-**ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストについては [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) を参照してください。
+**ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストは[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md)を参照してください。
 
-**注意**:
-- Eigenはヘッダーオンリーライブラリで、明示的に有効化された場合のみインクルードされます
-- Google Testは開発時のみ使用され、ライブラリと一緒に配布されません
-- gladは`IGESIO_ENABLE_GRAPHICS`または`IGESIO_BUILD_GUI`が有効な場合のみ含まれます。gladのソースコードはMITライセンス、Khronos XML API RegistryはApache License 2.0でライセンスされています
-- このライブラリはサードパーティの依存関係なしでビルドできます
+**備考**:
+- ※1 Eigen3はヘッダーオンリーライブラリで、現在はビルドに必須です。将来的に`IGESIO_ENABLE_EIGEN`オプションによる有効化/無効化に対応予定です
+- ※2 gladのソースコード自体はMITライセンスですが、同梱のKhronos XML API RegistryはApache License 2.0です
+- Google Testはビルド時のみ使用され、ライブラリと一緒に配布されません
 
 ## ビルド方法
 

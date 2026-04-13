@@ -93,3 +93,11 @@ Individual entity class documents are as follows. Currently, they include mathem
 - **[Entity Analysis (en)](entity-analysis.md)**: Analysis of the classification and parameters of each entity in IGES 5.3
 - **[Additional Notes (ja)](additional_notes_ja.md)**: Other supplementary notes
 - **[TODO (ja)](todo.md)**: TODO list
+- For Implementers
+  - **[Adding an Entity (ja)](./for_impl/add_entity_ja.md)**
+    - Step-by-step guide for adding a new IGES entity
+    - Methods for implementing entity classes, registering with factory, and adding graphics support
+  - **[Adding Entity Graphics Code (ja)](./for_impl/add_entity_graphics_ja.md)**
+    - Detailed procedures for creating a dedicated `Graphics` class
+    - From preparing GLSL shaders to registering with the factory
+

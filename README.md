@@ -173,24 +173,24 @@ ninja --version
 
 ### Third-Party Dependencies
 
-This library includes optional dependencies with compatible licenses:
+This library retrieves third-party dependencies using CMake's FetchContent (source code is not included in this repository). All dependencies except Eigen3 are optional, and builds without dependencies are also possible by disabling the corresponding CMake options.
 
-| Library | License | Usage | Optional |
-|---------|---------|-------|----------|
-| [Eigen3](https://eigen.tuxfamily.org/) | MPL-2.0 | Linear algebra operations | Yes (`-DIGESIO_ENABLE_EIGEN=OFF` to disable) |
-| [Google Test](https://github.com/google/googletest) | BSD-3-Clause | Unit testing | Yes (only when `IGESIO_BUILD_TESTING` is enabled) |
-| [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0 | OpenGL loader | Yes (only when `IGESIO_ENABLE_GRAPHICS` or `IGESIO_BUILD_GUI` is enabled) |
-| [glfw](https://www.glfw.org/) | Zlib | Window creation and input handling | Yes (only when `IGESIO_BUILD_GUI` is enabled) |
-| [imgui](https://github.com/ocornut/imgui) | MIT | Graphical user interface | Yes (only when `IGESIO_BUILD_GUI` is enabled) |
-| [stb](https://github.com/nothings/stb) | MIT | Image loading and saving | Yes (only when `IGESIO_ENABLE_TEXTURE_IO` is enabled) |
+| Library | License | Usage | Required | Enabled by |
+|---------|---------|-------|:--------:|-----------|
+| [Boost](https://www.boost.org/) | BSL-1.0 | Optimization, etc. | ✓ | Always |
+| [Eigen3](https://eigen.tuxfamily.org/) | MPL-2.0 | Linear algebra operations | ✓ | Always (※1) |
+| [Google Test](https://github.com/google/googletest) | BSD-3-Clause | Unit testing | - | `IGESIO_BUILD_TESTING` |
+| [glad](https://github.com/Dav1dde/glad) | MIT, Apache-2.0 (※2) | OpenGL loader | - | `IGESIO_ENABLE_GRAPHICS` or `IGESIO_BUILD_GUI` |
+| [GLFW](https://www.glfw.org/) | Zlib | Window creation and input handling | - | `IGESIO_BUILD_GUI` |
+| [Dear ImGui](https://github.com/ocornut/imgui) | MIT | GUI | - | `IGESIO_BUILD_GUI` |
+| [stb](https://github.com/nothings/stb) | MIT | Image loading and saving | - | `IGESIO_ENABLE_TEXTURE_IO` |
 
 **License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) for full license texts.
 
 **Note**:
-- Eigen is header-only and only included when explicitly enabled
-- Google Test is only used for development and not distributed with the library
-- glad is included only when `IGESIO_ENABLE_GRAPHICS` or `IGESIO_BUILD_GUI` is enabled. glad's source code is licensed under MIT license, and Khronos XML API Registry is licensed under Apache License 2.0
-- This library can be built without any third-party dependencies
+- ※1 Eigen3 is a header-only library and is currently required for building. In the future, we plan to support enabling/disabling via the `IGESIO_ENABLE_EIGEN` option
+- ※2 glad's source code is licensed under MIT license, and the included Khronos XML API Registry is licensed under Apache License 2.0
+- Google Test is only used during development and is not distributed with the library
 
 ## Building
 

@@ -27,6 +27,7 @@
 #include "igesio/entities/curves/rational_b_spline_curve.h"         // type 126
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"     // type 128
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"   // type 142
+#include "igesio/entities/surfaces/trimmed_surface.h"               // type 144
 #include "igesio/entities/structures/color_definition.h"            // type 314
 
 
@@ -131,6 +132,12 @@ void i_ent::EntityFactory::Initialize() {
                                                    const p2I& d2i, const ObjectID& iid) {
         return std::make_shared<i_ent::CurveOnAParametricSurface>(de, p, d2i, iid);
     };
+    // 144 - Trimmed Surface
+    creators_[ET::kTrimmedSurface] = [](const DE& de, const IVec& p,
+                                        const p2I& d2i, const ObjectID& iid) {
+        return std::make_shared<i_ent::TrimmedSurface>(de, p, d2i, iid);
+    };
+
 
     // 314 - Color Definition
     creators_[ET::kColorDefinition] = [](const DE& de, const IVec& p,

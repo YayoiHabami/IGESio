@@ -19,8 +19,10 @@
 #include <igesio/entities/surfaces/surface_of_revolution.h>
 #include <igesio/entities/surfaces/tabulated_cylinder.h>
 #include <igesio/entities/surfaces/rational_b_spline_surface.h>
+#include <igesio/entities/surfaces/trimmed_surface.h>
 
 #include <igesio/entities/curves/rational_b_spline_curve.h>
+#include <igesio/entities/curves/curve_on_a_parametric_surface.h>
 #include <igesio/entities/transformations/transformation_matrix.h>
 #include <igesio/writer.h>
 
@@ -197,6 +199,87 @@ ent_vec CreateRationalBSplineSurface() {
     return {nurbs_plane, nurbs_freeform};
 }
 
+/// @brief Example for Trimmed Surface entity (Type 144)
+ent_vec CreateTrimmedSurface() {
+    // Create NURBS surface
+    auto param = igesio::IGESParameterVector{
+        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
+        3, 3,  // M1, M2 (Degree in U and V)
+        false, false, true, false, false,         // PROP1-5
+        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
+        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
+        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
+        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
+        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
+        // Control points (36 points, each with x, y, z)
+         5., -25., -10.,   // Control point (0,0)
+         5., -15., -5.,    // Control point (0,1)
+         5., -5., 0.,      // Control point (0,2)
+         5., 5., 0.,       // Control point (0,3)
+         5., 15., -5.,     // Control point (0,4)
+         5., 25., -10.,    // Control point (0,5)
+        15., -25., -8.,    // Control point (1,0)
+        15., -15., -4.,    // Control point (1,1)
+        15., -5., -4.,     // Control point (1,2)
+        15., 5., -4.,      // Control point (1,3)
+        15., 15., -4.,     // Control point (1,4)
+        15., 25., -8.,     // Control point (1,5)
+        25., -25., -5.,    // Control point (2,0)
+        25., -15., -3.,    // Control point (2,1)
+        25., -5., -8.,     // Control point (2,2)
+        25., 5., -8.,      // Control point (2,3)
+        25., 15., -3.,     // Control point (2,4)
+        25., 25., -5.,     // Control point (2,5)
+        35., -25., -3.,    // Control point (3,0)
+        35., -15., -2.,    // Control point (3,1)
+        35., -5., -8.,     // Control point (3,2)
+        35., 5., -8.,      // Control point (3,3)
+        35., 15., -2.,     // Control point (3,4)
+        35., 25., -3.,     // Control point (3,5)
+        45., -25., -8.,    // Control point (4,0)
+        45., -15., -4.,    // Control point (4,1)
+        45., -5., -4.,     // Control point (4,2)
+        45., 5., -4.,      // Control point (4,3)
+        45., 15., -4.,     // Control point (4,4)
+        45., 25., -8.,     // Control point (4,5)
+        55., -25., -10.,   // Control point (5,0)
+        55., -15., -5.,    // Control point (5,1)
+        55., -5., 2.,      // Control point (5,2)
+        55., 5., 2.,       // Control point (5,3)
+        55., 15., -5.,     // Control point (5,4)
+        55., 25., -10.,    // Control point (5,5)
+        0., 3., 0., 3.     // Parameter range in U and V
+    };
+    auto nurbs_s = std::make_shared<i_ent::RationalBSplineSurface>(param);
+
+    // Create closed curve on a parametric surface
+    param = igesio::IGESParameterVector{
+        4,  // number of control points - 1
+        3,  // degree
+        false, false, true, false,  // non-periodic open NURBS curve
+        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
+        1., 1., 1., 1., 1.,  // weights
+         1.5,  0.5,  0.0,    // control point P(0)
+         0.0,  0.5,  0.0,    // control point P(1)
+         2.0,  4.0,  0.0,    // control point P(2)
+         3.0,  0.5,  0.0,    // control point P(3)
+         1.5,  0.5,  0.0,    // control point P(4)
+        0.0, 1.0,            // parameter range V(0), V(1)
+        0.0, 0.0, 1.0        // normal vector of the defining plane
+    };
+    auto nurbs_cc = std::make_shared<i_ent::RationalBSplineCurve>(param);
+    auto [closed_curve, closed_cons] = i_ent::MakeCurveOnAParametricSurface(nurbs_s, nurbs_cc);
+    closed_curve->SetLineWeightNumber(2);
+    auto closed_cons_bs = std::dynamic_pointer_cast<i_ent::EntityBase>(closed_cons);
+
+    // Trimmed surface
+    auto trimmed_surf = std::make_shared<i_ent::TrimmedSurface>(nurbs_s);
+    trimmed_surf->AddInnerBoundary(closed_curve);
+    trimmed_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
+
+    return {nurbs_s, nurbs_cc, closed_curve, closed_cons_bs, trimmed_surf};
+}
+
 
 
 /// @brief Main function (creates IGES data and writes to file)
@@ -213,6 +296,9 @@ int main() {
         iges_data.AddEntity(entity);
     }
     for (const auto& entity : CreateRationalBSplineSurface()) {
+        iges_data.AddEntity(entity);
+    }
+    for (const auto& entity : CreateTrimmedSurface()) {
         iges_data.AddEntity(entity);
     }
 

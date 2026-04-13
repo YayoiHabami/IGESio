@@ -353,6 +353,37 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
 
 
 /**
+ * 直線部・角点サポート
+ */
+
+std::vector<std::array<double, 2>>
+ParametricSplineCurve::GetLinearSegments() const {
+    // kLinearのときのみ全セグメントが直線
+    if (curve_type_ != ParametricSplineCurveType::kLinear) return {};
+    if (breakpoints_.size() < 2) return {};
+
+    std::vector<std::array<double, 2>> segments;
+    segments.reserve(breakpoints_.size() - 1);
+    for (size_t i = 0; i + 1 < breakpoints_.size(); ++i) {
+        segments.push_back({breakpoints_[i], breakpoints_[i + 1]});
+    }
+    return segments;
+}
+
+std::vector<double> ParametricSplineCurve::GetCornerParams() const {
+    // H=0 (C^0連続のみ) の場合は内部ブレークポイントが角点
+    if (degree_ != 0) return {};
+    if (breakpoints_.size() < 3) return {};
+
+    // 内部ブレークポイント (先頭・末尾を除く)
+    std::vector<double> corners(breakpoints_.begin() + 1,
+                                breakpoints_.end() - 1);
+    return corners;
+}
+
+
+
+/**
  * ICurve implementation
  */
 

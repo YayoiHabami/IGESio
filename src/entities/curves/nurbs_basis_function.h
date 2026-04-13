@@ -99,6 +99,11 @@ TryComputeBasisFunctions(const double t, const int num_derivatives,
         double saved = 0.0;
         for (int r = 0; r < p; ++r) {
             ndu(p, r) = right[r + 1] + left[p - r];
+            if (numerics::IsApproxZero(ndu(p, r))) {
+                // 分母がゼロに近い場合は、基底関数の値もゼロに近いとみなす
+                ndu(p, r) = 0.0;
+                continue;
+            }
             double temp = ndu(r, p - 1) / ndu(p, r);
             ndu(r, p) = saved + right[r + 1] * temp;
             saved = left[p - r] * temp;
@@ -111,8 +116,8 @@ TryComputeBasisFunctions(const double t, const int num_derivatives,
 
     // 導関数の計算
     if (num_derivatives > 0) {
-        MatrixXd a = MatrixXd::Zero(m + 1, m + 1);
-        for (int r = 0; r <= m; ++r) {
+            for (int r = 0; r <= m; ++r) {
+            MatrixXd a = MatrixXd::Zero(m + 1, m + 1);
             int s1 = 0, s2 = 1;
             a(0, 0) = 1.0;
             for (int k = 1; k <= num_derivatives; ++k) {

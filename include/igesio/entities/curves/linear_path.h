@@ -45,6 +45,32 @@ class LinearPath : public CopiousDataBase,
 
 
     /**
+     * 直線部・角点サポート (ICurve override)
+     */
+
+    /// @brief 直線部のパラメータ区間リストを返す
+    /// @return 全線分区間 {L_i, L_{i+1}} のリスト (L_iは弧長パラメータ).
+    ///         kPlanarLoopの場合は閉鎖辺を含む
+    std::vector<std::array<double, 2>> GetLinearSegments() const override;
+
+    /// @brief 角点のパラメータ値リストを返す
+    /// @return 内部頂点の弧長パラメータのリスト.
+    ///         kPlanarLoopの場合は t=0 (頂点0) も含む
+    std::vector<double> GetCornerParams() const override;
+
+    /// @brief 角点における左側単位接線ベクトルを解析的に返す
+    /// @param t パラメータ値
+    /// @return 入射辺方向の単位ベクトル. 計算できない場合は`std::nullopt`
+    std::optional<Vector3d> LeftTangentAt(const double t) const override;
+
+    /// @brief 角点における右側単位接線ベクトルを解析的に返す
+    /// @param t パラメータ値
+    /// @return 出射辺方向の単位ベクトル. 計算できない場合は`std::nullopt`
+    std::optional<Vector3d> RightTangentAt(const double t) const override;
+
+
+
+    /**
      * ICurve implementation
      */
 

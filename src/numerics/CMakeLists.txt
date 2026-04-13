@@ -4,6 +4,8 @@ add_library(igesio_numerics STATIC
     integration.cpp
     combinatorics.cpp
     bounding_box.cpp
+    polygon.cpp
+    optimize.cpp
 )
 
 # Set the source and include directories
@@ -14,8 +16,11 @@ target_include_directories(igesio_numerics PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(igesio_numerics PUBLIC
-    IGESio::common
+target_link_libraries(igesio_numerics
+    PUBLIC
+        IGESio::common
+    PRIVATE
+        $<BUILD_INTERFACE:Boost::math>
 )
 
 # Create an alias for the library

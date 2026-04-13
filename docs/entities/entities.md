@@ -36,6 +36,7 @@ This document covers the interfaces for specific entities and individual entity 
   - [`SurfaceOfRevolution` (type 120)](#surfaceofrevolution-type-120)
   - [`TabulatedCylinder` (type 122)](#tabulatedcylinder-type-122)
   - [`RationalBSplineSurface` (type 128)](#rationalbsplinesurface-type-128)
+  - [`TrimmedSurface` (type 144)](#trimmedsurface-type-144)
 - [Transformations](#transformations)
   - [`TransformationMatrix` (type 124)](#transformationmatrix-type-124)
 
@@ -785,6 +786,58 @@ nurbs_freeform->OverwriteColor(igesio::entities::ColorNumber::kCyan);
 <img src="./images/rational_b_spline_surface.png" width=400px alt="RationalBSplineSurface Example" />
 
 **Figure: Example of a RationalBSplineSurface entity**
+
+### `TrimmedSurface` (type 144)
+
+> Defined at [trimmed_surface.h](./../../../include/igesio/entities/surfaces/trimmed_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ TrimmedSurface
+>                     └─ IGeometry <── ISurface <───┘
+> ```
+
+
+　The `TrimmedSurface` class represents a surface formed by trimming a base surface $S(u, v)$ using boundary curves defined in the parameter space $(u, v)$. [`CurveOnAParametricSurface (Type 142)`](#curveonaparametricsurface-type-142) is used to represent these boundary curves.
+
+　Given the parameter rectangle $D$ of the base surface, the valid domain $\Omega$ of the trimmed surface is defined as the intersection of the interior region $\mathrm{int}(\partial\Omega_{\text{out}})$ of the outer boundary and the exterior regions $\mathrm{ext}(\partial\Omega_{\text{in},i})$ of the $N_2$ inner boundaries:
+
+$$\Omega = \overline{\mathrm{int}(\partial\Omega_{\text{out}})} \cap \bigcap_{i=1}^{N_2} \overline{\mathrm{ext}(\partial\Omega_{\text{in},i})}$$
+
+
+　The outer boundary can be specified in two ways: it either coincides with the boundary of the parameter rectangle $D$ ($N_1=0$), or it is an arbitrary closed curve defined within $D$ ($N_1=1$).
+
+　The `TryGetDerivatives(u, v, n)` method determines whether the given parameters $(u, v)$ lie within the valid domain $\Omega$. It returns `std::nullopt` if the point is outside $\Omega$, and delegates to the base surface's partial derivatives if it is inside.
+
+　The following code example creates a trimmed surface using a [RationalBSplineSurface](#rationalbsplinesurface-type-128) as the base surface, with a circular hole cut out of its center.
+
+```cpp
+namespace i_ent = igesio::entities;
+
+// 1. Create the base surface (NURBS Surface)
+auto base_surface = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
+
+// 2. Create an inner boundary (the hole)
+// Define a circular arc in the parameter space (u, v)
+auto circle_u_v = std::make_shared<i_ent::CircularArc>(
+        igesio::Vector2d{1.5, 1.5}, 0.5); 
+// Configure as Type 142
+auto [inner_boundary, inner_cons] = i_ent::MakeCurveOnAParametricSurface(
+        base_surface, circle_u_v);
+
+// 3. Construct the Trimmed Surface
+// Use the base surface's parameter rectangle D as the outer boundary (N1=0)
+auto trimmed_surf = std::make_shared<i_ent::TrimmedSurface>(base_surface);
+trimmed_surf->AddInnerBoundary(inner_boundary);
+
+// If within the valid domain, it returns values from the base surface
+auto derivs = trimmed_surf->TryGetDerivatives(0.0, 0.0, 1); // Valid
+auto hole = trimmed_surf->TryGetDerivatives(1.5, 1.5, 1);   // std::nullopt
+```
+
+<img src="./images/trimmed_surface.png" width=400px alt="TrimmedSurface Example" />
+
+**Figure: Example of a TrimmedSurface entity**
 
 ## Transformations
 
