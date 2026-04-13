@@ -14,14 +14,14 @@
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/tolerance.h"
 #include "igesio/entities/curves/linear_path.h"
-#include "igesio/entities/curves/algorithms.h"
+#include "igesio/entities/curves/nurbs_algorithms.h"
+#include "entities/curves/algorithms/polygonal_approximation.h"
 
 namespace {
 
 /// @brief 曲線を離散化する際のトレランス
-constexpr double kDiscretizationTol = 1e-6;
+constexpr double kDiscretizationTol = 1e-4;
 
 namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
@@ -32,9 +32,10 @@ using igesio::Vector3d;
 std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
         const std::shared_ptr<const i_ent::ISurface>& surface,
         const std::shared_ptr<const i_ent::ICurve>& base_curve) {
-    // 曲面上の曲線 C(t) を生成
-    auto tol = igesio::numerics::Tolerance(kDiscretizationTol);
-    auto vertices = DiscretizeCurve(base_curve, tol);
+    // 曲面上の曲線 C(t) を折れ線近似で生成
+    auto polygon = i_ent::ComputeApproximatePolygon(*base_curve, {}, {},
+                                                    kDiscretizationTol);
+    const auto& vertices = polygon.vertices;
 
     // kPolyLineを生成
     auto curve_2d = std::make_shared<i_ent::LinearPath>(vertices);
@@ -49,10 +50,33 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
         projected_vertices.push_back(pt_opt.value());
     }
 
-    // 投射した頂点から3D曲線を生成
-    // TODO: NURBS曲線などでC(t)を生成する. 現在の折れ線による実装では、出力
-    //       されるファイルのファイルサイズが非常に大きくなるため
-    return std::make_shared<i_ent::LinearPath>(projected_vertices);
+    // 端点接線を chain rule で計算: C'(t) = dS/du * u'(t) + dS/dv * v'(t)
+    auto [tmin, tmax] = base_curve->GetParameterRange();
+    i_ent::NurbsEndpointTangents tangents;
+    for (bool is_start : {true, false}) {
+        double t = is_start ? tmin : tmax;
+        auto db_opt = base_curve->TryGetDerivatives(t, 1);
+        if (!db_opt) continue;
+        const auto& db = db_opt.value();
+        auto ds_opt = surface->TryGetDerivatives(db[0].x(), db[0].y(), 1);
+        if (!ds_opt) continue;
+        const auto& ds = ds_opt.value();
+        Vector3d tangent = ds(1, 0)*db[1].x() + ds(0, 1)*db[1].y();
+        if (is_start) {
+            tangents.start = tangent;
+        } else {
+            tangents.end = tangent;
+        }
+    }
+
+    // 投射した頂点からNURBS曲線でC(t)を生成; 失敗時は折れ線で代替
+    try {
+        i_ent::NurbsApproxOptions opts;
+        opts.tolerance = kDiscretizationTol * 10.0;
+        return i_ent::ApproximateWithNurbs(projected_vertices, tangents, opts);
+    } catch (const std::exception&) {
+        return std::make_shared<i_ent::LinearPath>(projected_vertices);
+    }
 }
 
 }  // namespace
@@ -299,6 +323,19 @@ igesio::ValidationResult CurveOnSurface::ValidatePD() const {
 
 
 /**
+ * 直線部・角点サポート
+ */
+
+std::vector<double> CurveOnSurface::GetCornerParams() const {
+    // B(t) の角点では C(t) = S(B(t)) も接線方向が不連続になる
+    auto bc = base_curve_.TryGetEntity<ICurve>();
+    if (!bc || !bc.value()) return {};
+    return bc.value()->GetCornerParams();
+}
+
+
+
+/**
  * ICurve implementation
  */
 
@@ -435,9 +472,12 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
         const std::shared_ptr<ICurve>& base_curve, const std::shared_ptr<ICurve>& curve) {
     SetBaseCurve(base_curve);
     // 基底曲線のentity use flagを5 (k2DParametric) に設定
+    // 併せてSubordinateEntitySwitchをkPhysicallyDependentに設定
     auto base_curve_entity = std::dynamic_pointer_cast<EntityBase>(base_curve);
     if (base_curve_entity) {
         base_curve_entity->SetEntityUseFlag(i_ent::EntityUseFlag::k2DParametric);
+        base_curve_entity->SetSubordinateEntitySwitch(
+            i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
     }
 
     // 曲線 C(t) を設定: 未指定であれば折れ線近似のもと生成する
@@ -452,6 +492,13 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
 
         // 投射した頂点から3D曲線を生成
         generated_curve = CreateCurveOnSurface(surf, base_curve);
+        // SubordinateEntitySwitchをkPhysicallyDependentに設定
+        if (auto entity_base =
+                std::dynamic_pointer_cast<EntityBase>(generated_curve)) {
+            entity_base->SetSubordinateEntitySwitch(
+                SubordinateEntitySwitch::kPhysicallyDependent);
+        }
+
         // S(B(t)) から C(t) を生成したので、優先表現を S(B(t)) に設定
         SetPreferredRepresentation(PreferredRepresentation::kSofB);
         curve_.OverwritePointer(generated_curve);

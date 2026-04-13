@@ -49,7 +49,7 @@
 |Boundary                             |141|  0  | ^ |❌|❌
 |Curve on a<br>Parametric<br>Surface  |142|  0  | ^ |✅|✅
 |Bounded<br>Surface                   |143|  0  | ^ |❌|❌
-|Trimmed<br>Surface                   |144|  0  | ^ |❌|❌
+|Trimmed<br>Surface                   |144|  0  | ^ |✅|✅
 |Nodal Results                        |‡146|0~34|St.|-|-
 |Element Results                      |‡148|0~34| ^ |-|-
 |Block                                |150|  0  |CSG|❌|❌

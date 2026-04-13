@@ -22,6 +22,7 @@
 
 #include "igesio/graphics/surfaces/i_surface_graphics.h"
 #include "igesio/graphics/surfaces/rational_b_spline_surface_graphics.h"
+#include "igesio/graphics/surfaces/trimmed_surface_graphics.h"
 
 namespace {
 
@@ -114,6 +115,10 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
                 const i_ent::RationalBSplineSurface>(entity)) {
         // Type 128: RationalBSplineSurfaceの描画オブジェクトを作成
         return std::make_unique<i_graph::RationalBSplineSurfaceGraphics>(r_bspline_surface, gl);
+    } else if (auto trimmed = std::dynamic_pointer_cast<
+                const i_ent::TrimmedSurface>(entity)) {
+        // Type 144: TrimmedSurfaceの描画オブジェクトを作成
+        return std::make_unique<i_graph::TrimmedSurfaceGraphics>(trimmed, gl);
     }
 
     // いずれにも当てはまらない場合は無効なポインタを返す

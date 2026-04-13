@@ -93,3 +93,10 @@
 - **[entity-analysis (en)](entity_analysis.md)**: IGES 5.3における、各エンティティの分類やパラメータについての分析
 - **[additional-notes (ja)](additional_notes_ja.md)**: その他の補足事項
 - **[todo](todo.md)**: TODOリスト
+- 実装者向けドキュメント
+  - **[エンティティの追加手順 (ja)](./for_impl/add_entity_ja.md)**
+    - 新たなIGESエンティティを追加する際のステップバイステップガイド
+    - エンティティクラスの実装・ファクトリへの登録・描画対応の方法
+  - **[エンティティの描画コードの追加手順 (ja)](./for_impl/add_entity_graphics_ja.md)**
+    - 専用`Graphics`クラスを新規作成する際の詳細な手順
+    - GLSLシェーダーの用意からファクトリへの登録まで
