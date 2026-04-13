@@ -36,6 +36,7 @@
   - [`SurfaceOfRevolution` (type 120)](#surfaceofrevolution-type-120)
   - [`TabulatedCylinder` (type 122)](#tabulatedcylinder-type-122)
   - [`RationalBSplineSurface` (type 128)](#rationalbsplinesurface-type-128)
+  - [`TrimmedSurface` (type 144)](#trimmedsurface-type-144)
 - [Transformations](#transformations)
   - [`TransformationMatrix` (type 124)](#transformationmatrix-type-124)
 
@@ -785,6 +786,56 @@ nurbs_freeform->OverwriteColor(igesio::entities::ColorNumber::kCyan);
 <img src="./images/rational_b_spline_surface.png" width=400px alt="RationalBSplineSurface Example" />
 
 **図: RationalBSplineSurfaceエンティティの例**
+
+### `TrimmedSurface` (type 144)
+
+> Defined at [trimmed_surface.h](../../include/igesio/entities/surfaces/trimmed_surface.h)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ TrimmedSurface
+>                     └─ IGeometry <── ISurface <───┘
+> ```
+
+　`TrimmedSurface`は、ベースとなる曲面 $S(u, v)$ を、パラメータ空間 $(u, v)$ 上に定義された境界曲線によって切り取った（トリミングした）曲面を表現するためのクラスです。境界曲線には[`CurveOnAParametricSurface (Type 142)`](#curveonaparametricsurface-type-142)が使用されます。
+
+　トリミング対象の曲面が持つパラメータ矩形領域を $D$ とすると、トリム済み曲面の有効定義域 $\Omega$ は、外側境界 $\partial\Omega_{\text{out}}$ の内部領域 $\mathrm{int}(\partial\Omega_{\text{out}})$ と、 $N_2$ 本の内側境界 $\partial\Omega_{\text{in},i}$ の外部領域 $\mathrm{ext}(\partial\Omega_{\text{in},i})$ の共通部分として定義されます。
+
+$$\Omega = \overline{\mathrm{int}(\partial\Omega_{\text{out}})} \cap \bigcap_{i=1}^{N_2} \overline{\mathrm{ext}(\partial\Omega_{\text{in},i})}$$
+
+　外側境界は、パラメータ矩形 $D$ の境界をそのまま使用するか（$N_1=0$）、あるいは $D$ 内に定義された任意の閉曲線を使用するか（$N_1=1$）を選択できます。
+
+　`TrimmedSurface`の`TryGetDerivatives(u, v, n)`メソッドは、指定されたパラメータ $(u, v)$ が有効定義域 $\Omega$ 内にあるかを判定します。 $\Omega$ 外であれば`std::nullopt`を返し、 $\Omega$ 内であればベース曲面の偏導関数をそのまま返します。
+
+　以下のコード例は、[RationalBSplineSurface](#rationalbsplinesurface-type-128)をベース曲面とし、その中央に円形の穴を開けたトリム済み曲面を生成します。
+
+```cpp
+namespace i_ent = igesio::entities;
+
+// 1. ベース曲面の作成 (NURBS Surface)
+auto base_surface = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
+
+// 2. 内側境界（穴）の作成
+// パラメータ空間(u, v)上での円弧を定義
+auto circle_u_v = std::make_shared<i_ent::CircularArc>(
+        igesio::Vector2d{1.5, 1.5}, 0.5);
+// Type 142として構成
+auto [inner_boundary, inner_cons] = i_ent::MakeCurveOnAParametricSurface(
+        base_surface, circle_u_v);
+
+// 3. トリム済み曲面の構成
+// 外側境界にベース曲面のパラメータ矩形 D を使用する場合 (N1=0)
+auto trimmed_surf = std::make_shared<i_ent::TrimmedSurface>(base_surface);
+trimmed_surf->AddInnerBoundary(inner_boundary);
+
+// 有効定義域内であれば、ベース曲面の値を返す
+auto derivs = trimmed_surf->TryGetDerivatives(0.0, 0.0, 1); // 有効
+auto hole = trimmed_surf->TryGetDerivatives(1.5, 1.5, 1);   // std::nullopt
+```
+
+<img src="./images/trimmed_surface.png" width=400px alt="TrimmedSurface Example" />
+
+**図: TrimmedSurfaceエンティティの例**
 
 ## Transformations
 
