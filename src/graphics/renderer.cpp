@@ -7,6 +7,7 @@
  */
 #include "igesio/graphics/renderer.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
@@ -18,6 +19,15 @@ namespace {
 
 namespace i_graph = igesio::graphics;
 using EntityRenderer = igesio::graphics::EntityRenderer;
+
+/// @brief 頂点群の重心（平均座標）を計算する
+/// @param vertices 頂点群（空でないこと）
+/// @return 重心座標
+igesio::Vector3d Centroid(const std::vector<igesio::Vector3d>& vertices) {
+    igesio::Vector3d sum = igesio::Vector3d::Zero();
+    for (const auto& v : vertices) sum += v;
+    return sum / static_cast<double>(vertices.size());
+}
 
 }  // namespace
 
@@ -51,6 +61,9 @@ void EntityRenderer::Initialize() {
 }
 
 void EntityRenderer::Cleanup() {
+    // 選択状態をクリア
+    selected_ids_.clear();
+
     // 描画オブジェクトのクリーンアップ
     for (auto& [shader_type, objects] : draw_objects_) {
         for (auto& [id, object] : objects) {
@@ -91,6 +104,11 @@ void EntityRenderer::AddGraphicsObject(
 }
 
 void EntityRenderer::RemoveEntity(const ObjectID& id) {
+    // 選択中であれば選択集合からも除去する (stale idの防止)
+    selected_ids_.erase(
+            std::remove(selected_ids_.begin(), selected_ids_.end(), id),
+            selected_ids_.end());
+
     for (auto& [shader_type, objects] : draw_objects_) {
         auto it = objects.find(id);
         if (it != objects.end()) {
@@ -342,6 +360,134 @@ i_graph::Texture EntityRenderer::CaptureScreenshot() const {
     Texture tex;
     tex.SetData(width, height, false, pixels.data(), false, true);
     return tex;
+}
+
+
+
+/**
+ * ピッキング・選択
+ */
+
+i_graph::Ray EntityRenderer::GetRayFromScreen(
+        double screen_x, double screen_y) const {
+    return i_graph::GetRayFromScreen(
+            camera_, display_width_, display_height_, screen_x, screen_y);
+}
+
+std::vector<i_graph::EntityHit> EntityRenderer::PickEntities(
+        const Ray& ray, double screen_x, double screen_y,
+        const RayIntersectionParams& params) const {
+    std::vector<EntityHit> hits;
+    const int w = display_width_, h = display_height_;
+    if (w <= 0 || h <= 0) return hits;
+
+    // フォールバック深度: カメラのターゲットをレイへ射影した距離
+    const igesio::Vector3d target = camera_.GetTarget().cast<double>();
+    const igesio::Vector3d position = camera_.GetPosition().cast<double>();
+    double fallback_depth = (target - ray.origin).dot(ray.direction);
+    if (fallback_depth <= 0.0) fallback_depth = (target - position).norm();
+    if (fallback_depth <= 0.0) fallback_depth = 1.0;  // 最終フォールバック
+
+    for (const auto& [shader_type, objects] : draw_objects_) {
+        for (const auto& [id, object] : objects) {
+            if (!object || !object->CanIntersect()) continue;
+
+            // 代表深度: BB中心をレイへ射影。BBが無限/未定義ならフォールバック
+            double depth = fallback_depth;
+            const auto bb = object->GetWorldBoundingBox();
+            if (bb && bb->IsFinite()) {
+                const auto vertices = bb->GetFiniteVertices();
+                if (!vertices.empty()) {
+                    const igesio::Vector3d center = Centroid(vertices);
+                    depth = (center - ray.origin).dot(ray.direction);
+                }
+            }
+            if (depth <= 0.0) depth = fallback_depth;
+
+            // 曲線ヒット許容量をワールド距離へ換算してパラメータを上書き
+            RayIntersectionParams p = params;
+            p.curve_hit_tolerance = i_graph::PixelToWorldSize(
+                    camera_, w, h, screen_x, screen_y, depth,
+                    params.curve_hit_pixels);
+
+            for (const auto& rh : object->Intersect(ray, p)) {
+                hits.push_back({id, rh});
+            }
+        }
+    }
+
+    // distance昇順にソート
+    std::sort(hits.begin(), hits.end(),
+              [](const EntityHit& a, const EntityHit& b) {
+                  return a.hit.distance < b.hit.distance;
+              });
+
+    // 同一IDかつposition近接 (dedup_tol以内) のヒットは近い方のみ残す
+    std::vector<EntityHit> deduped;
+    for (const auto& hit : hits) {
+        bool duplicate = false;
+        for (const auto& kept : deduped) {
+            if (kept.id == hit.id &&
+                (kept.hit.position - hit.hit.position).norm() < params.dedup_tol) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate) deduped.push_back(hit);
+    }
+    return deduped;
+}
+
+void EntityRenderer::Select(const ObjectID& id) {
+    if (IsSelected(id)) return;
+
+    auto* graphics = FindGraphics(id);
+    if (!graphics) return;  // 未登録のIDは選択しない
+
+    graphics->SetColor(kSelectionColor);
+    selected_ids_.push_back(id);
+}
+
+void EntityRenderer::Deselect(const ObjectID& id) {
+    auto it = std::find(selected_ids_.begin(), selected_ids_.end(), id);
+    if (it == selected_ids_.end()) return;
+
+    if (auto* graphics = FindGraphics(id)) {
+        graphics->ResetColor();  // 元のエンティティの色へ復帰
+    }
+    selected_ids_.erase(it);
+}
+
+void EntityRenderer::ToggleSelection(const ObjectID& id) {
+    if (IsSelected(id)) {
+        Deselect(id);
+    } else {
+        Select(id);
+    }
+}
+
+void EntityRenderer::ClearSelection() {
+    for (const auto& id : selected_ids_) {
+        if (auto* graphics = FindGraphics(id)) {
+            graphics->ResetColor();
+        }
+    }
+    selected_ids_.clear();
+}
+
+bool EntityRenderer::IsSelected(const ObjectID& id) const {
+    return std::find(selected_ids_.begin(), selected_ids_.end(), id)
+            != selected_ids_.end();
+}
+
+i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) const {
+    for (const auto& [shader_type, objects] : draw_objects_) {
+        auto it = objects.find(id);
+        if (it != objects.end()) {
+            return it->second.get();
+        }
+    }
+    return nullptr;
 }
 
 
