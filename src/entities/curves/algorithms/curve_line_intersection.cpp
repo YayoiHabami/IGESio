@@ -301,3 +301,37 @@ std::vector<CurveLineIntersection> i_ent::IntersectCurveWithLine(
               });
     return candidates;
 }
+
+
+
+/**
+ * 点と直線（半直線・線分を含む）の最近接判定
+ */
+
+std::optional<CurveLineIntersection> i_ent::IntersectPointWithLine(
+        const Vector3d& point,
+        const Vector3d& p0, const Vector3d& p1,
+        const LineType line_type,
+        const double hit_tolerance) {
+    if (!point.allFinite() || !p0.allFinite() || !p1.allFinite()) {
+        throw std::invalid_argument(
+            "IntersectPointWithLine: point, p0 and p1 must be finite.");
+    }
+
+    // 方向ベクトルのゼロチェック
+    const Vector3d d = p1 - p0;
+    const double d_sq = d.squaredNorm();
+    const double tol_sq =
+        i_num::kGeometryTolerance * i_num::kGeometryTolerance;
+    if (d_sq < tol_sq) return std::nullopt;
+
+    // 点を直線へ射影し、線種の有効範囲を確認
+    const double s = ProjectOntoLine(point, p0, d, d_sq);
+    if (!IsValidS(s, line_type)) return std::nullopt;
+
+    // 最近接点との3D距離がhit_tolerance以下であればヒット
+    const double gap = (point - (p0 + s * d)).norm();
+    if (gap > hit_tolerance) return std::nullopt;
+
+    return CurveLineIntersection{point, 0.0, s, gap};
+}

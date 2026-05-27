@@ -7,6 +7,7 @@
  *
  * ### 対象関数
  * - igesio::entities::IntersectCurveWithLine
+ * - igesio::entities::IntersectPointWithLine
  *
  * TODO: NURBS曲線・CompositeCurve（複数区間）での検証は未実装
  * TODO: 無限パラメータ範囲を持つ曲線（kRay/kLineのLine）の直接検証は
@@ -32,6 +33,7 @@ namespace i_ent = igesio::entities;
 using i_ent::CurveLineIntersection;
 using i_ent::CurveLineIntersectionParams;
 using i_ent::IntersectCurveWithLine;
+using i_ent::IntersectPointWithLine;
 using igesio::Vector2d;
 using igesio::Vector3d;
 using igesio::Matrix3d;
@@ -275,5 +277,83 @@ TEST(IntersectCurveWithLineTest, Throws_InvalidArg_NaN) {
             Vector3d{std::numeric_limits<double>::quiet_NaN(), 0., 0.},
             Vector3d{0., 1., 0.},
             LineType::kRay),
+        std::invalid_argument);
+}
+
+
+
+/**
+ * 点と直線の近接判定 (IntersectPointWithLine)
+ */
+
+/// @brief 点がレイ上にある場合、gap≈0で点とt_lineを返す
+TEST(IntersectPointWithLineTest, PointOnRay_GapZero) {
+    // 点(0,0,0)、x軸方向のレイ (10,0,0)→(9,0,0); 単位方向なのでt_line=距離
+    const auto hit = IntersectPointWithLine(
+        Vector3d{0., 0., 0.}, Vector3d{10., 0., 0.}, Vector3d{9., 0., 0.},
+        LineType::kRay, 1.0);
+
+    ASSERT_TRUE(hit.has_value());
+    ExpectPositionNear(hit->position, Vector3d{0., 0., 0.});
+    EXPECT_NEAR(hit->gap, 0.0, kPosTol);
+    EXPECT_NEAR(hit->t_line, 10.0, kPosTol);
+}
+
+/// @brief レイからずれた点も許容内なら近接として返す (gapが正しい)
+TEST(IntersectPointWithLineTest, PointSkew_WithinTolerance) {
+    // 点(0,2,0)、x軸 (z=0,y=0) のレイ. 最近接距離は2
+    const auto hit = IntersectPointWithLine(
+        Vector3d{0., 2., 0.}, Vector3d{10., 0., 0.}, Vector3d{9., 0., 0.},
+        LineType::kRay, 3.0);
+
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_NEAR(hit->gap, 2.0, kPosTol);
+}
+
+/// @brief gapが許容値を超える場合はnulloptを返す
+TEST(IntersectPointWithLineTest, NoHit_GapExceedsTolerance) {
+    const auto hit = IntersectPointWithLine(
+        Vector3d{0., 2., 0.}, Vector3d{10., 0., 0.}, Vector3d{9., 0., 0.},
+        LineType::kRay, 1.0);
+
+    EXPECT_FALSE(hit.has_value());
+}
+
+/// @brief kRayで点が始点より後方 (s<0) の場合はnulloptを返す
+TEST(IntersectPointWithLineTest, NoHit_BehindRayOrigin) {
+    // レイは(0,0,0)から+x方向. 点(-5,0,0)はs<0 (後方)
+    const auto hit = IntersectPointWithLine(
+        Vector3d{-5., 0., 0.}, Vector3d{0., 0., 0.}, Vector3d{1., 0., 0.},
+        LineType::kRay, 1.0);
+
+    EXPECT_FALSE(hit.has_value());
+}
+
+/// @brief kSegmentで射影が線分外 (s>1) の場合はnulloptを返す
+TEST(IntersectPointWithLineTest, NoHit_OutsideSegment) {
+    // 線分(0,0,0)→(1,0,0). 点(5,0,0)はs=5>1
+    const auto hit = IntersectPointWithLine(
+        Vector3d{5., 0., 0.}, Vector3d{0., 0., 0.}, Vector3d{1., 0., 0.},
+        LineType::kSegment, 1.0);
+
+    EXPECT_FALSE(hit.has_value());
+}
+
+/// @brief 方向ベクトルがゼロ (p0==p1) の場合はnulloptを返す
+TEST(IntersectPointWithLineTest, NoHit_ZeroDirection) {
+    const auto hit = IntersectPointWithLine(
+        Vector3d{0., 0., 0.}, Vector3d{1., 1., 1.}, Vector3d{1., 1., 1.},
+        LineType::kRay, 1.0);
+
+    EXPECT_FALSE(hit.has_value());
+}
+
+/// @brief pointにNaNが含まれる場合はstd::invalid_argumentを投げる
+TEST(IntersectPointWithLineTest, Throws_InvalidArg_NaN) {
+    EXPECT_THROW(
+        IntersectPointWithLine(
+            Vector3d{std::numeric_limits<double>::quiet_NaN(), 0., 0.},
+            Vector3d{0., 0., 0.}, Vector3d{1., 0., 0.},
+            LineType::kRay, 1.0),
         std::invalid_argument);
 }

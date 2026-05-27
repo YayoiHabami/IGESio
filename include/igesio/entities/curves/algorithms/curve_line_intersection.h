@@ -25,6 +25,7 @@
 #ifndef IGESIO_ENTITIES_CURVES_ALGORITHMS_CURVE_LINE_INTERSECTION_H_
 #define IGESIO_ENTITIES_CURVES_ALGORITHMS_CURVE_LINE_INTERSECTION_H_
 
+#include <optional>
 #include <vector>
 
 #include "igesio/numerics/bounding_box.h"
@@ -88,6 +89,29 @@ std::vector<CurveLineIntersection> IntersectCurveWithLine(
         const Vector3d& p0, const Vector3d& p1,
         numerics::BoundingBox::DirectionType line_type,
         const CurveLineIntersectionParams& params = {});
+
+/// @brief 点と直線（半直線・線分を含む）の最近接判定
+///
+/// 点はレイと厳密交差しないため、点と直線の3D距離gapが許容値hit_tolerance
+/// 以下の場合に「ヒット」とみなす。Point(116)やCopious Data点列(106 form1-3)
+/// など、接線が定義されず IntersectCurveWithLine が適用できない点状の形状の
+/// ピッキングに用いる。
+///
+/// @param point      最近接を求める点（ワールド座標）
+/// @param p0         線の始点（kLineの場合は通過点1）
+/// @param p1         線の終点（kLine/kRayの場合は通過方向を定める第2点）
+/// @param line_type  線の種類（kSegment: 線分, kRay: 半直線, kLine: 無限直線）
+/// @param hit_tolerance gapがこの値以下の場合のみ結果を返す [モデル単位]
+/// @return gap <= hit_toleranceのとき最近接情報（t_curveは0固定）、
+///         そうでなければstd::nullopt
+/// @throw std::invalid_argument point/p0/p1に無限大・NaNの成分がある場合
+/// @note 線方向ベクトル (p1-p0) のノルムがゼロの場合はstd::nulloptを返す
+/// @note 射影パラメータsが線種の有効範囲外の場合はstd::nulloptを返す
+std::optional<CurveLineIntersection> IntersectPointWithLine(
+        const Vector3d& point,
+        const Vector3d& p0, const Vector3d& p1,
+        numerics::BoundingBox::DirectionType line_type,
+        double hit_tolerance);
 
 }  // namespace igesio::entities
 

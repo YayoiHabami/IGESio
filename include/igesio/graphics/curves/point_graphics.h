@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "igesio/entities/curves/point.h"
 #include "igesio/graphics/core/entity_graphics.h"
@@ -65,6 +66,20 @@ class PointGraphics
 
     /// @brief エンティティをセットアップする
     void Synchronize() override;
+
+    /// @brief レイとの交差判定が可能か
+    /// @return 常にtrue (点とレイの近接判定を行う)
+    /// @note PointはICurveを継承しないため、基底の判定ではfalseとなる.
+    ///       点状形状として独自に近接判定を行うためtrueを返す
+    bool CanIntersect() const override;
+
+    /// @brief レイと点の近接判定を行う
+    /// @param ray ワールド空間のレイ (kRayとして扱う)
+    /// @param params 探索制御パラメータ
+    /// @return 点とレイの3D距離がcurve_hit_tolerance以下のとき1件、
+    ///         そうでなければ空リスト
+    std::vector<RayHit> Intersect(
+            const Ray&, const RayIntersectionParams&) const override;
 
  protected:
     /// @brief エンティティの描画を行う
