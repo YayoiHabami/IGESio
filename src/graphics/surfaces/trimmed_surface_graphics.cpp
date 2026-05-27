@@ -57,12 +57,15 @@ std::optional<std::array<float, 8>> ComputeVertexData(
     auto deriv_opt = entity.TryGetDerivatives(u, v, 1);
     if (!deriv_opt) return std::nullopt;
 
-    auto pos = (*deriv_opt)(0, 0).cast<float>();
+    // NOTE: cast<float>()は遅延評価式を返すため、autoで受けると一時オブジェクト
+    //       へのダングリング参照となる。具体型で受けて即時評価・コピーさせる。
+    const igesio::Vector3f pos = (*deriv_opt)(0, 0).cast<float>();
     const Vector3d su = (*deriv_opt)(1, 0);
     const Vector3d sv = (*deriv_opt)(0, 1);
     const Vector3d n_vec = su.cross(sv);
     const double len = n_vec.norm();
-    auto normal = ((len > 1e-10) ? (n_vec / len) : Vector3d(0, 0, 1)).cast<float>();
+    const igesio::Vector3f normal =
+            ((len > 1e-10) ? (n_vec / len) : Vector3d(0, 0, 1)).cast<float>();
 
     const float tu = static_cast<float>((u - u_range[0]) /
                                         (u_range[1] - u_range[0]));
