@@ -22,10 +22,12 @@ set(TEST_SOURCES
     curves/test_parametric_spline_curve.cpp
     curves/test_rational_b_spline_curve.cpp
     curves/test_signed_curvature.cpp
+    curves/test_curve_line_intersection.cpp
 
     # Surfaces
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
+    surfaces/test_surface_line_intersection.cpp
 )
 
 add_executable(test_entities ${TEST_SOURCES})

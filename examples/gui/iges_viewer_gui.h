@@ -13,6 +13,7 @@
 
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 #include "igesio/graphics/core/open_gl.h"
 #define GLFW_INCLUDE_NONE
@@ -23,6 +24,8 @@
 #include <imgui_impl_opengl3.h>
 
 #include <igesio/graphics/renderer.h>
+
+#include "./input_config.h"
 
 
 
@@ -40,12 +43,31 @@ class IgesViewerGUI {
     /// @brief MSAA (マルチサンプリング) のサンプル数 (0で無効)
     int msaa_samples_ = 0;
 
-    /// @brief ドラッグ中か
-    bool is_dragging_ = false;
-    /// @brief パン (平行移動) 中か
-    bool is_panning_ = false;
+    /// @brief ドラッグ中のカメラ操作モード
+    enum class DragMode {
+        /// @brief ドラッグによるカメラ操作なし
+        kNone,
+        /// @brief 回転
+        kRotate,
+        /// @brief 移動 (パン)
+        kPan,
+        /// @brief ズーム
+        kZoom,
+    };
+
+    /// @brief 現在のドラッグ操作モード (ボタン押下時に確定する)
+    DragMode drag_mode_ = DragMode::kNone;
+    /// @brief マウス操作のキー割り当て設定
+    InputConfig input_config_;
     /// @brief 画面上における最後のマウス位置 (x, y)
     double last_x_ = 0.0, last_y_ = 0.0;
+    /// @brief 左クリック押下時のマウス位置 (x, y)
+    /// @note ドラッグ (回転) とクリック (ピッキング) の判別に使用する
+    double press_x_ = 0.0, press_y_ = 0.0;
+
+    /// @brief 選択中エンティティの交差座標 (表示用; キーはエンティティID)
+    /// @note ピッキング時の3D交点座標を保持し、Controlsパネルに表示する
+    std::unordered_map<ObjectID, Vector3d> selected_hit_positions_;
 
     /// @brief 再描画が必要か
     bool needs_redraw_ = true;
@@ -73,6 +95,15 @@ class IgesViewerGUI {
     /// @brief レンダラーを取得する (非const版)
     /// @return レンダラーの参照
     EntityRenderer& Renderer() { return renderer_; }
+
+
+
+    /// @brief マウス操作のキー割り当て設定を取得する
+    /// @return 現在のキー割り当て設定
+    const InputConfig& GetInputConfig() const { return input_config_; }
+    /// @brief マウス操作のキー割り当て設定を注入する
+    /// @param config 新しいキー割り当て設定
+    void SetInputConfig(const InputConfig& config) { input_config_ = config; }
 
 
 
@@ -122,6 +153,13 @@ class IgesViewerGUI {
     /// @param action アクション (押下/解放)
     /// @param mods 修飾キー
     virtual void MouseButtonCallback(const int, const int, const int);
+
+    /// @brief クリックによるエンティティ選択を処理する
+    /// @param x クリックのスクリーンx座標 [px]（フレームバッファ座標系）
+    /// @param y クリックのスクリーンy座標 [px]（フレームバッファ座標系）
+    /// @param mods 修飾キー (GLFW_MOD_*)
+    /// @note Ctrl押下でトグル、修飾なしでid単独へ置換、空クリックで全解除
+    virtual void HandleClickSelection(const double, const double, const int);
 
     /// @brief マウスカーソル位置のコールバック
     /// @param xpos カーソルのX座標

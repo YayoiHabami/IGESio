@@ -8,6 +8,7 @@
 #ifndef IGESIO_GRAPHICS_RENDERER_H_
 #define IGESIO_GRAPHICS_RENDERER_H_
 
+#include <array>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -21,6 +22,7 @@
 #include "igesio/graphics/core/light.h"
 #include "igesio/graphics/core/texture.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
+#include "igesio/graphics/core/ray.h"
 #include "igesio/graphics/factory.h"
 
 
@@ -31,6 +33,17 @@ namespace igesio::graphics {
 constexpr int kDefaultDisplayWidth = 1280;
 /// @brief 描画対象の高さ [px] (デフォルト)
 constexpr int kDefaultDisplayHeight = 720;
+
+/// @brief 選択中エンティティのハイライト色 (RGBA) [0.0 - 1.0]
+constexpr std::array<float, 4> kSelectionColor = {1.0f, 0.6f, 0.0f, 1.0f};
+
+/// @brief ピッキング結果 (ObjectID付きのRayHit)
+struct EntityHit {
+    /// @brief ヒットしたエンティティのID
+    ObjectID id;
+    /// @brief 交差結果 (3D交点座標とray.originからの距離)
+    RayHit hit;
+};
 
 /// @brief 描画全般に関する (細かい) 設定
 struct GraphicsSettings {
@@ -80,6 +93,9 @@ class EntityRenderer {
 
     /// @brief 描画全般に関する設定
     GraphicsSettings settings_;
+
+    /// @brief 選択中のエンティティID群
+    std::vector<ObjectID> selected_ids_;
 
  public:
     /// @brief コンストラクタ
@@ -276,6 +292,56 @@ class EntityRenderer {
 
 
 
+    /**
+     * ピッキング・選択
+     */
+
+    /// @brief スクリーン座標からワールド空間のレイを生成する
+    /// @param screen_x スクリーンx座標 [px]（左上原点・GLFW準拠）
+    /// @param screen_y スクリーンy座標 [px]（左上原点・GLFW準拠）
+    /// @return ワールド空間のレイ
+    /// @note kOblique投影モードでは正しいレイが生成されない (TODO: 未対応)
+    Ray GetRayFromScreen(double screen_x, double screen_y) const;
+
+    /// @brief 登録済みエンティティとレイの交差判定を行う
+    /// @param ray ワールド空間のレイ
+    /// @param screen_x 曲線ヒットのピクセル換算に使う基準スクリーンx座標 [px]
+    /// @param screen_y 曲線ヒットのピクセル換算に使う基準スクリーンy座標 [px]
+    /// @param params 探索制御パラメータ
+    /// @return distance昇順のヒットリスト（重複除去済み）
+    /// @note 曲線ヒット許容量はエンティティ毎の代表深度でピクセル換算される
+    std::vector<EntityHit> PickEntities(
+            const Ray&, double screen_x, double screen_y,
+            const RayIntersectionParams& = {}) const;
+
+    /// @brief 指定IDのエンティティを選択する
+    /// @param id エンティティのID
+    /// @note 既に選択中、または未登録の場合は何もしない
+    void Select(const ObjectID&);
+
+    /// @brief 指定IDのエンティティの選択を解除する
+    /// @param id エンティティのID
+    /// @note 選択されていない場合は何もしない
+    void Deselect(const ObjectID&);
+
+    /// @brief 指定IDのエンティティの選択状態をトグルする
+    /// @param id エンティティのID
+    void ToggleSelection(const ObjectID&);
+
+    /// @brief すべての選択を解除する
+    void ClearSelection();
+
+    /// @brief 指定IDのエンティティが選択中か
+    /// @param id エンティティのID
+    /// @return 選択中の場合はtrue
+    bool IsSelected(const ObjectID&) const;
+
+    /// @brief 選択中のエンティティID群を取得する
+    /// @return 選択中のエンティティIDのリスト
+    const std::vector<ObjectID>& GetSelectedIds() const { return selected_ids_; }
+
+
+
  protected:
     /// @brief 現在のviewportを取得する
     /// @return viewportの4要素 (x, y, width, height)
@@ -347,6 +413,12 @@ class EntityRenderer {
     /// @return kCompositeの子要素も含めて、指定されたシェーダータイプに対応する
     ///         描画オブジェクトを持つ場合は`true`, そうでない場合は`false`.
     bool HasGraphicsObject(const ShaderType shader_type) const;
+
+    /// @brief 指定IDの描画オブジェクトを取得する
+    /// @param id エンティティのID
+    /// @return 描画オブジェクトのポインタ. 存在しない場合はnullptr
+    /// @note 所有権は移譲しない (draw_objects_が保持し続ける)
+    IEntityGraphics* FindGraphics(const ObjectID&) const;
 
     /// @brief 全ての子要素のDrawメンバを呼び出す
     /// @param program_id シェーダープログラムのID

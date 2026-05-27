@@ -9,16 +9,19 @@
 #define IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "igesio/numerics/matrix.h"
+#include "igesio/numerics/bounding_box.h"
 #include "igesio/entities/entity_type.h"
 #include "igesio/models/global_param.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/material_property.h"
+#include "igesio/graphics/core/ray.h"
 
 
 
@@ -272,6 +275,32 @@ class IEntityGraphics {
     /// @note GPUへパラメータを渡し、GPU上で離散点を計算する場合は
     ///       オーバーライド不要.
     virtual bool IsDrawable() const = 0;
+
+
+
+    /**
+     * ピッキング（レイ交差判定）
+     */
+
+    /// @brief レイとの交差判定が可能か
+    /// @return 交差判定可能な場合はtrue, そうでない場合はfalse
+    /// @note デフォルト実装は常にfalseを返す
+    virtual bool CanIntersect() const { return false; }
+
+    /// @brief レイとエンティティの交差点を求める
+    /// @param ray ワールド空間のレイ (kRayとして扱う)
+    /// @param params 探索制御パラメータ
+    /// @return 交差点のリスト (distance昇順). CanIntersect()がfalseの場合は空リスト
+    /// @note デフォルト実装は空リストを返す
+    virtual std::vector<RayHit> Intersect(
+            const Ray&,
+            const RayIntersectionParams& = {}) const { return {}; }
+
+    /// @brief ワールド座標系におけるバウンディングボックスを取得する
+    /// @return エンティティのバウンディングボックスにworld_transform_を
+    ///         適用したもの. BBを定義できない (IGeometryでない) 場合はstd::nullopt
+    /// @note ピッキング時の代表深度の算出に用いる
+    virtual std::optional<numerics::BoundingBox> GetWorldBoundingBox() const = 0;
 };
 
 }  // namespace igesio::graphics

@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/entities/curves/algorithms/curve_line_intersection.h"
+
 namespace {
 
 using igesio::graphics::PointGraphics;
@@ -64,6 +66,28 @@ bool PointGraphics::IsDrawable() const {
 
     // 追加の条件をチェック
     return vbo_ != 0;
+}
+
+bool PointGraphics::CanIntersect() const {
+    return entity_ != nullptr;
+}
+
+std::vector<igesio::graphics::RayHit> PointGraphics::Intersect(
+        const Ray& ray, const RayIntersectionParams& params) const {
+    if (!entity_) return {};
+
+    const Vector3d p1 = ray.origin + ray.direction;
+    constexpr auto kRay = numerics::BoundingBox::DirectionType::kRay;
+
+    // 描画位置に一致させる: model = GetWorldTransform(), VBO = 定義空間座標
+    const igesio::Matrix4d m = GetWorldTransform().cast<double>();
+    const Vector3d world_pt =
+            (m * entity_->GetDefinedPosition().homogeneous()).hnormalized();
+
+    const auto hit = entities::IntersectPointWithLine(
+            world_pt, ray.origin, p1, kRay, params.curve_hit_tolerance);
+    if (hit) return {{hit->position, hit->t_line}};
+    return {};
 }
 
 

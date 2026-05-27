@@ -10,6 +10,7 @@
 #include <memory>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "igesio/entities/curves/copious_data_base.h"
 #include "igesio/entities/curves/rational_b_spline_curve.h"
@@ -100,5 +101,28 @@ void CurveOnSurfaceGraphics::Draw(
         // 指定されたシェーダータイプに合致する場合、描画を行う
         curve_graphics_->Draw(shader, viewport);
     }
+}
+
+bool CurveOnSurfaceGraphics::CanIntersect() const {
+    return curve_graphics_ != nullptr && curve_graphics_->CanIntersect();
+}
+
+std::vector<i_graph::RayHit> CurveOnSurfaceGraphics::Intersect(
+        const Ray& ray, const RayIntersectionParams& params) const {
+    // 描画と同一の生成済み3D曲線C(t)へ委譲する
+    if (curve_graphics_ == nullptr) return {};
+    return curve_graphics_->Intersect(ray, params);
+}
+
+void CurveOnSurfaceGraphics::SetColor(const std::array<GLfloat, 4>& color) {
+    EntityGraphics::SetColor(color);
+    // 描画は子要素C(t)に委譲されるため、色も子要素へ伝播させる
+    if (curve_graphics_ != nullptr) curve_graphics_->SetColor(color);
+}
+
+void CurveOnSurfaceGraphics::ResetColor() {
+    EntityGraphics::ResetColor();
+    // 子要素C(t)の色もデフォルトに戻す
+    if (curve_graphics_ != nullptr) curve_graphics_->ResetColor();
 }
 

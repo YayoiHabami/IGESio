@@ -161,21 +161,15 @@ class ExampleIGESViewer : public IgesViewerGUI {
     }
 
     // RenderControlsをオーバーライド
+    // (親の共通コントロールを描画した上で、本サンプル固有の項目を追記する)
     void RenderControls() override {
-        ImGui::Begin("Controls");
-        ImGui::Text("Camera");
-        ImGui::Text("  - Drag Left Mouse: Rotate");
-        ImGui::Text("  - Drag Right Mouse: Pan");
-        ImGui::Text("  - Mouse Wheel: Zoom");
-        ImGui::Separator();
+        // 親 (共通) のControlsパネル (カメラ情報・操作説明・選択一覧等) を描画
+        IgesViewerGUI::RenderControls();
 
-        // カメラの位置とターゲットを表示
-        auto cam_pos = renderer_.Camera().GetPosition();
-        auto cam_target = renderer_.Camera().GetTarget();
-        ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)",
-                    cam_pos[0], cam_pos[1], cam_pos[2]);
-        ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)",
-                    cam_target[0], cam_target[1], cam_target[2]);
+        // 本サンプル固有のコントロールを同じControlsパネルへ追記する
+        // (Beginを同名で再度呼ぶと既存のウィンドウへ追記される)
+        ImGui::Begin("Controls");
+        ImGui::Separator();
 
         // カメラの投影モード切り替え
         ImGui::Text("Projection Mode");
@@ -195,18 +189,6 @@ class ExampleIGESViewer : public IgesViewerGUI {
         // スクリーンショットボタン
         if (ImGui::Button("Capture Screenshot")) {
             CaptureScreenshot("screenshot " + CurrentTimeString() + ".png");
-        }
-
-        // カメラの操作
-        if (ImGui::Button("Reset Camera")) {
-            renderer_.Camera().Reset();
-            needs_redraw_ = true;
-        }
-        ImGui::Separator();
-
-        if (ImGui::ColorEdit3("Background",
-                              renderer_.GetBackgroundColorRef().data())) {
-            needs_redraw_ = true;
         }
         ImGui::Separator();
 

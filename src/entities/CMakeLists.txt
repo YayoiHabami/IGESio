@@ -52,7 +52,9 @@ add_library(igesio_entities STATIC
     curves/algorithms.cpp
     curves/algorithms/extremal_polygon.cpp
     curves/algorithms/polygonal_approximation.cpp
+    curves/algorithms/curve_line_intersection.cpp
     curves/nurbs_algorithms.cpp
+    surfaces/algorithms/surface_line_intersection.cpp
 
     # Factory
     factory.cpp

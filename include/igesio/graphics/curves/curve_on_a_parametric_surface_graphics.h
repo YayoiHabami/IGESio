@@ -11,6 +11,7 @@
 #include <memory>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
@@ -70,6 +71,28 @@ class CurveOnAParametricSurfaceGraphics
     /// @note shader_typeの子要素のみを描画する. 子要素の描画は
     ///       子要素に移譲する.
     void Draw(GLuint, const ShaderType, const std::pair<float, float>&) const override;
+
+    /// @brief レイとの交差判定が可能か
+    /// @return 生成済みの3D曲線C(t)が交差判定可能な場合はtrue
+    bool CanIntersect() const override;
+
+    /// @brief レイとエンティティの交差点を求める
+    /// @param ray ワールド空間のレイ (kRayとして扱う)
+    /// @param params 探索制御パラメータ
+    /// @return 交差点のリスト (distance昇順)
+    /// @note 142自身の評価は曲面の定義空間を経由し描画形状とずれるため、
+    ///       描画と同一の生成済み3D曲線C(t) (子要素) へ判定を委譲する
+    std::vector<RayHit> Intersect(
+            const Ray&, const RayIntersectionParams&) const override;
+
+    /// @brief メインの色を設定する
+    /// @param color メインの色 (RGBA; [0, 1]の範囲)
+    /// @note 描画は子要素C(t)に委譲されるため、色も子要素へ伝播させる
+    void SetColor(const std::array<GLfloat, 4>&) override;
+
+    /// @brief 色をデフォルトのエンティティの色に戻す
+    /// @note 描画は子要素C(t)に委譲されるため、子要素の色もリセットする
+    void ResetColor() override;
 
 
 

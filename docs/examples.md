@@ -41,10 +41,15 @@ If the file loads successfully, curve entities are automatically added and displ
 #### Viewer Controls
 
 - Camera controls:
-    - Left drag: Rotate the view.
-    - Right drag: Pan (move the view).
-    - Mouse wheel: Zoom in/out.
+    - Middle drag: Rotate the view.
+    - Ctrl + Middle drag: Pan (move the view).
+    - Mouse wheel (or Shift + Middle drag): Zoom in/out.
     - "Reset Camera" button resets the camera to its initial position.
+- Entity selection:
+    - Left click: Select the entity under the cursor (highlighted).
+    - Ctrl + Left click: Toggle selection (multi-select).
+    - Click on empty space: Clear all selections.
+    - Range selection (left drag) is not yet implemented.
 - Projection mode: Choose between two modes:
     - Perspective: Shows objects with depth (default).
     - Orthographic: Parallel projection, commonly used in CAD.

@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "igesio/entities/curves/copious_data_base.h"
 #include "igesio/graphics/core/entity_graphics.h"
@@ -59,6 +60,16 @@ class CopiousDataGraphics
 
     /// @brief エンティティをセットアップする
     void Synchronize() override;
+
+    /// @brief レイと各頂点の近接判定を行う
+    /// @param ray ワールド空間のレイ (kRayとして扱う)
+    /// @param params 探索制御パラメータ
+    /// @return 点列 (form 1-3) の場合は各頂点とレイの近接判定結果 (distance昇順)、
+    ///         折れ線 (form 11-13) の場合は基底の曲線判定に委譲した結果
+    /// @note 点列は接線を持たず IntersectCurveWithLine が適用できないため、
+    ///       各頂点とレイの距離で判定する
+    std::vector<RayHit> Intersect(
+            const Ray&, const RayIntersectionParams&) const override;
 
  protected:
     /// @brief エンティティの描画を行う

@@ -10,11 +10,16 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "igesio/entities/interfaces/i_entity_identifier.h"
+#include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/entity_base.h"
+#include "igesio/entities/curves/algorithms/curve_line_intersection.h"
+#include "igesio/entities/surfaces/algorithms/surface_line_intersection.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
 
 
@@ -311,6 +316,92 @@ class EntityGraphics : public IEntityGraphics {
             }
         }
         return kDefaultLineWidth;
+    }
+
+
+
+    /**
+     * ピッキング（レイ交差判定）
+     */
+
+    /// @brief レイとの交差判定が可能か
+    /// @return entity_がISurfaceまたはICurveを参照する場合はtrue
+    bool CanIntersect() const override {
+        if (!entity_) return false;
+        const auto* p = entity_.get();
+        return dynamic_cast<const entities::ISurface*>(p) != nullptr
+            || dynamic_cast<const entities::ICurve*>(p) != nullptr;
+    }
+
+    /// @brief レイとエンティティの交差点を求める
+    /// @param ray ワールド空間のレイ (kRayとして扱う)
+    /// @param params 探索制御パラメータ
+    /// @return 交差点のリスト (distance昇順). 交差判定不可の場合は空リスト
+    std::vector<RayHit> Intersect(
+            const Ray& ray,
+            const RayIntersectionParams& params) const override {
+        if (!entity_) return {};
+
+        // ray.directionが単位ベクトルのため、線パラメータが原点からの距離に等しい
+        const Vector3d p1 = ray.origin + ray.direction;
+        constexpr auto kRay = numerics::BoundingBox::DirectionType::kRay;
+
+        std::vector<RayHit> result;
+
+        if (const auto* surf =
+                dynamic_cast<const entities::ISurface*>(entity_.get())) {
+            entities::SurfaceLineIntersectionParams sp;
+            sp.u_samples = params.surface_u_samples;
+            sp.v_samples = params.surface_v_samples;
+            sp.convergence_tol = params.convergence_tol;
+            sp.dedup_tol = params.dedup_tol;
+            for (const auto& h : entities::IntersectSurfaceWithLine(
+                    *surf, ray.origin, p1, kRay, sp)) {
+                result.push_back({h.position, h.t});
+            }
+            return result;
+        }
+
+        if (const auto* curve =
+                dynamic_cast<const entities::ICurve*>(entity_.get())) {
+            entities::CurveLineIntersectionParams cp;
+            cp.curve_samples = params.curve_samples;
+            cp.convergence_tol = params.convergence_tol;
+            cp.dedup_tol = params.dedup_tol;
+            // ピッキング経路ではPickEntitiesがワールド換算した値で上書き済み
+            cp.hit_tolerance = params.curve_hit_tolerance;
+            for (const auto& h : entities::IntersectCurveWithLine(
+                    *curve, ray.origin, p1, kRay, cp)) {
+                result.push_back({h.position, h.t_line});
+            }
+            return result;
+        }
+
+        return result;
+    }
+
+    /// @brief ワールド座標系におけるバウンディングボックスを取得する
+    std::optional<numerics::BoundingBox> GetWorldBoundingBox() const override {
+        auto geom = std::dynamic_pointer_cast<const entities::IGeometry>(entity_);
+        if (!geom) return std::nullopt;
+
+        // 点・直線状などs0/s1が0の退化したBBはGetBoundingBox()が例外を投げる
+        // (3DのBBを構成できない)。深度推定には使えないためnulloptを返し、
+        // 呼び出し側のフォールバック深度に委ねる。
+        const auto defined = geom->GetDefinedBoundingBox();
+        const auto def_sizes = defined.GetSizes();
+        if (defined.IsEmpty() || def_sizes[0] <= 0.0 || def_sizes[1] <= 0.0) {
+            return std::nullopt;
+        }
+
+        // GetBoundingBox()はエンティティ自身のDE変換を適用済み(親空間)。
+        // world_transform_ (親→ワールド) を適用してワールド空間のBBを得る。
+        auto bb = geom->GetBoundingBox();
+        const igesio::Matrix4d wt = world_transform_.cast<double>();
+        const igesio::Matrix3d r = wt.block<3, 3>(0, 0);
+        const igesio::Vector3d t = wt.block<3, 1>(0, 3);
+        bb.Transform(r, t);
+        return bb;
     }
 
 

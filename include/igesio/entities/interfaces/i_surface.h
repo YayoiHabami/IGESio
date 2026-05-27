@@ -127,6 +127,11 @@ class ISurface : public virtual IEntityIdentifier,
     /// @return 有限の面積を持つ場合は`true`、無限の面積を持つ場合は`false`
     virtual bool IsFinite() const;
 
+    /// @brief 指定された (u, v) がこのサーフェスの有効なドメイン内かどうかを判定する
+    /// @note デフォルト実装は GetParameterRange() の矩形範囲を使用する。
+    ///       トリム等でドメインが制限されるサブクラスはこれをオーバーライドすること。
+    virtual bool IsInDomain(const double u, const double v) const;
+
 
 
     /**

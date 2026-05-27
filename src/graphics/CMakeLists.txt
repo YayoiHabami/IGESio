@@ -3,6 +3,7 @@ add_library(igesio_graphics STATIC
     core/camera.cpp
     core/texture.cpp
     core/i_entity_graphics.cpp
+    core/ray.cpp
 
     curves/i_curve_graphics.cpp          # general curves
     curves/circular_arc_graphics.cpp     # 100

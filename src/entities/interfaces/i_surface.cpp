@@ -100,6 +100,11 @@ bool ISurface::IsFinite() const {
            HasFiniteVStart() && HasFiniteVEnd();
 }
 
+bool ISurface::IsInDomain(const double u, const double v) const {
+    const auto range = GetParameterRange();
+    return u >= range[0] && u <= range[1] && v >= range[2] && v <= range[3];
+}
+
 
 
 /**
@@ -232,6 +237,8 @@ double ISurface::Area(const double u_start, const double u_end,
 
     // 面積を数値積分で計算
     auto integrand = [this](const double u, const double v) -> double {
+        // ドメイン外 (トリム等) はゼロ寄与
+        if (!IsInDomain(u, v)) return 0.0;
         // 偏導関数を取得
         auto derivatives = TryGetDerivatives(u, v, 1);
         if (!derivatives) return 0.0;
