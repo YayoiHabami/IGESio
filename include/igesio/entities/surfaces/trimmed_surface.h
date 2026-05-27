@@ -105,9 +105,13 @@ class TrimmedSurface : public EntityBase, public virtual ISurface {
      * ISurface implementation
      */
 
-    /// @brief サーフェスがU方向に閉じているかどうか (surface_に委譲)
+    /// @brief サーフェスがU方向に閉じているかどうか
+    /// @note N1=1 (外側境界が明示指定) の場合は保守的にfalseを返す。
+    ///       N1=0 の場合はsurface_に委譲する。
     bool IsUClosed() const override;
-    /// @brief サーフェスがV方向に閉じているかどうか (surface_に委譲)
+    /// @brief サーフェスがV方向に閉じているかどうか
+    /// @note N1=1 (外側境界が明示指定) の場合は保守的にfalseを返す。
+    ///       N1=0 の場合はsurface_に委譲する。
     bool IsVClosed() const override;
 
     /// @brief サーフェスのパラメータ範囲を取得する (surface_に委譲)
@@ -122,6 +126,10 @@ class TrimmedSurface : public EntityBase, public virtual ISurface {
     /// @brief 定義空間における曲面のバウンディングボックスを取得する
     /// @note surface_->GetDefinedBoundingBox()に委譲する (保守的な上界)
     numerics::BoundingBox GetDefinedBoundingBox() const override;
+
+    /// @brief (u, v) がトリム後の有効なドメイン内かどうかを判定する
+    /// @note キャッシュが未構築の場合はBuildDomainCache()を呼び出す
+    bool IsInDomain(const double u, const double v) const override;
 
 
 
@@ -193,10 +201,6 @@ class TrimmedSurface : public EntityBase, public virtual ISurface {
     /// @brief 包含多角形キャッシュを構築する
     /// @note domain_cache_が有効な場合は何もしない
     void BuildDomainCache() const;
-
-    /// @brief (u, v) がトリム領域内かどうかを判定する
-    /// @note キャッシュが未構築の場合はBuildDomainCache()を呼び出す
-    bool IsInTrimmedDomain(const double u, const double v) const;
 };
 
 }  // namespace igesio::entities

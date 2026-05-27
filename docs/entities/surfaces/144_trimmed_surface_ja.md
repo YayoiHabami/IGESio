@@ -77,12 +77,12 @@ TryGetDerivatives(u, v, n)
 
 ### 内外判定の実装
 
-　`TryGetDerivatives`が内部で呼び出す`IsInTrimmedDomain(u, v)`は、パラメータ空間 $(u, v)$ 上の点が有効定義域 $\Omega$ 内にあるかを判定する。判定には`ComputeContainmentPolygons`（`entities/curves/algorithms.h`）および`IsPointInPolygon`（`numerics/polygon.h`）を使用する。
+　`TryGetDerivatives`が内部で呼び出す`IsInDomain(u, v)`は、パラメータ空間 $(u, v)$ 上の点が有効定義域 $\Omega$ 内にあるかを判定する。判定には`ComputeContainmentPolygons`（`entities/curves/algorithms.h`）および`IsPointInPolygon`（`numerics/polygon.h`）を使用する。
 
 判定の流れは次の通りである。
 
 ```
-IsInTrimmedDomain(u, v)
+IsInDomain(u, v)
   │
   ├─ N1=0 かつ N2=0 → 常にtrue（最速パス）
   │
@@ -103,6 +103,6 @@ IsInTrimmedDomain(u, v)
   上記のいずれにも該当しない場合 → true
 ```
 
-　`BuildDomainCache()`が構築する`DomainCache`は初回判定時にのみ構築され、以降は再利用される（遅延構築）。曲面や境界曲線が変更された場合はキャッシュが無効化され、次回の`IsInTrimmedDomain`呼び出し時に再構築される。
+　`BuildDomainCache()`が構築する`DomainCache`は初回判定時にのみ構築され、以降は再利用される（遅延構築）。曲面や境界曲線が変更された場合はキャッシュが無効化され、次回の`IsInDomain`呼び出し時に再構築される。
 
 　境界曲線の基底曲線 $B(t) = (u(t), v(t))$ はパラメータ空間 $(u, v)$ 上の曲線であり、内外判定は3次元空間ではなくパラメータ空間上で行われることに注意する。`ComputeContainmentPolygons`に渡す法線ベクトルには $(0, 0, 1)$ を使用する（パラメータ空間は $z=0$ 平面として扱う）。
