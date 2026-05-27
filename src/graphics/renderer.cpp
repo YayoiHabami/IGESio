@@ -29,6 +29,163 @@ igesio::Vector3d Centroid(const std::vector<igesio::Vector3d>& vertices) {
     return sum / static_cast<double>(vertices.size());
 }
 
+/// @brief 点が矩形内（境界含む）にあるか
+bool PointInRect(double x, double y, const i_graph::ScreenRect& r) {
+    return x >= r.x_min && x <= r.x_max && y >= r.y_min && y <= r.y_max;
+}
+
+/// @brief 2次元ベクトル (ux,uy)x(vx,vy) の外積 (z成分)
+double Cross2D(double ux, double uy, double vx, double vy) {
+    return ux * vy - uy * vx;
+}
+
+/// @brief 線分 (a,b) と (c,d) が交差するか（端点接触・共線重なりを含む）
+bool SegmentsCross(double ax, double ay, double bx, double by,
+                   double cx, double cy, double dx, double dy) {
+    const double d1 = Cross2D(bx - ax, by - ay, cx - ax, cy - ay);
+    const double d2 = Cross2D(bx - ax, by - ay, dx - ax, dy - ay);
+    const double d3 = Cross2D(dx - cx, dy - cy, ax - cx, ay - cy);
+    const double d4 = Cross2D(dx - cx, dy - cy, bx - cx, by - cy);
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+        return true;
+    }
+    // 共線で端点が相手の線分上に乗るケース
+    auto on = [](double px, double py, double qx, double qy,
+                 double rx, double ry) {
+        return std::min(px, qx) <= rx && rx <= std::max(px, qx) &&
+               std::min(py, qy) <= ry && ry <= std::max(py, qy);
+    };
+    if (d1 == 0.0 && on(ax, ay, bx, by, cx, cy)) return true;
+    if (d2 == 0.0 && on(ax, ay, bx, by, dx, dy)) return true;
+    if (d3 == 0.0 && on(cx, cy, dx, dy, ax, ay)) return true;
+    if (d4 == 0.0 && on(cx, cy, dx, dy, bx, by)) return true;
+    return false;
+}
+
+/// @brief 線分 (x0,y0)-(x1,y1) が矩形と交差するか
+bool SegmentIntersectsRect(double x0, double y0, double x1, double y1,
+                           const i_graph::ScreenRect& r) {
+    if (PointInRect(x0, y0, r) || PointInRect(x1, y1, r)) return true;
+    return SegmentsCross(x0, y0, x1, y1, r.x_min, r.y_min, r.x_max, r.y_min) ||
+           SegmentsCross(x0, y0, x1, y1, r.x_max, r.y_min, r.x_max, r.y_max) ||
+           SegmentsCross(x0, y0, x1, y1, r.x_max, r.y_max, r.x_min, r.y_max) ||
+           SegmentsCross(x0, y0, x1, y1, r.x_min, r.y_max, r.x_min, r.y_min);
+}
+
+/// @brief 点 (px,py) が多角形 poly の内側にあるか（射線法・偶奇判定）
+bool PointInPolygon(double px, double py,
+                    const std::vector<std::array<double, 2>>& poly) {
+    if (poly.size() < 3) return false;
+    bool inside = false;
+    const size_t n = poly.size();
+    for (size_t i = 0, j = n - 1; i < n; j = i++) {
+        const double xi = poly[i][0], yi = poly[i][1];
+        const double xj = poly[j][0], yj = poly[j][1];
+        if (((yi > py) != (yj > py)) &&
+            (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+/// @brief BBのスクリーンAABBがrectと重なる可能性があるか（粗カリング用）
+/// @return BBが未定義/無限/一部がカメラ背面の場合は判定不能としtrueを返す
+///         (カリングせずprecise判定に委ねる)
+bool MayOverlapRect(const std::optional<igesio::numerics::BoundingBox>& bb,
+                    const i_graph::ScreenRect& rect,
+                    const igesio::Matrix4d& vp, int w, int h) {
+    if (!bb || !bb->IsFinite()) return true;
+    const auto vertices = bb->GetFiniteVertices();
+    if (vertices.empty()) return true;
+
+    double x_min = 0.0, y_min = 0.0, x_max = 0.0, y_max = 0.0;
+    bool first = true;
+    for (const auto& v : vertices) {
+        const auto sp = i_graph::WorldToScreen(vp, w, h, v);
+        if (!sp) return true;  // 一部がカメラ背面 → カリングしない
+        if (first) {
+            x_min = x_max = sp->x();
+            y_min = y_max = sp->y();
+            first = false;
+        } else {
+            x_min = std::min(x_min, sp->x());
+            x_max = std::max(x_max, sp->x());
+            y_min = std::min(y_min, sp->y());
+            y_max = std::max(y_max, sp->y());
+        }
+    }
+    if (first) return true;
+    return !(x_max < rect.x_min || x_min > rect.x_max ||
+             y_max < rect.y_min || y_min > rect.y_max);
+}
+
+/// @brief サンプル全体が矩形内に収まるか（内包判定）
+/// @return サンプルが存在し、かつ全点が射影可能で矩形内のときtrue
+bool ContainedInRect(const i_graph::SelectionSamples& s,
+                     const i_graph::ScreenRect& rect,
+                     const igesio::Matrix4d& vp, int w, int h) {
+    bool any = false;
+    for (const auto& pt : s.points) {
+        const auto sp = i_graph::WorldToScreen(vp, w, h, pt);
+        if (!sp || !PointInRect(sp->x(), sp->y(), rect)) return false;
+        any = true;
+    }
+    for (const auto& polyline : s.polylines) {
+        for (const auto& v : polyline) {
+            const auto sp = i_graph::WorldToScreen(vp, w, h, v);
+            if (!sp || !PointInRect(sp->x(), sp->y(), rect)) return false;
+            any = true;
+        }
+    }
+    return any;
+}
+
+/// @brief サンプルが矩形と交差するか（交差判定）
+bool CrossesRect(const i_graph::SelectionSamples& s,
+                 const i_graph::ScreenRect& rect,
+                 const igesio::Matrix4d& vp, int w, int h) {
+    // 孤立点
+    for (const auto& pt : s.points) {
+        const auto sp = i_graph::WorldToScreen(vp, w, h, pt);
+        if (sp && PointInRect(sp->x(), sp->y(), rect)) return true;
+    }
+    // 折れ線（連続する射影可能な頂点間のみ線分を張る）
+    for (const auto& polyline : s.polylines) {
+        bool has_prev = false;
+        double px = 0.0, py = 0.0;
+        for (const auto& v : polyline) {
+            const auto sp = i_graph::WorldToScreen(vp, w, h, v);
+            if (!sp) { has_prev = false; continue; }
+            const double cx = sp->x(), cy = sp->y();
+            if (PointInRect(cx, cy, rect)) return true;
+            if (has_prev && SegmentIntersectsRect(px, py, cx, cy, rect)) {
+                return true;
+            }
+            px = cx; py = cy; has_prev = true;
+        }
+    }
+    // 閉ループ: 矩形の角が射影境界ポリゴンの内側か（大面にズームインしたケース）
+    if (s.polylines_closed) {
+        for (const auto& polyline : s.polylines) {
+            std::vector<std::array<double, 2>> poly;
+            poly.reserve(polyline.size());
+            for (const auto& v : polyline) {
+                const auto sp = i_graph::WorldToScreen(vp, w, h, v);
+                if (sp) poly.push_back({sp->x(), sp->y()});
+            }
+            if (PointInPolygon(rect.x_min, rect.y_min, poly) ||
+                PointInPolygon(rect.x_max, rect.y_min, poly) ||
+                PointInPolygon(rect.x_max, rect.y_max, poly) ||
+                PointInPolygon(rect.x_min, rect.y_max, poly)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 
@@ -436,6 +593,40 @@ std::vector<i_graph::EntityHit> EntityRenderer::PickEntities(
         if (!duplicate) deduped.push_back(hit);
     }
     return deduped;
+}
+
+std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
+        const ScreenRect& rect, BoxSelectionMode mode,
+        const SelectionSampleParams& params) const {
+    std::vector<igesio::ObjectID> result;
+    const int w = display_width_, h = display_height_;
+    if (w <= 0 || h <= 0) return result;
+
+    // VP行列を一度だけ計算し、各サンプルの射影で使い回す
+    const float aspect = static_cast<float>(w) / static_cast<float>(h);
+    const igesio::Matrix4d vp =
+            camera_.GetProjectionMatrix(aspect).cast<double>()
+            * camera_.GetViewMatrix().cast<double>();
+
+    for (const auto& [shader_type, objects] : draw_objects_) {
+        for (const auto& [id, object] : objects) {
+            if (!object) continue;
+
+            const auto samples = object->GetSelectionSamples(params);
+            if (samples.polylines.empty() && samples.points.empty()) continue;
+
+            // 粗カリング: BBのスクリーンAABBがrectと重ならなければ棄却
+            if (!MayOverlapRect(object->GetWorldBoundingBox(), rect, vp, w, h)) {
+                continue;
+            }
+
+            const bool hit = (mode == BoxSelectionMode::kContained)
+                    ? ContainedInRect(samples, rect, vp, w, h)
+                    : CrossesRect(samples, rect, vp, w, h);
+            if (hit) result.push_back(id);
+        }
+    }
+    return result;
 }
 
 void EntityRenderer::Select(const ObjectID& id) {
