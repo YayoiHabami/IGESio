@@ -252,7 +252,11 @@ class EntityGraphics : public IEntityGraphics {
             auto ptr = std::dynamic_pointer_cast<const entities::EntityBase>(entity_);
             if (ptr) {
                 // entity_が参照する変換行列を掛け合わせる
-                auto entity_transform = ptr->GetTransformationMatrix()
+                // NOTE: cast<float>()は遅延評価式を返すため、autoで受けると
+                //       GetTransformation()が返す一時Matrix4dへのダングリング参照
+                //       となる (Release最適化時にUBで描画が破綻する)。具体型で
+                //       受けて一時が生存中に即時評価・コピーさせる。
+                const igesio::Matrix4f entity_transform = ptr->GetTransformationMatrix()
                         .GetTransformation().template cast<float>();
                 return world_transform_ * entity_transform;
             }
