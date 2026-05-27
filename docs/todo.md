@@ -56,10 +56,14 @@
   - [x] v0.6.2: 導関数の計算を追加（曲面等の幾何学的特性の計算に応用）
   - [x] v0.6.3: 行列表現のデフォルトをEigenの行列クラスに変更 (今まではEigen互換の独自行列クラスを使用していた)
   - [x] v0.6.4: Trimmed Surface (144) の基本的な実装
-  - [ ] v0.6.5: クリック機能 (レイとの交差判定) の実装
-- [ ] **v0.7: Assemblyクラスの実装** (5)
-- [ ] **v0.8: Manifold Solid B-Rep Objectへの対応** (6)
-- [ ] **v0.9: Constructive Solid Geometryへの対応** (8)
+  - [x] v0.6.5: Releaseビルドで描画がx軸方向につぶれる問題の修正
+  - [x] v0.6.6: クリック機能 (レイとの交差判定) の実装
+  - [ ] v0.6.7: クリック機能（範囲選択）への対応
+- [ ] **v0.7: ICurve/ISurfaceクラスの修正**
+  - [ ] v0.7.0: TryGetDerivatives関数が定義空間の値を返すため、他メンバとの整合性が取れていない問題を修正
+- [ ] **v0.8: Assemblyクラスの実装** (5)
+- [ ] **v0.9: Manifold Solid B-Rep Objectへの対応** (6)
+- [ ] **v0.10: Constructive Solid Geometryへの対応** (8)
 - [ ] **v1.0: 主要なエンティティクラスへの対応** (Untested, Annotation、Property等を除く)
 
 ## 細かいタスク

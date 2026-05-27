@@ -12,6 +12,38 @@
 namespace {
 
 using IgesViewerGUI = igesio::graphics::IgesViewerGUI;
+using igesio::graphics::MouseButton;
+using igesio::graphics::ModifierKey;
+
+/// @brief クリックと判定する移動量の閾値 [px]
+/// @note 押下から解放までの移動量がこの値未満であればクリック(ピッキング)、
+///       以上であればドラッグ(回転)とみなす
+constexpr double kClickThresholdPx = 5.0;
+
+/// @brief GLFWのマウスボタン定数をMouseButtonへ変換する
+/// @param glfw_button GLFW_MOUSE_BUTTON_*
+/// @return 対応するMouseButton (未対応のボタンはkNone)
+MouseButton ToMouseButton(const int glfw_button) {
+    switch (glfw_button) {
+        case GLFW_MOUSE_BUTTON_LEFT: return MouseButton::kLeft;
+        case GLFW_MOUSE_BUTTON_MIDDLE: return MouseButton::kMiddle;
+        case GLFW_MOUSE_BUTTON_RIGHT: return MouseButton::kRight;
+        default: return MouseButton::kNone;
+    }
+}
+
+/// @brief GLFWの修飾キービットをModifierKeyへ変換する
+/// @param glfw_mods GLFW_MOD_* のOR
+/// @return Ctrl/Shift/Alt/Superのみを反映したModifierKey
+/// @note CapsLock等の無関係なビットは落とし、完全一致判定を可能にする
+ModifierKey ToModifierKey(const int glfw_mods) {
+    ModifierKey mods = ModifierKey::kNone;
+    if (glfw_mods & GLFW_MOD_CONTROL) mods = mods | ModifierKey::kCtrl;
+    if (glfw_mods & GLFW_MOD_SHIFT) mods = mods | ModifierKey::kShift;
+    if (glfw_mods & GLFW_MOD_ALT) mods = mods | ModifierKey::kAlt;
+    if (glfw_mods & GLFW_MOD_SUPER) mods = mods | ModifierKey::kSuper;
+    return mods;
+}
 
 }  // namespace
 
@@ -144,9 +176,12 @@ void IgesViewerGUI::CaptureScreenshot(const std::string& filename) {
 void IgesViewerGUI::RenderControls() {
     ImGui::Begin("Controls");
     ImGui::Text("Camera");
-    ImGui::Text("  - Drag Left Mouse: Rotate");
-    ImGui::Text("  - Drag Right Mouse: Pan");
-    ImGui::Text("  - Mouse Wheel: Zoom");
+    ImGui::Text("  - Middle Drag: Rotate");
+    ImGui::Text("  - Ctrl + Middle Drag: Pan");
+    ImGui::Text("  - Wheel / Shift + Middle Drag: Zoom");
+    ImGui::Text("Selection");
+    ImGui::Text("  - Left Click: Select");
+    ImGui::Text("  - Ctrl + Left Click: Multi-select");
     ImGui::Separator();
 
     // カメラの位置とターゲットを表示
@@ -166,6 +201,27 @@ void IgesViewerGUI::RenderControls() {
 
     if (ImGui::ColorEdit3("Background",
                       renderer_.GetBackgroundColorRef().data())) {
+        needs_redraw_ = true;
+    }
+    ImGui::Separator();
+
+    // 選択中エンティティの一覧 (型・ID・交差座標)
+    const auto& selected = renderer_.GetSelectedIds();
+    ImGui::Text("Selected: %d", static_cast<int>(selected.size()));
+    for (const auto& id : selected) {
+        const auto type_str = ToString(renderer_.GetEntityShaderType(id));
+        auto it = selected_hit_positions_.find(id);
+        if (it != selected_hit_positions_.end()) {
+            const auto& p = it->second;
+            ImGui::Text("  [%d] %s  (%.3f, %.3f, %.3f)",
+                        id.ToInt(), type_str.c_str(), p.x(), p.y(), p.z());
+        } else {
+            ImGui::Text("  [%d] %s", id.ToInt(), type_str.c_str());
+        }
+    }
+    if (ImGui::Button("Deselect All")) {
+        renderer_.ClearSelection();
+        selected_hit_positions_.clear();
         needs_redraw_ = true;
     }
 
@@ -209,40 +265,119 @@ void IgesViewerGUI::MouseButtonCallback(
         const int button, const int action, const int mods) {
     if (ImGui::GetIO().WantCaptureMouse) return;
 
-    if (button == GLFW_MOUSE_BUTTON_LEFT) {
-        if (action == GLFW_PRESS) {
-            glfwGetCursorPos(window_, &last_x_, &last_y_);
-            is_dragging_ = true;
-        } else if (action == GLFW_RELEASE) {
-            is_dragging_ = false;
+    const MouseButton btn = ToMouseButton(button);
+    const ModifierKey mod = ToModifierKey(mods);
+
+    if (action == GLFW_PRESS) {
+        glfwGetCursorPos(window_, &last_x_, &last_y_);
+        press_x_ = last_x_;
+        press_y_ = last_y_;
+
+        // 押下したボタン+修飾キーから、ドラッグ操作モードを確定する
+        if (Matches(input_config_.rotate, btn, mod)) {
+            drag_mode_ = DragMode::kRotate;
+        } else if (Matches(input_config_.pan, btn, mod)) {
+            drag_mode_ = DragMode::kPan;
+        } else if (Matches(input_config_.zoom_drag, btn, mod)) {
+            drag_mode_ = DragMode::kZoom;
+        } else {
+            drag_mode_ = DragMode::kNone;
+        }
+    } else if (action == GLFW_RELEASE) {
+        drag_mode_ = DragMode::kNone;
+
+        // 選択ボタンの解放時、移動量が閾値未満であればクリック(ピッキング)
+        // とみなす。修飾キー (単一/複数選択) はHandleClickSelectionで判別する
+        if (btn != input_config_.select.button) return;
+
+        double x, y;
+        glfwGetCursorPos(window_, &x, &y);
+        const double dx = x - press_x_, dy = y - press_y_;
+        if (dx * dx + dy * dy < kClickThresholdPx * kClickThresholdPx) {
+            // ウィンドウ座標 -> フレームバッファ座標へ換算
+            // (HiDPI環境ではウィンドウサイズとフレームバッファサイズが異なる)
+            int win_w = 0, win_h = 0;
+            glfwGetWindowSize(window_, &win_w, &win_h);
+            const auto [fb_w, fb_h] = renderer_.GetDisplaySize();
+            const double sx = (win_w > 0)
+                    ? static_cast<double>(fb_w) / win_w : 1.0;
+            const double sy = (win_h > 0)
+                    ? static_cast<double>(fb_h) / win_h : 1.0;
+
+            HandleClickSelection(x * sx, y * sy, mods);
+            needs_redraw_ = true;
         }
     }
-    if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-        if (action == GLFW_PRESS) {
-            glfwGetCursorPos(window_, &last_x_, &last_y_);
-            is_panning_ = true;
-        } else if (action == GLFW_RELEASE) {
-            is_panning_ = false;
+}
+
+void IgesViewerGUI::HandleClickSelection(
+        const double x, const double y, const int mods) {
+    const Ray ray = renderer_.GetRayFromScreen(x, y);
+    const auto hits = renderer_.PickEntities(ray, x, y);
+    // 複数選択 (トグル) 修飾キーが押下されているか
+    const ModifierKey mod = ToModifierKey(mods);
+    const ModifierKey multi_mod = input_config_.multi_select_mod;
+    const bool ctrl = multi_mod != ModifierKey::kNone
+            && (mod & multi_mod) == multi_mod;
+
+    if (hits.empty()) {
+        // 空クリック かつ 複数選択修飾なし のときのみ全解除
+        if (!ctrl) {
+            renderer_.ClearSelection();
+            selected_hit_positions_.clear();
         }
+        return;
+    }
+
+    const ObjectID id = hits.front().id;
+    const Vector3d pos = hits.front().hit.position;
+    if (ctrl) {
+        // 複数選択修飾: 選択状態をトグル
+        if (renderer_.IsSelected(id)) {
+            renderer_.Deselect(id);
+            selected_hit_positions_.erase(id);
+        } else {
+            renderer_.Select(id);
+            selected_hit_positions_[id] = pos;
+        }
+    } else {
+        // 複数選択修飾なし: 選択集合をid単独へ置換
+        renderer_.ClearSelection();
+        selected_hit_positions_.clear();
+        renderer_.Select(id);
+        selected_hit_positions_[id] = pos;
     }
 }
 
 void IgesViewerGUI::CursorPositionCallback(
         const double xpos, const double ypos) {
-    auto dx = static_cast<float>(xpos - last_x_);
-    auto dy = static_cast<float>(ypos - last_y_);
+    const auto dx = static_cast<float>(xpos - last_x_);
+    const auto dy = static_cast<float>(ypos - last_y_);
 
-    if (is_dragging_) {
-        // カメラをターゲットの周りで回転
-        float sensitivity = 0.006f;
-        renderer_.Camera().Rotate(-dx * sensitivity, -dy * sensitivity);
-        needs_redraw_ = true;
-    }
-    if (is_panning_) {
-        // カメラをパン (平行移動)
-        float sensitivity = 0.001f;
-        renderer_.Camera().Pan(dx * sensitivity, dy * sensitivity);
-        needs_redraw_ = true;
+    switch (drag_mode_) {
+        case DragMode::kRotate: {
+            // カメラをターゲットの周りで回転
+            constexpr float kSensitivity = 0.006f;
+            renderer_.Camera().Rotate(-dx * kSensitivity, -dy * kSensitivity);
+            needs_redraw_ = true;
+            break;
+        }
+        case DragMode::kPan: {
+            // カメラをパン (平行移動)
+            constexpr float kSensitivity = 0.001f;
+            renderer_.Camera().Pan(dx * kSensitivity, dy * kSensitivity);
+            needs_redraw_ = true;
+            break;
+        }
+        case DragMode::kZoom: {
+            // 上方向のドラッグでズームイン (Zoomは<1.0fでズームイン)
+            constexpr float kSensitivity = 0.01f;
+            renderer_.Camera().Zoom(1.0f + dy * kSensitivity);
+            needs_redraw_ = true;
+            break;
+        }
+        case DragMode::kNone:
+            break;
     }
 
     last_x_ = xpos;
