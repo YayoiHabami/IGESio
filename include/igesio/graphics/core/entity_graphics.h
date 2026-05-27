@@ -9,6 +9,7 @@
 #define IGESIO_GRAPHICS_CORE_ENTITY_GRAPHICS_H_
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -380,6 +381,29 @@ class EntityGraphics : public IEntityGraphics {
         return result;
     }
 
+    /// @brief 範囲選択用にエンティティをサンプリングした点列を返す
+    /// @param params サンプリング制御パラメータ
+    /// @return ワールド座標のサンプル. ISurface/ICurveでなければ空
+    SelectionSamples GetSelectionSamples(
+            const SelectionSampleParams& params) const override {
+        if (!entity_) return {};
+
+        // world_transform_ (親->ワールド) をdoubleへ昇格して適用する
+        // (GetWorldBoundingBoxと同じ規約. TryGetPointAtは親空間を返すため、
+        //  これを掛けるとワールド座標になる)
+        const igesio::Matrix4d wt = world_transform_.cast<double>();
+
+        if (const auto* surf =
+                dynamic_cast<const entities::ISurface*>(entity_.get())) {
+            return SampleSurfaceBoundary(*surf, params, wt);
+        }
+        if (const auto* curve =
+                dynamic_cast<const entities::ICurve*>(entity_.get())) {
+            return SampleCurve(*curve, params, wt);
+        }
+        return {};
+    }
+
     /// @brief ワールド座標系におけるバウンディングボックスを取得する
     std::optional<numerics::BoundingBox> GetWorldBoundingBox() const override {
         auto geom = std::dynamic_pointer_cast<const entities::IGeometry>(entity_);
@@ -405,6 +429,107 @@ class EntityGraphics : public IEntityGraphics {
     }
 
 
+
+ private:
+    /// @brief 親空間の点にworld_transform_を適用しワールド座標にする
+    /// @param wt world_transform_ (double)
+    /// @param p 親空間の点
+    /// @return ワールド座標の点
+    /// @note アフィン変換のためw成分は1のまま. Vector4d経由で乗算し、
+    ///       Eigen非使用ビルドでも動作させる
+    static Vector3d ToWorld(const igesio::Matrix4d& wt, const Vector3d& p) {
+        const igesio::Vector4d w = wt * igesio::Vector4d(p.x(), p.y(), p.z(), 1.0);
+        return Vector3d(w.x(), w.y(), w.z());
+    }
+
+    /// @brief 曲線を折れ線群へサンプリングする
+    /// @param curve 対象の曲線
+    /// @param params サンプリング制御パラメータ
+    /// @param wt world_transform_ (double)
+    /// @return ワールド座標のサンプル. nulloptの点で折れ線を分割する
+    static SelectionSamples SampleCurve(
+            const entities::ICurve& curve, const SelectionSampleParams& params,
+            const igesio::Matrix4d& wt) {
+        auto range = curve.GetParameterRange();
+        double t0 = range[0], t1 = range[1];
+        if (std::isinf(t0)) t0 = -kInfiniteParamClamp;
+        if (std::isinf(t1)) t1 = kInfiniteParamClamp;
+
+        const int n = std::max(1, params.curve_samples);
+        SelectionSamples result;
+        std::vector<Vector3d> current;
+        for (int i = 0; i <= n; ++i) {
+            const double t = t0 + (t1 - t0) * static_cast<double>(i) / n;
+            const auto p = curve.TryGetPointAt(t);
+            if (p) {
+                current.push_back(ToWorld(wt, *p));
+            } else if (!current.empty()) {
+                result.polylines.push_back(std::move(current));
+                current.clear();
+            }
+        }
+        if (!current.empty()) result.polylines.push_back(std::move(current));
+        return result;
+    }
+
+    /// @brief 曲面のパラメータ矩形境界を1つの閉ループ折れ線へサンプリングする
+    /// @param surf 対象の曲面
+    /// @param params サンプリング制御パラメータ
+    /// @param wt world_transform_ (double)
+    /// @return ワールド座標のサンプル. トリム面は未トリム外形で代用する (TODO)
+    static SelectionSamples SampleSurfaceBoundary(
+            const entities::ISurface& surf, const SelectionSampleParams& params,
+            const igesio::Matrix4d& wt) {
+        auto range = surf.GetParameterRange();  // {u0, u1, v0, v1}
+        double u0 = range[0], u1 = range[1], v0 = range[2], v1 = range[3];
+        if (std::isinf(u0)) u0 = -kInfiniteParamClamp;
+        if (std::isinf(u1)) u1 = kInfiniteParamClamp;
+        if (std::isinf(v0)) v0 = -kInfiniteParamClamp;
+        if (std::isinf(v1)) v1 = kInfiniteParamClamp;
+
+        const int nu = std::max(1, params.surface_u_samples);
+        const int nv = std::max(1, params.surface_v_samples);
+
+        // パラメータ矩形の外周を辿る (u,v) 列. 角点重複を避けるため
+        // 各辺は始点を含み終点を含まない (全体で閉ループの頂点列となる)
+        std::vector<std::pair<double, double>> perimeter;
+        for (int i = 0; i < nu; ++i) {  // 辺1: v=v0, u: u0->u1
+            const double s = static_cast<double>(i) / nu;
+            perimeter.emplace_back(u0 + (u1 - u0) * s, v0);
+        }
+        for (int i = 0; i < nv; ++i) {  // 辺2: u=u1, v: v0->v1
+            const double s = static_cast<double>(i) / nv;
+            perimeter.emplace_back(u1, v0 + (v1 - v0) * s);
+        }
+        for (int i = 0; i < nu; ++i) {  // 辺3: v=v1, u: u1->u0
+            const double s = static_cast<double>(i) / nu;
+            perimeter.emplace_back(u1 + (u0 - u1) * s, v1);
+        }
+        for (int i = 0; i < nv; ++i) {  // 辺4: u=u0, v: v1->v0
+            const double s = static_cast<double>(i) / nv;
+            perimeter.emplace_back(u0, v1 + (v0 - v1) * s);
+        }
+
+        SelectionSamples result;
+        std::vector<Vector3d> current;
+        bool split = false;
+        for (const auto& [u, v] : perimeter) {
+            const auto p = surf.TryGetPointAt(u, v);
+            if (p) {
+                current.push_back(ToWorld(wt, *p));
+            } else {
+                if (!current.empty()) {
+                    result.polylines.push_back(std::move(current));
+                    current.clear();
+                }
+                split = true;
+            }
+        }
+        if (!current.empty()) result.polylines.push_back(std::move(current));
+        // 分割無く1ループに収まった場合のみ閉ループとして扱う
+        result.polylines_closed = !split && result.polylines.size() == 1;
+        return result;
+    }
 
  protected:
     /// @brief エンティティの描画を実装する関数

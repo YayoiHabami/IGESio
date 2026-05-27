@@ -31,6 +31,11 @@ namespace igesio::graphics {
 constexpr double kDefaultLineWidth =
         models::kDefaultMaxLineWeight / models::kDefaultLineWeightGradations;
 
+/// @brief 無限パラメータ範囲を持つ曲線/曲面を離散化する際のクランプ値
+/// @note 描画 (i_curve_graphics) と範囲選択のサンプリングで離散化範囲を一致させる
+///       ための共有定数. 半直線・直線・無限平面などの無限端をこの値で打ち切る
+constexpr double kInfiniteParamClamp = 100.0;
+
 /// @brief シェーダーのタイプ
 /// @note この列挙体の値に基づき、どのシェーダープログラムを使用するかを決定する
 /// @note `kNone`は最大値として使用される.
@@ -97,6 +102,20 @@ std::string ToString(const ShaderType);
 ///       (kCompositeとkNoneは除く)
 bool UsesLighting(const ShaderType);
 
+
+/// @brief 範囲選択用のジオメトリサンプル（ワールド座標）
+struct SelectionSamples {
+    /// @brief 折れ線群. 各内側ベクタが連続頂点列.
+    /// @note 1本の曲線でも、TryGetPointAtがnulloptを返す点や射影不能 (near面より
+    ///       手前) の点で分割して複数の折れ線になり得る. 欠落点をまたいで頂点を
+    ///       橋渡ししない (偽の線分を作らないため). 曲面境界は各ループが1本の折れ線
+    std::vector<std::vector<Vector3d>> polylines;
+    /// @brief 孤立点（Point(116)など）
+    std::vector<Vector3d> points;
+    /// @brief polylinesが閉じた境界ループか（点内外判定に利用可能か）
+    /// @note 分割が起きた場合は閉ループ性が保証されないためfalseとする
+    bool polylines_closed = false;
+};
 
 /// @brief EntityGraphicsの型消去クラス
 /// @note すべての描画用クラスの基底クラス
@@ -295,6 +314,13 @@ class IEntityGraphics {
     virtual std::vector<RayHit> Intersect(
             const Ray&,
             const RayIntersectionParams& = {}) const { return {}; }
+
+    /// @brief 範囲選択用にエンティティをサンプリングした点列を返す
+    /// @param params サンプリング制御パラメータ
+    /// @return ワールド座標のサンプル. 判定不可なら空
+    /// @note デフォルト実装は空を返す
+    virtual SelectionSamples GetSelectionSamples(
+            const SelectionSampleParams& = {}) const { return {}; }
 
     /// @brief ワールド座標系におけるバウンディングボックスを取得する
     /// @return エンティティのバウンディングボックスにworld_transform_を

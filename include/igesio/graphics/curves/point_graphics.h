@@ -81,6 +81,14 @@ class PointGraphics
     std::vector<RayHit> Intersect(
             const Ray&, const RayIntersectionParams&) const override;
 
+    /// @brief 範囲選択用に点をサンプリングする
+    /// @param params サンプリング制御パラメータ (未使用)
+    /// @return 点1つをpointsに格納したサンプル (描画位置・ピッキング位置に一致)
+    /// @note PointはICurveを継承しないため基底の汎用サンプリングでは拾えない.
+    ///       点状形状として独自にサンプルを返す
+    SelectionSamples GetSelectionSamples(
+            const SelectionSampleParams&) const override;
+
  protected:
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID

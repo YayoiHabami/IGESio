@@ -90,6 +90,20 @@ std::vector<igesio::graphics::RayHit> PointGraphics::Intersect(
     return {};
 }
 
+igesio::graphics::SelectionSamples PointGraphics::GetSelectionSamples(
+        const SelectionSampleParams&) const {
+    if (!entity_) return {};
+
+    // 描画位置に一致させる: model = GetWorldTransform(), 座標 = 定義空間
+    const igesio::Matrix4d m = GetWorldTransform().cast<double>();
+    const Vector3d world_pt =
+            (m * entity_->GetDefinedPosition().homogeneous()).hnormalized();
+
+    SelectionSamples result;
+    result.points.push_back(world_pt);
+    return result;
+}
+
 
 
 /**

@@ -71,6 +71,13 @@ class CopiousDataGraphics
     std::vector<RayHit> Intersect(
             const Ray&, const RayIntersectionParams&) const override;
 
+    /// @brief 範囲選択用にサンプリングする
+    /// @param params サンプリング制御パラメータ
+    /// @return 点列 (form 1-3) は各頂点をpointsに格納したサンプル、
+    ///         折れ線 (form 11-13) は基底の曲線サンプリングに委譲した結果
+    SelectionSamples GetSelectionSamples(
+            const SelectionSampleParams&) const override;
+
  protected:
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID

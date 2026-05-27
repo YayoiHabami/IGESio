@@ -354,6 +354,31 @@ class CompositeEntityGraphics : public IEntityGraphics {
         return result;
     }
 
+    /// @brief 範囲選択用にエンティティをサンプリングした点列を返す
+    /// @param params サンプリング制御パラメータ
+    /// @return 子要素のサンプルを集約したもの
+    /// @note 子要素はSetWorldTransform伝播済みのためワールド座標で得られる.
+    ///       ここでworld_transform_を再適用しないこと (二重適用となるため)
+    SelectionSamples GetSelectionSamples(
+            const SelectionSampleParams& params) const override {
+        SelectionSamples result;
+        for (const auto& [shader_type, graphics_list] : child_graphics_) {
+            for (const auto& child : graphics_list) {
+                if (!child) continue;
+                auto child_samples = child->GetSelectionSamples(params);
+                for (auto& polyline : child_samples.polylines) {
+                    result.polylines.push_back(std::move(polyline));
+                }
+                for (const auto& point : child_samples.points) {
+                    result.points.push_back(point);
+                }
+            }
+        }
+        // 複数子要素の集約のため、単一閉ループであることは保証されない
+        result.polylines_closed = false;
+        return result;
+    }
+
     /// @brief ワールド座標系におけるバウンディングボックスを取得する
     std::optional<numerics::BoundingBox> GetWorldBoundingBox() const override {
         auto geom = std::dynamic_pointer_cast<const entities::IGeometry>(entity_);
