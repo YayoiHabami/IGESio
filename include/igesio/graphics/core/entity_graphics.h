@@ -395,7 +395,9 @@ class EntityGraphics : public IEntityGraphics {
 
         if (const auto* surf =
                 dynamic_cast<const entities::ISurface*>(entity_.get())) {
-            return SampleSurfaceBoundary(*surf, params, wt);
+            SelectionSamples result = SampleSurfaceBoundary(*surf, params, wt);
+            SampleSurfaceInteriorGrid(*surf, params, wt, result);
+            return result;
         }
         if (const auto* curve =
                 dynamic_cast<const entities::ICurve*>(entity_.get())) {
@@ -430,7 +432,7 @@ class EntityGraphics : public IEntityGraphics {
 
 
 
- private:
+ protected:
     /// @brief 親空間の点にworld_transform_を適用しワールド座標にする
     /// @param wt world_transform_ (double)
     /// @param p 親空間の点
@@ -442,11 +444,44 @@ class EntityGraphics : public IEntityGraphics {
         return Vector3d(w.x(), w.y(), w.z());
     }
 
+    /// @brief 曲線区間[ta,tb]を画面弦長基準で再帰的に細分し、中間点を追加する
+    /// @param curve 対象の曲線
+    /// @param params サンプリング制御パラメータ (適応分割の射影状態を含む)
+    /// @param wt world_transform_ (double)
+    /// @param ta, wa 区間始点のパラメータとワールド座標 (out には未追加)
+    /// @param tb, wb 区間終点のパラメータとワールド座標 (caller が後で追加)
+    /// @param depth 残り再帰深さ
+    /// @param out 中間点の追加先 (ta側からtb側の順で追加; 両端は含めない)
+    static void RefineCurveSegment(
+            const entities::ICurve& curve, const SelectionSampleParams& params,
+            const igesio::Matrix4d& wt, double ta, const Vector3d& wa,
+            double tb, const Vector3d& wb, int depth,
+            std::vector<Vector3d>& out) {
+        if (depth <= 0) return;
+        const auto sa = WorldToScreen(params.adaptive_view_proj,
+                params.adaptive_width, params.adaptive_height, wa);
+        const auto sb = WorldToScreen(params.adaptive_view_proj,
+                params.adaptive_width, params.adaptive_height, wb);
+        if (!sa || !sb) return;  // 射影不能ならこれ以上細分しない
+        const double dx = sa->x() - sb->x(), dy = sa->y() - sb->y();
+        const double tol = params.adaptive_max_chord_px;
+        if (dx * dx + dy * dy <= tol * tol) return;  // 画面上で十分短い
+
+        const double tm = 0.5 * (ta + tb);
+        const auto pm = curve.TryGetPointAt(tm);
+        if (!pm) return;
+        const Vector3d wm = ToWorld(wt, *pm);
+        RefineCurveSegment(curve, params, wt, ta, wa, tm, wm, depth - 1, out);
+        out.push_back(wm);
+        RefineCurveSegment(curve, params, wt, tm, wm, tb, wb, depth - 1, out);
+    }
+
     /// @brief 曲線を折れ線群へサンプリングする
     /// @param curve 対象の曲線
     /// @param params サンプリング制御パラメータ
     /// @param wt world_transform_ (double)
-    /// @return ワールド座標のサンプル. nulloptの点で折れ線を分割する
+    /// @return ワールド座標のサンプル. nulloptの点で折れ線を分割する。
+    ///         params.adaptive_refine時は画面弦長基準で区間を細分する
     static SelectionSamples SampleCurve(
             const entities::ICurve& curve, const SelectionSampleParams& params,
             const igesio::Matrix4d& wt) {
@@ -458,15 +493,28 @@ class EntityGraphics : public IEntityGraphics {
         const int n = std::max(1, params.curve_samples);
         SelectionSamples result;
         std::vector<Vector3d> current;
+        bool has_prev = false;
+        double prev_t = 0.0;
+        Vector3d prev_w;
         for (int i = 0; i <= n; ++i) {
             const double t = t0 + (t1 - t0) * static_cast<double>(i) / n;
             const auto p = curve.TryGetPointAt(t);
-            if (p) {
-                current.push_back(ToWorld(wt, *p));
-            } else if (!current.empty()) {
-                result.polylines.push_back(std::move(current));
-                current.clear();
+            if (!p) {
+                if (!current.empty()) {
+                    result.polylines.push_back(std::move(current));
+                    current.clear();
+                }
+                has_prev = false;
+                continue;
             }
+            const Vector3d wp = ToWorld(wt, *p);
+            // 直前点との間を画面弦長基準で細分する (中間点のみ追加)
+            if (has_prev && params.adaptive_refine) {
+                RefineCurveSegment(curve, params, wt, prev_t, prev_w, t, wp,
+                                   params.adaptive_max_depth, current);
+            }
+            current.push_back(wp);
+            prev_t = t; prev_w = wp; has_prev = true;
         }
         if (!current.empty()) result.polylines.push_back(std::move(current));
         return result;
@@ -529,6 +577,36 @@ class EntityGraphics : public IEntityGraphics {
         // 分割無く1ループに収まった場合のみ閉ループとして扱う
         result.polylines_closed = !split && result.polylines.size() == 1;
         return result;
+    }
+
+    /// @brief 曲面の内部格子点 (トリム領域内) をサンプルへ追加する
+    /// @param surf 対象の曲面
+    /// @param params サンプリング制御パラメータ
+    /// @param wt world_transform_ (double)
+    /// @param result 追加先のサンプル (pointsへ格納)
+    /// @note 矩形境界だけでは捉えられない、面内に収まる矩形や非凸シルエットの
+    ///       取りこぼしを補う。IsInDomainを満たす点のみ追加する
+    static void SampleSurfaceInteriorGrid(
+            const entities::ISurface& surf, const SelectionSampleParams& params,
+            const igesio::Matrix4d& wt, SelectionSamples& result) {
+        auto range = surf.GetParameterRange();
+        double u0 = range[0], u1 = range[1], v0 = range[2], v1 = range[3];
+        if (std::isinf(u0)) u0 = -kInfiniteParamClamp;
+        if (std::isinf(u1)) u1 = kInfiniteParamClamp;
+        if (std::isinf(v0)) v0 = -kInfiniteParamClamp;
+        if (std::isinf(v1)) v1 = kInfiniteParamClamp;
+
+        const int nu = std::max(1, params.surface_u_samples);
+        const int nv = std::max(1, params.surface_v_samples);
+        for (int i = 1; i < nu; ++i) {
+            for (int j = 1; j < nv; ++j) {
+                const double u = u0 + (u1 - u0) * static_cast<double>(i) / nu;
+                const double v = v0 + (v1 - v0) * static_cast<double>(j) / nv;
+                if (!surf.IsInDomain(u, v)) continue;
+                const auto p = surf.TryGetPointAt(u, v);
+                if (p) result.points.push_back(ToWorld(wt, *p));
+            }
+        }
     }
 
  protected:

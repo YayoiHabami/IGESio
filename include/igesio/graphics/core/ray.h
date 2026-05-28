@@ -78,12 +78,27 @@ struct ScreenRect {
 
 /// @brief 範囲選択用のサンプリング制御パラメータ
 struct SelectionSampleParams {
-    /// @brief 曲線の折れ線分割数
+    /// @brief 曲線の折れ線分割数（適応分割時は初期分割数）
     int curve_samples = 32;
     /// @brief 曲面境界/グリッドのu方向サンプル数
     int surface_u_samples = 16;
     /// @brief 曲面境界/グリッドのv方向サンプル数
     int surface_v_samples = 16;
+
+    // --- 適応分割 (オプション; adaptive_refine=true のときのみ有効) ---
+    /// @brief 曲線をスクリーン弦長基準で適応的に細分するか
+    /// @note PickEntitiesInRectが射影状態を設定して有効化する
+    bool adaptive_refine = false;
+    /// @brief 適応分割に用いる射影行列 P*V (double)
+    Matrix4d adaptive_view_proj = Matrix4d::Identity();
+    /// @brief 適応分割の基準ビューポート幅 [px]
+    int adaptive_width = 0;
+    /// @brief 適応分割の基準ビューポート高さ [px]
+    int adaptive_height = 0;
+    /// @brief 隣接サンプルの画面距離がこの値を超えたら細分する [px]
+    double adaptive_max_chord_px = 8.0;
+    /// @brief 適応分割の最大再帰深さ
+    int adaptive_max_depth = 4;
 };
 
 /// @brief スクリーン座標からワールド空間のレイを生成する
@@ -143,6 +158,14 @@ std::optional<Vector3d> WorldToScreen(const Camera& camera, int w, int h,
 /// @note 戻り値の意味・特異点の扱いはカメラ版と同一
 std::optional<Vector3d> WorldToScreen(const Matrix4d& view_proj, int w, int h,
                                       const Vector3d& world);
+
+/// @brief ワールド座標をクリップ空間 (w除算前) へ射影する
+/// @param view_proj (投影行列P)*(ビュー行列V)（double）
+/// @param world ワールド座標
+/// @return クリップ空間座標 (x, y, z, w)
+/// @note near面クリッピングのように、w除算前の座標で線形補間したい場合に用いる。
+///       near面の内側判定は (clip.z + clip.w >= 0)
+Vector4d WorldToClip(const Matrix4d& view_proj, const Vector3d& world);
 
 }  // namespace igesio::graphics
 

@@ -71,13 +71,17 @@ double PixelToWorldSize(const Camera& camera, int w, int h,
     return (p2 - p1).norm();
 }
 
+igesio::Vector4d WorldToClip(
+        const igesio::Matrix4d& view_proj, const igesio::Vector3d& world) {
+    return view_proj * igesio::Vector4d(world.x(), world.y(), world.z(), 1.0);
+}
+
 std::optional<igesio::Vector3d> WorldToScreen(
         const igesio::Matrix4d& view_proj, int w, int h,
         const igesio::Vector3d& world) {
     if (w <= 0 || h <= 0) return std::nullopt;
 
-    const igesio::Vector4d clip =
-            view_proj * igesio::Vector4d(world.x(), world.y(), world.z(), 1.0);
+    const igesio::Vector4d clip = WorldToClip(view_proj, world);
 
     // clip.w<=0は透視投影でカメラ平面以遠の点に生じる射影特異点
     // (w除算で符号反転・破綻する)。正射影/斜投影ではwが常に1のため発火しない
