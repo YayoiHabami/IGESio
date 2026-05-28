@@ -49,6 +49,10 @@ enum class ObjectType : uint8_t {
     kIgesData = 4,
     /// @brief アセンブリオブジェクト
     kAssembly = 5,
+    /// @brief 変換ビュー(CurveView/SurfaceView)
+    /// @note IDは採番するがIGESファイルへは出力しないオブジェクト.
+    ///       採番形式はEntity (in program)系に倣う
+    kEntityView = 6,
 };
 
 /// @brief ObjectTypeを文字列に変換する
@@ -267,11 +271,12 @@ class IDGenerator {
     /// @throw std::runtime_error IDを使用中のオブジェクトが多く、生成できなかった場合
     /// @throw igesio::ImplementationError obj_typeがkIgesDataまたはkAssemblyでない場合
     static ObjectID Generate(const ObjectType);
-    /// @brief 新しいObjectIDを作成する (Entity (in program), EntityGraphics用)
-    /// @param obj_type オブジェクトの種類 (kEntityNewまたはkEntityGraphics)
+    /// @brief 新しいObjectIDを作成する (Entity (in program), EntityGraphics, EntityView用)
+    /// @param obj_type オブジェクトの種類 (kEntityNew、kEntityGraphicsまたはkEntityView)
     /// @param entity_type エンティティのタイプ
     /// @throw std::runtime_error IDを使用中のオブジェクトが多く、生成できなかった場合
-    /// @throw igesio::ImplementationError obj_typeがkEntityNewまたはkEntityGraphicsでない場合
+    /// @throw igesio::ImplementationError obj_typeがkEntityNew、kEntityGraphics、
+    ///        kEntityViewのいずれでもない場合
     static ObjectID Generate(const ObjectType, const uint16_t);
     /// @brief 新しいObjectIDを予約する (Entity (from IGES)用)
     /// @param iges_id 読み込み元のIGESファイルに対応するIgesDataのObjectID
