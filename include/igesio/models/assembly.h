@@ -24,11 +24,69 @@
 
 #include "igesio/common/id_generator.h"
 #include "igesio/numerics/matrix.h"
+#include "igesio/numerics/bounding_box.h"
 #include "igesio/entities/entity_base.h"
 
 
 
+namespace igesio::entities {
+// 変換ビュー(views/curve_view.h, views/surface_view.h で定義)
+class CurveView;
+class SurfaceView;
+}  // namespace igesio::entities
+
+
+
 namespace igesio::models {
+
+/// @brief 座標系(フレーム)指定子
+/// @note 取得したい座標がどのフレームに属するか(§4.1の梯子)を表す. 静的生成関数
+///       (Definition/EntityLocal/World/RelativeTo)で構築し、ビュー生成・配置解決の
+///       引数として用いる.
+class CoordFrame {
+ public:
+    /// @brief フレームの種類
+    enum class Kind {
+        /// @brief 定義空間 (P_def そのもの. 変換を一切適用しない)
+        kDefinition,
+        /// @brief エンティティ自身のフレーム (M_entityのみ適用. Assembly非依存)
+        kEntityLocal,
+        /// @brief ワールド/モデル空間 (ルートまでの全Assembly大域変換 + M_entity)
+        kWorld,
+        /// @brief 指定Assemblyの定義空間 (そのAssemblyの大域変換G_kは含めない. §4.1)
+        kRelative,
+    };
+
+    /// @brief 定義空間フレームを生成する
+    static CoordFrame Definition() { return CoordFrame(Kind::kDefinition); }
+    /// @brief エンティティ自身のフレームを生成する
+    static CoordFrame EntityLocal() { return CoordFrame(Kind::kEntityLocal); }
+    /// @brief ワールド/モデル空間フレームを生成する
+    static CoordFrame World() { return CoordFrame(Kind::kWorld); }
+    /// @brief 指定Assemblyの定義空間フレームを生成する
+    /// @param base 基準AssemblyのID (そのAssemblyの大域変換G_k自身は含めない. §4.1)
+    static CoordFrame RelativeTo(const ObjectID& base) {
+        return CoordFrame(Kind::kRelative, base);
+    }
+
+    /// @brief フレームの種類を取得する
+    Kind GetKind() const { return kind_; }
+    /// @brief 相対指定の基準AssemblyのIDを取得する
+    /// @return 基準AssemblyのID. GetKind()==kRelativeのときのみ有効.
+    const ObjectID& GetRelativeBase() const { return relative_base_; }
+
+ private:
+    /// @brief コンストラクタ
+    /// @param kind フレームの種類
+    /// @param base 相対指定の基準AssemblyのID (kRelative以外では未設定)
+    explicit CoordFrame(const Kind kind, const ObjectID& base = ObjectID())
+            : kind_(kind), relative_base_(base) {}
+
+    /// @brief フレームの種類
+    Kind kind_;
+    /// @brief 相対指定の基準AssemblyのID (kRelativeのときのみ有効)
+    ObjectID relative_base_;
+};
 
 /// @brief Assemblyのメタ情報
 /// @note 描画・編集の際に参照される付随情報をまとめた構造体.
@@ -254,6 +312,51 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     std::vector<std::shared_ptr<entities::EntityBase>>
     FindEntities(const std::function<bool(const entities::EntityBase&)>& predicate,
                  bool recursive = false) const;
+
+
+
+    /**
+     * 座標系・ビュー・空間検索
+     */
+
+    /// @brief エンティティの配置行列を解決する
+    /// @param id エンティティのID
+    /// @param frame 取得したいフレーム (CoordFrame::World()やRelativeTo()等で生成)
+    /// @return M_entity適用後の値に後掛けする配置行列. idがツリーに存在しない場合、
+    ///         またはframeがkDefinition(配置概念なし)の場合は`std::nullopt`
+    /// @throw std::invalid_argument frameがRelativeToで、基準が所有Assemblyの祖先で
+    ///        ない場合
+    /// @note 戻り値の配列を`ICurve::TryGetPointAt(t, placement)`等に渡すと、当該フレーム
+    ///       での座標が得られる
+    std::optional<igesio::Matrix4d>
+    ResolvePlacement(const ObjectID& id, const CoordFrame& frame) const;
+
+    /// @brief 指定IDの曲線について、指定フレームの変換ビューを生成する
+    /// @param id エンティティのID
+    /// @param frame 取得したいフレーム (CoordFrame::World()やRelativeTo()等で生成)
+    /// @return 生成したCurveView. idがツリーに存在しない、または対象が曲線でない場合は
+    ///         `nullptr`
+    /// @throw std::invalid_argument frameがkDefinitionの場合 (ビューはM_entity適用が前提)、
+    ///        またはRelativeToの基準が所有Assemblyの祖先でない場合
+    std::shared_ptr<entities::CurveView>
+    GetCurveView(const ObjectID& id, const CoordFrame& frame) const;
+
+    /// @brief 指定IDの曲面について、指定フレームの変換ビューを生成する
+    /// @param id エンティティのID
+    /// @param frame 取得したいフレーム (CoordFrame::World()やRelativeTo()等で生成)
+    /// @return 生成したSurfaceView. idがツリーに存在しない、または対象が曲面でない場合は
+    ///         `nullptr`
+    /// @throw std::invalid_argument frameがkDefinitionの場合 (ビューはM_entity適用が前提)、
+    ///        またはRelativeToの基準が所有Assemblyの祖先でない場合
+    std::shared_ptr<entities::SurfaceView>
+    GetSurfaceView(const ObjectID& id, const CoordFrame& frame) const;
+
+    /// @brief 子孫の幾何メンバを包含するワールド空間のバウンディングボックスを取得する
+    /// @return 軸平行なバウンディングボックス. 幾何メンバがない、または全体が退化(点・
+    ///         直線状)してAABBを構成できない場合は`std::nullopt`
+    /// @note ワールド空間(このノードを含むルートまでの全大域変換を適用)で計算する.
+    ///       幾何かつ物理従属でないメンバのみを対象とし、退化BBは既存ガードに倣って除外する.
+    std::optional<numerics::BoundingBox> GetWorldBoundingBox() const;
 };
 
 }  // namespace igesio::models

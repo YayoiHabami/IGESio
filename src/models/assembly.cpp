@@ -8,13 +8,98 @@
 #include "igesio/models/assembly.h"
 
 #include <memory>
+#include <optional>
+#include <stdexcept>
 #include <unordered_set>
 #include <vector>
+
+#include "igesio/entities/views/curve_view.h"
+#include "igesio/entities/views/surface_view.h"
 
 namespace {
 
 namespace i_models = igesio::models;
+namespace i_ent = igesio::entities;
 using Assembly = i_models::Assembly;
+using i_models::CoordFrame;
+using igesio::Matrix4d;
+using igesio::Vector3d;
+
+/// @brief ノードのローカル空間からワールド空間への配置行列を計算する
+/// @param node 対象ノード
+/// @return ルートまでの大域変換の積 G_root·…·G_node (nodeのG_node自身を含む)
+Matrix4d WorldPlacementOf(const Assembly* node) {
+    Matrix4d acc = Matrix4d::Identity();
+    while (node) {
+        acc = node->GetGlobalTransform() * acc;
+        node = node->GetParent().lock().get();
+    }
+    return acc;
+}
+
+/// @brief エンティティ所有Assemblyから指定フレームへの配置行列を計算する
+/// @param owner エンティティを所有するAssembly
+/// @param frame 取得したいフレーム
+/// @return 配置行列. frameがkDefinitionの場合は配置概念がないため`std::nullopt`
+/// @throw std::invalid_argument frameがRelativeToで、基準がownerの祖先でない場合
+std::optional<Matrix4d> ComputePlacement(const Assembly* owner,
+                                         const CoordFrame& frame) {
+    if (frame.GetKind() == CoordFrame::Kind::kDefinition) return std::nullopt;
+    if (frame.GetKind() == CoordFrame::Kind::kEntityLocal) {
+        return Matrix4d::Identity();
+    }
+
+    const bool relative = (frame.GetKind() == CoordFrame::Kind::kRelative);
+    const auto& base = frame.GetRelativeBase();  // kRelativeのときのみ意味を持つ
+
+    Matrix4d acc = Matrix4d::Identity();
+    const Assembly* node = owner;
+    while (node != nullptr) {
+        // RelativeTo: 基準ノードに到達したら、そのG_kは適用せず終了
+        if (relative && node->GetID() == base) return acc;
+        acc = node->GetGlobalTransform() * acc;
+        node = node->GetParent().lock().get();
+    }
+    // ルートを越えた. RelativeToで基準に到達しなかった場合は祖先でない
+    if (relative) {
+        throw std::invalid_argument(
+            "RelativeTo base is not an ancestor of the entity owner");
+    }
+    return acc;  // kWorld (G_rootまで積算済み)
+}
+
+/// @brief ノード以下の幾何メンバのワールド空間BB頂点を収集する
+/// @param node 対象ノード
+/// @param node_world nodeのローカル空間からワールド空間への配置行列
+/// @param[out] out 収集した有限頂点の格納先
+/// @note 幾何かつ物理従属でないメンバのみを対象とし、退化BB(点・直線状)は除外する.
+void CollectWorldVertices(const Assembly& node, const Matrix4d& node_world,
+                          std::vector<Vector3d>& out) {
+    for (const auto& [id, entity] : node.GetEntities()) {
+        if (!entity) continue;
+        // 物理従属のメンバは親経由で辿るため、ここでは対象としない
+        if (entity->GetSubordinateEntitySwitch()
+                == i_ent::SubordinateEntitySwitch::kPhysicallyDependent) {
+            continue;
+        }
+        const auto geom = std::dynamic_pointer_cast<const i_ent::IGeometry>(entity);
+        if (!geom) continue;
+
+        // 点・直線状などs0/s1が0の退化BBはGetBoundingBoxが例外を投げるため除外する
+        const auto defined = geom->GetDefinedBoundingBox();
+        const auto dsz = defined.GetSizes();
+        if (defined.IsEmpty() || dsz[0] <= 0.0 || dsz[1] <= 0.0) continue;
+
+        const auto bb = geom->GetBoundingBox(node_world);
+        for (const auto& v : bb.GetFiniteVertices()) out.push_back(v);
+    }
+
+    // 子Assemblyへは、自ノードのworld配置に子の大域変換を後段で掛けて降ろす
+    for (const auto& child : node.GetChildAssemblies()) {
+        if (!child) continue;
+        CollectWorldVertices(*child, node_world * child->GetGlobalTransform(), out);
+    }
+}
 
 }  // namespace
 
@@ -245,4 +330,83 @@ Assembly::FindEntitiesByUseFlag(const entities::EntityUseFlag flag,
     return FindEntities([flag](const entities::EntityBase& entity) {
         return entity.GetEntityUseFlag() == flag;
     }, recursive);
+}
+
+
+
+/**
+ * 座標系・ビュー・空間検索
+ */
+
+std::optional<igesio::Matrix4d>
+Assembly::ResolvePlacement(const ObjectID& id, const CoordFrame& frame) const {
+    const Assembly* owner = FindOwner(id);
+    if (!owner) return std::nullopt;
+    return ComputePlacement(owner, frame);
+}
+
+std::shared_ptr<igesio::entities::CurveView>
+Assembly::GetCurveView(const ObjectID& id, const CoordFrame& frame) const {
+    if (frame.GetKind() == CoordFrame::Kind::kDefinition) {
+        throw std::invalid_argument(
+            "kDefinition cannot be used for view generation");
+    }
+
+    const Assembly* owner = FindOwner(id);
+    if (!owner) return nullptr;
+    auto curve = std::dynamic_pointer_cast<const entities::ICurve>(
+            owner->GetEntity(id));
+    if (!curve) return nullptr;
+
+    const auto placement = ComputePlacement(owner, frame);
+    if (!placement) return nullptr;
+    return std::make_shared<entities::CurveView>(curve, *placement);
+}
+
+std::shared_ptr<igesio::entities::SurfaceView>
+Assembly::GetSurfaceView(const ObjectID& id, const CoordFrame& frame) const {
+    if (frame.GetKind() == CoordFrame::Kind::kDefinition) {
+        throw std::invalid_argument(
+            "kDefinition cannot be used for view generation");
+    }
+
+    const Assembly* owner = FindOwner(id);
+    if (!owner) return nullptr;
+    auto surface = std::dynamic_pointer_cast<const entities::ISurface>(
+            owner->GetEntity(id));
+    if (!surface) return nullptr;
+
+    const auto placement = ComputePlacement(owner, frame);
+    if (!placement) return nullptr;
+    return std::make_shared<entities::SurfaceView>(surface, *placement);
+}
+
+std::optional<igesio::numerics::BoundingBox>
+Assembly::GetWorldBoundingBox() const {
+    // 自ノードのローカル空間からワールド空間への配置を求める
+    const Matrix4d this_world = WorldPlacementOf(this);
+
+    // 子孫の幾何メンバのワールド空間BB頂点を収集する
+    std::vector<Vector3d> pts;
+    CollectWorldVertices(*this, this_world, pts);
+    if (pts.empty()) return std::nullopt;
+
+    // 軸平行AABBへ合成する
+    Vector3d lo = pts.front();
+    Vector3d hi = pts.front();
+    for (const auto& p : pts) {
+        lo = lo.cwiseMin(p);
+        hi = hi.cwiseMax(p);
+    }
+
+    // 幅が0の軸の数を数える. 2軸以上が0(点・直線状)はBBを構成できないため除外する
+    // (退化BBはnulloptとする既存ガードに倣う). 1軸のみ0の場合は2次元BBとなる
+    const Vector3d sizes = hi - lo;
+    int zero_axes = 0;
+    if (sizes.x() <= 0.0) ++zero_axes;
+    if (sizes.y() <= 0.0) ++zero_axes;
+    if (sizes.z() <= 0.0) ++zero_axes;
+    if (zero_axes >= 2) return std::nullopt;
+
+    return numerics::BoundingBox(lo, hi);
 }
