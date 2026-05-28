@@ -101,21 +101,21 @@ int main() {
 
     // Create an IgesData object and add all entities
     IgesData iges_data;
-    iges_data.AddEntity(transformation);
-    iges_data.AddEntity(arc);
-    iges_data.AddEntity(circle);
-    iges_data.AddEntity(curve1);
-    iges_data.AddEntity(curve2);
-    iges_data.AddEntity(curve3);
-    iges_data.AddEntity(composite_curve);
-    iges_data.AddEntity(color_def);
+    iges_data.Root().AddEntity(transformation);
+    iges_data.Root().AddEntity(arc);
+    iges_data.Root().AddEntity(circle);
+    iges_data.Root().AddEntity(curve1);
+    iges_data.Root().AddEntity(curve2);
+    iges_data.Root().AddEntity(curve3);
+    iges_data.Root().AddEntity(composite_curve);
+    iges_data.Root().AddEntity(color_def);
 
     std::cout << std::endl << "Total entities added: "
-              << iges_data.GetEntities().size() << std::endl;
-    auto is_ready = iges_data.IsReady();
+              << iges_data.Root().GetEntities().size() << std::endl;
+    auto is_ready = iges_data.Root().IsReady();
     std::cout << "iges_data is ready: " << (is_ready ? "true" : "false") << std::endl;
     if (!is_ready) {
-        auto result = iges_data.Validate();
+        auto result = iges_data.Root().Validate();
         std::cout << "Validation errors: " << result.Message() << std::endl;
     } else {
         // Write the IGES data to a file

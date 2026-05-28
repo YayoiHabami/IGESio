@@ -374,7 +374,7 @@ i_model::IgesData igesio::ConvertFromIntermediate(
         // DEとPDを組み合わせてエンティティを生成
         try {
             auto entity = entities::EntityFactory::CreateEntity(de, pd, de2id, iges_id);
-            iges.AddEntity(entity);
+            iges.Root().AddEntity(entity);
         } catch (const std::out_of_range& e) {
             // エンティティがIGESファイル内に存在しないエンティティを参照している場合
             throw iio::DataFormatError(

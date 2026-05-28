@@ -323,31 +323,31 @@ int main() {
     i_mod::IgesData iges_data;
 
     for (const auto& entity : CreateCircularArc()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateCompositeCurve()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateConicArc()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateCopiousData()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateLine()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateParametricSplineCurve()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreatePoint()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateRationalBSplineCurve()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateCurveOnParametricSurface()) {
-        auto id = iges_data.AddEntity(entity);
+        auto id = iges_data.Root().AddEntity(entity);
     }
 
     // Write to IGES file

@@ -336,7 +336,7 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
                               const bool save_unsupported) {
     // id -> de_pointerのマッピングを作成する
     id2pointer id2de;
-    for (const auto& [id, entity] : data.GetEntities()) {
+    for (const auto& [id, entity] : data.Root().GetEntities()) {
         // TODO: 親子関係を考慮してDEポインタを割り当てる
         id2de[id] = id2de.size() * 2 + 1;
 
@@ -354,7 +354,7 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
     intermediate.global_section = data.global_section;
 
     // DEセクションとPDセクションを変換する
-    for (const auto& [id, entity] : data.GetEntities()) {
+    for (const auto& [id, entity] : data.Root().GetEntities()) {
         auto de = entity->GetRawEntityDE(id2de);
         de.sequence_number = id2de.at(id);
         intermediate.directory_entry_section.push_back(de);

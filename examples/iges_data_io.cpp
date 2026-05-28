@@ -70,7 +70,7 @@ void ShowEntityCounts(const igesio::models::IgesData& data) {
     // Count entity types (and whether they are supported)
     std::unordered_map<i_ent::EntityType, int> type_counts;
     std::unordered_map<i_ent::EntityType, bool> is_supported;
-    for (const auto& [id, entity] : data.GetEntities()) {
+    for (const auto& [id, entity] : data.Root().GetEntities()) {
         type_counts[entity->GetType()]++;
         is_supported[entity->GetType()] = entity->IsSupported();
     }
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
 
         // List entity types and their counts
         std::cout << std::endl << "Table 1. Entity types and counts ("
-                  << data.GetEntityCount() << " entities):" << std::endl;
+                  << data.Root().GetEntityCount() << " entities):" << std::endl;
         ShowEntityCounts(data);
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

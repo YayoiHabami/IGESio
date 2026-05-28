@@ -97,7 +97,7 @@ class ExampleIGESViewer : public IgesViewerGUI {
             show_entity_.clear();
 
             // IGESファイルからエンティティを取得して追加
-            const auto& iges_entities = iges_data_.GetEntities();
+            const auto& iges_entities = iges_data_.Root().GetEntities();
             for (const auto& pair : iges_entities) {
                 AddEntity(pair.second);
             }
