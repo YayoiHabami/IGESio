@@ -7,6 +7,7 @@
  */
 #include "./iges_viewer_gui.h"
 
+#include <algorithm>
 #include <string>
 
 namespace {
@@ -149,6 +150,9 @@ void IgesViewerGUI::Run(const bool vsync) {
         // Controls GUIの描画
         RenderControls();
 
+        // 範囲選択のラバーバンドを描画 (foregroundドローリスト)
+        RenderBoxSelectionOverlay();
+
         // OpenGLの描画
         renderer_.Draw();
 
@@ -182,6 +186,9 @@ void IgesViewerGUI::RenderControls() {
     ImGui::Text("Selection");
     ImGui::Text("  - Left Click: Select");
     ImGui::Text("  - Ctrl + Left Click: Multi-select");
+    ImGui::Text("  - Left Drag L->R: Box select (window)");
+    ImGui::Text("  - Left Drag R->L: Box select (crossing)");
+    ImGui::Text("  - Ctrl + Left Drag: Add to selection");
     ImGui::Separator();
 
     // カメラの位置とターゲットを表示
@@ -283,17 +290,23 @@ void IgesViewerGUI::MouseButtonCallback(
         } else {
             drag_mode_ = DragMode::kNone;
         }
+
+        // 選択ボタン押下時は範囲選択の候補とする (回転は中ボタンのため衝突しない)
+        is_box_selecting_ = (btn == input_config_.select.button);
     } else if (action == GLFW_RELEASE) {
         drag_mode_ = DragMode::kNone;
 
-        // 選択ボタンの解放時、移動量が閾値未満であればクリック(ピッキング)
-        // とみなす。修飾キー (単一/複数選択) はHandleClickSelectionで判別する
+        // 選択ボタン以外の解放では何もしない
         if (btn != input_config_.select.button) return;
+        is_box_selecting_ = false;
 
         double x, y;
         glfwGetCursorPos(window_, &x, &y);
         const double dx = x - press_x_, dy = y - press_y_;
-        if (dx * dx + dy * dy < kClickThresholdPx * kClickThresholdPx) {
+        const bool is_click =
+                dx * dx + dy * dy < kClickThresholdPx * kClickThresholdPx;
+
+        if (is_click) {
             // ウィンドウ座標 -> フレームバッファ座標へ換算
             // (HiDPI環境ではウィンドウサイズとフレームバッファサイズが異なる)
             int win_w = 0, win_h = 0;
@@ -305,8 +318,11 @@ void IgesViewerGUI::MouseButtonCallback(
                     ? static_cast<double>(fb_h) / win_h : 1.0;
 
             HandleClickSelection(x * sx, y * sy, mods);
-            needs_redraw_ = true;
+        } else {
+            // 閾値以上の移動は範囲選択 (矩形ドラッグ)
+            HandleBoxSelection(x, y, mods);
         }
+        needs_redraw_ = true;
     }
 }
 
@@ -349,10 +365,77 @@ void IgesViewerGUI::HandleClickSelection(
     }
 }
 
+void IgesViewerGUI::HandleBoxSelection(
+        const double x, const double y, const int mods) {
+    // ウィンドウ座標 -> フレームバッファ座標へ換算 (HiDPI対応)
+    int win_w = 0, win_h = 0;
+    glfwGetWindowSize(window_, &win_w, &win_h);
+    const auto [fb_w, fb_h] = renderer_.GetDisplaySize();
+    const double sx = (win_w > 0) ? static_cast<double>(fb_w) / win_w : 1.0;
+    const double sy = (win_h > 0) ? static_cast<double>(fb_h) / win_h : 1.0;
+
+    ScreenRect rect;
+    rect.x_min = std::min(press_x_, x) * sx;
+    rect.x_max = std::max(press_x_, x) * sx;
+    rect.y_min = std::min(press_y_, y) * sy;
+    rect.y_max = std::max(press_y_, y) * sy;
+
+    // 左→右ドラッグで内包、右→左で交差 (AutoCAD流)
+    const BoxSelectionMode mode = (x - press_x_ >= 0.0)
+            ? BoxSelectionMode::kContained : BoxSelectionMode::kCrossing;
+    const auto ids = renderer_.PickEntitiesInRect(rect, mode);
+
+    // 複数選択 (追加) 修飾キーが押下されているか
+    const ModifierKey mod = ToModifierKey(mods);
+    const ModifierKey multi_mod = input_config_.multi_select_mod;
+    const bool additive = multi_mod != ModifierKey::kNone
+            && (mod & multi_mod) == multi_mod;
+
+    // 追加でなければ既存の選択を置換する
+    if (!additive) {
+        renderer_.ClearSelection();
+        selected_hit_positions_.clear();
+    }
+    // 範囲選択は単一の交点座標を持たないため hit_positions には登録しない
+    for (const auto& id : ids) {
+        renderer_.Select(id);  // 既に選択済みの場合はSelect側で無視される
+    }
+}
+
+void IgesViewerGUI::RenderBoxSelectionOverlay() {
+    if (!is_box_selecting_) return;
+
+    // 閾値未満の移動はクリック扱いとなるためラバーバンドを描画しない
+    const double dx = last_x_ - press_x_, dy = last_y_ - press_y_;
+    if (dx * dx + dy * dy < kClickThresholdPx * kClickThresholdPx) return;
+
+    // ウィンドウ座標でラバーバンドを描画する (ImGui座標系に一致)
+    const float x0 = static_cast<float>(std::min(press_x_, last_x_));
+    const float y0 = static_cast<float>(std::min(press_y_, last_y_));
+    const float x1 = static_cast<float>(std::max(press_x_, last_x_));
+    const float y1 = static_cast<float>(std::max(press_y_, last_y_));
+
+    // 左→右で内包 (青)、右→左で交差 (緑) — AutoCAD流の色分け
+    const bool contained = (last_x_ - press_x_) >= 0.0;
+    const ImU32 fill = contained
+            ? IM_COL32(50, 120, 255, 40) : IM_COL32(50, 200, 80, 40);
+    const ImU32 border = contained
+            ? IM_COL32(50, 120, 255, 200) : IM_COL32(50, 200, 80, 200);
+
+    ImDrawList* draw_list = ImGui::GetForegroundDrawList();
+    draw_list->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), fill);
+    draw_list->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), border);
+}
+
 void IgesViewerGUI::CursorPositionCallback(
         const double xpos, const double ypos) {
     const auto dx = static_cast<float>(xpos - last_x_);
     const auto dy = static_cast<float>(ypos - last_y_);
+
+    // 範囲選択中はカメラ操作を行わず、ラバーバンド更新のため再描画する
+    if (is_box_selecting_) {
+        needs_redraw_ = true;
+    }
 
     switch (drag_mode_) {
         case DragMode::kRotate: {

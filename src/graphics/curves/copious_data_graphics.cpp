@@ -148,6 +148,31 @@ std::vector<igesio::graphics::RayHit> CopiousDataGraphics::Intersect(
     return result;
 }
 
+igesio::graphics::SelectionSamples CopiousDataGraphics::GetSelectionSamples(
+        const SelectionSampleParams& params) const {
+    if (!entity_) return {};
+
+    // 折れ線 (form 11-13) は接線を持つため基底の曲線サンプリングに委譲する
+    const auto type = entity_->GetDataType();
+    const bool is_point_series =
+            (CDType::kPlanarPoints <= type && type <= CDType::kSextuples);
+    if (!is_point_series) {
+        return EntityGraphics::GetSelectionSamples(params);
+    }
+
+    // 点列 (form 1-3): 各頂点を描画位置に一致させてpointsに格納する
+    const igesio::Matrix4d m = GetWorldTransform().cast<double>();
+    const auto& coords = entity_->Coordinates();
+    const auto count = entity_->GetCount();
+
+    SelectionSamples result;
+    for (size_t i = 0; i < count; ++i) {
+        const Vector3d v = coords.col(i);
+        result.points.push_back((m * v.homogeneous()).hnormalized());
+    }
+    return result;
+}
+
 void CopiousDataGraphics::DrawImpl(
         GLuint, const std::pair<float, float>&) const {
     if (draw_mode_ == GL_POINTS) {

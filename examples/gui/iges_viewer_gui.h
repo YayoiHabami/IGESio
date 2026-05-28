@@ -65,6 +65,11 @@ class IgesViewerGUI {
     /// @note ドラッグ (回転) とクリック (ピッキング) の判別に使用する
     double press_x_ = 0.0, press_y_ = 0.0;
 
+    /// @brief 範囲選択 (左ドラッグ) 中か
+    /// @note 選択ボタン押下で立ち、解放で倒す。ラバーバンド描画と、
+    ///       クリック/範囲選択の判別・カメラ操作の抑止に使用する
+    bool is_box_selecting_ = false;
+
     /// @brief 選択中エンティティの交差座標 (表示用; キーはエンティティID)
     /// @note ピッキング時の3D交点座標を保持し、Controlsパネルに表示する
     std::unordered_map<ObjectID, Vector3d> selected_hit_positions_;
@@ -160,6 +165,19 @@ class IgesViewerGUI {
     /// @param mods 修飾キー (GLFW_MOD_*)
     /// @note Ctrl押下でトグル、修飾なしでid単独へ置換、空クリックで全解除
     virtual void HandleClickSelection(const double, const double, const int);
+
+    /// @brief 範囲選択 (矩形ドラッグ) を処理する
+    /// @param x ドラッグ終了のスクリーンx座標 [px]（ウィンドウ座標系）
+    /// @param y ドラッグ終了のスクリーンy座標 [px]（ウィンドウ座標系）
+    /// @param mods 修飾キー (GLFW_MOD_*)
+    /// @note 左→右ドラッグで内包、右→左で交差 (AutoCAD流)。
+    ///       multi_select_mod押下で選択集合へ追加、なしで置換
+    virtual void HandleBoxSelection(const double, const double, const int);
+
+    /// @brief 範囲選択中のラバーバンド矩形を描画する
+    /// @note ImGuiのforegroundドローリストに描画する。
+    ///       内包=青系、交差=緑系で塗り分ける (AutoCAD流)
+    virtual void RenderBoxSelectionOverlay();
 
     /// @brief マウスカーソル位置のコールバック
     /// @param xpos カーソルのX座標

@@ -45,6 +45,14 @@ struct EntityHit {
     RayHit hit;
 };
 
+/// @brief 範囲選択の判定種別
+enum class BoxSelectionMode {
+    /// @brief 内包: エンティティ全体が矩形内に見える場合に選択
+    kContained,
+    /// @brief 交差: 矩形がエンティティに少しでもかかって見える場合に選択
+    kCrossing,
+};
+
 /// @brief 描画全般に関する (細かい) 設定
 struct GraphicsSettings {
     /// @brief アンチエイリアシングを有効にするか
@@ -313,6 +321,17 @@ class EntityRenderer {
     std::vector<EntityHit> PickEntities(
             const Ray&, double screen_x, double screen_y,
             const RayIntersectionParams& = {}) const;
+
+    /// @brief スクリーン矩形領域内のエンティティを取得する
+    /// @param rect スクリーン矩形 [px]（左上原点・GLFW準拠）
+    /// @param mode 判定種別（内包／交差）
+    /// @param params サンプリング制御パラメータ
+    /// @return 条件を満たすエンティティIDのリスト（順不同）
+    /// @note 粗カリングはBBのスクリーンAABBがrectと重なるかのみで行う（保守的）
+    /// @note kOblique投影モードでは正しい結果を返さない (TODO: 未対応)
+    std::vector<ObjectID> PickEntitiesInRect(
+            const ScreenRect&, BoxSelectionMode,
+            const SelectionSampleParams& = {}) const;
 
     /// @brief 指定IDのエンティティを選択する
     /// @param id エンティティのID
