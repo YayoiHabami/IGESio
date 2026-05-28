@@ -16,6 +16,8 @@
 #ifndef IGESIO_GRAPHICS_CORE_RAY_H_
 #define IGESIO_GRAPHICS_CORE_RAY_H_
 
+#include <optional>
+
 #include "igesio/numerics/matrix.h"
 #include "igesio/graphics/core/camera.h"
 
@@ -62,6 +64,43 @@ struct RayIntersectionParams {
     double curve_hit_tolerance = 1.0;
 };
 
+/// @brief スクリーン空間の矩形領域 [px]（左上原点・GLFW準拠）
+struct ScreenRect {
+    /// @brief x方向の最小値 [px]
+    double x_min = 0.0;
+    /// @brief y方向の最小値 [px]
+    double y_min = 0.0;
+    /// @brief x方向の最大値 [px]
+    double x_max = 0.0;
+    /// @brief y方向の最大値 [px]
+    double y_max = 0.0;
+};
+
+/// @brief 範囲選択用のサンプリング制御パラメータ
+struct SelectionSampleParams {
+    /// @brief 曲線の折れ線分割数（適応分割時は初期分割数）
+    int curve_samples = 32;
+    /// @brief 曲面境界/グリッドのu方向サンプル数
+    int surface_u_samples = 16;
+    /// @brief 曲面境界/グリッドのv方向サンプル数
+    int surface_v_samples = 16;
+
+    // --- 適応分割 (オプション; adaptive_refine=true のときのみ有効) ---
+    /// @brief 曲線をスクリーン弦長基準で適応的に細分するか
+    /// @note PickEntitiesInRectが射影状態を設定して有効化する
+    bool adaptive_refine = false;
+    /// @brief 適応分割に用いる射影行列 P*V (double)
+    Matrix4d adaptive_view_proj = Matrix4d::Identity();
+    /// @brief 適応分割の基準ビューポート幅 [px]
+    int adaptive_width = 0;
+    /// @brief 適応分割の基準ビューポート高さ [px]
+    int adaptive_height = 0;
+    /// @brief 隣接サンプルの画面距離がこの値を超えたら細分する [px]
+    double adaptive_max_chord_px = 8.0;
+    /// @brief 適応分割の最大再帰深さ
+    int adaptive_max_depth = 4;
+};
+
 /// @brief スクリーン座標からワールド空間のレイを生成する
 /// @param camera 現在のカメラ
 /// @param w ビューポートの幅 [px]
@@ -92,6 +131,41 @@ Ray GetRayFromScreen(const Camera& camera, int w, int h,
 /// @note kOblique投影モードでは正しい値が返らない (TODO: 未対応)
 double PixelToWorldSize(const Camera& camera, int w, int h,
                         double x, double y, double depth, double pixel_tol);
+
+/// @brief ワールド座標をスクリーン座標へ順射影する（GetRayFromScreenの双対）
+/// @param camera 現在のカメラ
+/// @param w ビューポートの幅 [px]
+/// @param h ビューポートの高さ [px]
+/// @param world ワールド座標
+/// @return {x, y, ndc_z}（x, yはピクセル座標・左上原点、ndc_zは奥行き -1..1）.
+///         w<=0 / h<=0、または透視投影でカメラ平面より手前（clip.w<=0）の場合は
+///         std::nullopt
+/// @note 内部でP*Vをdoubleへ昇格して計算する。多数の点を射影する場合は、
+///       VP行列版オーバーロードでP*Vを使い回すこと
+/// @note 可視 (near/far) 判定はndc_zで行う (ndc_z<-1: near面より手前,
+///       >1: far面より奥). 正射影/斜投影では特異点が無いため、near面より手前の点も
+///       射影値を返す
+/// @note kOblique投影モードでは正しい結果を返さない (TODO: 未対応)
+std::optional<Vector3d> WorldToScreen(const Camera& camera, int w, int h,
+                                      const Vector3d& world);
+
+/// @brief ワールド座標をスクリーン座標へ順射影する（VP行列を直接受ける版）
+/// @param view_proj (投影行列P)*(ビュー行列V)（double）
+/// @param w ビューポートの幅 [px]
+/// @param h ビューポートの高さ [px]
+/// @param world ワールド座標
+/// @return カメラ版と同じ. 多数の点を射影する際にP*Vの再計算を避けるための版
+/// @note 戻り値の意味・特異点の扱いはカメラ版と同一
+std::optional<Vector3d> WorldToScreen(const Matrix4d& view_proj, int w, int h,
+                                      const Vector3d& world);
+
+/// @brief ワールド座標をクリップ空間 (w除算前) へ射影する
+/// @param view_proj (投影行列P)*(ビュー行列V)（double）
+/// @param world ワールド座標
+/// @return クリップ空間座標 (x, y, z, w)
+/// @note near面クリッピングのように、w除算前の座標で線形補間したい場合に用いる。
+///       near面の内側判定は (clip.z + clip.w >= 0)
+Vector4d WorldToClip(const Matrix4d& view_proj, const Vector3d& world);
 
 }  // namespace igesio::graphics
 

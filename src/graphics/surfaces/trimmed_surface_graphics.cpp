@@ -368,6 +368,47 @@ void igesio::graphics::TrimmedSurfaceGraphics::Cleanup() {
     indices_.clear();
 }
 
+igesio::graphics::SelectionSamples
+igesio::graphics::TrimmedSurfaceGraphics::GetSelectionSamples(
+        const SelectionSampleParams& params) const {
+    if (!entity_) return {};
+
+    const igesio::Matrix4d wt = world_transform_.cast<double>();
+    SelectionSamples result;
+
+    // 外周ループ: N1=0 ならパラメータ矩形、N1=1 ならトリム境界曲線(142)を使用
+    if (entity_->IsOuterBoundaryOfD()) {
+        SelectionSamples base = SampleSurfaceBoundary(*entity_, params, wt);
+        for (auto& pl : base.polylines) {
+            result.polylines.push_back(std::move(pl));
+        }
+    } else if (auto outer = entity_->GetOuterBoundary()) {
+        // CurveOnAParametricSurface(142) は ICurve
+        SelectionSamples outer_s = SampleCurve(*outer, params, wt);
+        for (auto& pl : outer_s.polylines) {
+            result.polylines.push_back(std::move(pl));
+        }
+    }
+
+    // 内周 (穴) ループ
+    const size_t n_inner = entity_->GetInnerBoundaryCount();
+    for (size_t i = 0; i < n_inner; ++i) {
+        auto inner = entity_->GetInnerBoundaryAt(i);
+        if (!inner) continue;
+        SelectionSamples inner_s = SampleCurve(*inner, params, wt);
+        for (auto& pl : inner_s.polylines) {
+            result.polylines.push_back(std::move(pl));
+        }
+    }
+
+    // トリム領域内の内部グリッド点を追加する (IsInDomainで穴/外側を除外)
+    SampleSurfaceInteriorGrid(*entity_, params, wt, result);
+
+    // 各ループを閉じた境界とみなし偶奇規則で内外判定する (穴対応はrenderer側)
+    result.polylines_closed = !result.polylines.empty();
+    return result;
+}
+
 
 
 /**

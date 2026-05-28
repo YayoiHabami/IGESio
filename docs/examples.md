@@ -49,7 +49,9 @@ If the file loads successfully, curve entities are automatically added and displ
     - Left click: Select the entity under the cursor (highlighted).
     - Ctrl + Left click: Toggle selection (multi-select).
     - Click on empty space: Clear all selections.
-    - Range selection (left drag) is not yet implemented.
+    - Left drag (L→R): Select entities fully inside the rectangle (window selection).
+    - Left drag (R→L): Select entities intersecting the rectangle (crossing selection).
+    - Ctrl + Left drag: Add box-selected entities to the current selection.
 - Projection mode: Choose between two modes:
     - Perspective: Shows objects with depth (default).
     - Orthographic: Parallel projection, commonly used in CAD.

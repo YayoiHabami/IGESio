@@ -68,6 +68,14 @@ class TrimmedSurfaceGraphics
     /// @brief OpenGLリソースを解放する
     void Cleanup() override;
 
+    /// @brief 範囲選択用にトリム面をサンプリングする
+    /// @param params サンプリング制御パラメータ
+    /// @return トリム境界(外周/内周)の閉ループ折れ線と、トリム領域内の内部グリッド点
+    /// @note 汎用の矩形境界では未トリム領域まで含み過剰選択となるため、
+    ///       トリム境界曲線(Type 142)を ICurve としてサンプリングする
+    SelectionSamples GetSelectionSamples(
+            const SelectionSampleParams&) const override;
+
  protected:
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID

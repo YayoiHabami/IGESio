@@ -94,9 +94,9 @@ void ICurveGraphics::Synchronize() {
     std::vector<float> vertices;
     auto [t_start, t_end] = entity_->GetParameterRange();
 
-    // 無限のパラメータ範囲をクリップ
-    if (std::isinf(t_start)) t_start = -100.0;
-    if (std::isinf(t_end))   t_end = 100.0;
+    // 無限のパラメータ範囲をクリップ (範囲選択のサンプリングと範囲を一致させる)
+    if (std::isinf(t_start)) t_start = -kInfiniteParamClamp;
+    if (std::isinf(t_end))   t_end = kInfiniteParamClamp;
 
     unsigned int segments = 50;  // TODO: GUIによるtessellationを設定可能にする
     if (segments == 0) segments = 1;
