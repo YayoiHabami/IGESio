@@ -42,3 +42,30 @@ i_num::BoundingBox IGeometry::GetBoundingBox() const {
     // 変換後のバウンディングボックスを作成して返す
     return i_num::BoundingBox(p0, dirs, sizes, is_line);
 }
+
+i_num::BoundingBox IGeometry::GetBoundingBox(const igesio::Matrix4d& context) const {
+    // 定義空間におけるバウンディングボックスを取得
+    auto defined_bb = GetDefinedBoundingBox();
+    auto p0 = defined_bb.GetControl();
+    auto dirs = defined_bb.GetDirections();
+    auto sizes = defined_bb.GetSizes();
+    auto types = defined_bb.GetDirectionTypes();
+
+    // 基点P0および延伸方向D0~D2を、M_entity適用後にcontextを後掛けして変換
+    p0 = i_num::ApplyTransform(context, Transform(p0, true).value(), true);
+    for (size_t i = 0; i < 3; ++i) {
+        dirs[i] = i_num::ApplyTransform(
+            context, Transform(dirs[i], false).value(), false);
+    }
+    std::array<bool, 3> is_line{};
+    for (size_t i = 0; i < 3; ++i) {
+        if (types[i] == i_num::BoundingBox::DirectionType::kLine) {
+            is_line[i] = true;
+        } else {
+            is_line[i] = false;
+        }
+    }
+
+    // 変換後のバウンディングボックスを作成して返す
+    return i_num::BoundingBox(p0, dirs, sizes, is_line);
+}

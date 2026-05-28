@@ -19,6 +19,7 @@ namespace i_ent = igesio::entities;
 
 using igesio::Vector2d;
 using igesio::Vector3d;
+using igesio::Matrix4d;
 using i_ent::SurfaceDerivatives;
 using i_ent::ISurface;
 
@@ -324,6 +325,57 @@ ISurface::TryGetTangentAt(const double u, const double v) const {
 std::optional<Vector3d>
 ISurface::TryGetNormalAt(const double u, const double v) const {
     return Transform(TryGetDefinedNormalAt(u, v), false);
+}
+
+
+
+/**
+ * 曲面の幾何学的情報 (ベクトル; 配置適用) を取得する (ISurface)
+ */
+
+std::optional<SurfaceDerivatives>
+ISurface::TryGetDerivatives(const double u, const double v,
+                            const unsigned int order,
+                            const Matrix4d& placement) const {
+    // 定義空間の偏導関数を取得
+    auto deriv = TryGetDerivatives(u, v, order);
+    if (!deriv) return std::nullopt;
+
+    // 各偏導関数に対し、M_entity適用(仮想Transform) → placement後掛けを行う
+    // S(0,0)は点(R·v+T)、それ以外はベクトル(R·v)として変換する
+    SurfaceDerivatives result(order);
+    for (unsigned int i = 0; i <= order; ++i) {
+        for (unsigned int j = 0; i + j <= order; ++j) {
+            const bool is_point = (i == 0 && j == 0);
+            const auto transformed = Transform((*deriv)(i, j), is_point);
+            result(i, j) =
+                i_num::ApplyTransform(placement, *transformed, is_point);
+        }
+    }
+    return result;
+}
+
+std::optional<Vector3d>
+ISurface::TryGetPointAt(const double u, const double v,
+                        const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetPointAt(u, v), true);
+}
+
+std::optional<std::pair<Vector3d, Vector3d>>
+ISurface::TryGetTangentAt(const double u, const double v,
+                          const Matrix4d& placement) const {
+    auto tangents = TryGetTangentAt(u, v);
+    if (!tangents) return std::nullopt;
+
+    return std::make_pair(
+            i_num::ApplyTransform(placement, tangents->first, false),
+            i_num::ApplyTransform(placement, tangents->second, false));
+}
+
+std::optional<Vector3d>
+ISurface::TryGetNormalAt(const double u, const double v,
+                         const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetNormalAt(u, v), false);
 }
 
 Vector3d ISurface::GetPointAt(const double u, const double v) const {

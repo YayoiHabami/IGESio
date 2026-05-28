@@ -19,6 +19,7 @@ namespace i_ent = igesio::entities;
 
 using igesio::Vector2d;
 using igesio::Vector3d;
+using igesio::Matrix4d;
 using i_ent::ICurve;
 using i_ent::ICurve2D;
 using i_ent::ICurve3D;
@@ -372,6 +373,60 @@ Vector3d ICurve::GetBinormalAt(const double t) const {
             " is out of range for the curve.");
     }
     return *binormal;
+}
+
+
+
+/**
+ * 曲線の幾何学的情報 (ベクトル; 配置適用) を取得する (ICurve)
+ */
+
+std::optional<CurveDerivatives>
+ICurve::TryGetDerivatives(const double t, const unsigned int n,
+                          const Matrix4d& placement) const {
+    // 定義空間の導関数を取得
+    auto deriv = TryGetDerivatives(t, n);
+    if (!deriv) return std::nullopt;
+
+    // 各階に対し、M_entity適用(仮想Transform) → placement後掛けを行う
+    // 0階は点(R·v+T)、1階以上はベクトル(R·v)として変換する
+    CurveDerivatives result(n);
+    for (unsigned int i = 0; i <= n; ++i) {
+        const bool is_point = (i == 0);
+        const auto transformed = Transform((*deriv)[i], is_point);
+        result[i] = i_num::ApplyTransform(placement, *transformed, is_point);
+    }
+    return result;
+}
+
+std::optional<Vector3d>
+ICurve::TryGetStartPoint(const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetStartPoint(), true);
+}
+
+std::optional<Vector3d>
+ICurve::TryGetEndPoint(const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetEndPoint(), true);
+}
+
+std::optional<Vector3d>
+ICurve::TryGetPointAt(const double t, const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetPointAt(t), true);
+}
+
+std::optional<Vector3d>
+ICurve::TryGetTangentAt(const double t, const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetTangentAt(t), false);
+}
+
+std::optional<Vector3d>
+ICurve::TryGetNormalAt(const double t, const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetNormalAt(t), false);
+}
+
+std::optional<Vector3d>
+ICurve::TryGetBinormalAt(const double t, const Matrix4d& placement) const {
+    return i_num::ApplyTransform(placement, TryGetBinormalAt(t), false);
 }
 
 

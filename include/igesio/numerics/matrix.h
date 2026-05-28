@@ -12,6 +12,7 @@
 #define IGESIO_NUMERICS_MATRIX_H_
 
 #include <algorithm>
+#include <optional>
 #include <string>
 
 namespace igesio {
@@ -1919,6 +1920,40 @@ inline auto AngleAxisf = [](float angle, const Vector<float, 3>& axis) {
 };
 
 }  // namespace igesio
+
+#endif  // IGESIO_ENABLE_EIGEN
+
+#ifdef IGESIO_ENABLE_EIGEN
+
+namespace igesio::numerics {
+
+/// @brief 4x4同次変換行列を座標orベクトルに適用する
+/// @param m 4x4同次変換行列(回転+並進。スケールは124相当を想定)
+/// @param v 変換前の座標orベクトル
+/// @param is_point 座標を変換する場合は`true`、ベクトルを変換する場合は`false`
+/// @return 変換後の座標orベクトル. 回転R(mの左上3x3)、並進T(mの右上3x1)に対し、
+///         座標の場合は R·v + T、ベクトルの場合は R·v
+/// @note `EntityBase::TransformImpl`の規約に準拠する
+inline Vector3d ApplyTransform(const Matrix4d& m, const Vector3d& v,
+                               const bool is_point) {
+    Vector3d result = m.topLeftCorner<3, 3>() * v;
+    if (is_point) result += m.topRightCorner<3, 1>();
+    return result;
+}
+
+/// @brief 4x4同次変換行列を座標orベクトルに適用する(optional透過版)
+/// @param m 4x4同次変換行列
+/// @param v 変換前の座標orベクトル. `std::nullopt`の場合はそのまま返す
+/// @param is_point 座標を変換する場合は`true`、ベクトルを変換する場合は`false`
+/// @return 変換後の座標orベクトル. vが`std::nullopt`の場合は`std::nullopt`
+inline std::optional<Vector3d> ApplyTransform(
+        const Matrix4d& m, const std::optional<Vector3d>& v,
+        const bool is_point) {
+    if (!v) return std::nullopt;
+    return ApplyTransform(m, *v, is_point);
+}
+
+}  // namespace igesio::numerics
 
 #endif  // IGESIO_ENABLE_EIGEN
 
