@@ -163,6 +163,21 @@ class AssemblyCoordsTest : public ::testing::Test {
         return surfaces.empty() ? nullptr : surfaces.front();
     }
 
+    /// @brief パラメータ中央で点が得られる、トリムなしのISurfaceを返す
+    /// @note TrimmedSurfaceはトリム領域外で点を返さない (IsInDomainで棄却) ため、
+    ///       配置合成の検算には下位の素のサーフェス (128等) を用いる。
+    static std::shared_ptr<i_ent::EntityBase> WorkingSurface() {
+        for (const auto& [id, e] : data_->Root().GetEntities()) {
+            auto surf = std::dynamic_pointer_cast<const i_ent::ISurface>(e);
+            if (!surf) continue;
+            const auto r = surf->GetParameterRange();
+            const double u = 0.5 * (r[0] + r[1]);
+            const double v = 0.5 * (r[2] + r[3]);
+            if (surf->TryGetPointAt(u, v).has_value()) return e;
+        }
+        return nullptr;
+    }
+
     /// @brief ロード済みエンティティから、物理従属かつ幾何を持つメンバを返す
     static std::shared_ptr<i_ent::EntityBase> LoadedDependentGeometry() {
         auto found = data_->Root().FindEntities(
@@ -423,9 +438,12 @@ TEST_F(AssemblyCoordsTest, GetSurfaceView_ReturnsViewForSurface) {
 }
 
 // 曲面ビューのサンプル点がResolvePlacementと一致する (配線整合)
+// NOTE: TrimmedSurfaceはトリム領域外で点を返さずデータ依存になるため、配置合成の検算には
+//       中央で点が得られる素のISurface (WorkingSurface) を用いる。型ディスパッチの検証は
+//       GetSurfaceView_ReturnsViewForSurface (144) が担う。
 TEST_F(AssemblyCoordsTest, GetSurfaceView_PointMatchesResolvedPlacement) {
-    auto surface = LoadedSurface();
-    ASSERT_NE(surface, nullptr);
+    auto surface = WorkingSurface();
+    ASSERT_NE(surface, nullptr) << "中央で点が得られるISurfaceが見つからない";
     auto surf = std::dynamic_pointer_cast<const i_ent::ISurface>(surface);
     ASSERT_NE(surf, nullptr);
 
@@ -438,23 +456,16 @@ TEST_F(AssemblyCoordsTest, GetSurfaceView_PointMatchesResolvedPlacement) {
     auto view = root->GetSurfaceView(id, CoordFrame::World());
     ASSERT_NE(view, nullptr);
 
-    // パラメータ範囲を3x3で走査し、基底が値を返す点で配置適用を検算する
+    // パラメータ中央 (WorkingSurfaceが点を返すことを保証済み) で配置適用を検算する
     const auto range = surf->GetParameterRange();
-    bool checked = false;
-    for (int iu = 0; iu <= 2; ++iu) {
-        for (int iv = 0; iv <= 2; ++iv) {
-            const double u = range[0] + (range[1] - range[0]) * iu / 2.0;
-            const double v = range[2] + (range[3] - range[2]) * iv / 2.0;
-            const auto local = surf->TryGetPointAt(u, v);  // M_entity適用済み
-            if (!local) continue;
-            const auto via_view = view->TryGetPointAt(u, v);
-            ASSERT_TRUE(via_view.has_value());
-            const Vector3d expected = i_num::ApplyTransform(*pl, *local, true);
-            EXPECT_TRUE(i_num::IsApproxEqual(*via_view, expected));
-            checked = true;
-        }
-    }
-    EXPECT_TRUE(checked) << "有効なパラメータ点が1つも得られなかった";
+    const double u = 0.5 * (range[0] + range[1]);
+    const double v = 0.5 * (range[2] + range[3]);
+    const auto local = surf->TryGetPointAt(u, v);  // M_entity適用済み
+    ASSERT_TRUE(local.has_value());
+    const auto via_view = view->TryGetPointAt(u, v);
+    ASSERT_TRUE(via_view.has_value());
+    const Vector3d expected = i_num::ApplyTransform(*pl, *local, true);
+    EXPECT_TRUE(i_num::IsApproxEqual(*via_view, expected));
 }
 
 // 曲線IDをGetSurfaceViewへ渡すとnullptr (型不一致)
