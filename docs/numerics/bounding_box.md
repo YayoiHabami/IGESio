@@ -32,10 +32,10 @@ The class defines a bounding box using the following four types of parameters:
 |:---|:---|
 | Control Point $P_0$ | A corner point of the bounding box <br> Specifically, when aligned with the x, y, z axes, this is the point with the smallest coordinate values |
 | Extension Directions $D_0, D_1, D_2$ | Three orthogonal unit vectors that form the bounding box (rectangular prism) |
-| Edge Lengths $s_0, s_1, s_2$ | Lengths of the bounding box edges along each extension direction <br> $s_0, s_1 > 0, \quad s_2 \geq 0$ (for 2D cases, $s_2 = 0$) |
+| Edge Lengths $s_0, s_1, s_2$ | Lengths of the bounding box edges along each extension direction <br> Each $s_i \geq 0$, and each axis may independently be zero ( $\pm\infty$ also allowed) <br> The number of non-zero edges gives the dimension (0–3): 0D is a point, 1D a segment, 2D a planar region, 3D a rectangular prism |
 | Edge Types $\text{type}_0, \text{type}_1, \text{type}_2$ | Enumeration type representing the type of edge along each extension direction <br> - `kSegment`: Finite line segment <br> - `kRay`: Half-infinite line (extends infinitely from the starting point) <br> - `kLine`: Infinite line (extends infinitely in both directions) |
 
-> Only when created with the default constructor will a special bounding box be generated with $P_0 = (0,0,0)$ and $s_0 = s_1 = s_2 = 0$. In this case, `BoundingBox::IsEmpty()` returns `true`.
+> When created with the default constructor, a bounding box is generated with $P_0 = (0,0,0)$ and $s_0 = s_1 = s_2 = 0$. `BoundingBox::IsEmpty()` returns `true` when all edge lengths are zero (i.e. `Dimension()==0`), so it returns `true` not only for the default-constructed box but also for a box degenerated to a point (0D).
 
 <img src="./images/bounding_boxes.svg" alt="Bounding Boxes Illustration" width="500"/>
 
@@ -50,7 +50,7 @@ The class defines a bounding box using the following four types of parameters:
 | `BoundingBox()` | Default constructor. Creates an empty bounding box with the control point at the origin and size of 0. |
 | `BoundingBox(control, directions, sizes, is_line)` | Creates a bounding box in arbitrary directions (2D or 3D).<br> - `control`: Control point $P_0$<br> - `directions`: Array of extension directions (2 elements for 2D, 3 for 3D; each element is a unit vector)<br> - `sizes`: Size along each direction<br> - `is_line`: Array indicating whether each direction is kLine (defaults to all `false`)<br> ※Overloaded for 2D/3D. |
 | `BoundingBox(control, sizes, is_line)` | Creates a bounding box aligned with the x, y, z axes (or x, y axes).<br> - `control`: Control point $P_0$<br> - `sizes`: Size along each direction (3 elements for 3D, 2 for 2D)<br> - `is_line`: Array indicating whether each direction is kLine (defaults to all `false`) |
-| `BoundingBox(point1, point2)` | Creates a bounding box that contains two points.<br> - `point1`, `point2`: Two points contained in the bounding box<br> - Automatically generates a bounding box aligned with the x, y, z axes based on the coordinate values of the two points<br> - If one axis has the same coordinate value, it is treated as a 2D bounding box (the zero-size direction is treated as $D_2$) <br> - Example: If $x_1=x_2$, then $D_0=e_y, D_1=e_z, D_2=e_x$ |
+| `BoundingBox(point1, point2)` | Creates a bounding box that contains two points.<br> - `point1`, `point2`: Two points contained in the bounding box<br> - The extension directions are always the x, y, z axes ( $D_0=e_x, D_1=e_y, D_2=e_z$ ), and the size of each axis is the absolute value of each component of $point2 - point1$<br> - Axes with equal coordinate values become size 0 (degenerate); depending on the number of matching axes, a 2D, 1D, or 0D bounding box is formed (when $point1 = point2$, a 0D point)<br> - Does not throw; degenerate inputs are allowed |
 
 ### Setting, Getting, and Modifying Parameters
 
@@ -68,11 +68,12 @@ The class defines a bounding box using the following four types of parameters:
 
 | Function | Description |
 |:---|:---|
-| `IsEmpty()` | Check if empty <br> (Returns `true` when edge lengths $s_0 = s_1 = s_2 = 0$) |
-| `Is2D()` <br> `Is3D()` | Check if 2D or 3D <br> (Determined as 2D when $s_2 = 0$) |
-| `IsOnZPlane()` | Check if on the Z=0 plane <br> (Returns `true` when `Is2D()==true` and $D_2 \parallel e_z$ and $P_0.z = 0$) |
+| `IsEmpty()` | Check if empty <br> (Returns `true` when all edge lengths are zero, i.e. `Dimension()==0`. Also `true` for a box degenerated to a point (0D)) |
+| `Dimension()` | Get the number of axes with a non-zero edge (extent), i.e. the dimension <br> (Returns 0–3; axes with $\pm\infty$ are also counted as non-zero) |
+| `Is0D()` <br> `Is1D()` <br> `Is2D()` <br> `Is3D()` | Check whether the enclosed region is 0/1/2/3-dimensional respectively <br> (Returns `true` when `Dimension()` equals 0/1/2/3) |
+| `IsOnZPlane()` | Check if on the Z=0 plane <br> (Returns `true` when $P_0.z = 0$ and the direction vectors of all non-degenerate axes have no z-component. Not limited to 2D regions; 1D segments and 0D points on the z=0 plane are also covered) |
 | `IsFinite()` | Check if (volume is) finite <br> (Returns `true` when all edge types are `kSegment`) |
-| `GetVertices()` | Get all vertices <br> (Vertex coordinates may be $\pm \infty$ when infinite edges exist) |
+| `GetVertices()` | Get all vertices <br> (Returns $2^{\text{Dimension}}$ vertices (0D=1, 1D=2, 2D=4, 3D=8). Vertex coordinates may be $\pm \infty$ when infinite edges exist) |
 | `GetFiniteVertices()` | Get only finite vertices <br> (Returns an empty vector when infinite edges exist) |
 
 ### Containment and Intersection Tests
@@ -97,13 +98,14 @@ The `BoundingBox` class defines a bounding box using the following four types of
     - $\|D_i\| = 1\ (i=0,1,2)$
     - $D_0 \cdot D_1 = 0, \quad D_0 \times D_1 = D_2$
 - Edge Lengths $s_0, s_1, s_2 \in \mathbb{R}$: Lengths of the bounding box edges along each extension direction
-    - $s_0, s_1 > 0, \quad s_2 \geq 0$ (for 2D cases, $s_2 = 0$)
+    - Each $s_i \geq 0$, and each axis may independently be zero ( $s_i = +\infty$ for `kRay`, $s_i = -\infty$ for `kLine`)
+    - The number of non-zero edges gives the dimension (0–3)
 - Edge Types $\text{type}_0, \text{type}_1, \text{type}_2$: Enumeration type representing the type of edge along each extension direction
     - `kSegment`: Finite line segment
     - `kRay`: Half-infinite line (extends infinitely from the starting point)
     - `kLine`: Infinite line (extends infinitely in both directions)
 
-> When nothing is specified in the constructor (default constructor), the edge lengths satisfy $s_0 = s_1 = s_2 = 0$. This is a special case where `BoundingBox::IsEmpty()` returns `true`. Although not explicitly handled below, in this case `BoundingBox::Contains(point)` always returns `false`, etc.
+> When nothing is specified in the constructor (default constructor), the edge lengths satisfy $s_0 = s_1 = s_2 = 0$. In this case `BoundingBox::IsEmpty()` returns `true` (a box degenerated to a point (0D) likewise returns `true`). Although not explicitly handled below, in this case `BoundingBox::Contains(point)` always returns `false`, etc.
 >
 > Including this case, in `BoundingBox::GetDirectionTypes()`, $\text{type}_i$ is calculated as follows:
 >
@@ -111,22 +113,15 @@ The `BoundingBox` class defines a bounding box using the following four types of
 
 #### BoundingBox Region and Vertices
 
-The region represented by a bounding box is finite only when all $\text{type}_i$ are `kSegment`. When $s_2 = 0$, this region represents a 2D rectangle; when $s_2 > 0$, it represents a 3D rectangular prism. When any edge has infinite length (`kRay` or `kLine`), the bounding box region extends infinitely. In this case, `BoundingBox::GetFiniteVertices()` returns an empty vector. On the other hand, `BoundingBox::GetVertices()` calculates vertices including those with coordinate values of $\pm \infty$.
+The region represented by a bounding box is finite only when all $\text{type}_i$ are `kSegment`. Depending on the number of non-zero edges (the dimension), this region represents one of a 0D point, a 1D segment, a 2D rectangle, or a 3D rectangular prism. When any edge has infinite length (`kRay` or `kLine`), the bounding box region extends infinitely. In this case, `BoundingBox::GetFiniteVertices()` returns an empty vector. On the other hand, `BoundingBox::GetVertices()` calculates vertices including those with coordinate values of $\pm \infty$.
 
-When the bounding box region is a rectangle or rectangular prism, the vertices are calculated as follows:
+When the bounding box region is finite, the vertices are generated using only the non-degenerate axes (axes with $s_i \neq 0$ ). Letting the set of non-degenerate axes be $A = \lbrace i \mid s_i \neq 0 \rbrace$, the number of vertices is $2^{|A|}$ (0D=1, 1D=2, 2D=4, 3D=8). Each vertex is given for a subset $S \subseteq A$ as follows:
 
-| Vertex Name <br> $V_{D}$ | Rectangle <br> (4 vertices) | Rectangular Prism <br> (8 vertices) |
-|:----|:---:|:---:|
-| $V_{LFB}$ | $P_0$ | $P_0$ |
-| $V_{RFB}$ | $P_0 + s_1 D_1$ | $P_0 + s_1 D_1$ |
-| $V_{RBB}$ | $P_0 + s_2 D_2$ | $P_0 + s_2 D_2$ |
-| $V_{LBB}$ | $P_0 + s_1 D_1 + s_2 D_2$ | $P_0 + s_1 D_1 + s_2 D_2$ |
-| $V_{LFT}$ | - | $P_0 + s_3 D_3$ |
-| $V_{RFT}$ | - | $P_0 + s_1 D_1 + s_3 D_3$ |
-| $V_{RBT}$ | - | $P_0 + s_2 D_2 + s_3 D_3$ |
-| $V_{LBT}$ | - | $P_0 + s_1 D_1 + s_2 D_2 + s_3 D_3$ |
+$$V_S = P_0 + \sum_{i \in S} s_i D_i$$
 
-> For coordinate values returned by `GetVertices()`, for example, if $D_0 = (1,0,0), s_0 = +\infty$ and $s_1, s_2 < \infty$, the x-component of vertices $V_{RFB}, V_{RBB}, V_{RFT}, V_{RBT}$ will be $+\infty$. Also, in this library, when $s_i = \infty$ and $D_{i,j} = 0\ (j = x,y,z)$, the corresponding vertex component is replaced with 0.
+Degenerate axes ( $s_i = 0$ ) do not contribute to this sum, so they have no effect on the vertex coordinates. Note that an axis with $\text{type}_i = \text{kLine}$ extends infinitely in both directions, so the side with $i \notin S$ is treated as the $-\infty$ end.
+
+> For coordinate values returned by `GetVertices()`, for example, if $D_0 = (1,0,0), s_0 = +\infty$ and $s_1, s_2 < \infty$, the x-component of vertices with $0 \in S$ will be $+\infty$. Also, in this library, when $s_i = \infty$ and $D_{i,j} = 0\ (j = x,y,z)$, the corresponding vertex component is replaced with 0.
 
 #### Containment Test Between BoundingBoxes
 
@@ -188,14 +183,7 @@ $$I_{i,A} = \begin{cases}
     [0, s_{i,A}] & (\text{type}_{i,A} = \text{kSegment})
 \end{cases}$$
 
-Next, the vertices $\text{vertices}_B$ of $\mathcal{B}_B$ are defined as follows:
-
-$$\text{vertices}_B = \begin{cases}
-    \lbrace V_{LFB}, V_{RFB}, V_{RBB}, V_{LBB} \rbrace & (s_{2,B} = 0) \\\
-    \lbrace V_{LFB}, V_{RFB}, V_{RBB}, V_{LBB}, V_{LFT}, V_{RFT}, V_{RBT}, V_{LBT} \rbrace & (s_{2,B} > 0)
-\end{cases}$$
-
-Transform each vertex to $\Sigma_A$ with coordinates $V_{D,B}'(x_{D,A}, y_{D,A}, z_{D,A})$. Among these vertices, define the minimum and maximum values in each axis direction as follows:
+Next, as described in [BoundingBox Region and Vertices](#boundingbox-region-and-vertices), the vertices $\text{vertices}_B$ of $\mathcal{B}_B$ are generated using only the non-degenerate axes, giving $2^{\text{dimension}}$ vertices. Transform each vertex to $\Sigma_A$ with coordinates $V_{D,B}'(x_{D,A}, y_{D,A}, z_{D,A})$. Among these vertices, define the minimum and maximum values in each axis direction as follows:
 
 $$\begin{aligned}
     x_{\text{min},B} &= \min_{V_{D,B}' \in \text{vertices}_B} x_{D,A}, \quad x_{\text{max},B} = \max_{V_{D,B}' \in \text{vertices}_B} x_{D,A} \\\

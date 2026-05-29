@@ -38,9 +38,9 @@ class BoundingBox {
     /// @note D0, D1, D2は単位ベクトルであり、D0×D1=D2を満たす.
     std::array<Vector3d, 3> directions_;
     /// @brief 各方向の長さ s0, s1, s2
-    /// @note DiがkSegmentの場合は正の有限値、DiがkRayの場合は+∞、DiがkLineの場合は-∞となる.
-    ///       また、sizes_[0], sizes_[1] > 0, sizes_[2] >= 0 を満たす
-    ///       (2次元の場合はsizes_[2] = 0).
+    /// @note DiがkSegmentの場合は非負の有限値、DiがkRayの場合は+∞、DiがkLineの場合は-∞となる.
+    ///       各siは独立に0を取りうる. 非ゼロのextentを持つ軸数が次元(0〜3)であり、
+    ///       0Dは点、1Dは線分、2Dは平面領域、3Dは直方体を表す.
     std::array<double, 3> sizes_;
 
     /// @brief デフォルトのdirection_types_
@@ -64,9 +64,10 @@ class BoundingBox {
     /// @param sizes 各方向のサイズ s0, s1, s2
     /// @param is_line 各方向がkLineかどうかを示す配列. is_line[i]がfalseの場合は、
     ///        sizes[i]が有限値であればkSegment、+∞であればkRayとして扱う.
-    /// @throw std::invalid_argument controlに無限大の値が含まれる場合、sizes[2]以外の
-    ///        要素がゼロの場合、D0, D1, D2が単位ベクトルでない場合、または
+    /// @throw std::invalid_argument controlに無限大の値が含まれる場合、sizesに負値が
+    ///        含まれる場合、D0, D1, D2が単位ベクトルでない場合、または
     ///        D0・D1!=0 または D0×D1!=D2 の場合 (各軸が直交座標系を形成しない場合)
+    /// @note sizesは各軸独立に0を取りうる(退化次元を許容する)
     BoundingBox(const Vector3d&, const std::array<Vector3d, 3>&,
                 const std::array<double, 3>&,
                 const std::array<bool, 3>& = {false, false, false});
@@ -76,8 +77,8 @@ class BoundingBox {
     /// @param sizes 各方向のサイズ (x軸正方向, y軸正方向, z軸正方向)
     /// @param is_line 各方向がkLineかどうかを示す配列. is_line[i]がfalseの場合は、
     ///        sizes[i]が有限値であればkSegment、+∞であればkRayとして扱う.
-    /// @throw std::invalid_argument sizesのいずれかの要素が負値の場合、
-    ///        またはsizes[2]以外が0の場合
+    /// @throw std::invalid_argument sizesのいずれかの要素が負値の場合
+    /// @note sizesは各軸独立に0を取りうる(退化次元を許容する)
     BoundingBox(const Vector3d&, const std::array<double, 3>&,
                 const std::array<bool, 3>& = {false, false, false});
 
@@ -87,9 +88,10 @@ class BoundingBox {
     /// @param sizes 各方向のサイズ
     /// @param is_line 各方向がkLineかどうかを示す配列. is_line[i]がfalseの場合は、
     ///        sizes[i]が有限値であればkSegment、+∞であればkRayとして扱う.
-    /// @throw std::invalid_argument controlに無限大の値が含まれる場合、sizesの
-    ///        いずれかの要素が0以下の場合、D0, D1が単位ベクトルでない場合、または
+    /// @throw std::invalid_argument controlに無限大の値が含まれる場合、sizesに負値が
+    ///        含まれる場合、D0, D1が単位ベクトルでない場合、または
     ///        D0・D1!=0の場合 (各軸が直交座標系を形成しない場合)
+    /// @note sizesは各軸独立に0を取りうる(退化次元を許容する)
     BoundingBox(const Vector3d&, const std::array<Vector3d, 2>&,
                 const std::array<double, 2>&,
                 const std::array<bool, 2>& = {false, false});
@@ -99,21 +101,18 @@ class BoundingBox {
     /// @param sizes 各方向のサイズ (x軸正方向, y軸正方向)
     /// @param is_line 各方向がkLineかどうかを示す配列. is_line[i]がfalseの場合は、
     ///        sizes[i]が有限値であればkSegment、+∞であればkRayとして扱う.
-    /// @throw std::invalid_argument sizesのいずれかの要素が0以下の値の場合
+    /// @throw std::invalid_argument sizesのいずれかの要素が負値の場合
+    /// @note sizesは各軸独立に0を取りうる(退化次元を許容する)
     BoundingBox(const Vector3d&, const std::array<double, 2>&,
                 const std::array<bool, 2>& = {false, false});
 
-    /// @brief コンストラクタ (2/3次元共通; 2点指定)
+    /// @brief コンストラクタ (0〜3次元共通; 2点指定)
     /// @param point1 バウンディングボックスに含まれる点1
     /// @param point2 バウンディングボックスに含まれる点2
-    /// @throw std::invalid_argument point1またはpoint2に無限大の成分が含まれる場合、
-    ///        point1とpoint2の2つ以上の座標値が等しい ((1,2,3)と(1,2,4)など) 場合、
-    ///        またはpoint1とpoint2が同じ点の場合
-    /// @note point1とpoint2が同じ座標値を持つ軸が1つの場合は2次元のバウンディングボックスを、
-    ///       2つの場合は1次元のバウンディングボックスを作成する. 基本的にはD1,D2,D3を
-    ///       x,y,z軸方向の単位ベクトルとするが、2次元の場合はサイズが0の方向をD2として扱い、
-    ///       D0×D1=D2となるようにD0,D1を設定する (x1=x2の場合はD0=y軸,D1=z軸,D2=x軸、
-    ///       y1=y2の場合はD0=z軸,D1=x軸,D2=y軸).
+    /// @throw std::invalid_argument point1またはpoint2に無限大の成分が含まれる場合
+    /// @note 各軸はx,y,z軸方向の単位ベクトルとし、サイズは|point2-point1|の各成分とする.
+    ///       同値の座標軸はサイズ0(退化)となり、同値軸の数に応じて2次元/1次元/0次元の
+    ///       バウンディングボックスを構成する (point1==point2の場合は0次元の点).
     BoundingBox(const Vector3d&, const Vector3d&);
 
 
@@ -154,26 +153,26 @@ class BoundingBox {
     /// @brief 各方向のサイズ s0, s1, s2 を設定する
     /// @param sizes 新しい各方向のサイズ s0, s1, s2
     /// @param is_line 各方向がkLineかどうかを示す配列
-    /// @throw std::invalid_argument sizesのいずれかが負の値の場合、
-    ///        またはsizes[2]以外が0の場合
+    /// @throw std::invalid_argument sizesのいずれかが負の値の場合
     /// @note privateメンバのsizes_とは異なる (kLineの場合も+∞を与える)
+    /// @note 各軸独立に0を取りうる(退化次元を許容する)
     void SetSizes(const std::array<double, 3>&,
                   const std::array<bool, 3>& = {false, false, false});
     /// @brief 各方向のサイズ s0, s1 を設定する (2次元用)
     /// @param sizes 新しい各方向のサイズ s0, s1
     /// @param is_line 各方向がkLineかどうかを示す配列
-    /// @throw std::invalid_argument sizesのいずれかが0以下の値の場合
+    /// @throw std::invalid_argument sizesのいずれかが負の値の場合
     /// @note privateメンバのsizes_とは異なる (kLineの場合も+∞を与える)
-    /// @note sizes_[2]は0に設定される
+    /// @note sizes_[2]は0に設定される. s0,s1は各軸独立に0を取りうる(退化次元を許容する)
     void SetSizes2D(const std::array<double, 2>&,
                     const std::array<bool, 2>& = {false, false});
     /// @brief i番目の方向のサイズを設定する
     /// @param i 方向のインデックス (0~2)
     /// @param size 新しいサイズ
     /// @param is_line その方向がkLineかどうか
-    /// @throw std::invalid_argument sizeが負の値の場合、
-    ///        またはiが0または1の場合にsizeが0の場合
+    /// @throw std::invalid_argument sizeが負の値の場合
     /// @throw std::out_of_range iが0,1,2以外の場合
+    /// @note sizeは0を取りうる(退化次元を許容する)
     void SetSize(const size_t, const double, const bool);
 
     /// @brief 各延伸方向の種類を取得する
@@ -216,17 +215,25 @@ class BoundingBox {
      * 状態の取得
      */
 
-    /// @brief 空であるか判定する
-    /// @note デフォルトコンストラクタで作成され、サイズが変更されていない場合にtrueを返す
+    /// @brief 空(全軸のサイズが0、すなわち0次元)であるか判定する
+    /// @note `Dimension()==0`と同義. 点に退化した箱や未初期化の箱でtrueとなる
     bool IsEmpty() const;
 
+    /// @brief 非ゼロのextentを持つ軸数(次元)を取得する
+    /// @return 0〜3. ±∞(kRay/kLine)の軸も非ゼロとして数える
+    unsigned int Dimension() const;
+    /// @brief 囲む領域が0次元(点)であるか
+    bool Is0D() const { return Dimension() == 0; }
+    /// @brief 囲む領域が1次元(線分)であるか
+    bool Is1D() const { return Dimension() == 1; }
     /// @brief 囲む領域が2次元であるか
-    bool Is2D() const;
+    bool Is2D() const { return Dimension() == 2; }
     /// @brief 囲む領域が3次元であるか
-    bool Is3D() const { return !Is2D(); }
+    bool Is3D() const { return Dimension() == 3; }
 
     /// @brief Z=0平面上にあるか
-    /// @note Is2D()==trueかつd2//z軸かつp0.z()==0の場合にtrueを返す
+    /// @note p0.z()==0かつ全ての非退化軸の方向ベクトルがz成分を持たない場合にtrueを返す.
+    ///       2次元領域に限らず、z=0平面上の1次元線分・0次元点も対象とする.
     bool IsOnZPlane() const;
 
     /// @brief 囲む領域が有限であるか判定する
