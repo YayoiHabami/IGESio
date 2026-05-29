@@ -112,6 +112,11 @@ class SurfaceView : public ISurface {
     std::array<double, 4> GetParameterRange() const override {
         return base_->GetParameterRange();
     }
+    /// @brief 基底の配置適用版`TryGetDerivatives(u, v, order, placement)`を可視化する
+    /// @note 3引数版をオーバーライドすると名前隠蔽により4引数版が隠れるため、
+    ///       `using`で再公開する. これによりSurfaceViewを具象型で保持したまま
+    ///       配置適用版を呼べる
+    using ISurface::TryGetDerivatives;
     /// @brief ビューの定義空間における偏導関数を取得する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v

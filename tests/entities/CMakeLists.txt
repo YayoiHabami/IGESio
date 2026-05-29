@@ -28,6 +28,9 @@ set(TEST_SOURCES
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
     surfaces/test_surface_line_intersection.cpp
+
+    # Views
+    views/test_curve_view.cpp
 )
 
 add_executable(test_entities ${TEST_SOURCES})

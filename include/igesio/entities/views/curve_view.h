@@ -110,6 +110,11 @@ class CurveView : public ICurve {
     std::array<double, 2> GetParameterRange() const override {
         return base_->GetParameterRange();
     }
+    /// @brief 基底の配置適用版`TryGetDerivatives(t, n, placement)`を可視化する
+    /// @note 2引数版をオーバーライドすると名前隠蔽により3引数版が隠れるため、
+    ///       `using`で再公開する. これによりCurveViewを具象型で保持したまま
+    ///       配置適用版を呼べる
+    using ICurve::TryGetDerivatives;
     /// @brief ビューの定義空間における導関数を取得する
     /// @param t パラメータ値
     /// @param n 何階まで計算するか
