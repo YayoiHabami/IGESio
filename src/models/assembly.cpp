@@ -85,10 +85,9 @@ void CollectWorldVertices(const Assembly& node, const Matrix4d& node_world,
         const auto geom = std::dynamic_pointer_cast<const i_ent::IGeometry>(entity);
         if (!geom) continue;
 
-        // 点・直線状などs0/s1が0の退化BBはGetBoundingBoxが例外を投げるため除外する
+        // 点・直線状(0/1次元)に退化したメンバはワールドBBに寄与しないため除外する
         const auto defined = geom->GetDefinedBoundingBox();
-        const auto dsz = defined.GetSizes();
-        if (defined.IsEmpty() || dsz[0] <= 0.0 || dsz[1] <= 0.0) continue;
+        if (defined.Dimension() < 2) continue;
 
         const auto bb = geom->GetBoundingBox(node_world);
         for (const auto& v : bb.GetFiniteVertices()) out.push_back(v);
