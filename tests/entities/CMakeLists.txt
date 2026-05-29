@@ -24,6 +24,9 @@ set(TEST_SOURCES
     curves/test_signed_curvature.cpp
     curves/test_curve_line_intersection.cpp
 
+    # Structures
+    structures/test_color_definition.cpp
+
     # Surfaces
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp

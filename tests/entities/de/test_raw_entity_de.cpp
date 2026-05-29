@@ -246,6 +246,37 @@ TEST(ToRawEntityDETest, NormalCase) {
     EXPECT_EQ(de.IsDefault(), is_default) << "IsDefault() mismatch";
 }
 
+// Line Weight Number (パラメータ12) が空欄の場合、必須エラーとせず
+// デフォルト値 (0) にフォールバックすること。
+// Fusion 360 / Inventor 等は本フィールドを省略して出力する (loading-error-analysis.md 分類I)。
+// 実データは M01_Impeller.iges (Fusion 360) の 186 エンティティ (D5/D6) より。
+TEST(ToRawEntityDETest, BlankLineWeightNumberDefaultsToZero) {
+    // col9-16 (Line Weight Number) が空欄、col17-24 (Color Number) が -1765
+    std::string f = "     186       3                                                00010000D      5";
+    std::string s = "     186           -1765       1       0                               0D      6";
+
+    // 空欄でも例外を投げずに読み込めること
+    i_ent::RawEntityDE de;
+    ASSERT_NO_THROW(de = i_ent::ToRawEntityDE(f, s));
+
+    CheckDEParamL1(de, i_ent::EntityType::kManifoldSolidBRepObject, 3, 0, 0, 0, 0, 0, 0,
+                   i_ent::EntityStatus("00010000"), 5);
+    // Line Weight Number はデフォルト値 0、Color Number は -1765
+    CheckDEParamL2(de, i_ent::kDefaultLineWeightNumber, -1765, 1, 0, "", 0);
+
+    // IsDefault(): index 6 (Line Weight Number) が true であること
+    std::array<bool, 10> is_default = {true, true, true, true, true, true,
+                                       true, false, false, true};
+    EXPECT_EQ(de.IsDefault(), is_default) << "IsDefault() mismatch";
+    EXPECT_TRUE(de.IsDefault()[6]) << "Line weight number should be marked as default";
+
+    // ラウンドトリップ: 空欄だった Line Weight Number が空欄で再現されること
+    auto [f2, s2] = i_ent::ToStrings(de, de.parameter_data_pointer,
+                                     de.sequence_number, de.parameter_line_count);
+    EXPECT_EQ(f, f2) << "First line mismatch";
+    EXPECT_EQ(s, s2) << "Second line mismatch (blank line weight not preserved)";
+}
+
 
 
 /******************************************************************************

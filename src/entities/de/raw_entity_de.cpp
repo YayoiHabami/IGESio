@@ -608,8 +608,11 @@ i_ent::ToRawEntityDE(const std::string& first, const std::string& second) {
         // Parameter 11: Entity Type Number (skip)
 
         // Parameter 12: Line Weight Number
+        // 仕様上 0 (システム既定) を取り得る表示属性であり、Fusion 360 / Inventor 等は
+        // 本フィールドを省略して出力する。他の表示属性フィールドと同様、空欄は
+        // kDefaultLineWeightNumber (0) にデフォルトする (読み込み寛容化の設計方針 A層)。
         tmp = second.substr(++i * w, w);
-        de.line_weight_number = igesio::FromIgesInteger(tmp, std::nullopt);
+        de.line_weight_number = igesio::FromIgesInteger(tmp, i_ent::kDefaultLineWeightNumber);
         de.SetIsDefault(12, i_util::IsOnlySpace(tmp));
 
         // Parameter 13: Color Number

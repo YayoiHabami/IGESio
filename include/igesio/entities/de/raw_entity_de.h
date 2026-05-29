@@ -159,6 +159,12 @@ constexpr int kDefaultView = 0;
 constexpr int kDefaultTransformationMatrix = 0;
 /// @brief ラベル表示関連付け (ディレクトリエントリ L1, d57-64) のデフォルト値
 constexpr int kDefaultLabelDisplayAssociativity = 0;
+/// @brief 線の太さ番号 (ディレクトリエントリ L2, d9-16) のデフォルト値
+/// @note 仕様上、0 は「システム既定の線幅を使用する」を意味する正当な値であり、
+///       他の表示属性フィールドと同様、フィールドが空欄の場合のデフォルトとして用いる。
+///       Fusion 360 / Inventor などはこのフィールドを省略して出力するため、
+///       空欄を必須エラーとせず 0 にデフォルトする（読み込み寛容化の設計方針 A層）。
+constexpr int kDefaultLineWeightNumber = 0;
 /// @brief 色番号 (ディレクトリエントリ L2, d17-24) のデフォルト値
 constexpr int kDefaultColorNumber = 0;
 /// @brief フォーム番号 (ディレクトリエントリ L2, d33-40) のデフォルト値
@@ -222,7 +228,7 @@ struct RawEntityDE {
     /// @note この値はエンティティの表示に使用する太さ(または幅)を指定する. グローバルパラメータ
     ///       (GlobalParam; 以下GP) と併せて、表示の太さは次式のように決定される:
     ///       `line_weight_number * GP.max_line_weight / GP.line_weight_gradations`
-    int line_weight_number;
+    int line_weight_number = kDefaultLineWeightNumber;
     /// @brief 色番号 (L2, d17-24)
     /// @note エンティティの表示色を指定する. 非負の色番号は以下のように解釈される:
     ///       > 0: 色割り当てなし(デフォルト), 1: 黒, 2: 赤, 3: 緑, 4: 青,
