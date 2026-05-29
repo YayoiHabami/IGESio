@@ -17,6 +17,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
+#include "igesio/models/selection_set.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
 #include "igesio/graphics/core/light.h"
@@ -102,8 +103,10 @@ class EntityRenderer {
     /// @brief 描画全般に関する設定
     GraphicsSettings settings_;
 
-    /// @brief 選択中のエンティティID群
-    std::vector<ObjectID> selected_ids_;
+    /// @brief 選択状態 (GUI非依存のモデル層オブジェクト)
+    /// @note P2ではレンダラが所有する. 将来はセッションラッパー(Scene)が保持し、
+    ///       レンダラはその参照を受け取る形へ移す予定 (本クラスは選択色を保持しない).
+    models::SelectionSet selection_;
 
  public:
     /// @brief コンストラクタ
@@ -356,8 +359,10 @@ class EntityRenderer {
     bool IsSelected(const ObjectID&) const;
 
     /// @brief 選択中のエンティティID群を取得する
-    /// @return 選択中のエンティティIDのリスト
-    const std::vector<ObjectID>& GetSelectedIds() const { return selected_ids_; }
+    /// @return 選択中のエンティティIDのリスト (順不同)
+    /// @note 選択状態は`SelectionSet`(集合)が保持するため、その時点のスナップショットを
+    ///       値で返す. 呼び出し側が`const auto&`で受けても寿命延長で安全に走査できる.
+    std::vector<ObjectID> GetSelectedIds() const;
 
 
 
@@ -443,7 +448,9 @@ class EntityRenderer {
     /// @param program_id シェーダープログラムのID
     /// @param shader_type シェーダータイプ
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawChildren(GLuint, const ShaderType, const std::pair<float, float>&) const;
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    void DrawChildren(GLuint, const ShaderType, const std::pair<float, float>&,
+                      const DrawContext&) const;
 };
 
 }  // namespace igesio::graphics

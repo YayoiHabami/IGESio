@@ -274,7 +274,7 @@ void EntityRenderer::Initialize() {
 
 void EntityRenderer::Cleanup() {
     // 選択状態をクリア
-    selected_ids_.clear();
+    selection_.Clear();
 
     // 描画オブジェクトのクリーンアップ
     for (auto& [shader_type, objects] : draw_objects_) {
@@ -317,9 +317,7 @@ void EntityRenderer::AddGraphicsObject(
 
 void EntityRenderer::RemoveEntity(const ObjectID& id) {
     // 選択中であれば選択集合からも除去する (stale idの防止)
-    selected_ids_.erase(
-            std::remove(selected_ids_.begin(), selected_ids_.end(), id),
-            selected_ids_.end());
+    selection_.Deselect(id);
 
     for (auto& [shader_type, objects] : draw_objects_) {
         auto it = objects.find(id);
@@ -465,6 +463,9 @@ void EntityRenderer::Draw() const {
     auto projection_matrix = camera_.GetProjectionMatrix(
         static_cast<float>(display_width_) / display_height_);
 
+    // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)
+    const DrawContext ctx{&selection_, kSelectionColor};
+
     // 各シェーダープログラムごとに描画
     // TODO: 半透明 (opacity < 1.0) なオブジェクトについては、描画を保留する
     //       (最後にまとめて、画面奥のものから描画するように変更する)
@@ -495,13 +496,13 @@ void EntityRenderer::Draw() const {
 
         // 各エンティティを描画
         DrawChildren(program_id, shader_type,
-                     std::pair<float, float>{display_width_, display_height_});
+                     std::pair<float, float>{display_width_, display_height_}, ctx);
     }
 }
 
 void EntityRenderer::DrawChildren(
         GLuint program_id, const ShaderType shader_type,
-        const std::pair<float, float>& viewport) const {
+        const std::pair<float, float>& viewport, const DrawContext& ctx) const {
     // 対応するシェーダーコードを持たない場合は何もしない
     if (!HasSpecificShaderCode(shader_type)) return;
 
@@ -509,7 +510,7 @@ void EntityRenderer::DrawChildren(
     auto it = draw_objects_.find(shader_type);
     if (it != draw_objects_.end()) {
         for (const auto& [id, object] : it->second) {
-            object->Draw(program_id, shader_type, viewport);
+            object->Draw(program_id, shader_type, viewport, ctx);
         }
     }
 
@@ -519,7 +520,7 @@ void EntityRenderer::DrawChildren(
         for (const auto& [id, object] : composite_it->second) {
             // 仮にshader_typeに対応する子要素がなければ何も実行されないため、
             // objectがshader_typeに対応する子要素を持つかは確認しない
-            object->Draw(program_id, shader_type, viewport);
+            object->Draw(program_id, shader_type, viewport, ctx);
         }
     }
 }
@@ -693,22 +694,14 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
 
 void EntityRenderer::Select(const ObjectID& id) {
     if (IsSelected(id)) return;
+    if (!HasEntity(id)) return;  // 未登録のIDは選択しない
 
-    auto* graphics = FindGraphics(id);
-    if (!graphics) return;  // 未登録のIDは選択しない
-
-    graphics->SetColor(kSelectionColor);
-    selected_ids_.push_back(id);
+    // 選択色は焼き込まず、選択集合へIDを加えるのみ (描画時にPULLしてハイライト)
+    selection_.Select(id);
 }
 
 void EntityRenderer::Deselect(const ObjectID& id) {
-    auto it = std::find(selected_ids_.begin(), selected_ids_.end(), id);
-    if (it == selected_ids_.end()) return;
-
-    if (auto* graphics = FindGraphics(id)) {
-        graphics->ResetColor();  // 元のエンティティの色へ復帰
-    }
-    selected_ids_.erase(it);
+    selection_.Deselect(id);
 }
 
 void EntityRenderer::ToggleSelection(const ObjectID& id) {
@@ -720,17 +713,16 @@ void EntityRenderer::ToggleSelection(const ObjectID& id) {
 }
 
 void EntityRenderer::ClearSelection() {
-    for (const auto& id : selected_ids_) {
-        if (auto* graphics = FindGraphics(id)) {
-            graphics->ResetColor();
-        }
-    }
-    selected_ids_.clear();
+    selection_.Clear();
 }
 
 bool EntityRenderer::IsSelected(const ObjectID& id) const {
-    return std::find(selected_ids_.begin(), selected_ids_.end(), id)
-            != selected_ids_.end();
+    return selection_.Contains(id);
+}
+
+std::vector<igesio::ObjectID> EntityRenderer::GetSelectedIds() const {
+    const auto& items = selection_.Items();
+    return std::vector<ObjectID>(items.begin(), items.end());
 }
 
 i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) const {

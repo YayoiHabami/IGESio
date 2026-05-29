@@ -134,7 +134,8 @@ class CompositeEntityGraphics : public IEntityGraphics {
     /// @note shader_typeの子要素のみを描画する. 子要素の描画は
     ///       子要素に移譲する.
     void Draw(GLuint shader, const ShaderType shader_type,
-              const std::pair<float, float>& viewport) const override {
+              const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
         // kCompositeは特殊なシェーダータイプであり、描画処理は行わない
         if (shader_type == ShaderType::kComposite) return;
 
@@ -143,7 +144,7 @@ class CompositeEntityGraphics : public IEntityGraphics {
         if (it != child_graphics_.end()) {
             for (const auto& child : it->second) {
                 if (child && child->IsDrawable()) {
-                    child->Draw(shader, shader_type, viewport);
+                    child->Draw(shader, shader_type, viewport, ctx);
                 }
             }
         }
@@ -153,7 +154,7 @@ class CompositeEntityGraphics : public IEntityGraphics {
         if (composite_it != child_graphics_.end()) {
             for (const auto& child : composite_it->second) {
                 if (child && child->IsDrawable()) {
-                    child->Draw(shader, shader_type, viewport);
+                    child->Draw(shader, shader_type, viewport, ctx);
                 }
             }
         }
@@ -162,8 +163,10 @@ class CompositeEntityGraphics : public IEntityGraphics {
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    /// @note 何もしない. 子要素の描画は`Draw(shader, shader_type, viewport)`で行う.
-    void Draw(GLuint shader, const std::pair<float, float>& viewport) const override {}
+    /// @param ctx 表示コンテキスト
+    /// @note 何もしない. 子要素の描画は`Draw(shader, shader_type, viewport, ctx)`で行う.
+    void Draw(GLuint shader, const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {}
 
 
 

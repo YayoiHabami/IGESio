@@ -26,6 +26,7 @@
 #include "igesio/common/errors.h"
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
+#include "igesio/graphics/core/draw_context.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
 #include "igesio/graphics/factory.h"
 #include "igesio/graphics/renderer.h"
@@ -68,7 +69,9 @@ TEST(GraphicsObjectSmokeTest, Draw_EmitsModelColorAndDrawCall) {
     const std::array<GLfloat, 4> expected = graphics->GetColor();
 
     // 任意のプログラムID (モックはlocationを名前で採番するため実プログラム不要)
-    graphics->Draw(/*shader=*/1u, std::pair<float, float>{800.0f, 600.0f});
+    // 非選択の表示コンテキスト (ハイライトしない)
+    const i_graph::DrawContext ctx{};
+    graphics->Draw(/*shader=*/1u, std::pair<float, float>{800.0f, 600.0f}, ctx);
 
     // model行列が設定された
     EXPECT_EQ(gl->last_matrix_by_name.count("model"), 1u);

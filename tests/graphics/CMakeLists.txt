@@ -1,5 +1,6 @@
 set(TEST_SOURCES
     test_renderer_smoke.cpp
+    test_selection_pull.cpp
 )
 
 add_executable(test_graphics ${TEST_SOURCES})

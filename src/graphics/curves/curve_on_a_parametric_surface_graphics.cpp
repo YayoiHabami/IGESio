@@ -94,12 +94,13 @@ std::unordered_set<i_graph::ShaderType> CurveOnSurfaceGraphics::GetShaderTypes()
 
 void CurveOnSurfaceGraphics::Draw(
         GLuint shader, const ShaderType shader_type,
-        const std::pair<float, float>& viewport) const {
+        const std::pair<float, float>& viewport,
+        const DrawContext& ctx) const {
     if (curve_graphics_ == nullptr) return;
 
     if (shader_type == curve_graphics_->GetShaderType()) {
         // 指定されたシェーダータイプに合致する場合、描画を行う
-        curve_graphics_->Draw(shader, viewport);
+        curve_graphics_->Draw(shader, viewport, ctx);
     }
 }
 

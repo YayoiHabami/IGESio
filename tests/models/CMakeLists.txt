@@ -5,6 +5,8 @@ set(TEST_SOURCES
     test_assembly_coords.cpp
     test_initial_tree.cpp
     test_flatten.cpp
+
+    test_selection_set.cpp
 )
 
 add_executable(test_models ${TEST_SOURCES})

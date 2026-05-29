@@ -22,6 +22,7 @@
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/material_property.h"
 #include "igesio/graphics/core/ray.h"
+#include "igesio/graphics/core/draw_context.h"
 
 
 
@@ -197,13 +198,17 @@ class IEntityGraphics {
     /// @param shader プログラムシェーダーのID
     /// @param shader_type 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
     /// @note shader_typeに合致する要素がない場合は何もしない
-    virtual void Draw(GLuint, const ShaderType, const std::pair<float, float>&) const = 0;
+    virtual void Draw(GLuint, const ShaderType, const std::pair<float, float>&,
+                      const DrawContext&) const = 0;
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    virtual void Draw(GLuint, const std::pair<float, float>&) const = 0;
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    virtual void Draw(GLuint, const std::pair<float, float>&,
+                      const DrawContext&) const = 0;
 
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、

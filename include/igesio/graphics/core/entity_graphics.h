@@ -143,17 +143,20 @@ class EntityGraphics : public IEntityGraphics {
     /// @param viewport ビューポートのサイズ (width, height)
     /// @note shader_typeに合致する要素がない場合は何もしない
     void Draw(GLuint shader, const ShaderType shader_type,
-              const std::pair<float, float>& viewport) const override {
+              const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
         // シェーダータイプが合致していることのみ確認
         if (shader_type != ShaderType_) return;
 
-        Draw(shader, viewport);
+        Draw(shader, viewport, ctx);
     }
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void Draw(GLuint shader, const std::pair<float, float>& viewport) const override {
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    void Draw(GLuint shader, const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
         if (!entity_) return;
         if (!IsDrawable()) return;
 
@@ -163,8 +166,12 @@ class EntityGraphics : public IEntityGraphics {
         igesio::Matrix4f model = GetWorldTransform();
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
                               1, GL_FALSE, model.data());
+        // 選択中はハイライト色をPULLし、そうでなければエンティティの色を使う
+        // (選択色をオブジェクトへ焼き込まない)
+        const std::array<GLfloat, 4> color =
+                ctx.IsHighlighted(GetEntityID()) ? ctx.highlight_color : GetColor();
         gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
-                        1, GetColor().data());
+                        1, color.data());
 
         // エンティティが面を持っている場合は関連するパラメータを設定
         if constexpr (has_surfaces) {
