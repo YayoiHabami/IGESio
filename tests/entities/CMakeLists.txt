@@ -31,6 +31,7 @@ set(TEST_SOURCES
 
     # Views
     views/test_curve_view.cpp
+    views/test_surface_view.cpp
 )
 
 add_executable(test_entities ${TEST_SOURCES})
