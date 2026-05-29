@@ -73,7 +73,7 @@ enum class ShaderType {
     kRationalBSplineSurface,
 
     /// @brief 複数のシェーダーを使用する
-    /// @note CompositeEntityGraphicsを継承したクラスで使用される.
+    /// @note 子要素(child_graphics_)を持つEntityGraphics(複合ノード)で使用される.
     ///       Composite Curveなど、複数の子要素を持ち、それぞれの子要素で
     ///       異なるシェーダーを使用する場合に使用される.
     kComposite,
