@@ -95,8 +95,8 @@ TestCases<int> DEValueTypeCases(const unsigned int param_index,
 
     switch (type) {
         case i_test::DEValueType::kNA:
-            // N.A.は未定義 (デフォルト値の0のみを許容)
-            return TestCases<int>({0}, {1, -1, 2});
+            // <n.a.>はpostprocessorが値を無視するため任意値を許容 (Section 2.2.1)
+            return TestCases<int>({0, 1, -1, 2, large_v}, {});
         case i_test::DEValueType::kInt:
             // `#`は0を含む任意の正の整数値を許容
             return TestCases<int>({0, 1, 2, large_v}, {-1, -2});
@@ -184,13 +184,13 @@ std::string IsValidErrorMessage(i_ent::EntityType entity_type,
 /// @param char2 ステータス番号の値 (2桁目)
 std::vector<int> StatusNumberValues(
         const unsigned int index, const char char1, const char char2) {
-    if (char1 == '*' && char2 == '*') return {0};  // N.A.と同等
     if (char1 == '0' && (char2 >= '0' && char2 <= '6')) {
         // 指定された数値
         return {static_cast<int>(char2 - '0')};
     }
-    if (char1 == '?' && char2 == '?') {
-        // 任意値
+    // '??'は任意値。'**'もpostprocessorが値を無視する (Section 2.2.1) ため
+    // 任意値を許容する。よって両者ともそのフィールドで取り得る全ての値を有効とする
+    if ((char1 == '?' && char2 == '?') || (char1 == '*' && char2 == '*')) {
         switch (index) {
             case 0:  // blank status
                 return {0, 1};
@@ -326,6 +326,65 @@ void TestIsValid(const unsigned int entity_type_number,
 }  // namespace
 
 
+
+// '**' (n.a.) のステータスフィールドはpostprocessorが値を無視するため
+// (Section 2.2.1)、非ゼロ値が入っていてもIsValidは例外を投げない。
+// 市販CAD (Kompas等) の出力でhierarchy/subordinate等の'**'フィールドに
+// 01/02が書かれるケース (M02_Centrifugal-compressor.igs) の回帰テスト。
+TEST(RawEntityDEIsValidTest, AcceptsNonZeroValueInNAStatusField) {
+    // Type 100 (CircularArc): ステータスパターン "??????**"。
+    // 末尾2桁 (hierarchy) が '**' であり、非ゼロ値を許容する。
+    {
+        auto de = i_ent::RawEntityDE::ByDefault(ET::kCircularArc);
+        de.status.hierarchy = i_ent::HierarchyType::kGlobalDefer;  // 01
+        EXPECT_NO_THROW(i_ent::IsValid(de));
+        de.status.hierarchy = i_ent::HierarchyType::kUseHierarchyProperty;  // 02
+        EXPECT_NO_THROW(i_ent::IsValid(de));
+    }
+    // Type 124 (TransformationMatrix): ステータスパターン "****??**"。
+    // blank_status / subordinate / hierarchy がいずれも '**'。
+    {
+        auto de = i_ent::RawEntityDE::ByDefault(ET::kTransformationMatrix);
+        de.status.blank_status = false;  // 01 (非表示)
+        de.status.subordinate_entity_switch =
+                i_ent::SubordinateEntitySwitch::kLogicallyDependent;  // 02
+        de.status.hierarchy = i_ent::HierarchyType::kGlobalDefer;  // 01
+        EXPECT_NO_THROW(i_ent::IsValid(de));
+    }
+}
+
+// '<n.a.>' のDE値フィールドはpostprocessorが値を無視するため (Section 2.2.1)、
+// 非ゼロ値でもIsValidは例外を投げない。Type 124 (TransformationMatrix) の
+// n.a. 要素 (DE値 + ステータス '**') をすべて非ゼロにした回帰テスト
+// (M02_Centrifugal-compressor.igs)。
+TEST(RawEntityDEIsValidTest, AcceptsNonZeroValueInNADEField) {
+    // Type 124パターン {Na, Na, Na, Na, ZP, Na, Na, Na, I} / status "****??**"。
+    auto de = i_ent::RawEntityDE::ByDefault(ET::kTransformationMatrix);
+    // <n.a.> のDE値フィールドをすべて適当な非ゼロ値に設定
+    de.structure = 3;                    // Structure
+    de.line_font_pattern = 2;            // Line Font Pattern
+    de.level = 5;                        // Level
+    de.view = 7;                         // View
+    de.label_display_associativity = 4;  // Label Display
+    de.line_weight_number = 1;           // Line Weight
+    de.color_number = 6;                 // Color Number
+    // '**' のステータスフィールド (blank/subordinate/hierarchy) も非ゼロに
+    de.status.blank_status = false;  // 01
+    de.status.subordinate_entity_switch =
+            i_ent::SubordinateEntitySwitch::kLogicallyDependent;  // 02
+    de.status.hierarchy = i_ent::HierarchyType::kGlobalDefer;  // 01
+    EXPECT_NO_THROW(i_ent::IsValid(de));
+}
+
+// IGES 5.3ではNullエンティティのみフォーム番号が<n.a.>であり、任意値を許容する。
+TEST(RawEntityDEIsValidTest, AcceptsAnyFormNumberForNullEntity) {
+    for (int fn : {0, 1, 2, 100, -1}) {
+        auto de = i_ent::RawEntityDE::ByDefault(ET::kNull, 0);
+        de.form_number = fn;
+        EXPECT_NO_THROW(i_ent::IsValid(de))
+            << "form number = " << fn;
+    }
+}
 
 TEST(RawEntityDEIsValidTest, Type000) {
     TestIsValid(0, 0, {Na, Na, Na, Na, Na, Na, Na, Na, Na}, "********");
