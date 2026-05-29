@@ -207,6 +207,20 @@ TEST(IGESParameterVectorTest, AccessAsObjectIDFromInt) {
     ASSERT_EQ(val, id);
 }
 
+TEST(IGESParameterVectorTest, AccessAsDoubleFromInt) {
+    // int格納値をdoubleとして取得できる (Realフィールドへの整数表記を許容)
+    igesio::IGESParameterVector vec = {24, 0};
+
+    ASSERT_NO_THROW(vec.access_as<double>(0));
+    EXPECT_DOUBLE_EQ(vec.access_as<double>(1), 0.0);
+    EXPECT_DOUBLE_EQ(vec.access_as<double>(0), 24.0);
+
+    // 変換後は型・フォーマットがReal (小数部なし) になる
+    EXPECT_TRUE(vec.is_type<double>(0));
+    EXPECT_EQ(vec.get_format(0).type, igesio::IGESParameterType::kReal);
+    EXPECT_FALSE(vec.get_format(0).has_fraction);
+}
+
 TEST(IGESParameterVectorTest, AccessAsBadVariantAccess) {
     igesio::IGESParameterVector vec = {std::string("test")};
     ASSERT_THROW(vec.access_as<bool>(0), std::bad_variant_access);
