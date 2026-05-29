@@ -255,6 +255,14 @@ double FindZeroCurvature(const i_ent::ICurve& curve,
         double result = i_num::FindRootScalar(
             kappa, ta, tb, eps * std::abs(tb - ta), 200);
         if (result > t_max) result -= period;
+        // ブラケット[ta,tb]内に角点(曲率∞)が含まれると、toms748の補間が
+        // 非有限なresultを返し得る。その場合は契約どおり区間中点へフォール
+        // バックする(∞をboostのルート探索に渡すとNaNになるのを防ぐ)。
+        if (!std::isfinite(result)) {
+            double t_mid = 0.5 * (ta + tb);
+            if (t_mid > t_max) t_mid -= period;
+            return t_mid;
+        }
         return result;
     } catch (const std::exception&) {
         double t_mid = 0.5 * (ta + tb);
@@ -536,6 +544,12 @@ std::pair<std::vector<double>, std::vector<double>> FindCurvatureExtrema(
         const double k_i = kappa[i];
         const double k_n = kappa[nxt];
 
+        // 角点では曲率が±∞となる (TryGetSignedCurvature)。∞は平滑な曲率の
+        // 極値ではなく、角点はInsertCornersで別途追加されるため、ここでの
+        // 極値探索の対象から除外する。∞をMinimizeScalar (boost) に渡すと
+        // 放物線補間でNaNのt_optが返り、後段のGetPointAtで例外となるのを防ぐ。
+        if (!std::isfinite(k_i)) continue;
+
         const double lb = ts[i] - dt;
         const double ub = ts[i] + dt;
 
@@ -545,7 +559,9 @@ std::pair<std::vector<double>, std::vector<double>> FindCurvatureExtrema(
                 const auto res = i_num::MinimizeScalar(
                     [&](double t) { return -kappa_fn(t); },
                     lb, ub, tol);
-                maxima.push_back(res.t_opt);
+                // ブラケット[lb,ub]が角点(∞)を含む場合、boostが非有限な
+                // t_optを返し得る。その場合はサンプル点にフォールバックする。
+                maxima.push_back(std::isfinite(res.t_opt) ? res.t_opt : ts[i]);
             } catch (const std::exception&) {
                 maxima.push_back(ts[i]);
             }
@@ -556,7 +572,7 @@ std::pair<std::vector<double>, std::vector<double>> FindCurvatureExtrema(
             try {
                 const auto res = i_num::MinimizeScalar(
                     kappa_fn, lb, ub, tol);
-                minima.push_back(res.t_opt);
+                minima.push_back(std::isfinite(res.t_opt) ? res.t_opt : ts[i]);
             } catch (const std::exception&) {
                 minima.push_back(ts[i]);
             }

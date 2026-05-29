@@ -97,6 +97,16 @@ CurveOnSurface::CurveOnAParametricSurface(
       base_curve_(IDGenerator::UnsetID()),
       curve_(IDGenerator::UnsetID()) {
     InitializePD(de2id);
+
+    // 仕様上 Type 142 の Entity Use Flag (Status Number 5〜6桁) は 00 (Geometry)
+    // でなければならないが、一部CAD (SolidWorks / NX 等) はトリム境界として
+    // 05 (2-D Parametric) で出力する。読み込みを通すため、00 以外であれば
+    // 00 へ正規化する。検証 (IsValid) は 00 を要求し続けるため (出力は厳格)、
+    // ここで仕様準拠の値に寄せる (パラメータ空間性は BPTR の構造で表現され、
+    // 142 本体の幾何解釈は自身の Entity Use Flag を参照しない)。
+    if (GetEntityUseFlag() != i_ent::EntityUseFlag::kGeometry) {
+        SetEntityUseFlag(i_ent::EntityUseFlag::kGeometry);
+    }
 }
 
 CurveOnSurface::CurveOnAParametricSurface(

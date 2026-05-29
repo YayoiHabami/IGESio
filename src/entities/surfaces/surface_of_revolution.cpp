@@ -204,7 +204,11 @@ igesio::ValidationResult SurfaceOfRevolution::ValidatePD() const {
 
     // 回転角度
     // 0 <= start_angle < end_angle <= 2*pi
-    if (!(0.0 <= start_angle_ && start_angle_ < end_angle_ && end_angle_ <= 2.0 * kPi)) {
+    // 上限は厳密比較ではなく許容誤差付き比較とする。全周回転(360°)では
+    // CADが終了角を2πの十進近似で出力し、double化で真の2πをわずかに超える
+    // (例: 6.28318530717959 ≈ 2π+4e-15)ことがあるため(値はクランプせず原値を保持)。
+    if (!(0.0 <= start_angle_ && start_angle_ < end_angle_
+          && i_num::IsApproxLEQ(end_angle_, 2.0 * kPi))) {
         errors.emplace_back("Invalid angles: Require 0 <= θstart < θend <= 2*pi, "
                             "but got θstart = " + std::to_string(start_angle_) + "[rad] and "
                             "θend = " + std::to_string(end_angle_) + "[rad].");
