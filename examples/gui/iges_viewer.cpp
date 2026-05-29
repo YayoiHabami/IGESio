@@ -102,6 +102,11 @@ class ExampleIGESViewer : public IgesViewerGUI {
                 AddEntity(pair.second);
             }
 
+            // レンダラにルートAssemblyを設定し、描画時にツリーを走査させる
+            // (可視/抑制サブツリーのスキップ・ワールド変換のリフレッシュ).
+            // 再読込のたびにrootが変わるため毎回設定する
+            Renderer().SetSceneRoot(&iges_data_.Root());
+
             // カメラをリセット
             Renderer().Camera().Reset();
             needs_redraw_ = true;

@@ -172,48 +172,19 @@ class EntityGraphics : public IEntityGraphics {
         DrawChildGraphics(shader, shader_type, viewport, ctx);
     }
 
-    /// @brief エンティティの描画を行う
+    /// @brief エンティティの描画を行う (Drawフェーズ)
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    /// @note 「PULLした表示状態の適用 (ApplyRenderState)」と「ジオメトリ発行
+    ///       (DrawImpl)」に責務を分離する. 本フェーズは論理状態を保持しない.
     void Draw(GLuint shader, const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override {
         if (!entity_) return;
         if (!IsDrawable()) return;
 
-        gl_->LineWidth(GetLineWidth());
-
-        // 全シェーダーで共通のuniform変数を設定
-        igesio::Matrix4f model = GetWorldTransform();
-        gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
-                              1, GL_FALSE, model.data());
-        // 選択中はハイライト色をPULLし、そうでなければエンティティの色を使う
-        // (選択色をオブジェクトへ焼き込まない)
-        const std::array<GLfloat, 4> color =
-                ctx.IsHighlighted(GetEntityID()) ? ctx.highlight_color : GetColor();
-        gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
-                        1, color.data());
-
-        // エンティティが面を持っている場合は関連するパラメータを設定
-        if constexpr (has_surfaces) {
-            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ambientStrength"),
-                           material_property_.ambient_strength);
-            gl_->Uniform1f(gl_->GetUniformLocation(shader, "specularStrength"),
-                           material_property_.specular_strength);
-            gl_->Uniform1i(gl_->GetUniformLocation(shader, "shininess"),
-                           material_property_.shininess);
-
-            // テクスチャの設定
-            gl_->Uniform1i(gl_->GetUniformLocation(shader, "useTexture"),
-                           material_property_.IsTextureUsable() ? 1 : 0);
-            if (material_property_.IsTextureUsable() && texture_id_ != 0) {
-                gl_->ActiveTexture(GL_TEXTURE0);
-                gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
-                gl_->Uniform1i(gl_->GetUniformLocation(shader, "textureSampler"), 0);
-            }
-        }
-
-        DrawImpl(shader, viewport);
+        ApplyRenderState(shader, ctx);  // PULLした表示状態 (変換/色/材質) を適用
+        DrawImpl(shader, viewport);      // ジオメトリ発行 (GL描画コマンド)
     }
 
     /// @brief テクスチャの設定を行う
@@ -737,6 +708,45 @@ class EntityGraphics : public IEntityGraphics {
     }
 
  protected:
+    /// @brief PULLした表示状態をuniformへ適用する (Drawフェーズの状態適用部)
+    /// @param shader プログラムシェーダーのID
+    /// @param ctx 表示コンテキスト
+    /// @note model(変換)・mainColor(選択ハイライト or エンティティ色)・線幅を設定し、
+    ///       has_surfaces時は材質/テクスチャを設定する. 論理状態は保持しない.
+    void ApplyRenderState(GLuint shader, const DrawContext& ctx) const {
+        gl_->LineWidth(GetLineWidth());
+
+        // 全シェーダーで共通のuniform変数を設定
+        igesio::Matrix4f model = GetWorldTransform();
+        gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
+                              1, GL_FALSE, model.data());
+        // 選択中はハイライト色をPULLし、そうでなければエンティティの色を使う
+        // (選択色をオブジェクトへ焼き込まない)
+        const std::array<GLfloat, 4> color =
+                ctx.IsHighlighted(GetEntityID()) ? ctx.highlight_color : GetColor();
+        gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
+                        1, color.data());
+
+        // エンティティが面を持っている場合は関連するパラメータを設定
+        if constexpr (has_surfaces) {
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ambientStrength"),
+                           material_property_.ambient_strength);
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "specularStrength"),
+                           material_property_.specular_strength);
+            gl_->Uniform1i(gl_->GetUniformLocation(shader, "shininess"),
+                           material_property_.shininess);
+
+            // テクスチャの設定
+            gl_->Uniform1i(gl_->GetUniformLocation(shader, "useTexture"),
+                           material_property_.IsTextureUsable() ? 1 : 0);
+            if (material_property_.IsTextureUsable() && texture_id_ != 0) {
+                gl_->ActiveTexture(GL_TEXTURE0);
+                gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
+                gl_->Uniform1i(gl_->GetUniformLocation(shader, "textureSampler"), 0);
+            }
+        }
+    }
+
     /// @brief 子要素 (複合ノード) を指定シェーダータイプで描画する
     /// @param shader プログラムシェーダーのID
     /// @param shader_type 描画に使用するシェーダーのタイプ

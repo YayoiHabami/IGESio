@@ -284,6 +284,9 @@ void EntityRenderer::Cleanup() {
         objects.clear();
     }
     draw_objects_.clear();
+    // キャッシュ描画リストも破棄する (draw_objects_の要素を指すため)
+    draw_list_.clear();
+    scene_dirty_ = true;
 
     // シェーダープログラムの削除
     for (auto& [shader_type, program_id] : shader_programs_) {
@@ -313,6 +316,8 @@ void EntityRenderer::AddGraphicsObject(
     // 新しい描画オブジェクトを追加
     draw_objects_[graphics->GetShaderType()][graphics->GetEntityID()]
             = std::move(graphics);
+    // 走査対象が増えたので次回描画で描画リストを再構築する
+    scene_dirty_ = true;
 }
 
 void EntityRenderer::RemoveEntity(const ObjectID& id) {
@@ -324,6 +329,9 @@ void EntityRenderer::RemoveEntity(const ObjectID& id) {
         if (it != objects.end()) {
             it->second->Cleanup();  // OpenGLリソースを解放
             objects.erase(it);  // 描画オブジェクトを削除
+            // draw_list_は当該ポインタを保持し得るため破棄し、次回再構築する
+            draw_list_.clear();
+            scene_dirty_ = true;
             return;  // 削除が完了したら終了
         }
     }
@@ -458,13 +466,26 @@ void EntityRenderer::Draw() const {
         gl_->Viewport(0, 0, display_width_, display_height_);
     }
 
+    // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)
+    const DrawContext ctx{&selection_, kSelectionColor};
+
+    // Assemblyツリー走査モード: dirty時のみ描画リストを再構築し、それを実行する
+    // (カメラ操作・選択変更だけの再描画では走査せずキャッシュを再利用する)
+    if (scene_root_ != nullptr) {
+        if (scene_dirty_) {
+            RebuildDrawList();
+            scene_dirty_ = false;
+        }
+        ExecuteDrawList(ctx);
+        return;
+    }
+
+    // --- 以下、従来のフラット描画 (scene_root_未設定時) ---
+
     // ビュー行列と投影行列を取得
     auto view_matrix = camera_.GetViewMatrix();
     auto projection_matrix = camera_.GetProjectionMatrix(
         static_cast<float>(display_width_) / display_height_);
-
-    // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)
-    const DrawContext ctx{&selection_, kSelectionColor};
 
     // 各シェーダープログラムごとに描画
     // TODO: 半透明 (opacity < 1.0) なオブジェクトについては、描画を保留する
@@ -497,6 +518,88 @@ void EntityRenderer::Draw() const {
         // 各エンティティを描画
         DrawChildren(program_id, shader_type,
                      std::pair<float, float>{display_width_, display_height_}, ctx);
+    }
+}
+
+void EntityRenderer::SetSceneRoot(const models::Assembly* root) {
+    scene_root_ = root;
+    scene_dirty_ = true;
+}
+
+void EntityRenderer::MarkSceneDirty() {
+    scene_dirty_ = true;
+}
+
+void EntityRenderer::RebuildDrawList() const {
+    draw_list_.clear();
+    if (scene_root_ == nullptr) return;
+    WalkAssembly(*scene_root_, igesio::Matrix4d::Identity());
+}
+
+void EntityRenderer::WalkAssembly(const models::Assembly& node,
+                                  const igesio::Matrix4d& parent_accum) const {
+    const auto& meta = node.Metadata();
+    // 非表示・抑制のサブツリーは描画対象から除外する
+    if (!meta.visible || meta.suppressed) return;
+
+    const igesio::Matrix4d accum = parent_accum * node.GetGlobalTransform();
+    const igesio::Matrix4f accum_f = accum.cast<float>();
+
+    for (const auto& [id, entity] : node.GetEntities()) {
+        // キャッシュに在席する = 投入時フィルタを通過した描画対象
+        // (ここではShouldRenderEntity/Validateを呼ばない)
+        auto* graphics = FindGraphics(id);
+        if (graphics == nullptr) continue;
+
+        // ピッキング/描画の整合のためワールド変換をリフレッシュする.
+        // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける)
+        graphics->SetWorldTransform(accum_f);
+
+        // バッチ描画のためシェーダー別に収集する (複合は子の各型へ収集される)
+        for (const auto st : graphics->GetShaderTypes()) {
+            if (HasSpecificShaderCode(st) && shader_programs_.count(st) > 0) {
+                draw_list_[st].push_back(graphics);
+            }
+        }
+    }
+
+    for (const auto& child : node.GetChildAssemblies()) {
+        if (child) WalkAssembly(*child, accum);
+    }
+}
+
+void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
+    const auto view_matrix = camera_.GetViewMatrix();
+    const auto projection_matrix = camera_.GetProjectionMatrix(
+        static_cast<float>(display_width_) / display_height_);
+    const std::pair<float, float> viewport{
+        static_cast<float>(display_width_), static_cast<float>(display_height_)};
+
+    for (const auto& [shader_type, program_id] : shader_programs_) {
+        auto it = draw_list_.find(shader_type);
+        if (it == draw_list_.end() || it->second.empty()) continue;
+
+        gl_->UseProgram(program_id);
+        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "view"),
+                              1, GL_FALSE, view_matrix.data());
+        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
+                              1, GL_FALSE, projection_matrix.data());
+
+        // 光源のパラメータを設定
+        if (UsesLighting(shader_type)) {
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPos_WorldSpace"),
+                            1, light_.position.data());
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuation"),
+                            1, light_.attenuation.data());
+            gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColor"),
+                            1, light_.color.data());
+        }
+
+        for (auto* graphics : it->second) {
+            if (graphics && graphics->IsDrawable()) {
+                graphics->Draw(program_id, shader_type, viewport, ctx);
+            }
+        }
     }
 }
 

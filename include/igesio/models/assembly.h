@@ -88,15 +88,32 @@ class CoordFrame {
     ObjectID relative_base_;
 };
 
+/// @brief ロック状態 (選択・編集の可否)
+/// @note 参照ジオメトリ(一時的な参照平面など)やユーザーロックの表現に用いる. 強制は
+///       選択を行う層(対話ピック/セッション)が`SelectionSet`の外で行う(本構造体は意図のみ保持).
+struct LockState {
+    /// @brief 選択可能か (falseの場合はピック/選択の対象外)
+    bool selectable = true;
+    /// @brief 編集可能か (falseの場合は編集操作の対象外. 将来用)
+    bool editable = true;
+};
+
 /// @brief Assemblyのメタ情報
 /// @note 描画・編集の際に参照される付随情報をまとめた構造体.
 struct AssemblyMetadata {
     /// @brief アセンブリの名前
     std::string name;
     /// @brief 可視性 (描画対象とするか)
+    /// @note 表示トグル. 非表示でも論理的には存在する(BBox/検証/出力/クエリには含まれる).
     bool visible = true;
+    /// @brief 抑制 (論理的にモデルから除外するか)
+    /// @note visibleとは別概念. 抑制時は描画されず、BBox/検証/出力/クエリからも除外される
+    ///       (子孫も連鎖). 描画条件は visible かつ !suppressed.
+    bool suppressed = false;
     /// @brief 役割を示すタグ (任意の分類用文字列)
     std::string role_tag;
+    /// @brief ロック状態 (選択・編集の可否)
+    LockState lock;
     /// @brief 色のオーバーライド (RGB; [0, 1]). 未設定の場合はメンバの色を使用する
     std::optional<std::array<float, 3>> color_override;
     /// @brief 不透明度のオーバーライド ([0, 1]). 未設定の場合はメンバの値を使用する

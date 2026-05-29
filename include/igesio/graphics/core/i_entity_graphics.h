@@ -120,6 +120,11 @@ struct SelectionSamples {
 
 /// @brief EntityGraphicsの型消去クラス
 /// @note すべての描画用クラスの基底クラス
+/// @note 責務は2フェーズに分かれる:
+///       - Build: `Synchronize`/`SyncTexture` がエンティティのジオメトリから
+///         GPUリソース (VAO/テクスチャ等) を構築する. ジオメトリ変更時に再実行可.
+///       - Draw: `Draw(..., ctx)` が `DrawContext` からPULLした表示状態 (変換・色・
+///         材質・選択ハイライト) を適用して描画する. 論理状態は保持しない.
 class IEntityGraphics {
  protected:
     /// @brief エンティティの色 (RGBA)

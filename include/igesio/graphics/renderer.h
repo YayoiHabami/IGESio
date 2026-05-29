@@ -18,6 +18,7 @@
 #include "igesio/common/errors.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/models/selection_set.h"
+#include "igesio/models/assembly.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
 #include "igesio/graphics/core/light.h"
@@ -107,6 +108,19 @@ class EntityRenderer {
     /// @note P2ではレンダラが所有する. 将来はセッションラッパー(Scene)が保持し、
     ///       レンダラはその参照を受け取る形へ移す予定 (本クラスは選択色を保持しない).
     models::SelectionSet selection_;
+
+    /// @brief 走査対象のルートAssembly (非所有). nullptrの場合は従来のフラット描画
+    /// @note 設定時は描画でツリーを走査し、各エンティティのワールド変換をリフレッシュ
+    ///       しつつ可視/抑制サブツリーをスキップする
+    const models::Assembly* scene_root_ = nullptr;
+    /// @brief 描画リストの再構築 (ツリー走査) が必要か
+    /// @note ツリー編集・エンティティ追加削除で立てる. カメラ操作・選択変更だけの
+    ///       再描画ではキャッシュした描画リストを再利用し、走査しない
+    mutable bool scene_dirty_ = true;
+    /// @brief キャッシュした描画リスト (シェーダー別の描画オブジェクト. 非所有ポインタ)
+    /// @note scene_root_設定時にツリー走査で構築し、フレームを越えて再利用する.
+    ///       draw_objects_の要素を指すため、追加/削除時はdirty化して再構築する
+    mutable std::unordered_map<ShaderType, std::vector<IEntityGraphics*>> draw_list_;
 
  public:
     /// @brief コンストラクタ
@@ -213,6 +227,18 @@ class EntityRenderer {
     /// @return 描画オブジェクトを保持している場合はそのエンティティのShaderTypeを、
     ///         存在しない場合はShaderType::kNoneを返す
     ShaderType GetEntityShaderType(const ObjectID&) const;
+
+    /// @brief 走査対象のルートAssemblyを設定する
+    /// @param root ルートAssembly (非所有). nullptrで従来のフラット描画へ戻す
+    /// @note 設定後の描画では、ツリーを走査して各エンティティのワールド変換を
+    ///       リフレッシュし、可視/抑制サブツリーをスキップする. 呼び出しで再走査を予約する.
+    ///       rootは本クラスより長く生存する必要がある (非所有参照).
+    void SetSceneRoot(const models::Assembly* root);
+
+    /// @brief シーン(ツリー)が変化したことを通知し、次回描画で再走査を予約する
+    /// @note 可視性・抑制・大域変換・構造を編集した後に呼ぶ.
+    ///       カメラ操作・選択変更だけの再描画では呼ぶ必要はない.
+    void MarkSceneDirty();
 
 
 
@@ -451,6 +477,23 @@ class EntityRenderer {
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
     void DrawChildren(GLuint, const ShaderType, const std::pair<float, float>&,
                       const DrawContext&) const;
+
+    /// @brief scene_root_を走査して描画リストを再構築し、ワールド変換をリフレッシュする
+    /// @note dirty時のみ呼ぶ. ShouldRenderEntityは呼ばず、キャッシュ在席を描画対象条件
+    ///       とする (フィルタは投入時に適用済み).
+    void RebuildDrawList() const;
+
+    /// @brief Assemblyツリーを再帰走査する (RebuildDrawListの実体)
+    /// @param node 走査中のノード
+    /// @param parent_accum 親までの累積変換 (G_root·…·G_{n-1})
+    /// @note 可視/抑制サブツリーはスキップ. node大域変換を掛けた累積をworld_transform_へ
+    ///       流し (M_entityは含めない)、graphicsをシェーダー別にdraw_list_へ収集する.
+    void WalkAssembly(const models::Assembly& node,
+                      const igesio::Matrix4d& parent_accum) const;
+
+    /// @brief キャッシュした描画リストをシェーダー単位で描画する
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    void ExecuteDrawList(const DrawContext& ctx) const;
 };
 
 }  // namespace igesio::graphics
