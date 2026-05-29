@@ -82,6 +82,15 @@ class EntityFactory {
                  const pointer2ID&, const ObjectID& = IDGenerator::UnsetID());
 };
 
+/// @brief エンティティを複製する
+/// @param entity 複製元のエンティティ
+/// @return 新しい`kEntityNew` IDを持つ複製. 参照(子・変換124・色314等)は複製元と同じ
+///         エンティティを共有する(浅い複製)
+/// @note DE/PDへ一旦シリアライズし、`EntityFactory::CreateEntity`で再構築することで複製する.
+///       `EntityBase::id_`がconstのためコピー後のID振り直しができないことへの対処.
+///       本ライブラリ未対応のエンティティは`UnsupportedEntity`として複製される.
+std::shared_ptr<EntityBase> CloneEntity(const EntityBase&);
+
 }  // namespace igesio::entities
 
 #endif  // IGESIO_ENTITIES_FACTORY_H_

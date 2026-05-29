@@ -320,6 +320,30 @@ i_model::IntermediateIgesData igesio::ReadIgesIntermediate(
     return data;
 }
 
+
+
+namespace {
+
+/// @brief 読み込んだエンティティから初期ツリー(子Assembly階層)を導出する
+/// @param[in,out] root 全エンティティを平坦に保持したルートAssembly
+/// @note 設計(assembly_class_design.md §8.1)の初期ツリー導出を行う拡張点.
+///       本来は独立エンティティをトップレベル、物理従属を親経由とし、ネイティブな束ね
+///       (402 Group / 308 Subfigure / 184 Solid Assembly)のメンバ列をヒントに子Assemblyを
+///       生成する. ただし現状これらの束ね系は型付きエンティティ未対応であり
+///       (UnsupportedEntityとして生成され、メンバ列を型安全に取得できない)、子Assemblyは
+///       生成せず全エンティティをルート直下に置いたフラットなツリーとする. これは束ねが無い
+///       場合の正しい初期ツリーに等しい. 束ね系が型付き対応した時点で、本関数にメンバ列からの
+///       子Assembly生成を実装する.
+void BuildInitialTree(i_model::Assembly& root) {
+    // 全エンティティは既にルート直下へ登録済みであり、束ね系の型付き未対応のうちは
+    // これがフラットな初期ツリーに相当する. 子Assemblyの生成は行わない.
+    (void)root;
+}
+
+}  // namespace
+
+
+
 i_model::IgesData igesio::ConvertFromIntermediate(
         const models::IntermediateIgesData& intermediate) {
     i_model::IgesData iges;
@@ -391,6 +415,9 @@ i_model::IgesData igesio::ConvertFromIntermediate(
                     "Details: " + std::string(e.what()));
         }
     }
+
+    // 読み込んだエンティティから初期ツリー(子Assembly階層)を導出する
+    BuildInitialTree(iges.Root());
 
     return iges;
 }
