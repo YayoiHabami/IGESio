@@ -21,9 +21,7 @@ namespace igesio::graphics {
 
 /// @brief RationalBSplineSurfaceエンティティの描画情報の管理クラス
 class RationalBSplineSurfaceGraphics
-    : public EntityGraphics<entities::RationalBSplineSurface,
-                            ShaderType::kRationalBSplineSurface,
-                            true> {
+    : public EntityGraphics<entities::RationalBSplineSurface, true> {
     /// @brief u方向のノットベクトルのSSBO
     GLuint knots_u_ssbo_ = 0;
     /// @brief v方向のノットベクトルのSSBO

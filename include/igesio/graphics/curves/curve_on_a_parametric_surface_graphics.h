@@ -22,8 +22,7 @@ namespace igesio::graphics {
 
 /// @brief CurveOnAParametricSurfaceエンティティの描画情報の管理クラス
 class CurveOnAParametricSurfaceGraphics
-    : public EntityGraphics<entities::CurveOnAParametricSurface,
-                            ShaderType::kComposite> {
+    : public EntityGraphics<entities::CurveOnAParametricSurface> {
  private:
     /// @brief C(t) 用の描画オブジェクト
     std::unique_ptr<IEntityGraphics> curve_graphics_;

@@ -21,9 +21,7 @@ namespace igesio::graphics {
 
 /// @brief ISurfaceクラス用の、曲面全般の描画情報の管理クラス
 class ISurfaceGraphics
-    : public EntityGraphics<entities::ISurface,
-                            ShaderType::kGeneralSurface,
-                            true> {
+    : public EntityGraphics<entities::ISurface, true> {
     /// @brief 面のVBO
     GLuint vbo_ = 0;
     /// @brief 面のEBO

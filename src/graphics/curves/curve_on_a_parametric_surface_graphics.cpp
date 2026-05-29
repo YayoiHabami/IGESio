@@ -32,7 +32,7 @@ using CurveOnSurfaceGraphics = i_graph::CurveOnAParametricSurfaceGraphics;
 CurveOnSurfaceGraphics::CurveOnAParametricSurfaceGraphics(
         const std::shared_ptr<const i_ent::CurveOnAParametricSurface>& entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, true) {
+        : EntityGraphics(entity, gl, ShaderType::kComposite, true) {
     Synchronize();
 }
 

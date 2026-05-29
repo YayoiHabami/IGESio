@@ -29,14 +29,15 @@ namespace igesio::graphics {
 
 /// @brief エンティティの描画情報を管理するクラス
 /// @tparam T エンティティの型
-/// @tparam ShaderType_ このクラスが対応するシェーダーのタイプ
 /// @tparam has_surfaces Tがサーフェスを持つか (デフォルト: false)
+/// @note このクラスが対応するShaderTypeはコンストラクタ引数で受け取り、
+///       実行時メンバ`shader_type_`に保持する.
 /// @note 以下のメンバ関数のオーバーライドが必要
 ///       - `EntityGraphics`由来:
 ///         - `Cleanup`(public): VAO以外のOpenGLリソースを持つ場合
 ///         - `DrawImpl`(protected): 常にオーバーライドが必要
-template<typename T, ShaderType ShaderType_,
-         bool has_surfaces = false, typename = std::enable_if_t<
+template<typename T, bool has_surfaces = false,
+         typename = std::enable_if_t<
         std::is_base_of_v<entities::IEntityIdentifier, T>>>
 class EntityGraphics : public IEntityGraphics {
  protected:
@@ -52,21 +53,26 @@ class EntityGraphics : public IEntityGraphics {
     GLenum draw_mode_ = GL_LINE_STRIP;
     /// @brief テクスチャのID (サーフェスを持つ場合に使用)
     GLuint texture_id_ = 0;
+    /// @brief このクラスが対応するシェーダーのタイプ
+    ShaderType shader_type_;
 
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
+    /// @param shader_type このクラスが対応するシェーダーのタイプ
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
     /// @throw std::invalid_argument entityがnullptrの場合
     EntityGraphics(const std::shared_ptr<const T> entity,
                    const std::shared_ptr<IOpenGL> gl,
+                   ShaderType shader_type,
                    bool use_entity_transform)
             : IEntityGraphics(gl, use_entity_transform),
               entity_(entity),
               graphics_id_(IDGenerator::Generate(
                     ObjectType::kEntityGraphics,
-                    (entity != nullptr) ? static_cast<uint16_t>(entity->GetType()) : 0)) {
+                    (entity != nullptr) ? static_cast<uint16_t>(entity->GetType()) : 0)),
+              shader_type_(shader_type) {
         if (!entity_) {
             throw std::invalid_argument("Entity pointer cannot be null");
         }
@@ -89,7 +95,8 @@ class EntityGraphics : public IEntityGraphics {
           vao_(other.vao_),
           draw_mode_(other.draw_mode_),
           texture_id_(other.texture_id_),
-          graphics_id_(std::move(other.graphics_id_)) {
+          graphics_id_(std::move(other.graphics_id_)),
+          shader_type_(other.shader_type_) {
         // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
         other.entity_ = nullptr;
         other.vao_ = 0;
@@ -113,6 +120,7 @@ class EntityGraphics : public IEntityGraphics {
             draw_mode_ = other.draw_mode_;
             texture_id_ = other.texture_id_;
             graphics_id_ = std::move(other.graphics_id_);
+            shader_type_ = other.shader_type_;
 
             // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
             other.entity_ = nullptr;
@@ -146,7 +154,7 @@ class EntityGraphics : public IEntityGraphics {
               const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override {
         // シェーダータイプが合致していることのみ確認
-        if (shader_type != ShaderType_) return;
+        if (shader_type != shader_type_) return;
 
         Draw(shader, viewport, ctx);
     }
@@ -225,7 +233,7 @@ class EntityGraphics : public IEntityGraphics {
     /// @brief 描画用のシェーダーのタイプを取得する
     /// @return 描画用のシェーダーのタイプ
     ShaderType GetShaderType() const override {
-        return ShaderType_;
+        return shader_type_;
     }
 
     /// @brief OpenGLリソースを解放する
