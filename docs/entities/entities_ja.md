@@ -769,12 +769,12 @@ auto param = igesio::IGESParameterVector{
     false, false, true, false, false,         // PROP1-5
     0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
     0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
-    // Control points (36 points, each with x, y, z)
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(5,1)
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,2) to W(5,3)
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,4) to W(5,5)
+    // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
     -25., -25., -10.,  // Control point (0,0)
-    -25., -15., -5.,   // Control point (0,1)
+    -15., -25., -8.,   // Control point (1,0)
     // ...
     25., 25., -10.,    // Control point (5,5)
     0., 3., 0., 3.     // Parameter range in U and V
