@@ -384,12 +384,10 @@ class CompositeEntityGraphics : public IEntityGraphics {
         auto geom = std::dynamic_pointer_cast<const entities::IGeometry>(entity_);
         if (!geom) return std::nullopt;
 
-        // 点・直線状などs0/s1が0の退化したBBはGetBoundingBox()が例外を投げる
-        // (3DのBBを構成できない)。深度推定には使えないためnulloptを返し、
-        // 呼び出し側のフォールバック深度に委ねる。
+        // 点・直線状(0/1次元)に退化したメンバは平面/立体のBBを構成できず深度推定に
+        // 使えないため、nulloptを返して呼び出し側のフォールバック深度に委ねる。
         const auto defined = geom->GetDefinedBoundingBox();
-        const auto def_sizes = defined.GetSizes();
-        if (defined.IsEmpty() || def_sizes[0] <= 0.0 || def_sizes[1] <= 0.0) {
+        if (defined.Dimension() < 2) {
             return std::nullopt;
         }
 

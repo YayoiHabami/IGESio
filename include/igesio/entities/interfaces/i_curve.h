@@ -158,6 +158,17 @@ class ICurve : public virtual IEntityIdentifier,
     virtual std::optional<CurveDerivatives>
     TryGetDerivatives(const double, const unsigned int) const = 0;
 
+    /// @brief 配置を適用した曲線のn階導関数 C^n(t) を計算する
+    /// @param t パラメータ値
+    /// @param n 何階まで計算するか
+    /// @param placement 定義空間に後掛けする配置行列(基準階層までの累積変換)
+    /// @return 配置適用後の導関数 placement·(M_entity·C^k_def). 0階は点(R·v+T)、
+    ///         1階以上はベクトル(R·v)として変換される. 計算できない場合は`std::nullopt`
+    /// @note 定義空間版は`TryGetDerivatives(t, n)`. placementに単位行列を渡すと
+    ///       M_entityのみを適用した実空間の導関数となる
+    std::optional<CurveDerivatives>
+    TryGetDerivatives(const double, const unsigned int, const Matrix4d&) const;
+
 
 
     /**
@@ -268,6 +279,47 @@ class ICurve : public virtual IEntityIdentifier,
     /// @return 曲線上の正規化された従法線ベクトル (bx, by, bz).
     ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
     std::optional<Vector3d> TryGetBinormalAt(const double) const;
+
+
+
+    /**
+     * 曲線の幾何学的情報 (ベクトル; 配置適用) を取得する
+     */
+
+    /// @brief 配置を適用した曲線の始点を取得する
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return placement·(M_entity·P_def). 始点が存在しない場合は`std::nullopt`
+    std::optional<Vector3d> TryGetStartPoint(const Matrix4d&) const;
+
+    /// @brief 配置を適用した曲線の終点を取得する
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return placement·(M_entity·P_def). 終点が存在しない場合は`std::nullopt`
+    std::optional<Vector3d> TryGetEndPoint(const Matrix4d&) const;
+
+    /// @brief 配置を適用した曲線上の点 C(t) を取得する
+    /// @param t パラメータ値
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return placement·(M_entity·P_def). パラメータ範囲外の場合は`std::nullopt`
+    std::optional<Vector3d> TryGetPointAt(const double, const Matrix4d&) const;
+
+    /// @brief 配置を適用した曲線上の接線ベクトル T(t) を取得する
+    /// @param t パラメータ値
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return 配置適用後の接線ベクトル. パラメータ範囲外の場合は`std::nullopt`
+    std::optional<Vector3d> TryGetTangentAt(const double, const Matrix4d&) const;
+
+    /// @brief 配置を適用した曲線上の法線ベクトル N(t) を取得する
+    /// @param t パラメータ値
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return 配置適用後の法線ベクトル. パラメータ範囲外の場合は`std::nullopt`
+    /// @note スケールなし(124相当)を前提とし、ベクトル変換(R·v)として扱う
+    std::optional<Vector3d> TryGetNormalAt(const double, const Matrix4d&) const;
+
+    /// @brief 配置を適用した曲線上の従法線ベクトル B(t) を取得する
+    /// @param t パラメータ値
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return 配置適用後の従法線ベクトル. パラメータ範囲外の場合は`std::nullopt`
+    std::optional<Vector3d> TryGetBinormalAt(const double, const Matrix4d&) const;
 
     /// @brief 曲線の始点を取得する
     /// @return 曲線の始点の座標値 (x, y, z)

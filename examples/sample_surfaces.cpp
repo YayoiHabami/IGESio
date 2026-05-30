@@ -287,19 +287,19 @@ int main() {
     i_mod::IgesData iges_data;
 
     for (const auto& entity : CreateRuledSurface()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateSurfaceOfRevolution()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateTabulatedCylinder()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateRationalBSplineSurface()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateTrimmedSurface()) {
-        iges_data.AddEntity(entity);
+        iges_data.Root().AddEntity(entity);
     }
 
     // Write to IGES file

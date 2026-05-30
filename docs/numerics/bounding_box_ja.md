@@ -32,10 +32,10 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 |:---|:---|
 | 基準点 $P_0$ | バウンディングボックスの一方の隅を表す点 <br> 特にx,y,z軸に直交しているとき、最も座標値の小さい点 |
 | 延伸方向 $D_0, D_1, D_2$ | バウンディングボックス（直方体）を形成する、3つの直交する単位ベクトル |
-| 辺の長さ $s_0, s_1, s_2$ | 各延伸方向に沿ったバウンディングボックスの辺の長さ <br> $s_0, s_1 > 0, \quad s_2 \geq 0$ （2次元の場合は $s_2 = 0$） |
+| 辺の長さ $s_0, s_1, s_2$ | 各延伸方向に沿ったバウンディングボックスの辺の長さ <br> 各 $s_i \geq 0$ であり、各軸独立に0を取りうる（ $\pm\infty$ も可）<br> 非ゼロの辺の数が次元（0〜3）を表し、0次元は点、1次元は線分、2次元は平面領域、3次元は直方体となる |
 | 辺の種類 $\text{type}_0, \text{type}_1, \text{type}_2$ | 各延伸方向に沿った辺の種類を表す列挙型 <br> - `kSegment` : 有限長の線分 <br> - `kRay` : 半無限線（始点から無限に延びる） <br> - `kLine` : 無限線（両方向に無限に延びる） |
 
-> デフォルトコンストラクタで作成された場合のみ, $P_0 = (0,0,0)$, $s_0 = s_1 = s_2 = 0$ の特殊なバウンディングボックスが生成されます。この場合、`BoundingBox::IsEmpty()`は`true`を返します。
+> デフォルトコンストラクタで作成された場合、 $P_0 = (0,0,0)$, $s_0 = s_1 = s_2 = 0$ のバウンディングボックスが生成されます。`BoundingBox::IsEmpty()`は全ての辺の長さが0（すなわち`Dimension()==0`）のときに`true`を返すため、デフォルト構築の箱に加え、点に退化した0次元の箱でも`true`となります。
 
 <img src="./images/bounding_boxes.svg" alt="Bounding Boxes Illustration" width="500"/>
 
@@ -50,7 +50,7 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 | `BoundingBox()` | デフォルトコンストラクタ。基準点が原点、大きさが0の空のバウンディングボックスを生成します。 |
 | `BoundingBox(control, directions, sizes, is_line)` | 任意方向（2Dまたは3D）のバウンディングボックスを生成します。<br> - `control`: 基準点 $P_0$<br> - `directions`: 延伸方向の配列（2D:2要素, 3D:3要素、各要素は単位ベクトル）<br> - `sizes`: 各方向のサイズ<br> - `is_line`: 各方向がkLineかどうかを示す配列（省略時は全て`false`）<br> ※2D/3Dでオーバーロードあり。 |
 | `BoundingBox(control, sizes, is_line)` | x,y,z軸（またはx,y軸）に平行なバウンディングボックスを生成します。<br> - `control`: 基準点 $P_0$<br> - `sizes`: 各方向のサイズ（3D:3要素, 2D:2要素）<br> - `is_line`: 各方向がkLineかどうかを示す配列（省略時は全て`false`） |
-| `BoundingBox(point1, point2)` | 2点を含むバウンディングボックスを生成します。<br> - `point1`, `point2`: バウンディングボックスに含まれる2点<br> - 2点の座標値から、x,y,z軸に平行なバウンディングボックスを自動的に生成<br> - 同じ座標値を持つ軸が1つの場合は2Dバウンディングボックス（サイズ0の方向を $D_2$ として扱う）<br> - 例: $x_1=x_2$ の場合は $D_0=e_y, D_1=e_z, D_2=e_x$ |
+| `BoundingBox(point1, point2)` | 2点を含むバウンディングボックスを生成します。<br> - `point1`, `point2`: バウンディングボックスに含まれる2点<br> - 延伸方向は常にx,y,z軸方向（ $D_0=e_x, D_1=e_y, D_2=e_z$ ）とし、各軸のサイズは $point2 - point1$ の各成分の絶対値とする<br> - 座標値が一致する軸はサイズ0（退化）となり、一致する軸数に応じて2次元・1次元・0次元のバウンディングボックスを構成する（ $point1 = point2$ の場合は0次元の点）<br> - 例外を投げず、退化した入力も許容する |
 
 ### パラメータの設定・取得・変更
 
@@ -68,11 +68,12 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 
 | 関数名 | 説明 |
 |:---|:---|
-| `IsEmpty()` | 空であるか判定 <br> （辺の長さ $s_0 = s_1 = s_2 = 0$ の場合に`true`を返す） |
-| `Is2D()` <br> `Is3D()` | 2Dまたは3Dであるかを判定 <br> （ $s_2 = 0$ の場合に2Dと判定） |
-| `IsOnZPlane()` | Z=0平面上にあるかを判定 <br> （`Is2D()==true`かつ $D_2 \parallel e_z$ かつ $P_0.z = 0$ の場合に`true`を返す） |
+| `IsEmpty()` | 空であるか判定 <br> （全ての辺の長さが0、すなわち`Dimension()==0`の場合に`true`を返す。点に退化した0次元の箱でも`true`） |
+| `Dimension()` | 非ゼロの辺（extent）を持つ軸数（次元）を取得 <br> （0〜3を返す。 $\pm\infty$ の軸も非ゼロとして数える） |
+| `Is0D()` <br> `Is1D()` <br> `Is2D()` <br> `Is3D()` | 囲む領域がそれぞれ0/1/2/3次元であるかを判定 <br> （`Dimension()`が0/1/2/3に等しい場合に`true`を返す） |
+| `IsOnZPlane()` | Z=0平面上にあるかを判定 <br> （ $P_0.z = 0$ かつ全ての非退化軸の方向ベクトルがz成分を持たない場合に`true`を返す。2次元領域に限らず、z=0平面上の1次元線分・0次元点も対象とする） |
 | `IsFinite()` | （体積が）有限であるかを判定 <br> （全ての辺の種類が`kSegment`の場合に`true`を返す） |
-| `GetVertices()` | 全頂点を取得 <br> （無限長の辺がある場合、頂点座標が $\pm \infty$ となる場合がある） |
+| `GetVertices()` | 全頂点を取得 <br> （ $2^{\text{Dimension}}$ 個の頂点を返す（0次元=1, 1次元=2, 2次元=4, 3次元=8）。無限長の辺がある場合、頂点座標が $\pm \infty$ となる場合がある） |
 | `GetFiniteVertices()` | 有限な頂点のみを取得 <br> （無限長の辺がある場合、空のベクトルを返す） |
 
 ### 他のオブジェクトとの包含・交差判定
@@ -97,13 +98,14 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
   - $\|D_i\| = 1\ (i=0,1,2)$
   - $D_0 \cdot D_1 = 0, \quad D_0 \times D_1 = D_2$
 - 辺の長さ $s_0, s_1, s_2 \in \mathbb{R}$ : 各延伸方向に沿ったバウンディングボックスの辺の長さ
-  - $s_0, s_1 > 0, \quad s_2 \geq 0$ （2次元の場合は $s_2 = 0$）
+  - 各 $s_i \geq 0$ であり、各軸独立に0を取りうる（ $s_i = +\infty$ で`kRay`, $s_i = -\infty$ で`kLine`）
+  - 非ゼロの辺の数が次元（0〜3）を表す
 - 辺の種類 $\text{type}_0, \text{type}_1, \text{type}_2$ : 各延伸方向に沿った辺の種類を表す列挙型
   - `kSegment` : 有限長の線分
   - `kRay` : 半無限線（始点から無限に延びる）
   - `kLine` : 無限線（両方向に無限に延びる）
 
-> コンストラクタで何も指定しない場合（デフォルトコンストラクタ）、辺の長さは $s_0 = s_1 = s_2 = 0$ を満たします。これは`BoundingBox::IsEmpty()`は`true`となる特殊ケースです。以下では明示的には扱いませんが、`BoundingBox::Contains(point)`は常に`false`を返す、などの動作をします。
+> コンストラクタで何も指定しない場合（デフォルトコンストラクタ）、辺の長さは $s_0 = s_1 = s_2 = 0$ を満たします。この場合`BoundingBox::IsEmpty()`は`true`となります（点に退化した0次元の箱も同様に`true`を返します）。以下では明示的には扱いませんが、`BoundingBox::Contains(point)`は常に`false`を返す、などの動作をします。
 >
 > このケースを含め、`BoundingBox::GetDirectionTypes()`において $\text{type}_i$ は以下のように計算されます
 >
@@ -111,22 +113,15 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 
 #### BoundingBoxの示す領域と頂点
 
-　バウンディングボックスの示す領域は、全ての $\text{type}_i$ が`kSegment`である場合にのみ有限な領域となります。この領域は, $s_2 = 0$ の場合は2次元の長方形, $s_2 > 0$ の場合は3次元の直方体を表します。いずれかの辺が無限長である場合（`kRay`または`kLine`）、バウンディングボックスの示す領域は無限に広がります。この場合、`BoundingBox::GetFiniteVertices()`は空のベクトルを返します。一方、`BoundingBox::GetVertices()`は、座標値が $\pm \infty$ となる頂点も含めて計算します。
+　バウンディングボックスの示す領域は、全ての $\text{type}_i$ が`kSegment`である場合にのみ有限な領域となります。この領域は、非ゼロの辺の数（次元）に応じて、0次元の点・1次元の線分・2次元の長方形・3次元の直方体のいずれかを表します。いずれかの辺が無限長である場合（`kRay`または`kLine`）、バウンディングボックスの示す領域は無限に広がります。この場合、`BoundingBox::GetFiniteVertices()`は空のベクトルを返します。一方、`BoundingBox::GetVertices()`は、座標値が $\pm \infty$ となる頂点も含めて計算します。
 
-　バウンディングボックスの示す領域が長方形または直方体の場合の、バウンディングボックスの頂点は以下のように計算されます。
+　バウンディングボックスの示す領域が有限な場合、頂点は非退化軸（ $s_i \neq 0$ の軸）のみを用いて生成されます。非退化軸の集合を $A = \lbrace i \mid s_i \neq 0 \rbrace$ とすると、頂点数は $2^{|A|}$ となります（0次元=1, 1次元=2, 2次元=4, 3次元=8）。各頂点は $A$ の部分集合 $S \subseteq A$ に対して以下のように与えられます。
 
-| 頂点名 <br> $V_{D}$ | 長方形 <br> (頂点数 4) | 直方体 <br> (頂点数 8) |
-|:----|:---:|:---:|
-| $V_{LFB}$ | $P_0$ | $P_0$ |
-| $V_{RFB}$ | $P_0 + s_1 D_1$ | $P_0 + s_1 D_1$ |
-| $V_{RBB}$ | $P_0 + s_2 D_2$ | $P_0 + s_2 D_2$ |
-| $V_{LBB}$ | $P_0 + s_1 D_1 + s_2 D_2$ | $P_0 + s_1 D_1 + s_2 D_2$ |
-| $V_{LFT}$ | - | $P_0 + s_3 D_3$ |
-| $V_{RFT}$ | - | $P_0 + s_1 D_1 + s_3 D_3$ |
-| $V_{RBT}$ | - | $P_0 + s_2 D_2 + s_3 D_3$ |
-| $V_{LBT}$ | - | $P_0 + s_1 D_1 + s_2 D_2 + s_3 D_3$ |
+$$V_S = P_0 + \sum_{i \in S} s_i D_i$$
 
-> `GetVertices()`で返される座標値について、例えば $D_0 = (1,0,0), s_0 = +\infty$ かつ $s_1, s_2 < \infty$ の場合、頂点 $V_{RFB}, V_{RBB}, V_{RFT}, V_{RBT}$ のx成分は $+\infty$ となります。また、本ライブラリでは, $s_i = \infty$ かつ $D_{i,j} = 0\ (j = x,y,z)$ の場合、対応する頂点の成分は0に置き換えられます。
+退化軸（ $s_i = 0$ ）はこの和に寄与しないため、頂点座標には影響しません。なお, $\text{type}_i = \text{kLine}$ の軸は両方向に無限に延びるため, $i \notin S$ の側は $-\infty$ 方向の端として扱われます。
+
+> `GetVertices()`で返される座標値について、例えば $D_0 = (1,0,0), s_0 = +\infty$ かつ $s_1, s_2 < \infty$ の場合, $0 \in S$ となる頂点のx成分は $+\infty$ となります。また、本ライブラリでは, $s_i = \infty$ かつ $D_{i,j} = 0\ (j = x,y,z)$ の場合、対応する頂点の成分は0に置き換えられます。
 
 #### BoundingBox間の包含判定
 
@@ -188,14 +183,7 @@ $$I_{i,A} = \begin{cases}
     [0, s_{i,A}] & (\text{type}_{i,A} = \text{kSegment})
 \end{cases}$$
 
-　次に、 $\mathcal{B}_B$ の各頂点 $\text{vertices}_B$ は以下のように定義されます。
-
-$$\text{vertices}_B = \begin{cases}
-    \lbrace V_{LFB}, V_{RFB}, V_{RBB}, V_{LBB} \rbrace & (s_{2,B} = 0) \\\
-    \lbrace V_{LFB}, V_{RFB}, V_{RBB}, V_{LBB}, V_{LFT}, V_{RFT}, V_{RBT}, V_{LBT} \rbrace & (s_{2,B} > 0)
-\end{cases}$$
-
-この各頂点を $\Sigma_A$ に変換し、その座標を $V_{D,B}'(x_{D,A}, y_{D,A}, z_{D,A})$ とします。これらの頂点のうち、各軸方向における最小値と最大値をそれぞれ以下のように定義します。
+　次に、 $\mathcal{B}_B$ の各頂点 $\text{vertices}_B$ は、[BoundingBoxの示す領域と頂点](#boundingboxの示す領域と頂点)で述べた通り、非退化軸のみを用いて $2^{\text{次元}}$ 個生成されます。この各頂点を $\Sigma_A$ に変換し、その座標を $V_{D,B}'(x_{D,A}, y_{D,A}, z_{D,A})$ とします。これらの頂点のうち、各軸方向における最小値と最大値をそれぞれ以下のように定義します。
 
 $$\begin{aligned}
     x_{\text{min},B} &= \min_{V_{D,B}' \in \text{vertices}_B} x_{D,A}, \quad x_{\text{max},B} = \max_{V_{D,B}' \in \text{vertices}_B} x_{D,A} \\\

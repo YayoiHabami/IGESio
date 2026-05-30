@@ -175,20 +175,17 @@ TEST(BoundingBoxTest, Constructor3DGeneral_InvalidDirections) {
 TEST(BoundingBoxTest, Constructor3DGeneral_InvalidSizes) {
     auto [box, p0, dirs, sizes] = MakeBBox3DRotatedByZ();
 
-    // s0 = 0
-    auto invalid_sizes = sizes;
-    invalid_sizes[0] = 0.0;
-    EXPECT_THROW(BoundingBox(p0, dirs, invalid_sizes), std::invalid_argument);
+    // 負値は不正
+    auto neg = sizes;
+    neg[0] = -1.0;
+    EXPECT_THROW(BoundingBox(p0, dirs, neg), std::invalid_argument);
 
-    // s1 = 0
-    invalid_sizes = sizes;
-    invalid_sizes[1] = 0.0;
-    EXPECT_THROW(BoundingBox(p0, dirs, invalid_sizes), std::invalid_argument);
-
-    // s2 = 0 は許可される
-    invalid_sizes = sizes;
-    invalid_sizes[2] = 0.0;
-    EXPECT_NO_THROW(BoundingBox(p0, dirs, invalid_sizes));
+    // ゼロはいずれの軸でも退化次元として許容される (例外を投げない)
+    for (int i = 0; i < 3; ++i) {
+        auto z = sizes;
+        z[i] = 0.0;
+        EXPECT_NO_THROW(BoundingBox(p0, dirs, z)) << "axis " << i;
+    }
 }
 
 // AABB (軸平行ボックス) のコンストラクタテスト
@@ -214,10 +211,10 @@ TEST(BoundingBoxTest, Constructor3DAABB_InvalidSizes) {
     invalid_sizes[0] = -1.0;
     EXPECT_THROW(BoundingBox(p0, invalid_sizes), std::invalid_argument);
 
-    // s0 = 0
-    invalid_sizes = sizes;
-    invalid_sizes[0] = 0.0;
-    EXPECT_THROW(BoundingBox(p0, invalid_sizes), std::invalid_argument);
+    // s0 = 0 は退化次元として許容される
+    auto degenerate_sizes = sizes;
+    degenerate_sizes[0] = 0.0;
+    EXPECT_NO_THROW(BoundingBox(p0, degenerate_sizes));
 }
 
 TEST(BoundingBoxTest, Constructor2DGeneral_Valid) {
@@ -253,11 +250,11 @@ TEST(BoundingBoxTest, Constructor2DGeneral_InvalidSizes) {
 
     auto invalid_sizes = sizes_2d;
 
-    // s0 = 0
+    // s0 = 0 は退化次元として許容される
     invalid_sizes[0] = 0.0;
-    EXPECT_THROW(BoundingBox(p0, dirs_2d, invalid_sizes), std::invalid_argument);
+    EXPECT_NO_THROW(BoundingBox(p0, dirs_2d, invalid_sizes));
 
-    // s1 = -1
+    // s1 = -1 は不正
     invalid_sizes = sizes_2d;
     invalid_sizes[1] = -1.0;
     EXPECT_THROW(BoundingBox(p0, dirs_2d, invalid_sizes), std::invalid_argument);
@@ -337,7 +334,7 @@ TEST(BoundingBoxTest, ConstructorFromTwoPoints_Valid) {
         EXPECT_TRUE(box.Is2D());
     }
 
-    // 2Dケース (yが同じ)
+    // 2Dケース (yが同じ → y軸が退化). 方向はworld軸のまま、退化軸のサイズが0となる
     {
         SCOPED_TRACE("2D case, y-plane");
         Vector3d p1(1, 5, 2);
@@ -345,14 +342,13 @@ TEST(BoundingBoxTest, ConstructorFromTwoPoints_Valid) {
         BoundingBox box(p1, p2);
 
         EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p1));
-        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 10.0, 0.0});
+        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 0.0, 10.0});
         auto dirs = box.GetDirections();
-        // D0=z, D1=x, D2=y
-        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitZ(), Vector3d::UnitX(), Vector3d::UnitY()});
+        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()});
         EXPECT_TRUE(box.Is2D());
     }
 
-    // 2Dケース (xが同じ)
+    // 2Dケース (xが同じ → x軸が退化)
     {
         SCOPED_TRACE("2D case, x-plane");
         Vector3d p1(5, 1, 2);
@@ -360,24 +356,33 @@ TEST(BoundingBoxTest, ConstructorFromTwoPoints_Valid) {
         BoundingBox box(p1, p2);
 
         EXPECT_TRUE(i_num::IsApproxEqual(box.GetControl(), p1));
-        ExpectArray3ApproxEqual(box.GetSizes(), {10.0, 10.0, 0.0});
+        ExpectArray3ApproxEqual(box.GetSizes(), {0.0, 10.0, 10.0});
         auto dirs = box.GetDirections();
-        // D0=y, D1=z, D2=x
-        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitY(), Vector3d::UnitZ(), Vector3d::UnitX()});
+        ExpectArray3ApproxEqual(dirs, {Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()});
         EXPECT_TRUE(box.Is2D());
     }
 }
 
+// 退化(0次元・1次元)ケースは例外を投げず、対応する次元の箱を構成する
+TEST(BoundingBoxTest, ConstructorFromTwoPoints_Degenerate) {
+    // 同一点 → 0次元(点)
+    EXPECT_NO_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(1, 2, 3)));
+    {
+        BoundingBox box(Vector3d(1, 2, 3), Vector3d(1, 2, 3));
+        EXPECT_EQ(box.Dimension(), 0u);
+        EXPECT_TRUE(box.Is0D());
+    }
+
+    // 1座標のみ異なる → 1次元(線分)
+    for (const auto& p2 : {Vector3d(1, 2, 4), Vector3d(1, 4, 3), Vector3d(4, 2, 3)}) {
+        BoundingBox box(Vector3d(1, 2, 3), p2);
+        EXPECT_EQ(box.Dimension(), 1u);
+        EXPECT_TRUE(box.Is1D());
+    }
+}
+
 TEST(BoundingBoxTest, ConstructorFromTwoPoints_Invalid) {
-    // point1とpoint2が同じ
-    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(1, 2, 3)), std::invalid_argument);
-
-    // 2つ以上の座標値が同じ (1Dになるケース)
-    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(1, 2, 4)), std::invalid_argument);
-    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(1, 4, 3)), std::invalid_argument);
-    EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(4, 2, 3)), std::invalid_argument);
-
-    // 無限大の成分を持つ
+    // 無限大の成分を持つ場合のみ不正
     EXPECT_THROW(BoundingBox(Vector3d(kInf, 2, 3), Vector3d(4, 5, 6)), std::invalid_argument);
     EXPECT_THROW(BoundingBox(Vector3d(1, 2, 3), Vector3d(4, -kInf, 6)), std::invalid_argument);
     EXPECT_THROW(BoundingBox(Vector3d(1, 2, kInf), Vector3d(4, 5, -kInf)), std::invalid_argument);
@@ -479,13 +484,13 @@ TEST(BoundingBoxTest, GetSetSizes) {
     types = box.GetDirectionTypes();
     ExpectArray3ApproxEqual(types, {DT::kSegment, DT::kRay, DT::kLine});
 
-    // 無効なサイズ (s0 = 0)
-    auto invalid_sizes = sizes_3d;
-    invalid_sizes[0] = 0.0;
-    EXPECT_THROW(box.SetSizes(invalid_sizes), std::invalid_argument);
+    // s0 = 0 は退化次元として許容される
+    auto degenerate_sizes = sizes_3d;
+    degenerate_sizes[0] = 0.0;
+    EXPECT_NO_THROW(box.SetSizes(degenerate_sizes));
 
     // 無効なサイズ (s1 < 0)
-    invalid_sizes = sizes_3d;
+    auto invalid_sizes = sizes_3d;
     invalid_sizes[1] = -1.0;
     EXPECT_THROW(box.SetSizes(invalid_sizes), std::invalid_argument);
 }
@@ -514,9 +519,14 @@ TEST(BoundingBoxTest, SetSizes2D) {
     types = box.GetDirectionTypes();
     ExpectArray3ApproxEqual(types, {DT::kLine, DT::kSegment, DT::kSegment});
 
-    // 無効なサイズ (s0 = 0)
+    // s0 = 0 は退化次元として許容される
+    auto degenerate_sizes = sizes_2d;
+    degenerate_sizes[0] = 0.0;
+    EXPECT_NO_THROW(box.SetSizes2D(degenerate_sizes));
+
+    // 負値は不正
     auto invalid_sizes = sizes_2d;
-    invalid_sizes[0] = 0.0;
+    invalid_sizes[0] = -1.0;
     EXPECT_THROW(box.SetSizes2D(invalid_sizes), std::invalid_argument);
 }
 
@@ -541,19 +551,15 @@ TEST(BoundingBoxTest, SetSize) {
     EXPECT_NEAR(box.GetSizes()[1], 50.0, kTol);
     EXPECT_EQ(box.GetDirectionTypes()[1], DT::kSegment);
 
-    // s2 を 0 に設定 (許可)
+    // 各軸とも 0 (退化次元) に設定できる
     EXPECT_NO_THROW(box.SetSize(2, 0.0, false));
     EXPECT_NEAR(box.GetSizes()[2], 0.0, kTol);
+    EXPECT_NO_THROW(box.SetSize(0, 0.0, false));
+    EXPECT_NO_THROW(box.SetSize(1, 0.0, false));
 
     // --- 異常系 ---
     // i が範囲外
     EXPECT_THROW(box.SetSize(3, 10.0, false), std::out_of_range);
-
-    // s0 = 0
-    EXPECT_THROW(box.SetSize(0, 0.0, false), std::invalid_argument);
-
-    // s1 = 0
-    EXPECT_THROW(box.SetSize(1, 0.0, false), std::invalid_argument);
 
     // s0 < 0
     EXPECT_THROW(box.SetSize(0, -1.0, false), std::invalid_argument);
@@ -871,10 +877,17 @@ TEST(BoundingBoxTest, IsEmpty) {
 TEST(BoundingBoxTest, Is2DIs3D) {
     Vector3d p0(1.0, 2.0, 3.0);
 
-    // Empty (s0=s1=s2=0) は 2D 扱い
+    // Empty (s0=s1=s2=0) は 0次元
     BoundingBox box_empty;
-    EXPECT_TRUE(box_empty.Is2D());
+    EXPECT_TRUE(box_empty.Is0D());
+    EXPECT_FALSE(box_empty.Is2D());
     EXPECT_FALSE(box_empty.Is3D());
+
+    // 1次元 (1軸のみ非ゼロ)
+    BoundingBox box_1d(p0, std::array<double, 3>{10.0, 0.0, 0.0});
+    EXPECT_TRUE(box_1d.Is1D());
+    EXPECT_FALSE(box_1d.Is2D());
+    EXPECT_FALSE(box_1d.Is3D());
 
     // 3D (s2 > 0)
     BoundingBox box_3d(p0, std::array<double, 3>{10.0, 20.0, 30.0});
@@ -909,6 +922,28 @@ TEST(BoundingBoxTest, Is2DIs3D) {
     // 2D -> 3D
     box_2d.SetSize(2, 10.0, false);
     EXPECT_FALSE(box_2d.Is2D());
+}
+
+TEST(BoundingBoxTest, Dimension) {
+    Vector3d p0(1.0, 2.0, 3.0);
+
+    // 0次元 (全軸ゼロ)
+    EXPECT_EQ(BoundingBox().Dimension(), 0u);
+
+    // 1次元 (1軸のみ非ゼロ): 各軸について確認
+    EXPECT_EQ(BoundingBox(p0, std::array<double, 3>{5.0, 0.0, 0.0}).Dimension(), 1u);
+    EXPECT_EQ(BoundingBox(p0, std::array<double, 3>{0.0, 5.0, 0.0}).Dimension(), 1u);
+    EXPECT_EQ(BoundingBox(p0, std::array<double, 3>{0.0, 0.0, 5.0}).Dimension(), 1u);
+
+    // 2次元
+    EXPECT_EQ(BoundingBox(p0, std::array<double, 3>{5.0, 6.0, 0.0}).Dimension(), 2u);
+
+    // 3次元
+    EXPECT_EQ(BoundingBox(p0, std::array<double, 3>{5.0, 6.0, 7.0}).Dimension(), 3u);
+
+    // 無限軸(kRay/kLine)も非ゼロextentとして数える
+    EXPECT_EQ(BoundingBox(p0, {kInf, 6.0, 0.0}, {false, false, false}).Dimension(), 2u);
+    EXPECT_EQ(BoundingBox(p0, {5.0, 6.0, 7.0}, {true, false, false}).Dimension(), 3u);
 }
 
 TEST(BoundingBoxTest, IsOnZPlane) {
@@ -957,10 +992,20 @@ TEST(BoundingBoxTest, IsOnZPlane) {
     EXPECT_TRUE(box_rotated_z.Is2D());
     EXPECT_TRUE(box_rotated_z.IsOnZPlane());
 
-    // Empty box (デフォルトコンストラクタ)
+    // Empty box (デフォルトコンストラクタ; 0次元・原点) はz=0平面上とみなす
     BoundingBox box_empty;
-    EXPECT_TRUE(box_empty.Is2D());
+    EXPECT_TRUE(box_empty.Is0D());
     EXPECT_TRUE(box_empty.IsOnZPlane());
+
+    // z=0平面上の1次元線分 (x軸方向) はz=0平面上
+    BoundingBox box_seg_on_z(Vector3d(1, 2, 0), std::array<double, 3>{10.0, 0.0, 0.0});
+    EXPECT_TRUE(box_seg_on_z.Is1D());
+    EXPECT_TRUE(box_seg_on_z.IsOnZPlane());
+
+    // z方向に伸びる1次元線分はz=0平面上にない
+    BoundingBox box_seg_along_z(Vector3d(1, 2, 0), std::array<double, 3>{0.0, 0.0, 10.0});
+    EXPECT_TRUE(box_seg_along_z.Is1D());
+    EXPECT_FALSE(box_seg_along_z.IsOnZPlane());
 
     // 2D無限ボックス (s0=Inf, p0.z=0, d2//UnitZ)
     std::array<bool, 2> is_line_2d = {false, false};
@@ -1062,15 +1107,19 @@ TEST(BoundingBoxTest, GetVerticesFinite) {
     EXPECT_TRUE(ContainsVertex(vertices_2d, p0 + s1 * d1));
     EXPECT_TRUE(ContainsVertex(vertices_2d, p0 + s0 * d0 + s1 * d1));
 
-    // --- Empty ---
+    // --- 1D (s1=s2=0) ---
+    BoundingBox box_1d(p0, std::array<double, 3>{s0, 0.0, 0.0});
+    auto vertices_1d = box_1d.GetVertices();
+    EXPECT_EQ(vertices_1d.size(), 2);  // 2^1 = 2頂点
+    EXPECT_TRUE(ContainsVertex(vertices_1d, p0));
+    EXPECT_TRUE(ContainsVertex(vertices_1d, p0 + s0 * d0));
+
+    // --- Empty (0次元) ---
     BoundingBox box_empty;
     auto vertices_empty = box_empty.GetVertices();
-    EXPECT_EQ(vertices_empty.size(), 4);  // Is2D() が true のため
+    EXPECT_EQ(vertices_empty.size(), 1);  // 2^0 = 1頂点
     EXPECT_TRUE(ContainsVertex(vertices_empty, Vector3d::Zero()));
     EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[0], 0.0));
-    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[1], 0.0));
-    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[2], 0.0));
-    EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[3], 0.0));
 }
 
 TEST(BoundingBoxTest, GetVerticesInfinite) {
@@ -1139,11 +1188,11 @@ TEST(BoundingBoxTest, GetFiniteVertices) {
     EXPECT_EQ(vertices_2d.size(), 4);
     EXPECT_EQ(vertices_2d.size(), vertices_2d_all.size());  // GetVertices と同じ結果
 
-    // --- Empty ---
+    // --- Empty (0次元) ---
     BoundingBox box_empty;
     EXPECT_TRUE(box_empty.IsFinite());
     auto vertices_empty = box_empty.GetFiniteVertices();
-    EXPECT_EQ(vertices_empty.size(), 4);
+    EXPECT_EQ(vertices_empty.size(), 1);  // 2^0 = 1頂点
     EXPECT_TRUE(i_num::IsApproxConstant(vertices_empty[0], 0.0));
 
     // --- Infinite (Ray) ---

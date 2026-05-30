@@ -10,11 +10,9 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "igesio/common/id_generator.h"
-#include "igesio/entities/entity_base.h"
+#include "igesio/models/assembly.h"
 #include "igesio/models/global_param.h"
 
 
@@ -29,21 +27,17 @@ GlobalParam GetDefaultGlobalParam();
 
 /// @brief IGESデータクラス
 /// @note 一つのIGESファイルに対応するデータ構造を表す.
+///       「エンティティの集合」という責務はルートAssemblyが担い、本クラスは
+///       入出力に関わる説明文・グローバルパラメータと、ルートAssemblyへの
+///       合成(継承ではない)を保持するラッパーとする.
 class IgesData {
  private:
     /// @brief IGESデータのID
     ObjectID id_ = IDGenerator::Generate(ObjectType::kIgesData);
 
-    /// @brief エンティティのIDとポインタのマッピング
-    std::unordered_map<ObjectID, std::shared_ptr<entities::EntityBase>> entities_;
-
-    /// @brief ポインタを設定する
-    /// @param[out] entity ポインタを設定するエンティティ
-    /// @note entityが未登録のポインタを持ち、かつentities_がそれを持つ場合、
-    ///       entityにそのポインタを設定する.
-    void SetPointerIfUnset(std::shared_ptr<entities::EntityBase>);
-
-
+    /// @brief エンティティの集合を保持するルートAssembly
+    /// @note Assemblyのツリー機構(`weak_from_this`等)のためshared_ptrで保持する
+    std::shared_ptr<Assembly> root_ = std::make_shared<Assembly>();
 
  public:
     /// @brief このIGESデータの説明
@@ -57,65 +51,12 @@ class IgesData {
     /// @return IgesDataのID
     const ObjectID& GetID() const { return id_; }
 
-    /// @brief エンティティを追加する
-    /// @param entity 追加するエンティティ
-    /// @return 追加に成功した場合は、そのエンティティのIDを返す.
-    /// @throw std::invalid_argument entityがnullptrの場合
-    template<typename T>
-    std::enable_if_t<std::is_base_of_v<entities::EntityBase, T>, ObjectID>
-    AddEntity(const std::shared_ptr<T> entity) {
-        // nullptrチェック
-        if (!entity) {
-            throw std::invalid_argument("Entity pointer is null");
-        }
-
-        // エンティティをマップに追加
-        auto id = entity->GetID();
-        SetPointerIfUnset(entity);
-        entities_[id] = entity;
-
-        return id;
-    }
-
-    /// @brief エンティティが参照する全てのエンティティのポインタが設定済みか
-    /// @return 一つでも未設定のポインタがある場合は`false`
-    /// @note Directory Entry フィールド関連のメンバも含む
-    bool AreAllReferencesSet() const;
-
-    /// @brief エンティティが参照する全てのエンティティのうち、
-    ///        ポインタが未設定のもののIDを取得する
-    /// @return ポインタが未設定のエンティティのIDのリスト
-    /// @note Directory Entry フィールド関連のメンバも含む
-    std::unordered_set<ObjectID> GetUnresolvedReferences() const;
-
-    /// @brief エンティティのポインタを取得する
-    /// @param id エンティティのID
-    /// @return 指定されたIDのエンティティのポインタ. 存在しない場合は`nullptr`.
-    std::shared_ptr<entities::EntityBase> GetEntity(const ObjectID&) const;
-
-    /// @brief エンティティへの参照の取得
-    /// @return エンティティのポインタのマップ
-    const std::unordered_map<ObjectID, std::shared_ptr<entities::EntityBase>>&
-    GetEntities() const { return entities_; }
-
-    /// @brief エンティティの数を取得する
-    /// @return エンティティの数
-    size_t GetEntityCount() const { return entities_.size(); }
-
-
-
-    /// @brief すべてのエンティティの準備ができているかを確認する
-    /// @note (1) 自身を含む、すべてのエンティティのポインタが設定済みであること
-    ///       (2) すべてのエンティティが有効であること
-    /// @return すべてのエンティティが準備できている場合は`true`, そうでない場合は`false`.
-    bool IsReady() const;
-
-    /// @brief 本オブジェクトがIGESファイルとして有効かを確認する
-    /// @return 検証結果
-    /// @note 以下を検証する:
-    ///       - 未設定の参照がないこと
-    ///       - すべてのエンティティが有効であること
-    ValidationResult Validate() const;
+    /// @brief ルートAssemblyを取得する
+    /// @return ルートAssemblyへの参照
+    Assembly& Root() { return *root_; }
+    /// @brief ルートAssemblyを取得する (変更不可)
+    /// @return ルートAssemblyへの参照
+    const Assembly& Root() const { return *root_; }
 };
 
 }  // namespace igesio::models

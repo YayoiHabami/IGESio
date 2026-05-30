@@ -32,6 +32,8 @@ std::string igesio::ToString(const ObjectType type) {
             return "IGES Data";
         case ObjectType::kAssembly:
             return "Assembly";
+        case ObjectType::kEntityView:
+            return "Entity View";
         default:
             return "Unknown";
     }
@@ -261,8 +263,9 @@ std::string ToReadableString(const igesio::Identifier& id) {
         oss << id.GetDEPointer().value_or(0) << "-";
         oss << id.GetEntityType().value_or(0) << "-";
     } else if (obj_type == igesio::ObjectType::kEntityNew ||
-               obj_type == igesio::ObjectType::kEntityGraphics) {
-        // Entity (in program) または EntityGraphics
+               obj_type == igesio::ObjectType::kEntityGraphics ||
+               obj_type == igesio::ObjectType::kEntityView) {
+        // Entity (in program)、EntityGraphics または EntityView
         oss << std::hex << (id.GetIDPrefix() & 0x00FFFFFFFFFFFFFF) << "-";
         oss << std::dec << id.GetEntityType().value_or(0) << "-";
     } else {
@@ -324,8 +327,9 @@ std::string ToString(const igesio::Identifier& id,
         auto entity_type = id.GetEntityType().value_or(0);
         oss << std::setw(4) << std::setfill('0') << entity_type << "-";
     } else if (obj_type == igesio::ObjectType::kEntityNew ||
-               obj_type == igesio::ObjectType::kEntityGraphics) {
-        // Entity (in program) または EntityGraphics
+               obj_type == igesio::ObjectType::kEntityGraphics ||
+               obj_type == igesio::ObjectType::kEntityView) {
+        // Entity (in program)、EntityGraphics または EntityView
         // OO-RRRRRRRRRRRRRR-EEEE-TTTTTTTTTTTT
 
         // 次の14桁はランダム部分 (16進数)
@@ -408,9 +412,10 @@ class IdentifierImpl : public igesio::Identifier {
                    const int int_id_value)
             : int_id(int_id_value) {
         if (obj_type != igesio::ObjectType::kEntityNew &&
-            obj_type != igesio::ObjectType::kEntityGraphics) {
+            obj_type != igesio::ObjectType::kEntityGraphics &&
+            obj_type != igesio::ObjectType::kEntityView) {
             throw igesio::ImplementationError(
-                "obj_type must be kEntityNew or kEntityGraphics");
+                "obj_type must be kEntityNew, kEntityGraphics or kEntityView");
         }
 
         // prefix: <obj-type:8><random:56>
@@ -503,7 +508,8 @@ class IdentifierImpl : public igesio::Identifier {
         // オブジェクトがID関連ではない場合はnulloptを返す
         if (obj_type != igesio::ObjectType::kEntityFromIGES &&
             obj_type != igesio::ObjectType::kEntityNew &&
-            obj_type != igesio::ObjectType::kEntityGraphics) {
+            obj_type != igesio::ObjectType::kEntityGraphics &&
+            obj_type != igesio::ObjectType::kEntityView) {
             return std::nullopt;
         }
 

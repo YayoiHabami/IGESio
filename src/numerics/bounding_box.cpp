@@ -84,57 +84,16 @@ BoundingBox::BoundingBox(const Vector3d& point1,
             "but got point1 = " + ToString(point1, /*transpose=*/true) +
             ", point2 = " + ToString(point2, /*transpose=*/true));
     }
-    if (IsApproxEqual(point1, point2)) {
-        throw std::invalid_argument(
-            "BoundingBox: Points must be different, but got "
-            "point1 = point2 = " + ToString(point1, /*transpose=*/true));
-    }
 
-    // 最小の点 (基点P0) とサイズを計算
-    auto min_point = point1.cwiseMin(point2);
-    auto max_point = point1.cwiseMax(point2);
-    Vector3d size = max_point - min_point;
+    // 基点P0とサイズを計算する. 退化軸(size[i]==0)はそのままゼロ幅として保持し、
+    // 同値軸の数に応じて0〜2次元のバウンディングボックスを構成する
+    const auto min_point = point1.cwiseMin(point2);
+    const auto max_point = point1.cwiseMax(point2);
+    const Vector3d size = max_point - min_point;
 
-    // 2つ以上のsize[i]が0である場合はエラー
-    int zero_index = -1;
-    for (size_t i = 0; i < 3; ++i) {
-        if (i_num::IsApproxZero(size[i])) {
-            if (zero_index != -1) {
-                throw std::invalid_argument(
-                    "BoundingBox: At least two dimensions are zero, "
-                    "which is not allowed, got sizes = " +
-                    ToString(size, /*transpose=*/true));
-            }
-            zero_index = i;
-        }
-    }
-
-    // 延伸方向とそのサイズを設定
-    std::array<Vector3d, 3> directions =
-            {Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()};
-    std::array<double, 3> sizes = {size[0], size[1], size[2]};
-    // 2次元の場合 (zero_index >= 0) はサイズがゼロの方向をD2として扱い、
-    // D0×D1=D2となるようにD0, D1を設定
-    switch (zero_index) {
-        case 0:   // x方向がゼロ
-            directions = {Vector3d::UnitY(), Vector3d::UnitZ(), Vector3d::UnitX()};
-            sizes = {size[1], size[2], 0.0};
-            break;
-        case 1:   // y方向がゼロ
-            directions = {Vector3d::UnitZ(), Vector3d::UnitX(), Vector3d::UnitY()};
-            sizes = {size[0], size[2], 0.0};
-            break;
-        case 2:   // z方向がゼロの場合、directionsはデフォルトのまま
-            sizes = {size[0], size[1], 0.0};
-            break;
-        default:  // z方向がゼロの場合はデフォルトのまま
-            break;
-    }
-
-    // パラメータを設定 (サイズについてはすべて有限)
     SetControl(min_point);
-    SetDirections(directions);
-    SetSizes(sizes, {false, false, false});
+    SetDirections({Vector3d::UnitX(), Vector3d::UnitY(), Vector3d::UnitZ()});
+    SetSizes({size[0], size[1], size[2]}, {false, false, false});
 }
 
 
@@ -239,15 +198,11 @@ void BoundingBox::SetSize(const size_t index, const double size, const bool is_l
     }
 
     // sizesに負の値が含まれている場合はエラー
+    // (0は退化次元として許容する)
     if (size < 0.0) {
         throw std::invalid_argument(
             "BoundingBox: Size in " + std::to_string(index + 1) + " direction must be "
             "non-negative, but got " + std::to_string(size));
-    } else if (index != 2 && i_num::IsApproxZero(size)) {
-        // sizes[2]以外が0の場合はエラー
-        throw std::invalid_argument(
-            "BoundingBox: Size in " + std::to_string(index + 1) + " direction must be "
-            "non-zero, but got " + std::to_string(size));
     }
 
     if (is_line) {
@@ -404,24 +359,25 @@ bool BoundingBox::IsEmpty() const {
            IsApproxZero(sizes_[2]);
 }
 
-bool BoundingBox::Is2D() const {
-    return IsApproxZero(sizes_[2]);
+unsigned int BoundingBox::Dimension() const {
+    // 非ゼロのextentを持つ軸数を数える (±∞も非ゼロ扱い)
+    unsigned int dim = 0;
+    for (size_t i = 0; i < 3; ++i) {
+        if (!IsApproxZero(sizes_[i])) ++dim;
+    }
+    return dim;
 }
 
 bool BoundingBox::IsOnZPlane() const {
-    if (!Is2D()) return false;
-
-    // d2がz平面に垂直であることを確認
-    Vector3d z_axis = Vector3d::UnitZ();
-    if (!IsApproxOne(std::abs(directions_[2].dot(z_axis)))) {
-        return false;
-    }
-
     // p0.z() == 0 を確認
-    if (!IsApproxZero(control_.z())) {
-        return false;
-    }
+    if (!IsApproxZero(control_.z())) return false;
 
+    // 全ての非退化軸の方向ベクトルがz成分を持たない
+    // (=領域全体がz=0平面内に収まる) ことを確認する
+    for (size_t i = 0; i < 3; ++i) {
+        if (IsApproxZero(sizes_[i])) continue;  // 退化軸は無視
+        if (!IsApproxZero(directions_[i].z())) return false;
+    }
     return true;
 }
 
@@ -435,40 +391,34 @@ bool BoundingBox::IsFinite() const {
 }
 
 std::vector<Vector3d> BoundingBox::GetVertices() const {
-    auto n_vertices = Is2D() ? 4 : 8;
-    auto [s0, s1, s2] = GetSizes();
-    auto [t0, t1, t2] = GetDirectionTypes();
+    const auto sizes = GetSizes();
+    const auto types = GetDirectionTypes();
+
+    // extentを持つ軸(非退化軸)のインデックスを収集する.
+    // 頂点数は 2^(次元) となる (0D=1, 1D=2, 2D=4, 3D=8)
+    std::vector<size_t> active;
+    for (size_t i = 0; i < 3; ++i) {
+        if (!IsApproxZero(sizes_[i])) active.push_back(i);
+    }
+    const size_t count = static_cast<size_t>(1) << active.size();
 
     std::vector<Vector3d> v;
-    v.reserve(n_vertices);
-    for (size_t i = 0; i < n_vertices; ++i) {
+    v.reserve(count);
+    for (size_t mask = 0; mask < count; ++mask) {
         Vector3d vertex = control_;
-        if (i % 2 == 1) {
-            // D0方向の加算
-            vertex += s0 * directions_[0];
-        } else if (t0 == DirectionType::kLine) {
-            // D0が無限直線の場合、D0方向の負の無限大成分を加算
-            vertex += -s0 * directions_[0];
+        for (size_t b = 0; b < active.size(); ++b) {
+            const size_t i = active[b];
+            if ((mask >> b) & static_cast<size_t>(1)) {
+                // 正方向の端
+                vertex += sizes[i] * directions_[i];
+            } else if (types[i] == DirectionType::kLine) {
+                // 無限直線の場合は負方向の端 (-∞)
+                vertex += -sizes[i] * directions_[i];
+            }
         }
 
-        if (i % 4 >= 2) {
-            // D1方向の加算
-            vertex += s1 * directions_[1];
-        } else if (t1 == DirectionType::kLine) {
-            // D1が無限直線の場合、D1方向の負の無限大成分を加算
-            vertex += -s1 * directions_[1];
-        }
-
-        if (i >= 4) {
-            // D2方向の加算
-            vertex += s2 * directions_[2];
-        } else if (t2 == DirectionType::kLine) {
-            // D2が無限直線の場合、D2方向の負の無限大成分を加算
-            vertex += -s2 * directions_[2];
-        }
-
-        // NaNの除去: 上記計算ではinf*0によりNaNが発生する場合があるが、
-        //            これを0に置き換える (0の場合s_iにより延伸される成分はないため)
+        // NaNの除去: inf*0によりNaNが発生する場合があるが、これを0に置き換える
+        //            (0の場合、その方向に延伸される成分はないため)
         for (int dim = 0; dim < 3; ++dim) {
             if (std::isnan(vertex(dim))) vertex(dim) = 0.0;
         }
