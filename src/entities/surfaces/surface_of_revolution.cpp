@@ -249,7 +249,7 @@ std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
 }
 
 std::optional<i_ent::SurfaceDerivatives>
-SurfaceOfRevolution::TryGetDerivatives(
+SurfaceOfRevolution::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {

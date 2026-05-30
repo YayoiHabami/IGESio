@@ -296,7 +296,7 @@ std::vector<double> CompositeCurve::GetCornerParams() const {
     return result;
 }
 
-std::optional<Vector3d> CompositeCurve::LeftTangentAt(const double t) const {
+std::optional<Vector3d> CompositeCurve::TryGetDefinedLeftTangentAt(const double t) const {
     const auto offsets = ComputeCurveOffsets(*this);
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
@@ -304,16 +304,16 @@ std::optional<Vector3d> CompositeCurve::LeftTangentAt(const double t) const {
             // 直前の構成曲線 (i-1) の終端における左接線
             auto curve = curves_[i - 1].GetEntity<ICurve>();
             if (!curve) break;
-            return curve->LeftTangentAt(curve->GetParameterRange()[1]);
+            return curve->TryGetDefinedLeftTangentAt(curve->GetParameterRange()[1]);
         }
     }
     // 非接合点: 該当する構成曲線に委譲
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (!curve) return std::nullopt;
-    return curve->LeftTangentAt(t_local);
+    return curve->TryGetDefinedLeftTangentAt(t_local);
 }
 
-std::optional<Vector3d> CompositeCurve::RightTangentAt(const double t) const {
+std::optional<Vector3d> CompositeCurve::TryGetDefinedRightTangentAt(const double t) const {
     const auto offsets = ComputeCurveOffsets(*this);
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
@@ -321,13 +321,13 @@ std::optional<Vector3d> CompositeCurve::RightTangentAt(const double t) const {
             // 直後の構成曲線 (i) の始端における右接線
             auto curve = curves_[i].GetEntity<ICurve>();
             if (!curve) break;
-            return curve->RightTangentAt(curve->GetParameterRange()[0]);
+            return curve->TryGetDefinedRightTangentAt(curve->GetParameterRange()[0]);
         }
     }
     // 非接合点: 該当する構成曲線に委譲
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (!curve) return std::nullopt;
-    return curve->RightTangentAt(t_local);
+    return curve->TryGetDefinedRightTangentAt(t_local);
 }
 
 
@@ -374,9 +374,11 @@ std::array<double, 2> CompositeCurve::GetParameterRange() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-CompositeCurve::TryGetDerivatives(const double t, const unsigned int n) const {
+CompositeCurve::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (curve) {
+        // 合成の定義空間は、構成曲線をそれぞれのモデル空間(M_sub適用済み)に
+        // 配置したもの. よって構成曲線のモデル空間導関数を集約する
         return curve->TryGetDerivatives(t_local, n);
     }
     // パラメータtが範囲外の場合

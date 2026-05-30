@@ -342,13 +342,14 @@ std::array<double, 4> TrimmedSurface::GetParameterRange() const {
 }
 
 std::optional<i_ent::SurfaceDerivatives>
-TrimmedSurface::TryGetDerivatives(
+TrimmedSurface::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // ドメイン外は nullopt
     if (!IsInDomain(u, v)) return std::nullopt;
 
     auto surf_opt = surface_.TryGetEntity<ISurface>();
     if (!surf_opt) return std::nullopt;
+    // トリム面の定義空間は基底曲面のモデル空間(M_base適用済み)とする
     return surf_opt.value()->TryGetDerivatives(u, v, order);
 }
 

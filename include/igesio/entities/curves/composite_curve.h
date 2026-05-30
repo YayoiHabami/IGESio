@@ -111,17 +111,17 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     ///         Composite Curveのパラメータ空間にマッピングしたリスト
     std::vector<double> GetCornerParams() const override;
 
-    /// @brief 角点における左側単位接線ベクトルを返す
+    /// @brief 角点における定義空間の左側単位接線ベクトルを返す
     /// @param t パラメータ値
     /// @return 接合点では直前の構成曲線の終端接線を返す.
-    ///         それ以外は構成曲線のLeftTangentAtに委譲
-    std::optional<Vector3d> LeftTangentAt(const double t) const override;
+    ///         それ以外は構成曲線のTryGetDefinedLeftTangentAtに委譲
+    std::optional<Vector3d> TryGetDefinedLeftTangentAt(const double t) const override;
 
-    /// @brief 角点における右側単位接線ベクトルを返す
+    /// @brief 角点における定義空間の右側単位接線ベクトルを返す
     /// @param t パラメータ値
     /// @return 接合点では直後の構成曲線の始端接線を返す.
-    ///         それ以外は構成曲線のRightTangentAtに委譲
-    std::optional<Vector3d> RightTangentAt(const double t) const override;
+    ///         それ以外は構成曲線のTryGetDefinedRightTangentAtに委譲
+    std::optional<Vector3d> TryGetDefinedRightTangentAt(const double t) const override;
 
 
 
@@ -146,7 +146,7 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @param n 何階まで計算するか; 例えば2を指定した場合、0階 C(t) から2階 C''(t) まで計算
     /// @return 導関数 C'(t), C''(t)、計算できない場合は`std::nullopt`
     std::optional<CurveDerivatives>
-    TryGetDerivatives(const double, const unsigned int) const override;
+    TryGetDefinedDerivatives(const double, const unsigned int) const override;
 
     /// @brief 曲線の [t_start, t_end] 間の長さを取得する
     /// @param start パラメータ範囲の開始値

@@ -365,7 +365,7 @@ std::array<double, 2> CurveOnSurface::GetParameterRange() const {
 
 
 std::optional<i_ent::CurveDerivatives>
-CurveOnSurface::TryGetDerivatives(const double t, const unsigned int n) const {
+CurveOnSurface::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     if (!base_curve_.IsPointerSet() || !surface_.IsPointerSet()) {
         return std::nullopt;
     }

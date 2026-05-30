@@ -173,7 +173,7 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @param n 何階まで計算するか; 例えば2を指定した場合、0階 C(t) から2階 C''(t) まで計算
     /// @return 導関数 C'(t), C''(t)、計算できない場合は`std::nullopt`
     std::optional<CurveDerivatives>
-    TryGetDerivatives(const double, const unsigned int) const override;
+    TryGetDefinedDerivatives(const double, const unsigned int) const override;
 
     /// @brief 曲線の [t_start, t_end] 間の長さを取得する
     /// @param start パラメータ範囲の開始値
