@@ -51,7 +51,7 @@ std::array<double, 2> CopiousData::GetParameterRange() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-CopiousData::TryGetDerivatives(const double t, const unsigned int n) const {
+CopiousData::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     if (t < GetParameterRange()[0] || t > GetParameterRange()[1]) {
         return std::nullopt;
     }

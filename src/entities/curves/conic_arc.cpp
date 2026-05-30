@@ -284,7 +284,7 @@ bool ConicArc::IsClosed() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-ConicArc::TryGetDerivatives(const double t, const unsigned int n) const {
+ConicArc::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     // 計算式の詳細は docs/entities/curves/104_conic_arc_ja.md を参照
     switch (GetConicType()) {
         case ConicType::kEllipse: {

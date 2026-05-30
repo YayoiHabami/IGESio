@@ -191,7 +191,7 @@ bool CircularArc::IsClosed() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-CircularArc::TryGetDerivatives(const double t, const unsigned int n) const {
+CircularArc::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
     if (t < range[0] || t > range[1]) return std::nullopt;
 

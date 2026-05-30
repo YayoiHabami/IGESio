@@ -58,15 +58,15 @@ class LinearPath : public CopiousDataBase,
     ///         kPlanarLoopの場合は t=0 (頂点0) も含む
     std::vector<double> GetCornerParams() const override;
 
-    /// @brief 角点における左側単位接線ベクトルを解析的に返す
+    /// @brief 角点における定義空間の左側単位接線ベクトルを解析的に返す
     /// @param t パラメータ値
     /// @return 入射辺方向の単位ベクトル. 計算できない場合は`std::nullopt`
-    std::optional<Vector3d> LeftTangentAt(const double t) const override;
+    std::optional<Vector3d> TryGetDefinedLeftTangentAt(const double t) const override;
 
-    /// @brief 角点における右側単位接線ベクトルを解析的に返す
+    /// @brief 角点における定義空間の右側単位接線ベクトルを解析的に返す
     /// @param t パラメータ値
     /// @return 出射辺方向の単位ベクトル. 計算できない場合は`std::nullopt`
-    std::optional<Vector3d> RightTangentAt(const double t) const override;
+    std::optional<Vector3d> TryGetDefinedRightTangentAt(const double t) const override;
 
 
 
@@ -90,7 +90,7 @@ class LinearPath : public CopiousDataBase,
     /// @param n 何階まで計算するか; 例えば2を指定した場合、0階 C(t) から2階 C''(t) まで計算
     /// @return 導関数 C'(t), C''(t)、計算できない場合は`std::nullopt`
     std::optional<CurveDerivatives>
-    TryGetDerivatives(const double, const unsigned int) const override;
+    TryGetDefinedDerivatives(const double, const unsigned int) const override;
 
     /// @brief 曲線の全長を取得する
     /// @return 曲線の全長

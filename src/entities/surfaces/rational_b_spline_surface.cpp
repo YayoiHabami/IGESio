@@ -369,7 +369,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
  */
 
 std::optional<i_ent::SurfaceDerivatives>
-RationalBSplineSurface::TryGetDerivatives(
+RationalBSplineSurface::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // パラメータ範囲チェック
     if (u < parameter_range_[0] || u > parameter_range_[1] ||

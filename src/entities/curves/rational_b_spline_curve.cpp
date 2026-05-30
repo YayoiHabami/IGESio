@@ -439,7 +439,7 @@ bool RationalBSplineCurve::IsClosed() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-RationalBSplineCurve::TryGetDerivatives(const double t, const unsigned int n) const {
+RationalBSplineCurve::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     auto basis = ::TryComputeBasisFunctions(t, static_cast<int>(n), *this);
     if (!basis) {
         return std::nullopt;

@@ -402,7 +402,7 @@ bool ParametricSplineCurve::IsClosed() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-ParametricSplineCurve::TryGetDerivatives(const double t, const unsigned int n) const {
+ParametricSplineCurve::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     // tが定義域内にあるか確認
     auto i_s_ptr = FindSegmentIndex(t);
     if (!i_s_ptr) return std::nullopt;

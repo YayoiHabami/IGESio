@@ -21,7 +21,7 @@
  *
  * TODO:
  *   - TryGetSignedCurvature の通常点（circle NURBS での κ_s = +1/R）テスト
- *   - LeftTangentAt / RightTangentAt の解析値との数値比較テスト
+ *   - TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt の解析値との数値比較テスト
  */
 #include <gtest/gtest.h>
 
@@ -60,7 +60,7 @@ constexpr double kTol = 1e-9;
 /// P0=(0,0,0), P1=(1,0,0), P2=(2,0,0) (共線)
 /// GetLinearSegments: [{0,1},{1,2}]
 /// GetCornerParams:   [1.0] (内部ノット t=1, mult=1 >= degree=1)
-/// LeftTangentAt(1-h) = RightTangentAt(1+h) = (1,0,0) (直線上なので外角=0)
+/// TryGetDefinedLeftTangentAt(1-h) = TryGetDefinedRightTangentAt(1+h) = (1,0,0) (直線上なので外角=0)
 std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_Straight() {
     const auto param = igesio::IGESParameterVector{
         2, 1,                       // K=2, M=1
