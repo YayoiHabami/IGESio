@@ -91,7 +91,7 @@ bool ICurve::IsFinite() const {
  */
 
 double ICurve::GetCurvature(const double t) const {
-    auto deriv = TryGetDerivatives(t, 2);
+    auto deriv = TryGetDefinedDerivatives(t, 2);
     if (!deriv.has_value()) return -1;
 
     // κ = |C' × C''| / |C'|^3
@@ -127,10 +127,10 @@ bool ICurve::IsCorner(const double t, const double eps) const {
     return false;
 }
 
-std::optional<Vector3d> ICurve::LeftTangentAt(const double t) const {
+std::optional<Vector3d> ICurve::TryGetDefinedLeftTangentAt(const double t) const {
     // (t-h)における導関数の方向で近似
     const double t_eval = std::max(t - kTangentH, GetParameterRange()[0]);
-    auto deriv = TryGetDerivatives(t_eval, 1);
+    auto deriv = TryGetDefinedDerivatives(t_eval, 1);
     if (!deriv.has_value()) return std::nullopt;
 
     // 導関数がゼロベクトルに近い場合は接線ベクトルを定義できないとみなす
@@ -139,10 +139,10 @@ std::optional<Vector3d> ICurve::LeftTangentAt(const double t) const {
     return (*deriv)[1] / norm;
 }
 
-std::optional<Vector3d> ICurve::RightTangentAt(const double t) const {
+std::optional<Vector3d> ICurve::TryGetDefinedRightTangentAt(const double t) const {
     // (t+h)における導関数の方向で近似
     const double t_eval = std::min(t + kTangentH, GetParameterRange()[1]);
-    auto deriv = TryGetDerivatives(t_eval, 1);
+    auto deriv = TryGetDefinedDerivatives(t_eval, 1);
     if (!deriv.has_value()) return std::nullopt;
 
     // 導関数がゼロベクトルに近い場合は接線ベクトルを定義できないとみなす
@@ -157,9 +157,9 @@ std::optional<double> ICurve::CornerExteriorAngle(
     if (n_norm < 1e-12) return std::nullopt;
     const Vector3d n_hat = reference_normal / n_norm;
 
-    auto tm = LeftTangentAt(t);
+    auto tm = TryGetDefinedLeftTangentAt(t);
     if (!tm.has_value()) return std::nullopt;
-    auto tp = RightTangentAt(t);
+    auto tp = TryGetDefinedRightTangentAt(t);
     if (!tp.has_value()) return std::nullopt;
 
     // (T⁻ × T⁺) · n̂ が符号付き sin 成分に対応
@@ -187,7 +187,7 @@ std::optional<double> ICurve::TryGetSignedCurvature(
     if (IsInLinearSegment(t)) return 0.0;
 
     // それ以外の点では、通常の曲率に符号をつける
-    auto deriv = TryGetDerivatives(t, 2);
+    auto deriv = TryGetDefinedDerivatives(t, 2);
     if (!deriv.has_value()) return std::nullopt;
 
     const auto& c1 = (*deriv)[1];
@@ -220,7 +220,7 @@ double ICurve::Length(const double start, const double end) const {
     }
 
     auto integrand = [this](double t) -> double {
-        auto deriv = TryGetDerivatives(t, 1);
+        auto deriv = TryGetDefinedDerivatives(t, 1);
         // 導関数が取得できない場合は0を返す
         if (!deriv.has_value()) return 0.0;
 
@@ -255,7 +255,7 @@ std::optional<Vector3d> ICurve::TryGetDefinedEndPoint() const {
 }
 
 std::optional<Vector3d> ICurve::TryGetDefinedPointAt(const double t) const {
-    auto deriv = TryGetDerivatives(t, 0);
+    auto deriv = TryGetDefinedDerivatives(t, 0);
     if (!deriv.has_value()) return std::nullopt;
 
     // 0階導関数が曲線上の点
@@ -263,7 +263,7 @@ std::optional<Vector3d> ICurve::TryGetDefinedPointAt(const double t) const {
 }
 
 std::optional<Vector3d> ICurve::TryGetDefinedTangentAt(const double t) const {
-    auto deriv = TryGetDerivatives(t, 1);
+    auto deriv = TryGetDefinedDerivatives(t, 1);
     if (!deriv.has_value()) return std::nullopt;
 
     // T = C' / |C'|
@@ -274,7 +274,7 @@ std::optional<Vector3d> ICurve::TryGetDefinedNormalAt(const double t) const {
     // 曲率が0（または計算できない場合の-1）ではない場合にのみ計算する
     if (GetCurvature(t) <= 0) return std::nullopt;
 
-    auto deriv = TryGetDerivatives(t, 2);
+    auto deriv = TryGetDefinedDerivatives(t, 2);
     if (!deriv.has_value()) return std::nullopt;
 
     // N = (C''|C'|^2 + C'(C'・C'')) / |C'|^3
@@ -382,19 +382,34 @@ Vector3d ICurve::GetBinormalAt(const double t) const {
  */
 
 std::optional<CurveDerivatives>
-ICurve::TryGetDerivatives(const double t, const unsigned int n,
-                          const Matrix4d& placement) const {
+ICurve::TryGetDerivatives(const double t, const unsigned int n) const {
     // 定義空間の導関数を取得
-    auto deriv = TryGetDerivatives(t, n);
+    auto deriv = TryGetDefinedDerivatives(t, n);
     if (!deriv) return std::nullopt;
 
-    // 各階に対し、M_entity適用(仮想Transform) → placement後掛けを行う
+    // 各階に対しM_entity(仮想Transform)を1回だけ適用する
     // 0階は点(R·v+T)、1階以上はベクトル(R·v)として変換する
     CurveDerivatives result(n);
     for (unsigned int i = 0; i <= n; ++i) {
         const bool is_point = (i == 0);
-        const auto transformed = Transform((*deriv)[i], is_point);
-        result[i] = i_num::ApplyTransform(placement, *transformed, is_point);
+        result[i] = *Transform((*deriv)[i], is_point);
+    }
+    return result;
+}
+
+std::optional<CurveDerivatives>
+ICurve::TryGetDerivatives(const double t, const unsigned int n,
+                          const Matrix4d& placement) const {
+    // モデル空間の導関数を取得 (M_entity適用済み)
+    auto deriv = TryGetDerivatives(t, n);
+    if (!deriv) return std::nullopt;
+
+    // 各階に対しplacementを後掛けする
+    // 0階は点(R·v+T)、1階以上はベクトル(R·v)として変換する
+    CurveDerivatives result(n);
+    for (unsigned int i = 0; i <= n; ++i) {
+        const bool is_point = (i == 0);
+        result[i] = i_num::ApplyTransform(placement, (*deriv)[i], is_point);
     }
     return result;
 }

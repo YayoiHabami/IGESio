@@ -145,15 +145,15 @@ TEST_P(ICurveDerivativesTest, ContinuityOrder) {
         // -> 基本的にどの関数もnulloptを返さなければ2階微分までを計算できるため
         //    ここでまとめて取得する
         if (curve.continuity_order < 1) continue;
-        auto deriv_t = curve.curve->TryGetDerivatives(t, 2);
+        auto deriv_t = curve.curve->TryGetDefinedDerivatives(t, 2);
         ASSERT_TRUE(deriv_t.has_value())
-                << "TryGetDerivatives returned std::nullopt at t = " << t;
-        auto deriv_t_minus = curve.curve->TryGetDerivatives(t_minus, 2);
+                << "TryGetDefinedDerivatives returned std::nullopt at t = " << t;
+        auto deriv_t_minus = curve.curve->TryGetDefinedDerivatives(t_minus, 2);
         ASSERT_TRUE(deriv_t_minus.has_value())
-                << "TryGetDerivatives returned std::nullopt at t - ε = " << t_minus;
-        auto deriv_t_plus = curve.curve->TryGetDerivatives(t_plus, 2);
+                << "TryGetDefinedDerivatives returned std::nullopt at t - ε = " << t_minus;
+        auto deriv_t_plus = curve.curve->TryGetDefinedDerivatives(t_plus, 2);
         ASSERT_TRUE(deriv_t_plus.has_value())
-                << "TryGetDerivatives returned std::nullopt at t + ε = " << t_plus;
+                << "TryGetDefinedDerivatives returned std::nullopt at t + ε = " << t_plus;
         // 確認
         ASSERT_TRUE(i_num::IsApproxEqual(deriv_t_minus->derivatives[1],
                                           deriv_t->derivatives[1], tol))
@@ -209,9 +209,9 @@ TEST_P(ICurveDerivativesTest, TryGetFirstDerivatives) {
         auto [t, t_minus, t_plus] = ClampToRange(t_range, param.r, epsilon);
 
         // C(t), C'(t), C''(t)を取得
-        auto result_t = curve.curve->TryGetDerivatives(t, 1);
+        auto result_t = curve.curve->TryGetDefinedDerivatives(t, 1);
         ASSERT_TRUE(result_t.has_value())
-                << "TryGetDerivatives returned std::nullopt at t = " << t;
+                << "TryGetDefinedDerivatives returned std::nullopt at t = " << t;
         ASSERT_TRUE(result_t->derivatives.size() == 1 + 1)
                 << "TryGetDerivatives returned incorrect number of derivatives at t = " << t;
 
@@ -260,9 +260,9 @@ TEST_P(ICurveDerivativesTest, TryGetSecondDerivatives) {
         auto [t, t_minus, t_plus] = ClampToRange(t_range, param.r, epsilon);
 
         // C(t), C'(t), C''(t)を取得
-        auto result_t = curve.curve->TryGetDerivatives(t, 2);
+        auto result_t = curve.curve->TryGetDefinedDerivatives(t, 2);
         ASSERT_TRUE(result_t.has_value())
-                << "TryGetDerivatives returned std::nullopt at t = " << t;
+                << "TryGetDefinedDerivatives returned std::nullopt at t = " << t;
         ASSERT_TRUE(result_t->derivatives.size() == 2 + 1)
                 << "TryGetDerivatives returned incorrect number of derivatives at t = " << t;
 

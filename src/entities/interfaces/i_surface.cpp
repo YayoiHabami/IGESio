@@ -115,7 +115,7 @@ bool ISurface::IsInDomain(const double u, const double v) const {
 std::optional<std::tuple<double, double, double>>
 ISurface::TryGetFirstFundamentalForm(const double u, const double v) const {
     // 偏導関数を取得
-    auto derivatives = TryGetDerivatives(u, v, 1);
+    auto derivatives = TryGetDefinedDerivatives(u, v, 1);
     if (!derivatives) return std::nullopt;
 
     const auto& Su = (*derivatives)(1, 0);
@@ -128,7 +128,7 @@ ISurface::TryGetFirstFundamentalForm(const double u, const double v) const {
 std::optional<std::tuple<double, double, double>>
 ISurface::TryGetSecondFundamentalForm(const double u, const double v) const {
     // 偏導関数を取得
-    auto derivatives = TryGetDerivatives(u, v, 2);
+    auto derivatives = TryGetDefinedDerivatives(u, v, 2);
     if (!derivatives) return std::nullopt;
 
     const auto& Su = (*derivatives)(1, 0);
@@ -241,7 +241,7 @@ double ISurface::Area(const double u_start, const double u_end,
         // ドメイン外 (トリム等) はゼロ寄与
         if (!IsInDomain(u, v)) return 0.0;
         // 偏導関数を取得
-        auto derivatives = TryGetDerivatives(u, v, 1);
+        auto derivatives = TryGetDefinedDerivatives(u, v, 1);
         if (!derivatives) return 0.0;
 
         const auto& Su = (*derivatives)(1, 0);
@@ -270,7 +270,7 @@ double ISurface::Area(const double u_start, const double u_end,
 std::optional<Vector3d>
 ISurface::TryGetDefinedPointAt(const double u, const double v) const {
     // 偏導関数を取得
-    auto derivatives = TryGetDerivatives(u, v, 0);
+    auto derivatives = TryGetDefinedDerivatives(u, v, 0);
     if (!derivatives) return std::nullopt;
 
     return (*derivatives)(0, 0);
@@ -279,7 +279,7 @@ ISurface::TryGetDefinedPointAt(const double u, const double v) const {
 std::optional<std::pair<Vector3d, Vector3d>>
 ISurface::TryGetDefinedTangentAt(const double u, const double v) const {
     // 偏導関数を取得
-    auto derivatives = TryGetDerivatives(u, v, 1);
+    auto derivatives = TryGetDefinedDerivatives(u, v, 1);
     if (!derivatives) return std::nullopt;
 
     const auto& Su = (*derivatives)(1, 0);
@@ -291,7 +291,7 @@ ISurface::TryGetDefinedTangentAt(const double u, const double v) const {
 std::optional<Vector3d>
 ISurface::TryGetDefinedNormalAt(const double u, const double v) const {
     // 偏導関数を取得
-    auto derivatives = TryGetDerivatives(u, v, 1);
+    auto derivatives = TryGetDefinedDerivatives(u, v, 1);
     if (!derivatives) return std::nullopt;
 
     const auto& Su = (*derivatives)(1, 0);
@@ -335,21 +335,39 @@ ISurface::TryGetNormalAt(const double u, const double v) const {
 
 std::optional<SurfaceDerivatives>
 ISurface::TryGetDerivatives(const double u, const double v,
-                            const unsigned int order,
-                            const Matrix4d& placement) const {
+                            const unsigned int order) const {
     // 定義空間の偏導関数を取得
-    auto deriv = TryGetDerivatives(u, v, order);
+    auto deriv = TryGetDefinedDerivatives(u, v, order);
     if (!deriv) return std::nullopt;
 
-    // 各偏導関数に対し、M_entity適用(仮想Transform) → placement後掛けを行う
+    // 各偏導関数に対しM_entity(仮想Transform)を1回だけ適用する
     // S(0,0)は点(R·v+T)、それ以外はベクトル(R·v)として変換する
     SurfaceDerivatives result(order);
     for (unsigned int i = 0; i <= order; ++i) {
         for (unsigned int j = 0; i + j <= order; ++j) {
             const bool is_point = (i == 0 && j == 0);
-            const auto transformed = Transform((*deriv)(i, j), is_point);
+            result(i, j) = *Transform((*deriv)(i, j), is_point);
+        }
+    }
+    return result;
+}
+
+std::optional<SurfaceDerivatives>
+ISurface::TryGetDerivatives(const double u, const double v,
+                            const unsigned int order,
+                            const Matrix4d& placement) const {
+    // モデル空間の偏導関数を取得 (M_entity適用済み)
+    auto deriv = TryGetDerivatives(u, v, order);
+    if (!deriv) return std::nullopt;
+
+    // 各偏導関数に対しplacementを後掛けする
+    // S(0,0)は点(R·v+T)、それ以外はベクトル(R·v)として変換する
+    SurfaceDerivatives result(order);
+    for (unsigned int i = 0; i <= order; ++i) {
+        for (unsigned int j = 0; i + j <= order; ++j) {
+            const bool is_point = (i == 0 && j == 0);
             result(i, j) =
-                i_num::ApplyTransform(placement, *transformed, is_point);
+                i_num::ApplyTransform(placement, (*deriv)(i, j), is_point);
         }
     }
     return result;

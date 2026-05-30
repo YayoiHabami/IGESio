@@ -170,8 +170,8 @@ void CheckSurfaceDerivativesNumerical(
     auto [v, v_minus, v_plus] = v_values;
     auto du = u_plus - u, dv = v_plus - v;
 
-    // S(u,v) のn階偏導関数を取得
-    auto d_center_opt = surface.surface->TryGetDerivatives(u, v, n);
+    // S(u,v) のn階偏導関数を取得 (定義空間の点と比較するため定義空間版を使用)
+    auto d_center_opt = surface.surface->TryGetDefinedDerivatives(u, v, n);
     ASSERT_TRUE(d_center_opt.has_value())
         << "Failed to get derivatives at (u,v)=(" << u << ", " << v
         << ") for surface: " << surface.name;
@@ -219,11 +219,11 @@ void CheckSurfaceDerivativesNumerical(
         const auto& suv = d_center(1, 1);
         const auto& svv = d_center(0, 2);
 
-        // (u±ε, v±ε)での1階偏導関数を取得
-        auto d_right_opt = surface.surface->TryGetDerivatives(u_plus, v, 1);
-        auto d_left_opt  = surface.surface->TryGetDerivatives(u_minus, v, 1);
-        auto d_up_opt    = surface.surface->TryGetDerivatives(u, v_plus, 1);
-        auto d_down_opt  = surface.surface->TryGetDerivatives(u, v_minus, 1);
+        // (u±ε, v±ε)での1階偏導関数を取得 (定義空間版で統一)
+        auto d_right_opt = surface.surface->TryGetDefinedDerivatives(u_plus, v, 1);
+        auto d_left_opt  = surface.surface->TryGetDefinedDerivatives(u_minus, v, 1);
+        auto d_up_opt    = surface.surface->TryGetDefinedDerivatives(u, v_plus, 1);
+        auto d_down_opt  = surface.surface->TryGetDefinedDerivatives(u, v_minus, 1);
         ASSERT_TRUE(d_right_opt.has_value() && d_left_opt.has_value() &&
                     d_up_opt.has_value() && d_down_opt.has_value())
             << "Failed to get 1st derivatives at neighboring points of (u,v)=(" << u
