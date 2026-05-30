@@ -8,6 +8,7 @@
 #include "./iges_viewer_gui.h"
 
 #include <algorithm>
+#include <memory>
 #include <string>
 
 namespace {
@@ -95,6 +96,10 @@ IgesViewerGUI::IgesViewerGUI(
     ImGui::StyleColorsDark();  // ダークテーマを使用
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 400 core");
+
+    // 空のSceneを生成し、レンダラへ束ねる (ロード時にBindSceneRootで差し替える)
+    scene_ = std::make_unique<models::Scene>(std::make_shared<models::Assembly>());
+    renderer_.SetScene(scene_.get());
 }
 
 IgesViewerGUI::~IgesViewerGUI() {
@@ -177,6 +182,14 @@ void IgesViewerGUI::CaptureScreenshot(const std::string& filename) {
  * 描画関連の関数 (protected)
  */
 
+void IgesViewerGUI::BindSceneRoot(std::shared_ptr<models::Assembly> root) {
+    // 新しいSceneを生成してから差し替える (renderer_のポインタを先に更新しダングリング回避)
+    auto new_scene = std::make_unique<models::Scene>(std::move(root));
+    renderer_.SetScene(new_scene.get());
+    scene_ = std::move(new_scene);
+    needs_redraw_ = true;
+}
+
 void IgesViewerGUI::RenderControls() {
     ImGui::Begin("Controls");
     ImGui::Text("Camera");
@@ -213,7 +226,7 @@ void IgesViewerGUI::RenderControls() {
     ImGui::Separator();
 
     // 選択中エンティティの一覧 (型・ID・交差座標)
-    const auto& selected = renderer_.GetSelectedIds();
+    const auto& selected = scene_->ActiveSelection().Items();
     ImGui::Text("Selected: %d", static_cast<int>(selected.size()));
     for (const auto& id : selected) {
         const auto type_str = ToString(renderer_.GetEntityShaderType(id));
@@ -227,7 +240,7 @@ void IgesViewerGUI::RenderControls() {
         }
     }
     if (ImGui::Button("Deselect All")) {
-        renderer_.ClearSelection();
+        scene_->ActiveSelection().Clear();
         selected_hit_positions_.clear();
         needs_redraw_ = true;
     }
@@ -336,10 +349,11 @@ void IgesViewerGUI::HandleClickSelection(
     const bool ctrl = multi_mod != ModifierKey::kNone
             && (mod & multi_mod) == multi_mod;
 
+    auto& selection = scene_->ActiveSelection();
     if (hits.empty()) {
         // 空クリック かつ 複数選択修飾なし のときのみ全解除
         if (!ctrl) {
-            renderer_.ClearSelection();
+            selection.Clear();
             selected_hit_positions_.clear();
         }
         return;
@@ -349,18 +363,18 @@ void IgesViewerGUI::HandleClickSelection(
     const Vector3d pos = hits.front().hit.position;
     if (ctrl) {
         // 複数選択修飾: 選択状態をトグル
-        if (renderer_.IsSelected(id)) {
-            renderer_.Deselect(id);
+        if (selection.Contains(id)) {
+            selection.Deselect(id);
             selected_hit_positions_.erase(id);
         } else {
-            renderer_.Select(id);
+            selection.Select(id);
             selected_hit_positions_[id] = pos;
         }
     } else {
         // 複数選択修飾なし: 選択集合をid単独へ置換
-        renderer_.ClearSelection();
+        selection.Clear();
         selected_hit_positions_.clear();
-        renderer_.Select(id);
+        selection.Select(id);
         selected_hit_positions_[id] = pos;
     }
 }
@@ -392,13 +406,14 @@ void IgesViewerGUI::HandleBoxSelection(
             && (mod & multi_mod) == multi_mod;
 
     // 追加でなければ既存の選択を置換する
+    auto& selection = scene_->ActiveSelection();
     if (!additive) {
-        renderer_.ClearSelection();
+        selection.Clear();
         selected_hit_positions_.clear();
     }
     // 範囲選択は単一の交点座標を持たないため hit_positions には登録しない
     for (const auto& id : ids) {
-        renderer_.Select(id);  // 既に選択済みの場合はSelect側で無視される
+        selection.Select(id);  // 既に選択済みの場合はSelect側で無視される
     }
 }
 

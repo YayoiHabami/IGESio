@@ -18,8 +18,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
-#include "igesio/models/selection_set.h"
-#include "igesio/models/assembly.h"
+#include "igesio/models/scene.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
 #include "igesio/graphics/core/light.h"
@@ -105,21 +104,17 @@ class EntityRenderer {
     /// @brief 描画全般に関する設定
     GraphicsSettings settings_;
 
-    /// @brief 選択状態 (GUI非依存のモデル層オブジェクト)
-    /// @note P2ではレンダラが所有する. 将来はセッションラッパー(Scene)が保持し、
-    ///       レンダラはその参照を受け取る形へ移す予定 (本クラスは選択色を保持しない).
-    models::SelectionSet selection_;
-
-    /// @brief 走査対象のルートAssembly (非所有). nullptrの場合は従来のフラット描画
-    /// @note 設定時は描画でツリーを走査し、各エンティティのワールド変換をリフレッシュ
-    ///       しつつ可視/抑制サブツリーをスキップする
-    const models::Assembly* scene_root_ = nullptr;
+    /// @brief 描画対象のシーン (非所有). セッション状態(root + 選択 + フィルタ)の権威
+    /// @note nullptrの間は描画しない. 設定時は描画でツリーを走査し、各エンティティの
+    ///       ワールド変換と色/不透明度オーバーライドをリフレッシュしつつ、可視/抑制
+    ///       サブツリーをスキップする. sceneは本クラスより長く生存する必要がある.
+    const models::Scene* scene_ = nullptr;
     /// @brief 描画リストの再構築 (ツリー走査) が必要か
     /// @note ツリー編集・エンティティ追加削除で立てる. カメラ操作・選択変更だけの
     ///       再描画ではキャッシュした描画リストを再利用し、走査しない
     mutable bool scene_dirty_ = true;
     /// @brief キャッシュした描画リスト (シェーダー別の描画オブジェクト. 非所有ポインタ)
-    /// @note scene_root_設定時にツリー走査で構築し、フレームを越えて再利用する.
+    /// @note scene_設定時にツリー走査で構築し、フレームを越えて再利用する.
     ///       draw_objects_の要素を指すため、追加/削除時はdirty化して再構築する
     mutable std::unordered_map<ShaderType, std::vector<IEntityGraphics*>> draw_list_;
 
@@ -229,12 +224,13 @@ class EntityRenderer {
     ///         存在しない場合はShaderType::kNoneを返す
     ShaderType GetEntityShaderType(const ObjectID&) const;
 
-    /// @brief 走査対象のルートAssemblyを設定する
-    /// @param root ルートAssembly (非所有). nullptrで従来のフラット描画へ戻す
-    /// @note 設定後の描画では、ツリーを走査して各エンティティのワールド変換を
-    ///       リフレッシュし、可視/抑制サブツリーをスキップする. 呼び出しで再走査を予約する.
-    ///       rootは本クラスより長く生存する必要がある (非所有参照).
-    void SetSceneRoot(const models::Assembly* root);
+    /// @brief 描画対象のシーンを設定する
+    /// @param scene シーン (非所有). nullptrで描画を停止する
+    /// @note 設定後の描画では、scene->Root()のツリーを走査して各エンティティのワールド
+    ///       変換と色/不透明度オーバーライドをリフレッシュし、可視/抑制サブツリーを
+    ///       スキップする. 呼び出しで再走査を予約する. 選択ハイライトは
+    ///       scene->ActiveSelection()からPULLする. sceneは本クラスより長く生存すること.
+    void SetScene(const models::Scene* scene);
 
     /// @brief シーン(ツリー)が変化したことを通知し、次回描画で再走査を予約する
     /// @note 可視性・抑制・大域変換・構造を編集した後に呼ぶ.
@@ -363,34 +359,6 @@ class EntityRenderer {
             const ScreenRect&, BoxSelectionMode,
             const SelectionSampleParams& = {}) const;
 
-    /// @brief 指定IDのエンティティを選択する
-    /// @param id エンティティのID
-    /// @note 既に選択中、または未登録の場合は何もしない
-    void Select(const ObjectID&);
-
-    /// @brief 指定IDのエンティティの選択を解除する
-    /// @param id エンティティのID
-    /// @note 選択されていない場合は何もしない
-    void Deselect(const ObjectID&);
-
-    /// @brief 指定IDのエンティティの選択状態をトグルする
-    /// @param id エンティティのID
-    void ToggleSelection(const ObjectID&);
-
-    /// @brief すべての選択を解除する
-    void ClearSelection();
-
-    /// @brief 指定IDのエンティティが選択中か
-    /// @param id エンティティのID
-    /// @return 選択中の場合はtrue
-    bool IsSelected(const ObjectID&) const;
-
-    /// @brief 選択中のエンティティID群を取得する
-    /// @return 選択中のエンティティIDのリスト (順不同)
-    /// @note 選択状態は`SelectionSet`(集合)が保持するため、その時点のスナップショットを
-    ///       値で返す. 呼び出し側が`const auto&`で受けても寿命延長で安全に走査できる.
-    std::vector<ObjectID> GetSelectedIds() const;
-
 
 
  protected:
@@ -459,27 +427,13 @@ class EntityRenderer {
     /// @note すでに同じIDのエンティティが存在する場合は何もしない
     void AddGraphicsObject(std::unique_ptr<IEntityGraphics>&&);
 
-    /// @brief 指定されたシェーダータイプに対応する描画オブジェクトを持つか
-    /// @param shader_type シェーダータイプ
-    /// @return kCompositeの子要素も含めて、指定されたシェーダータイプに対応する
-    ///         描画オブジェクトを持つ場合は`true`, そうでない場合は`false`.
-    bool HasGraphicsObject(const ShaderType shader_type) const;
-
     /// @brief 指定IDの描画オブジェクトを取得する
     /// @param id エンティティのID
     /// @return 描画オブジェクトのポインタ. 存在しない場合はnullptr
     /// @note 所有権は移譲しない (draw_objects_が保持し続ける)
     IEntityGraphics* FindGraphics(const ObjectID&) const;
 
-    /// @brief 全ての子要素のDrawメンバを呼び出す
-    /// @param program_id シェーダープログラムのID
-    /// @param shader_type シェーダータイプ
-    /// @param viewport ビューポートのサイズ (width, height)
-    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
-    void DrawChildren(GLuint, const ShaderType, const std::pair<float, float>&,
-                      const DrawContext&) const;
-
-    /// @brief scene_root_を走査して描画リストを再構築し、ワールド変換をリフレッシュする
+    /// @brief scene_を走査して描画リストを再構築し、ワールド変換と色をリフレッシュする
     /// @note dirty時のみ呼ぶ. ShouldRenderEntityは呼ばず、キャッシュ在席を描画対象条件
     ///       とする (フィルタは投入時に適用済み).
     void RebuildDrawList() const;

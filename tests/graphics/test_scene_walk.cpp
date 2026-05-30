@@ -5,7 +5,7 @@
  * @date 2026-05-29
  * @copyright 2026 Yayoi Habami
  *
- * 対象: EntityRenderer::SetSceneRoot 設定時のDrawが、Assemblyツリーを走査して
+ * 対象: EntityRenderer::SetScene 設定時のDrawが、Assemblyツリーを走査して
  *       - 各エンティティのワールド変換を累積変換でリフレッシュし(model行列へ反映)、
  *       - 非表示/抑制サブツリーを描画から除外すること。
  * TODO: dirtyゲート(非dirty再描画で走査をスキップ)は走査回数の観測手段が無いため
@@ -22,6 +22,7 @@
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/models/assembly.h"
+#include "igesio/models/scene.h"
 #include "igesio/graphics/renderer.h"
 
 
@@ -73,7 +74,8 @@ TEST(SceneWalkTest, NestedTransform_AccumulatedIntoModel) {
     auto arc = MakeArc();
     child->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
-    renderer.SetSceneRoot(root.get());
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
 
     renderer.Draw();
 
@@ -103,7 +105,8 @@ TEST(SceneWalkTest, InvisibleSubtree_NotDrawn) {
     auto arc = MakeArc();
     child->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
-    renderer.SetSceneRoot(root.get());
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
 
     renderer.Draw();
 
@@ -128,7 +131,8 @@ TEST(SceneWalkTest, SuppressedSubtree_NotDrawn) {
     auto arc = MakeArc();
     child->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
-    renderer.SetSceneRoot(root.get());
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
 
     renderer.Draw();
 

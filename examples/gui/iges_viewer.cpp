@@ -6,6 +6,7 @@
  * @copyright 2025 Yayoi Habami
  */
 #include <chrono>
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -39,7 +40,14 @@ using igesio::graphics::IgesViewerGUI;
 std::string CurrentTimeString(const std::string& format = "%Y-%m-%d %H%M%S") {
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::tm local_time = *std::localtime(&now_c);
+    // std::localtimeは非スレッドセーフかつMSVCで非推奨警告となるため、
+    // プラットフォーム毎の安全な版を使う (引数順がWindows/POSIXで異なる点に注意)
+    std::tm local_time{};
+#if defined(_WIN32)
+    localtime_s(&local_time, &now_c);  // MSVCは(tm*, time_t*)の順
+#else
+    localtime_r(&now_c, &local_time);  // POSIXは(time_t*, tm*)の順
+#endif
 
     // フォーマットに従って文字列を生成
     std::stringstream ss;
@@ -102,10 +110,10 @@ class ExampleIGESViewer : public IgesViewerGUI {
                 AddEntity(pair.second);
             }
 
-            // レンダラにルートAssemblyを設定し、描画時にツリーを走査させる
-            // (可視/抑制サブツリーのスキップ・ワールド変換のリフレッシュ).
-            // 再読込のたびにrootが変わるため毎回設定する
-            Renderer().SetSceneRoot(&iges_data_.Root());
+            // シーンをモデルのルートへ束ね、描画時にツリーを走査させる
+            // (可視/抑制サブツリーのスキップ・変換/色のリフレッシュ).
+            // 再読込のたびにrootが変わるため毎回束ね直す (選択はリセットされる)
+            BindSceneRoot(iges_data_.RootPtr());
 
             // カメラをリセット
             Renderer().Camera().Reset();

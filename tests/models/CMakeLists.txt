@@ -7,6 +7,7 @@ set(TEST_SOURCES
     test_flatten.cpp
 
     test_selection_set.cpp
+    test_scene.cpp
 )
 
 add_executable(test_models ${TEST_SOURCES})

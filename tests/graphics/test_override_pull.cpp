@@ -5,7 +5,7 @@
  * @date 2026-05-29
  * @copyright 2026 Yayoi Habami
  *
- * 対象: SetSceneRoot 設定時のDrawが、Assemblyツリーの色/不透明度オーバーライドを
+ * 対象: SetScene 設定時のDrawが、Assemblyツリーの色/不透明度オーバーライドを
  *       最近接優先で解決し、各エンティティへフレーム毎にPUSHして mainColor へ反映すること.
  *       - 親の color_override が子孫へ継承される
  *       - 子の color_override が祖先を上書きする (最近接優先)
@@ -24,6 +24,7 @@
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/models/assembly.h"
+#include "igesio/models/scene.h"
 #include "igesio/graphics/factory.h"
 #include "igesio/graphics/renderer.h"
 
@@ -80,7 +81,8 @@ TEST(OverridePullTest, ParentColorOverride_AppliesToDescendant) {
     auto arc = MakeArc();
     child->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
-    renderer.SetSceneRoot(root.get());
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
 
     renderer.Draw();
 
@@ -111,7 +113,8 @@ TEST(OverridePullTest, NearestColorOverrideWins) {
     auto arc = MakeArc();
     child->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
-    renderer.SetSceneRoot(root.get());
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
 
     renderer.Draw();
 
@@ -140,7 +143,8 @@ TEST(OverridePullTest, OpacityOverride_ChangesAlphaKeepsRgb) {
     root->Metadata().opacity_override = 0.5f;
     root->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
-    renderer.SetSceneRoot(root.get());
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
 
     renderer.Draw();
 
@@ -169,7 +173,8 @@ TEST(OverridePullTest, NoOverride_UsesEntityColor) {
     auto root = std::make_shared<i_mod::Assembly>();
     root->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
-    renderer.SetSceneRoot(root.get());
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
 
     renderer.Draw();
 

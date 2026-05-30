@@ -12,6 +12,7 @@
 #define EXAMPLES_GUI_IGES_VIEWER_GUI_H_
 
 #include <iostream>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -23,6 +24,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include <igesio/models/scene.h>
 #include <igesio/graphics/renderer.h>
 
 #include "./input_config.h"
@@ -39,6 +41,11 @@ class IgesViewerGUI {
     GLFWwindow* window_ = nullptr;
     /// @brief レンダー
     EntityRenderer renderer_;
+
+    /// @brief セッション状態(root + 選択セット群 + ピックフィルタ)の権威オブジェクト
+    /// @note ロード時にBindSceneRootでモデルのrootへ束ね、renderer_へ参照を渡す.
+    ///       選択はここのActiveSelection()を操作する(rendererは選択状態を持たない).
+    std::unique_ptr<models::Scene> scene_;
 
     /// @brief MSAA (マルチサンプリング) のサンプル数 (0で無効)
     int msaa_samples_ = 0;
@@ -135,6 +142,12 @@ class IgesViewerGUI {
 
     /// @brief Controls GUIの描画
     virtual void RenderControls();
+
+    /// @brief 描画対象のシーンをモデルのルートへ束ね直す
+    /// @param root モデルのルートAssembly (IgesData等と共有)
+    /// @note 新しいSceneを生成してrenderer_へ渡す. ロード(モデル差し替え)時に呼ぶ.
+    ///       選択セットは新規化される(=ロードで選択リセット).
+    void BindSceneRoot(std::shared_ptr<models::Assembly> root);
 
 
 

@@ -273,9 +273,6 @@ void EntityRenderer::Initialize() {
 }
 
 void EntityRenderer::Cleanup() {
-    // 選択状態をクリア
-    selection_.Clear();
-
     // 描画オブジェクトのクリーンアップ
     for (auto& [shader_type, objects] : draw_objects_) {
         for (auto& [id, object] : objects) {
@@ -321,9 +318,6 @@ void EntityRenderer::AddGraphicsObject(
 }
 
 void EntityRenderer::RemoveEntity(const ObjectID& id) {
-    // 選択中であれば選択集合からも除去する (stale idの防止)
-    selection_.Deselect(id);
-
     for (auto& [shader_type, objects] : draw_objects_) {
         auto it = objects.find(id);
         if (it != objects.end()) {
@@ -355,27 +349,6 @@ EntityRenderer::GetEntityShaderType(const ObjectID& id) const {
         }
     }
     return ShaderType::kNone;
-}
-
-bool EntityRenderer::HasGraphicsObject(const ShaderType shader_type) const {
-    // draw_objects_のキーを走査
-    auto it = draw_objects_.find(shader_type);
-    if (it != draw_objects_.end() && !it->second.empty()) {
-        return true;  // 指定されたシェーダータイプに対応する描画オブジェクトが存在する
-    }
-
-    // kCompositeな描画オブジェクトを走査
-    auto composite_it = draw_objects_.find(ShaderType::kComposite);
-    if (composite_it != draw_objects_.end()) {
-        for (const auto& [id, object] : composite_it->second) {
-            auto shaders = object->GetShaderTypes();
-            if (shaders.find(shader_type) != shaders.end()) {
-                return true;  // 子要素に指定されたシェーダータイプが存在する
-            }
-        }
-    }
-
-    return false;
 }
 
 
@@ -466,63 +439,24 @@ void EntityRenderer::Draw() const {
         gl_->Viewport(0, 0, display_width_, display_height_);
     }
 
+    // シーン(権威ツリー)が未設定なら描画しない (描画はScene走査に一本化)
+    if (scene_ == nullptr) return;
+
     // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)
-    const DrawContext ctx{&selection_, kSelectionColor};
+    const DrawContext ctx{&scene_->ActiveSelection(), kSelectionColor};
 
-    // Assemblyツリー走査モード: dirty時のみ描画リストを再構築し、それを実行する
-    // (カメラ操作・選択変更だけの再描画では走査せずキャッシュを再利用する)
-    if (scene_root_ != nullptr) {
-        if (scene_dirty_) {
-            RebuildDrawList();
-            scene_dirty_ = false;
-        }
-        ExecuteDrawList(ctx);
-        return;
+    // dirty時のみ描画リストを再構築し (Assemblyツリー走査)、それを実行する.
+    // カメラ操作・選択変更だけの再描画では走査せずキャッシュを再利用する
+    // (選択ハイライトは毎フレームctxからPULLされるため再walkは不要)
+    if (scene_dirty_) {
+        RebuildDrawList();
+        scene_dirty_ = false;
     }
-
-    // --- 以下、従来のフラット描画 (scene_root_未設定時) ---
-
-    // ビュー行列と投影行列を取得
-    auto view_matrix = camera_.GetViewMatrix();
-    auto projection_matrix = camera_.GetProjectionMatrix(
-        static_cast<float>(display_width_) / display_height_);
-
-    // 各シェーダープログラムごとに描画
-    // TODO: 半透明 (opacity < 1.0) なオブジェクトについては、描画を保留する
-    //       (最後にまとめて、画面奥のものから描画するように変更する)
-    for (const auto& [shader_type, program_id] : shader_programs_) {
-        if (!HasGraphicsObject(shader_type)) {
-            // このシェーダータイプの描画オブジェクトがない、または
-            // 対応する描画オブジェクトが1つもない場合はスキップ
-            continue;
-        }
-
-        gl_->UseProgram(program_id);
-
-        // 共通のuniform変数を設定
-        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "view"),
-                              1, GL_FALSE, view_matrix.data());
-        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
-                              1, GL_FALSE, projection_matrix.data());
-
-        // 光源のパラメータを設定
-        if (UsesLighting(shader_type)) {
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPos_WorldSpace"),
-                            1, light_.position.data());
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuation"),
-                            1, light_.attenuation.data());
-            gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColor"),
-                            1, light_.color.data());
-        }
-
-        // 各エンティティを描画
-        DrawChildren(program_id, shader_type,
-                     std::pair<float, float>{display_width_, display_height_}, ctx);
-    }
+    ExecuteDrawList(ctx);
 }
 
-void EntityRenderer::SetSceneRoot(const models::Assembly* root) {
-    scene_root_ = root;
+void EntityRenderer::SetScene(const models::Scene* scene) {
+    scene_ = scene;
     scene_dirty_ = true;
 }
 
@@ -532,8 +466,8 @@ void EntityRenderer::MarkSceneDirty() {
 
 void EntityRenderer::RebuildDrawList() const {
     draw_list_.clear();
-    if (scene_root_ == nullptr) return;
-    WalkAssembly(*scene_root_, igesio::Matrix4d::Identity(),
+    if (scene_ == nullptr) return;
+    WalkAssembly(scene_->Root(), igesio::Matrix4d::Identity(),
                  std::nullopt, std::nullopt);
 }
 
@@ -620,31 +554,6 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
             if (graphics && graphics->IsDrawable()) {
                 graphics->Draw(program_id, shader_type, viewport, ctx);
             }
-        }
-    }
-}
-
-void EntityRenderer::DrawChildren(
-        GLuint program_id, const ShaderType shader_type,
-        const std::pair<float, float>& viewport, const DrawContext& ctx) const {
-    // 対応するシェーダーコードを持たない場合は何もしない
-    if (!HasSpecificShaderCode(shader_type)) return;
-
-    // shader_typeの直接の子要素を描画
-    auto it = draw_objects_.find(shader_type);
-    if (it != draw_objects_.end()) {
-        for (const auto& [id, object] : it->second) {
-            object->Draw(program_id, shader_type, viewport, ctx);
-        }
-    }
-
-    // kCompositeな描画オブジェクトの子要素を描画
-    auto composite_it = draw_objects_.find(ShaderType::kComposite);
-    if (composite_it != draw_objects_.end()) {
-        for (const auto& [id, object] : composite_it->second) {
-            // 仮にshader_typeに対応する子要素がなければ何も実行されないため、
-            // objectがshader_typeに対応する子要素を持つかは確認しない
-            object->Draw(program_id, shader_type, viewport, ctx);
         }
     }
 }
@@ -814,39 +723,6 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
         }
     }
     return result;
-}
-
-void EntityRenderer::Select(const ObjectID& id) {
-    if (IsSelected(id)) return;
-    if (!HasEntity(id)) return;  // 未登録のIDは選択しない
-
-    // 選択色は焼き込まず、選択集合へIDを加えるのみ (描画時にPULLしてハイライト)
-    selection_.Select(id);
-}
-
-void EntityRenderer::Deselect(const ObjectID& id) {
-    selection_.Deselect(id);
-}
-
-void EntityRenderer::ToggleSelection(const ObjectID& id) {
-    if (IsSelected(id)) {
-        Deselect(id);
-    } else {
-        Select(id);
-    }
-}
-
-void EntityRenderer::ClearSelection() {
-    selection_.Clear();
-}
-
-bool EntityRenderer::IsSelected(const ObjectID& id) const {
-    return selection_.Contains(id);
-}
-
-std::vector<igesio::ObjectID> EntityRenderer::GetSelectedIds() const {
-    const auto& items = selection_.Items();
-    return std::vector<ObjectID>(items.begin(), items.end());
 }
 
 i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) const {
