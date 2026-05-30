@@ -101,18 +101,24 @@ igesio::IGESParameterVector RationalBSplineSurface::GetMainPDParameters() const 
     // ノットベクトル T (v方向)
     for (const auto& v : v_knots_) params.push_back(v);
 
-    // 重み W
-    for (int i = 0; i < weights_.rows(); ++i) {
-        for (int j = 0; j < weights_.cols(); ++j) {
+    // 重み W (IGESのストリーム順: 第1添字i (u方向) が最速で変化する)
+    for (int j = 0; j < weights_.cols(); ++j) {
+        for (int i = 0; i < weights_.rows(); ++i) {
             params.push_back(weights_(i, j));
         }
     }
 
-    // 制御点 P = (x_ij, y_ij, z_ij)
-    for (int i = 0; i < control_points_.cols(); ++i) {
-        params.push_back(control_points_(0, i));
-        params.push_back(control_points_(1, i));
-        params.push_back(control_points_(2, i));
+    // 制御点 P = (x_ij, y_ij, z_ij) (IGESのストリーム順: 第1添字iが最速).
+    // 格納規約 col = i * (K2 + 1) + j に従い、iを内側ループで出力する
+    const int n_i = static_cast<int>(k1p1);  // K1 + 1
+    const int n_j = static_cast<int>(k2p1);  // K2 + 1
+    for (int j = 0; j < n_j; ++j) {
+        for (int i = 0; i < n_i; ++i) {
+            const int col = i * n_j + j;
+            params.push_back(control_points_(0, col));
+            params.push_back(control_points_(1, col));
+            params.push_back(control_points_(2, col));
+        }
     }
 
     // 曲面のパラメータ範囲 (U(0), U(1), V(0), V(1))
@@ -201,17 +207,22 @@ size_t RationalBSplineSurface::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 重み W
+    // IGESのストリームは第1添字i (u方向) が最速で変化する
+    // (W(0,0), W(1,0), ..., W(K1,0), W(0,1), ...) ため、iを内側ループとする
     weights_ = MatrixXd(k1 + 1, k2 + 1);
-    for (int i = 0; i <= k1; ++i) {
-        for (int j = 0; j <= k2; ++j) {
+    for (int j = 0; j <= k2; ++j) {
+        for (int i = 0; i <= k1; ++i) {
             weights_(i, j) = pd.access_as<double>(index++);
         }
     }
 
     // 制御点 P
+    // 重みと同様、IGESのストリームは第1添字i (u方向) が最速で変化する
+    // (P(0,0), P(1,0), ..., P(K1,0), P(0,1), ...) ため、iを内側ループとする.
+    // 格納規約 col = i * (k2 + 1) + j は維持する
     control_points_ = Matrix3Xd(3, (k1 + 1) * (k2 + 1));
-    for (int i = 0; i <= k1; ++i) {
-        for (int j = 0; j <= k2; ++j) {
+    for (int j = 0; j <= k2; ++j) {
+        for (int i = 0; i <= k1; ++i) {
             auto col = i * (k2 + 1) + j;
             control_points_(0, col) = pd.access_as<double>(index++);
             control_points_(1, col) = pd.access_as<double>(index++);
