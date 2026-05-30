@@ -169,3 +169,27 @@ std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
         const pointer2ID& de2id, const ObjectID& iges_id) {
     return CreateEntity(de, ToIGESParameterVector(pd), de2id, iges_id);
 }
+
+std::shared_ptr<i_ent::EntityBase> i_ent::CloneEntity(const EntityBase& entity) {
+    // 複製元自身と被参照エンティティに一時的なDEポインタを割り当てる
+    igesio::id2pointer id2de;   // ID -> ポインタ
+    igesio::pointer2ID de2id;   // ポインタ -> ID (元の被参照エンティティへ解決させる)
+    unsigned int next = 1;
+    auto assign = [&](const ObjectID& oid) {
+        if (id2de.find(oid) == id2de.end()) {
+            id2de[oid] = next;
+            de2id[next] = oid;
+            next += 2;
+        }
+    };
+    const auto self_id = entity.GetID();
+    assign(self_id);
+    for (const auto& rid : entity.GetReferencedEntityIDs()) assign(rid);
+
+    // DE/PDへシリアライズし、iges_id未指定 (UnsetID) で再構築することで新IDを採番する
+    auto de = entity.GetRawEntityDE(id2de);
+    de.sequence_number = id2de.at(self_id);
+    auto pd = ToRawEntityPD(entity.GetType(), self_id, entity.GetParameters(), id2de);
+    pd.sequence_number = de.sequence_number;
+    return EntityFactory::CreateEntity(de, pd, de2id, IDGenerator::UnsetID());
+}

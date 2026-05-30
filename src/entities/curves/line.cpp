@@ -186,13 +186,14 @@ double Line::Length(const double start, const double end) const {
 }
 
 i_num::BoundingBox Line::GetDefinedBoundingBox() const {
-    auto start = start_point_;
-    auto end = terminate_point_;
-    auto dir = terminate_point_ - start_point_;
-    auto type = GetLineType();
-    auto eps = 1e-10;  // 2軸方向の長さがゼロの場合に1軸に設定する微小値
+    const auto start = start_point_;
+    const auto end = terminate_point_;
+    const auto dir = terminate_point_ - start_point_;
+    const auto type = GetLineType();
 
-    // 各軸方向の移動量を確認し、非ゼロかつkRay,kLineであれば無限大に設定
+    // 各軸方向の移動量を計算する. 非ゼロかつkRay,kLineであれば無限大に設定する.
+    // BoundingBoxは0〜3次元を表現できるため、軸平行な直線等の退化形状も
+    // ゼロ幅の軸を持つ低次元の箱としてそのまま構成できる(eps補正は不要).
     std::array<double, 3> sizes = {
         std::abs(dir[0]), std::abs(dir[1]), std::abs(dir[2])};
     std::array<bool, 3> is_line = {false, false, false};
@@ -209,21 +210,7 @@ i_num::BoundingBox Line::GetDefinedBoundingBox() const {
         }
     }
 
-    // 非ゼロの成分が1軸のみの場合
-    if (sizes[0] == 0.0 && sizes[1] == 0.0) {
-        // Z軸方向 -> D0をZ軸、D1をX軸、D2をY軸に変更
-        std::array<Vector3d, 3> dirs =
-                {Vector3d::UnitZ(), Vector3d::UnitX(), Vector3d::UnitY()};
-        sizes = {sizes[2], eps, 0.0};
-        is_line = {is_line[2], false, false};
-        return i_num::BoundingBox(start, dirs, sizes, is_line);
-    } else if ((sizes[1] == 0.0 && sizes[2] == 0.0) ||
-               (sizes[2] == 0.0 && sizes[0] == 0.0)) {
-        // XorY軸方向 -> YorX方向にepsを設定
-        sizes = {std::max(sizes[0], eps), std::max(sizes[1], eps), 0.0};
-    }
-
-    auto min = start.cwiseMin(end);
+    const auto min = start.cwiseMin(end);
     return i_num::BoundingBox(min, sizes, is_line);
 }
 

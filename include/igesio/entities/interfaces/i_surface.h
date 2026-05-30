@@ -147,6 +147,20 @@ class ISurface : public virtual IEntityIdentifier,
     virtual std::optional<SurfaceDerivatives>
     TryGetDerivatives(const double, const double, const unsigned int) const = 0;
 
+    /// @brief 配置を適用したサーフェスの偏導関数 S^(i,j)(u, v) を計算する
+    /// @param u パラメータ値 u
+    /// @param v パラメータ値 v
+    /// @param order 何階まで計算するか
+    /// @param placement 定義空間に後掛けする配置行列(基準階層までの累積変換)
+    /// @return 配置適用後の偏導関数 placement·(M_entity·S^(i,j)_def). S(0,0)は点
+    ///         (R·v+T)、それ以外はベクトル(R·v)として変換される. 計算できない場合は
+    ///         `std::nullopt`
+    /// @note 定義空間版は`TryGetDerivatives(u, v, order)`. placementに単位行列を渡すと
+    ///       M_entityのみを適用した実空間の偏導関数となる
+    std::optional<SurfaceDerivatives>
+    TryGetDerivatives(const double, const double, const unsigned int,
+                      const Matrix4d&) const;
+
 
 
     /**
@@ -259,6 +273,37 @@ class ISurface : public virtual IEntityIdentifier,
     ///         指定されたパラメータ値がパラメータ範囲外の場合は`std::nullopt`
     std::optional<Vector3d>
     TryGetNormalAt(const double, const double) const;
+
+
+
+    /**
+     * 曲面の幾何学的情報 (ベクトル; 配置適用) を取得する
+     */
+
+    /// @brief 配置を適用したサーフェス上の点 P(u, v) を取得する
+    /// @param u パラメータ値 u
+    /// @param v パラメータ値 v
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return placement·(M_entity·P_def). パラメータ範囲外の場合は`std::nullopt`
+    std::optional<Vector3d>
+    TryGetPointAt(const double, const double, const Matrix4d&) const;
+
+    /// @brief 配置を適用したサーフェス上の接線ベクトル (Tu, Tv) を取得する
+    /// @param u パラメータ値 u
+    /// @param v パラメータ値 v
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return 配置適用後の接線ベクトル Tu, Tv. パラメータ範囲外の場合は`std::nullopt`
+    std::optional<std::pair<Vector3d, Vector3d>>
+    TryGetTangentAt(const double, const double, const Matrix4d&) const;
+
+    /// @brief 配置を適用したサーフェス上の法線ベクトル N(u, v) を取得する
+    /// @param u パラメータ値 u
+    /// @param v パラメータ値 v
+    /// @param placement 配置行列(基準階層までの累積変換)
+    /// @return 配置適用後の法線ベクトル. パラメータ範囲外の場合は`std::nullopt`
+    /// @note スケールなし(124相当)を前提とし、ベクトル変換(R·v)として扱う
+    std::optional<Vector3d>
+    TryGetNormalAt(const double, const double, const Matrix4d&) const;
 
     /// @brief サーフェス上の点 P(u, v) を取得する
     /// @param u パラメータ値 u

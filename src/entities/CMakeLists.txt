@@ -8,6 +8,10 @@ add_library(igesio_entities STATIC
     interfaces/i_curve.cpp
     interfaces/i_surface.cpp
 
+    # Views (in-memory transform decorators)
+    views/curve_view.cpp
+    views/surface_view.cpp
+
     # Directory Entry section related
     de/de_structure.cpp
     de/de_line_font_pattern.cpp

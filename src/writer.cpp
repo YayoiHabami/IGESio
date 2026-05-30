@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -331,12 +332,39 @@ bool igesio::WriteIgesIntermediate(
     return true;
 }
 
+namespace {
+
+/// @brief ルート以下の全Assemblyの所有エンティティを集約する
+/// @param node 対象ノード
+/// @param[out] out 収集した(ID, エンティティ)の格納先
+/// @note Assemblyは非永続のため、出力時は全子孫の所有エンティティをフラットに束ねる
+void CollectAllEntities(
+        const igesio::models::Assembly& node,
+        std::vector<std::pair<igesio::ObjectID,
+                std::shared_ptr<igesio::entities::EntityBase>>>& out) {
+    for (const auto& [id, entity] : node.GetEntities()) {
+        out.emplace_back(id, entity);
+    }
+    for (const auto& child : node.GetChildAssemblies()) {
+        if (child) CollectAllEntities(*child, out);
+    }
+}
+
+}  // namespace
+
+
+
 igesio::models::IntermediateIgesData
 igesio::ConvertToIntermediate(const models::IgesData& data,
                               const bool save_unsupported) {
+    // 全子孫Assemblyの所有エンティティを集約する(Assemblyは非永続のためフラット出力)
+    std::vector<std::pair<ObjectID, std::shared_ptr<entities::EntityBase>>>
+            all_entities;
+    CollectAllEntities(data.Root(), all_entities);
+
     // id -> de_pointerのマッピングを作成する
     id2pointer id2de;
-    for (const auto& [id, entity] : data.GetEntities()) {
+    for (const auto& [id, entity] : all_entities) {
         // TODO: 親子関係を考慮してDEポインタを割り当てる
         id2de[id] = id2de.size() * 2 + 1;
 
@@ -354,7 +382,7 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
     intermediate.global_section = data.global_section;
 
     // DEセクションとPDセクションを変換する
-    for (const auto& [id, entity] : data.GetEntities()) {
+    for (const auto& [id, entity] : all_entities) {
         auto de = entity->GetRawEntityDE(id2de);
         de.sequence_number = id2de.at(id);
         intermediate.directory_entry_section.push_back(de);

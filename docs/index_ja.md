@@ -42,6 +42,9 @@
 - **[ジオメトリの幾何学的特性](entities/geometric_properties_ja.md)**
   - 曲線および曲面エンティティに対して計算可能な、各種幾何学的特性の説明
   - 各種特性の計算方法（コード例）についても記述
+- **[エンティティ実装の内部詳細](entities/entity_internals_ja.md)**
+  - 他のエンティティを参照する場合の参照解決フロー（`pointer2ID`・`PointerContainer`・`SetUnresolvedReference`）
+  - IGESファイルへの書き戻しに必要なシリアライズの仕組み（`GetMainPDParameters`・フォーマット保持）
 - **[中間データ構造](intermediate_data_structure_ja.md)**
   - 本ライブラリにおいて、IGESファイルの入出力の際に内部で使用される中間データ構造の説明
   - IGESファイルのDirectory EntryセクションとParameter Dataセクションの中間データ構造
@@ -70,7 +73,9 @@
 
 ### graphicsモジュール
 
-- 現在、ドキュメントはありません。
+- **[描画システム概要](graphics/overview.md)**
+  - 描画システムの全体構成、`ShaderType`列挙体、描画フローの説明
+
 
 ### modelsモジュール
 

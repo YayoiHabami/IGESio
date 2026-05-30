@@ -47,6 +47,12 @@ class IGeometry : public virtual IEntityIdentifier {
     /// @return 自身の持つ変換行列を適用した後のバウンディングボックス
     numerics::BoundingBox GetBoundingBox() const;
 
+    /// @brief コンテキスト変換を適用したバウンディングボックスを取得する
+    /// @param context 自身の変換行列に後掛けする累積変換(親階層等の配置)
+    /// @return `context · M_entity`を適用した後のバウンディングボックス
+    /// @note contextに単位行列を渡すと無引数版と一致する
+    numerics::BoundingBox GetBoundingBox(const Matrix4d& context) const;
+
 
 
  protected:

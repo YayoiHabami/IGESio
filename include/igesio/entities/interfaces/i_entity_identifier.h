@@ -28,6 +28,12 @@ class IEntityIdentifier {
     /// @brief エンティティのIDを取得する
     /// @return エンティティのID
     virtual const ObjectID& GetID() const = 0;
+    /// @brief 元エンティティのIDを取得する
+    /// @return 通常のエンティティでは`GetID()`と同じ値.
+    ///         ビュー(CurveView/SurfaceView)では元エンティティのID
+    /// @note ピッキング結果(ビュー)から元エンティティを特定するために用いる.
+    ///       ビュー等を除き、オーバーライドは不要
+    virtual const ObjectID& GetSourceID() const { return GetID(); }
     /// @brief エンティティタイプを取得する
     /// @return エンティティタイプ
     virtual EntityType GetType() const = 0;

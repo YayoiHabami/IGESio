@@ -1,8 +1,14 @@
 set(TEST_SOURCES
     test_global_param.cpp
+
+    test_assembly.cpp
+    test_assembly_coords.cpp
+    test_initial_tree.cpp
+    test_flatten.cpp
 )
 
 add_executable(test_models ${TEST_SOURCES})
-target_link_libraries(test_models PRIVATE gtest gtest_main igesio_models)
+# AssemblyテストはReadIges(reader)やviews等を引くためフルigesioへリンクする
+target_link_libraries(test_models PRIVATE gtest gtest_main igesio)
 
 add_test(NAME test_models COMMAND test_models)
