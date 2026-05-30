@@ -280,15 +280,15 @@ TEST(SurfaceViewTest, TryGetNormalAt_ConsistentWithBasePlacement) {
     EXPECT_TRUE(i_num::IsApproxEqual(*exp_n, *act_n, kTol));
 }
 
-// TryGetDerivatives(3引数=defined override) は base のIdentity-placement版と一致
-TEST(SurfaceViewTest, TryGetDerivatives_ThreeArg_EqualsBaseIdentityPlacement) {
+// TryGetDefinedDerivatives(defined override) は base のIdentity-placement版と一致
+TEST(SurfaceViewTest, TryGetDefinedDerivatives_EqualsBaseIdentityPlacement) {
     auto base = std::make_shared<MockSurface>(SampleMEntity());
     i_ent::SurfaceView view(base);
 
     const unsigned int order = 1;
     auto expected =
         base->TryGetDerivatives(kU, kV, order, Matrix4d::Identity());
-    auto actual = view.TryGetDerivatives(kU, kV, order);
+    auto actual = view.TryGetDefinedDerivatives(kU, kV, order);
     ASSERT_TRUE(expected.has_value());
     ASSERT_TRUE(actual.has_value());
     // (0,0), (1,0), (0,1) を比較

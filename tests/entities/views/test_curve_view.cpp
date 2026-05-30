@@ -290,15 +290,15 @@ TEST(CurveViewTest, TryGetNormalBinormal_ConsistentWithBasePlacement) {
     EXPECT_TRUE(i_num::IsApproxEqual(*exp_b, *act_b, kTol));
 }
 
-// TryGetDerivatives(2引数=defined override) は base のIdentity-placement版と一致
-TEST(CurveViewTest, TryGetDerivatives_TwoArg_EqualsBaseIdentityPlacement) {
+// TryGetDefinedDerivatives(defined override) は base のIdentity-placement版と一致
+TEST(CurveViewTest, TryGetDefinedDerivatives_EqualsBaseIdentityPlacement) {
     auto base = std::make_shared<MockCurve>(SampleMEntity());
     i_ent::CurveView view(base);
 
     const double t = igesio::tests::kPiHalf * 0.5;
     const unsigned int n = 2;
     auto expected = base->TryGetDerivatives(t, n, Matrix4d::Identity());
-    auto actual = view.TryGetDerivatives(t, n);
+    auto actual = view.TryGetDefinedDerivatives(t, n);
     ASSERT_TRUE(expected.has_value());
     ASSERT_TRUE(actual.has_value());
     ASSERT_EQ(expected->derivatives.size(), actual->derivatives.size());
