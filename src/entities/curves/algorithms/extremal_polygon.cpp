@@ -161,15 +161,16 @@ Vector3d LineIntersect(const Vector3d& p1, const Vector3d& d1,
 
 /// @brief 曲線上の点tにおける「前進方向」単位接線ベクトルを返す
 ///
-/// 角点では右側接線T⁺(t)を使用し、通常点ではTryGetDefinedTangentAtを使用する.
+/// 角点では右側接線T⁺(t) (TryGetRightTangentAt) を使用し、通常点では
+/// TryGetTangentAtを使用する.
 ///
 /// @param curve 対象曲線
 /// @param t パラメータ値
 /// @return 前進方向単位接線ベクトル. 取得できない場合はstd::nullopt
 std::optional<Vector3d>
 GetForwardTangentAt(const i_ent::ICurve& curve, double t) {
-    if (curve.IsCorner(t)) return curve.RightTangentAt(t);
-    return curve.TryGetDefinedTangentAt(t);
+    if (curve.IsCorner(t)) return curve.TryGetRightTangentAt(t);
+    return curve.TryGetTangentAt(t);
 }
 
 // ===========================================================================

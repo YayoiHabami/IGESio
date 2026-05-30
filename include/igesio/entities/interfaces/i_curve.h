@@ -129,12 +129,22 @@ class ICurve : public virtual IEntityIdentifier,
     ///       解析的に既知のサブクラスはオーバーライド可能
     virtual std::optional<Vector3d> TryGetDefinedLeftTangentAt(const double t) const;
 
+    /// @brief 角点における左側単位接線ベクトルT⁻(t)を返す
+    /// @param t パラメータ値
+    /// @return 左側単位接線ベクトル. 計算できない場合は`std::nullopt`
+    std::optional<Vector3d> TryGetLeftTangentAt(const double t) const;
+
     /// @brief 角点における定義空間の右側単位接線ベクトルT⁺(t)を返す
     /// @param t パラメータ値
     /// @return 定義空間の右側単位接線ベクトル. 計算できない場合は`std::nullopt`
     /// @note デフォルト実装は (t + h) における導関数の方向で近似する.
     ///       解析的に既知のサブクラスはオーバーライド可能
     virtual std::optional<Vector3d> TryGetDefinedRightTangentAt(const double t) const;
+
+    /// @brief 角点における右側単位接線ベクトルT⁺(t)を返す
+    /// @param t パラメータ値
+    /// @return 右側単位接線ベクトル. 計算できない場合は`std::nullopt`
+    std::optional<Vector3d> TryGetRightTangentAt(const double t) const;
 
     /// @brief 角点における外角αを返す
     /// @param t パラメータ値（角点であること）

@@ -9,7 +9,7 @@
  *   [CompositeCurve オーバライド]
  *     GetLinearSegments(), IsInLinearSegment(t, eps)
  *     GetCornerParams(),   IsCorner(t, eps)
- *     LeftTangentAt(t),    RightTangentAt(t)
+ *     TryGetDefinedLeftTangentAt(t),    TryGetDefinedRightTangentAt(t)
  *   [ICurve デフォルト実装; CompositeCurve の挙動を通じて確認]
  *     CornerExteriorAngle(t, n), TryGetSignedCurvature(t, n)
  *
@@ -17,7 +17,7 @@
  *   - Line エンティティは GetLinearSegments() をオーバライドしないため、
  *     IsInLinearSegment のテストには LinearPath サブカーブを使用する。
  *   - 接合点は GetCornerParams() に常に角点として追加される（接線連続性は問わない）。
- *   - LeftTangentAt/RightTangentAt の接合点検出は内部で 1e-9 の固定誤差を使用する。
+ *   - TryGetDefinedLeftTangentAt/TryGetDefinedRightTangentAt の接合点検出は内部で 1e-9 の固定誤差を使用する。
  *
  * TODO:
  *   - 接合点の固定誤差（hardcoded 1e-9）の境界挙動テストを追加する
@@ -370,14 +370,14 @@ TEST(CompositeCurveCornerTest, NonCornerPoints_NotCorner) {
 
 
 /**
- * LeftTangentAt / RightTangentAt のテスト
+ * TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt のテスト
  */
 
 // 接合点での左接線: 直前の曲線の終端方向
 TEST(CompositeCurveTangentAtTest, Junction_LeftTangent_FromPrevCurve) {
     auto cc = MakeLineLine_LeftTurn();
     // 接合点 t=1: Line1(→(1,0)) の終端接線 = (1,0,0)
-    const auto result = cc->LeftTangentAt(1.0);
+    const auto result = cc->TryGetDefinedLeftTangentAt(1.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -387,7 +387,7 @@ TEST(CompositeCurveTangentAtTest, Junction_LeftTangent_FromPrevCurve) {
 TEST(CompositeCurveTangentAtTest, Junction_RightTangent_FromNextCurve) {
     auto cc = MakeLineLine_LeftTurn();
     // 接合点 t=1: Line2(→(0,1)) の始端接線 = (0,1,0)
-    const auto result = cc->RightTangentAt(1.0);
+    const auto result = cc->TryGetDefinedRightTangentAt(1.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(0.0, 1.0, 0.0), kTol));
@@ -396,8 +396,8 @@ TEST(CompositeCurveTangentAtTest, Junction_RightTangent_FromNextCurve) {
 // 直線上接合点: Left=Right (同方向)
 TEST(CompositeCurveTangentAtTest, Junction_Straight_BothTangentsSameDirection) {
     auto cc = MakeLineLine_Straight();
-    const auto left  = cc->LeftTangentAt(1.0);
-    const auto right = cc->RightTangentAt(1.0);
+    const auto left  = cc->TryGetDefinedLeftTangentAt(1.0);
+    const auto right = cc->TryGetDefinedRightTangentAt(1.0);
 
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
@@ -409,8 +409,8 @@ TEST(CompositeCurveTangentAtTest, Junction_Straight_BothTangentsSameDirection) {
 TEST(CompositeCurveTangentAtTest, SubcurveCorner_LeftTangent_Delegated) {
     auto cc = MakeLineLinearPath_LeftTurn();
     // t=2: 接合点は t=1, Path の角点 t=2 はサブカーブに委譲される
-    // Path.LeftTangentAt(t_local=1): 入射辺 (1,0,0)→(2,0,0) 方向 = (1,0,0)
-    const auto result = cc->LeftTangentAt(2.0);
+    // Path.TryGetDefinedLeftTangentAt(t_local=1): 入射辺 (1,0,0)→(2,0,0) 方向 = (1,0,0)
+    const auto result = cc->TryGetDefinedLeftTangentAt(2.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -419,8 +419,8 @@ TEST(CompositeCurveTangentAtTest, SubcurveCorner_LeftTangent_Delegated) {
 // サブカーブ角点の右接線: LinearPath に委譲
 TEST(CompositeCurveTangentAtTest, SubcurveCorner_RightTangent_Delegated) {
     auto cc = MakeLineLinearPath_LeftTurn();
-    // Path.RightTangentAt(t_local=1): 出射辺 (2,0,0)→(2,1,0) 方向 = (0,1,0)
-    const auto result = cc->RightTangentAt(2.0);
+    // Path.TryGetDefinedRightTangentAt(t_local=1): 出射辺 (2,0,0)→(2,1,0) 方向 = (0,1,0)
+    const auto result = cc->TryGetDefinedRightTangentAt(2.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(0.0, 1.0, 0.0), kTol));
@@ -430,7 +430,7 @@ TEST(CompositeCurveTangentAtTest, SubcurveCorner_RightTangent_Delegated) {
 TEST(CompositeCurveTangentAtTest, Interior_Delegated) {
     auto cc = MakeLineLine_LeftTurn();
     // t=0.5 (Line1 内部): Line1 の接線 = (1,0,0)
-    const auto result = cc->LeftTangentAt(0.5);
+    const auto result = cc->TryGetDefinedLeftTangentAt(0.5);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -440,7 +440,7 @@ TEST(CompositeCurveTangentAtTest, Interior_Delegated) {
 
 /**
  * CornerExteriorAngle のテスト
- * ICurve デフォルト実装を CompositeCurve の LeftTangentAt / RightTangentAt を
+ * ICurve デフォルト実装を CompositeCurve の TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt を
  * 通じて確認する
  */
 

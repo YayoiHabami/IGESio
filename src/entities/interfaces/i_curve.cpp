@@ -151,6 +151,14 @@ std::optional<Vector3d> ICurve::TryGetDefinedRightTangentAt(const double t) cons
     return (*deriv)[1] / norm;
 }
 
+std::optional<Vector3d> ICurve::TryGetLeftTangentAt(const double t) const {
+    return Transform(TryGetDefinedLeftTangentAt(t), false);
+}
+
+std::optional<Vector3d> ICurve::TryGetRightTangentAt(const double t) const {
+    return Transform(TryGetDefinedRightTangentAt(t), false);
+}
+
 std::optional<double> ICurve::CornerExteriorAngle(
         const double t, const Vector3d& reference_normal) const {
     const double n_norm = reference_normal.norm();

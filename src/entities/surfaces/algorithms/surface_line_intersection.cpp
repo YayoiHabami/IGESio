@@ -112,9 +112,10 @@ double ProjectOntoLine(const Vector3d& point, const Vector3d& p0,
 /// J = [Su | Sv | -d] による反復で解く。
 /// 穴領域 (TryGetDerivativesがnullopt) に到達した場合も失敗とする。
 ///
-/// @note TryGetDerivativesは定義空間を返す。p0/dはワールド空間のため、
-///       TryGetPointAt/TryGetTangentAtでワールド空間に統一して残差を評価する。
-///       IGES変換は直交行列+並進（スケールなし）なので |Su_world| = |Su_def|。
+/// @note TryGetDerivativesはモデル空間(M_entity適用済み)を返す。p0/dは累積配置を
+///       含むワールド空間のため、TryGetPointAt/TryGetTangentAtでワールド空間に統一して
+///       残差を評価する。IGES変換は直交行列+並進（スケールなし）なので |Su| はモデル空間
+///       でもワールド空間でも不変であり、偏導関数からはノルムのみを用いる。
 ///
 /// @return 収束した交点情報、失敗の場合はnullopt
 std::optional<SurfaceLineIntersection> RunNewton(
@@ -125,7 +126,7 @@ std::optional<SurfaceLineIntersection> RunNewton(
         const SurfaceLineIntersectionParams& params,
         const LineType line_type) {
     for (int iter = 0; iter < params.max_iter; ++iter) {
-        // 定義空間の偏導関数を取得 (穴領域ではnulloptが返る)
+        // 偏導関数を取得 (ノルムのみ使用; 穴領域ではnulloptが返る)
         const auto deriv = surface.TryGetDerivatives(u, v, 1);
         if (!deriv) return std::nullopt;
 

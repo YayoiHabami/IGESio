@@ -107,7 +107,7 @@ class MockCurve : public i_ent::ICurve {
     /// @brief 基底の配置適用版を可視化する(名前隠蔽の回避)
     using i_ent::ICurve::TryGetDerivatives;
     std::optional<i_ent::CurveDerivatives>
-    TryGetDerivatives(const double t, const unsigned int n) const override {
+    TryGetDefinedDerivatives(const double t, const unsigned int n) const override {
         if (t < range_[0] || t > range_[1]) return std::nullopt;
         i_ent::CurveDerivatives result(n);
         for (unsigned int k = 0; k <= n; ++k) {
@@ -171,8 +171,8 @@ class MockSurface : public i_ent::ISurface {
     /// @brief 基底の配置適用版を可視化する(名前隠蔽の回避)
     using i_ent::ISurface::TryGetDerivatives;
     std::optional<i_ent::SurfaceDerivatives>
-    TryGetDerivatives(const double u, const double v,
-                      const unsigned int order) const override {
+    TryGetDefinedDerivatives(const double u, const double v,
+                             const unsigned int order) const override {
         if (u < range_[0] || u > range_[1] ||
             v < range_[2] || v > range_[3]) {
             return std::nullopt;
