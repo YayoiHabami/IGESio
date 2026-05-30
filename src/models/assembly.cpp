@@ -280,6 +280,17 @@ Assembly* Assembly::FindOwner(const ObjectID& id) const {
     return nullptr;
 }
 
+bool Assembly::IsEffectivelySelectable(const ObjectID& id) const {
+    const Assembly* node = FindOwner(id);
+    // ツリーに属さないIDは制限しない (選択可)
+    if (node == nullptr) return true;
+    // 所有ノードからrootまで lock.selectable をANDで畳む
+    for (const Assembly* n = node; n != nullptr; n = n->GetParent().lock().get()) {
+        if (!n->Metadata().lock.selectable) return false;
+    }
+    return true;
+}
+
 std::vector<igesio::ObjectID>
 Assembly::GetEntityIDs(const bool recursive) const {
     std::vector<ObjectID> ids;

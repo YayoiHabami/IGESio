@@ -60,6 +60,14 @@ class Scene {
     /// @brief 保持する選択セットのハンドル一覧を取得する (順不同)
     std::vector<ObjectID> SelectionSetIds() const;
 
+    /// @brief ロック・ピックフィルタを尊重して選択する (対話ピック経路用)
+    /// @param set 選択を加える対象のセット
+    /// @param id 選択するID
+    /// @return 選択した場合はtrue. ロック/フィルタで拒否した場合はfalse
+    /// @note SelectionSet::Select自体は純粋なまま(ヘッドレスは意図的にロックを無視可).
+    ///       v1はエンティティ(body)単位のみ尊重する.
+    bool TrySelectWithLock(SelectionSet& set, const ObjectID& id);
+
     /// @brief ピックフィルタを取得する (非const)
     PickFilter& Filter();
     /// @brief ピックフィルタを取得する (const)

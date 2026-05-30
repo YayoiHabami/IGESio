@@ -58,6 +58,15 @@ std::vector<ObjectID> Scene::SelectionSetIds() const {
     return ids;
 }
 
+bool Scene::TrySelectWithLock(SelectionSet& set, const ObjectID& id) {
+    // v1: エンティティ(body)単位の選択のみ. bodiesフィルタが無効なら拒否
+    if (!pick_filter_.bodies) return false;
+    // ロックされたサブツリーの要素は対話選択しない
+    if (root_ && !root_->IsEffectivelySelectable(id)) return false;
+    set.Select(id);
+    return true;
+}
+
 PickFilter& Scene::Filter() { return pick_filter_; }
 
 const PickFilter& Scene::Filter() const { return pick_filter_; }

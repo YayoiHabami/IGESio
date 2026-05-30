@@ -302,6 +302,14 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @note ルートの逆引きインデックスを参照する (O(1)).
     Assembly* FindOwner(const ObjectID&) const;
 
+    /// @brief 指定IDのエンティティが実効的に選択可能か
+    /// @param id エンティティのID
+    /// @return 所有ノードからrootまで全ての lock.selectable がtrueならtrue.
+    ///         ツリーに属さないIDは制限なし(true)とみなす.
+    /// @note lock.selectableを祖先方向へANDで畳む. 強制はSelectionSetでなく本層
+    ///       (または対話ピック/Scene)で行う方針に従う. v1はエンティティID対象.
+    bool IsEffectivelySelectable(const ObjectID& id) const;
+
     /// @brief 所有するエンティティのIDを取得する
     /// @param recursive trueの場合は全子孫を含める (デフォルト: false)
     /// @return エンティティIDのリスト

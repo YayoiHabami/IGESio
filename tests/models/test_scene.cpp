@@ -11,15 +11,18 @@
  * - Scene::CreateSelectionSet / ActivateSelectionSet / SelectionSetIds (複数セット切替)
  * - アンカー(SelectionSet::Active) と アクティブセット(Scene) の区別
  * - Scene::Filter (ピックフィルタ既定値)
+ * - Assembly::IsEffectivelySelectable / Scene::TrySelectWithLock (lock/フィルタ尊重)
  *
- * TODO: ロックを尊重した選択(TrySelectWithLock)はP5-3で追加するため本テスト対象外.
- *       編集コンテキスト(ActiveContext)は将来用の枠のみのため検証は最小限とする.
+ * TODO: 編集コンテキスト(ActiveContext)は将来用の枠のみのため検証は最小限とする.
+ *       サブエンティティ選択(faces/edges/vertices)は将来課題のため対象外.
  */
 #include <gtest/gtest.h>
 
 #include <memory>
 
 #include "igesio/common/id_generator.h"
+#include "igesio/numerics/matrix.h"
+#include "igesio/entities/curves/circular_arc.h"
 #include "igesio/models/assembly.h"
 #include "igesio/models/scene.h"
 
@@ -28,11 +31,19 @@
 namespace {
 
 namespace i_mod = igesio::models;
+namespace i_ent = igesio::entities;
 
 /// @brief ダミーのID (エンティティ/Assembly相当) を生成する
 /// @note Sceneの選択操作はObjectIDのみを扱うため、実体は不要
 igesio::ObjectID MakeId() {
     return igesio::IDGenerator::Generate(igesio::ObjectType::kAssembly);
+}
+
+/// @brief 単純な円弧を生成する (ロック判定用の実エンティティ)
+std::shared_ptr<i_ent::CircularArc> MakeArc() {
+    return std::make_shared<i_ent::CircularArc>(
+        igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
+        igesio::Vector2d(0.0, 1.0), 0.0);
 }
 
 }  // namespace
@@ -131,4 +142,76 @@ TEST(SceneTest, Filter_DefaultsToAllTrue) {
     EXPECT_TRUE(f.edges);
     EXPECT_TRUE(f.vertices);
     EXPECT_TRUE(f.bodies);
+}
+
+
+
+// 祖先がロックされていなければ実効的に選択可能
+TEST(SceneTest, IsEffectivelySelectable_TrueWhenUnlocked) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto child = std::make_shared<i_mod::Assembly>();
+    root->AddChildAssembly(child);
+    auto arc = MakeArc();
+    child->AddEntity(arc);
+
+    EXPECT_TRUE(root->IsEffectivelySelectable(arc->GetID()));
+}
+
+// 所有ノードまたは祖先がロックされていれば選択不可
+TEST(SceneTest, IsEffectivelySelectable_FalseWhenAncestorLocked) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto child = std::make_shared<i_mod::Assembly>();
+    root->AddChildAssembly(child);
+    auto arc = MakeArc();
+    child->AddEntity(arc);
+    const auto id = arc->GetID();
+
+    child->Metadata().lock.selectable = false;  // 所有ノードをロック
+    EXPECT_FALSE(root->IsEffectivelySelectable(id));
+
+    child->Metadata().lock.selectable = true;
+    root->Metadata().lock.selectable = false;   // 祖先(root)をロック
+    EXPECT_FALSE(root->IsEffectivelySelectable(id));
+}
+
+// TrySelectWithLock: 非ロック要素は選択され、trueを返す
+TEST(SceneTest, TrySelectWithLock_SelectsWhenUnlocked) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto arc = MakeArc();
+    root->AddEntity(arc);
+    i_mod::Scene scene(root);
+
+    EXPECT_TRUE(scene.TrySelectWithLock(scene.ActiveSelection(), arc->GetID()));
+    EXPECT_TRUE(scene.ActiveSelection().Contains(arc->GetID()));
+}
+
+// TrySelectWithLock: ロック要素は拒否されるが、SelectionSet直呼びは迂回できる
+TEST(SceneTest, TrySelectWithLock_RejectsWhenAncestorLocked) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto child = std::make_shared<i_mod::Assembly>();
+    root->AddChildAssembly(child);
+    auto arc = MakeArc();
+    child->AddEntity(arc);
+    child->Metadata().lock.selectable = false;
+    i_mod::Scene scene(root);
+    const auto id = arc->GetID();
+
+    EXPECT_FALSE(scene.TrySelectWithLock(scene.ActiveSelection(), id));
+    EXPECT_FALSE(scene.ActiveSelection().Contains(id));
+
+    // ヘッドレスな直接選択はロックを無視できる (SelectionSetは純粋)
+    scene.ActiveSelection().Select(id);
+    EXPECT_TRUE(scene.ActiveSelection().Contains(id));
+}
+
+// TrySelectWithLock: bodiesフィルタが無効なら拒否する
+TEST(SceneTest, TrySelectWithLock_RejectsWhenBodiesFilterDisabled) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto arc = MakeArc();
+    root->AddEntity(arc);
+    i_mod::Scene scene(root);
+    scene.Filter().bodies = false;
+
+    EXPECT_FALSE(scene.TrySelectWithLock(scene.ActiveSelection(), arc->GetID()));
+    EXPECT_FALSE(scene.ActiveSelection().Contains(arc->GetID()));
 }

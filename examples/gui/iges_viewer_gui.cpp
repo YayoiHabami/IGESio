@@ -245,6 +245,9 @@ void IgesViewerGUI::RenderControls() {
         needs_redraw_ = true;
     }
 
+    // ピックフィルタ (v1はbodies=エンティティ単位のみ尊重)
+    ImGui::Checkbox("Pick bodies", &scene_->Filter().bodies);
+
     ImGui::End();
 }
 
@@ -366,16 +369,16 @@ void IgesViewerGUI::HandleClickSelection(
         if (selection.Contains(id)) {
             selection.Deselect(id);
             selected_hit_positions_.erase(id);
-        } else {
-            selection.Select(id);
+        } else if (scene_->TrySelectWithLock(selection, id)) {
             selected_hit_positions_[id] = pos;
         }
     } else {
-        // 複数選択修飾なし: 選択集合をid単独へ置換
+        // 複数選択修飾なし: 選択集合をid単独へ置換 (ロック要素は選択されない)
         selection.Clear();
         selected_hit_positions_.clear();
-        selection.Select(id);
-        selected_hit_positions_[id] = pos;
+        if (scene_->TrySelectWithLock(selection, id)) {
+            selected_hit_positions_[id] = pos;
+        }
     }
 }
 
@@ -412,8 +415,9 @@ void IgesViewerGUI::HandleBoxSelection(
         selected_hit_positions_.clear();
     }
     // 範囲選択は単一の交点座標を持たないため hit_positions には登録しない
+    // (ロック要素・bodiesフィルタ無効時は選択されない)
     for (const auto& id : ids) {
-        selection.Select(id);  // 既に選択済みの場合はSelect側で無視される
+        scene_->TrySelectWithLock(selection, id);
     }
 }
 
