@@ -3,6 +3,7 @@ set(TEST_SOURCES
     test_selection_pull.cpp
     test_composite_render.cpp
     test_scene_walk.cpp
+    test_override_pull.cpp
 )
 
 add_executable(test_graphics ${TEST_SOURCES})

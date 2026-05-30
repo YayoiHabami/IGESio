@@ -10,6 +10,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -486,10 +487,16 @@ class EntityRenderer {
     /// @brief Assemblyツリーを再帰走査する (RebuildDrawListの実体)
     /// @param node 走査中のノード
     /// @param parent_accum 親までの累積変換 (G_root·…·G_{n-1})
+    /// @param inherited_color 親までの最近接の色オーバーライド (無ければnullopt)
+    /// @param inherited_opacity 親までの最近接の不透明度オーバーライド (無ければnullopt)
     /// @note 可視/抑制サブツリーはスキップ. node大域変換を掛けた累積をworld_transform_へ
     ///       流し (M_entityは含めない)、graphicsをシェーダー別にdraw_list_へ収集する.
+    ///       色/不透明度の最近接オーバーライドを解決し、各描画オブジェクトへ
+    ///       フレーム毎にPUSHする (world_transform_と同じく派生キャッシュ扱い).
     void WalkAssembly(const models::Assembly& node,
-                      const igesio::Matrix4d& parent_accum) const;
+                      const igesio::Matrix4d& parent_accum,
+                      const std::optional<std::array<float, 3>>& inherited_color,
+                      const std::optional<float>& inherited_opacity) const;
 
     /// @brief キャッシュした描画リストをシェーダー単位で描画する
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)

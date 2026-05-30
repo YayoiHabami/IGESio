@@ -533,17 +533,25 @@ void EntityRenderer::MarkSceneDirty() {
 void EntityRenderer::RebuildDrawList() const {
     draw_list_.clear();
     if (scene_root_ == nullptr) return;
-    WalkAssembly(*scene_root_, igesio::Matrix4d::Identity());
+    WalkAssembly(*scene_root_, igesio::Matrix4d::Identity(),
+                 std::nullopt, std::nullopt);
 }
 
-void EntityRenderer::WalkAssembly(const models::Assembly& node,
-                                  const igesio::Matrix4d& parent_accum) const {
+void EntityRenderer::WalkAssembly(
+        const models::Assembly& node, const igesio::Matrix4d& parent_accum,
+        const std::optional<std::array<float, 3>>& inherited_color,
+        const std::optional<float>& inherited_opacity) const {
     const auto& meta = node.Metadata();
     // 非表示・抑制のサブツリーは描画対象から除外する
     if (!meta.visible || meta.suppressed) return;
 
     const igesio::Matrix4d accum = parent_accum * node.GetGlobalTransform();
     const igesio::Matrix4f accum_f = accum.cast<float>();
+
+    // 色/不透明度のオーバーライドは最近接が優先 (子の設定が祖先を上書きする)
+    const auto color_ovr = meta.color_override ? meta.color_override : inherited_color;
+    const auto opacity_ovr =
+            meta.opacity_override ? meta.opacity_override : inherited_opacity;
 
     for (const auto& [id, entity] : node.GetEntities()) {
         // キャッシュに在席する = 投入時フィルタを通過した描画対象
@@ -555,6 +563,19 @@ void EntityRenderer::WalkAssembly(const models::Assembly& node,
         // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける)
         graphics->SetWorldTransform(accum_f);
 
+        // 解決したオーバーライドをフレーム毎にPUSHする (world_transform_と同じ派生キャッシュ).
+        // まずentity固有色へ戻し、指定があるRGB/不透明度のみ差し替える
+        // (選択ハイライトは描画時にPULLされ、これより優先される)
+        graphics->ResetColor();
+        if (color_ovr || opacity_ovr) {
+            const auto natural = graphics->GetColor();  // {base_rgb, material_opacity}
+            graphics->SetColor({
+                color_ovr ? (*color_ovr)[0] : natural[0],
+                color_ovr ? (*color_ovr)[1] : natural[1],
+                color_ovr ? (*color_ovr)[2] : natural[2],
+                opacity_ovr ? *opacity_ovr : natural[3]});
+        }
+
         // バッチ描画のためシェーダー別に収集する (複合は子の各型へ収集される)
         for (const auto st : graphics->GetShaderTypes()) {
             if (HasSpecificShaderCode(st) && shader_programs_.count(st) > 0) {
@@ -564,7 +585,7 @@ void EntityRenderer::WalkAssembly(const models::Assembly& node,
     }
 
     for (const auto& child : node.GetChildAssemblies()) {
-        if (child) WalkAssembly(*child, accum);
+        if (child) WalkAssembly(*child, accum, color_ovr, opacity_ovr);
     }
 }
 
