@@ -120,6 +120,17 @@ struct AssemblyMetadata {
     std::optional<float> opacity_override;
 };
 
+/// @brief 削除時に、他から参照されているエンティティの扱い
+/// @note 自己完結の不変条件(各Assemblyが参照を解決できる)を保つための削除戦略.
+enum class RemovalPolicy {
+    /// @brief 参照が残るなら削除を拒否する (自己完結を保つ既定)
+    kReject,
+    /// @brief 参照元・物理従属子も連鎖削除する
+    kCascade,
+    /// @brief 参照を未解決のまま削除する (被参照のweak_ptrは自然失効)
+    kOrphan,
+};
+
 
 
 /// @brief エンティティの集合を表すアセンブリクラス
@@ -171,6 +182,27 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @note entityが未登録のポインタを持ち、かつentities_がそれを持つ場合、
     ///       entityにそのポインタを設定する. 対象はこのノードのentities_のみ.
     void SetPointerIfUnset(std::shared_ptr<entities::EntityBase>);
+
+    /// @brief nodeが自身(this)のサブツリーに属すか (自身を含む)
+    /// @param node 判定対象のノード
+    /// @return nodeから親をたどってthisに到達できる場合はtrue
+    bool IsInSubtree(const Assembly* node) const;
+
+    /// @brief nodeからrootまで全ての lock.editable がtrueか
+    /// @param node 起点ノード
+    /// @return 経路上にeditable==falseが無ければtrue. nodeがnullptrならtrue.
+    bool IsChainEditable(const Assembly* node) const;
+
+    /// @brief 指定ノードのentities_とルート逆引きインデックスから1エンティティを除去する
+    /// @param owner 対象エンティティを所有するノード
+    /// @param id 除去するエンティティのID
+    void EraseEntity(Assembly* owner, const ObjectID& id);
+
+    /// @brief idを起点に、物理従属子と参照元の閉包を連鎖削除する (kCascade用)
+    /// @param start 起点エンティティのID
+    /// @note GetChildIDs(物理従属)とFindReferrers(参照元)をvisited管理で再帰展開する.
+    ///       共有定義を指す参照元が多い場合は広範に削除されうる(設計§12.2 P9-7のリスク).
+    void RemoveCascade(const ObjectID& start);
 
  public:
     /// @brief AssemblyのIDを取得する
@@ -310,6 +342,13 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     ///       (または対話ピック/Scene)で行う方針に従う. v1はエンティティID対象.
     bool IsEffectivelySelectable(const ObjectID& id) const;
 
+    /// @brief 指定IDのエンティティが実効的に編集可能か
+    /// @param id エンティティのID
+    /// @return 所有ノードからrootまで全ての lock.editable がtrueならtrue.
+    ///         ツリーに属さないIDは制限なし(true)とみなす.
+    /// @note IsEffectivelySelectableの編集版. 編集操作(削除等)のガードに用いる.
+    bool IsEffectivelyEditable(const ObjectID& id) const;
+
     /// @brief 所有するエンティティのIDを取得する
     /// @param recursive trueの場合は全子孫を含める (デフォルト: false)
     /// @return エンティティIDのリスト
@@ -337,6 +376,92 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     std::vector<std::shared_ptr<entities::EntityBase>>
     FindEntities(const std::function<bool(const entities::EntityBase&)>& predicate,
                  bool recursive = false) const;
+
+
+
+    /**
+     * 編集・ライフサイクル (TODO 3-3)
+     */
+
+    /// @brief 指定IDを参照しているエンティティのIDを収集する (逆方向検索)
+    /// @param id 参照されている側のエンティティのID
+    /// @return idを参照する全エンティティのID (id自身は除く)
+    /// @note ルート全体の子孫エンティティを走査する線形検索. 大規模モデルでは逆参照
+    ///       インデックス化を将来検討する(設計§12.2 P9-7).
+    std::vector<ObjectID> FindReferrers(const ObjectID& id) const;
+
+    /// @brief 指定IDのエンティティを削除する
+    /// @param id 削除するエンティティのID
+    /// @param policy 参照が残る場合の扱い (既定: kReject)
+    /// @return 削除した場合はtrue. 未存在/このサブツリー外/編集不可、または
+    ///         kRejectで参照が残る場合はfalse(無変更)
+    /// @note 所有ノードを逆引きで特定し、このノードのサブツリー内のみを対象とする.
+    ///       削除後はルートの逆引きインデックスからも除去する. 構造編集後は呼び出し側で
+    ///       描画の再走査(MarkSceneDirty)を行うこと(Assemblyはレンダラを知らない).
+    bool RemoveEntity(const ObjectID& id,
+                      RemovalPolicy policy = RemovalPolicy::kReject);
+
+    /// @brief 直接の子Assemblyを削除する
+    /// @param child_id 削除する子AssemblyのID (直接の子のみ対象)
+    /// @param policy 外部(サブツリー外)からの参照が残る場合の扱い (既定: kReject)
+    /// @return 削除した場合はtrue. 直接の子に該当が無い/編集不可、または
+    ///         kRejectで外部からの参照(inbound)が残る場合はfalse(無変更)
+    /// @note サブツリー内の全エンティティをルート逆引きインデックスからも除去する.
+    ///       kCascadeは外部の参照元もRemoveEntity(kCascade)で連鎖削除する.
+    bool RemoveChildAssembly(const ObjectID& child_id,
+                             RemovalPolicy policy = RemovalPolicy::kReject);
+
+    /// @brief このノードの全エンティティと全子Assemblyを除去する (一斉リセット)
+    /// @note 自ノード+全子孫のエンティティをルート逆引きインデックスからも除去する.
+    ///       明示的なリセットのためロック(editable)は考慮しない.
+    void Clear();
+
+    /// @brief エンティティを別のAssemblyノードへ移動する
+    /// @param id 移動するエンティティのID
+    /// @param dest 移動先のAssembly (同一ルートであること)
+    /// @throw std::invalid_argument destが同一ルートでない、またはidがツリーに無い場合
+    /// @note entities_間の付け替えと逆引きownerの更新を行い、dest内で参照を張り直す.
+    ///       移動は非破壊のためロックは考慮しない. 自己完結は
+    ///       ValidateSelfContainedRecursive(後続)で検証する.
+    void MoveEntityTo(const ObjectID& id, Assembly& dest);
+
+    /// @brief 直接の子Assemblyを別のAssemblyノードへ移動する
+    /// @param child_id 移動する子AssemblyのID (直接の子のみ対象)
+    /// @param dest 移動先のAssembly (同一ルートであること)
+    /// @throw std::invalid_argument destが同一ルートでない、child_idが直接の子でない、
+    ///        またはdestが移動対象サブツリー内(循環)の場合
+    /// @note children_の付け替えと親weak_ptr更新を行う. 同一ルートのため逆引きインデックス
+    ///       (エンティティ→所有ノード)は不変.
+    void MoveChildAssemblyTo(const ObjectID& child_id, Assembly& dest);
+
+    /// @brief 自ノードと全子孫の可視性を一括設定する
+    /// @param visible 設定する可視性
+    void SetVisibleRecursive(bool visible);
+
+    /// @brief 自ノードと全子孫の抑制状態を一括設定する
+    /// @param suppressed 設定する抑制状態
+    void SetSuppressedRecursive(bool suppressed);
+
+    /// @brief 自ノードと全子孫の色オーバーライドを一括設定する
+    /// @param color 設定する色 (RGB; [0,1]). std::nulloptでオーバーライドを解除する
+    void SetColorOverrideRecursive(
+            const std::optional<std::array<float, 3>>& color);
+
+    /// @brief 自ノードと全子孫の不透明度オーバーライドを一括設定する
+    /// @param opacity 設定する不透明度 ([0,1]). std::nulloptで解除する
+    void SetOpacityOverrideRecursive(const std::optional<float>& opacity);
+
+    /// @brief このノードの大域変換へ追加変換を合成する (親フレームでの後付け; 非再帰)
+    /// @param transform 合成する変換 (124相当・スケールなし前提)
+    /// @note 結果は global_transform_ = transform * global_transform_ (左から合成=親
+    ///       フレームでの適用). 子孫へは描画ドライバの累積で自然に波及するため再帰しない(§9).
+    void ComposeGlobalTransform(const igesio::Matrix4d& transform);
+
+    /// @brief 各ノードが参照を自己完結的に解決できるかを再帰的に検証する
+    /// @return 検証結果. いずれかのノードに未解決参照があればis_valid==false
+    /// @note GetUnresolvedReferencesの再帰版. 各編集の事後条件(自己完結の不変条件)に用いる.
+    ///       エンティティ個別の幾何検証は含めず、参照解決のみを対象とする.
+    ValidationResult ValidateSelfContainedRecursive() const;
 
 
 
