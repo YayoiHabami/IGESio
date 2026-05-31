@@ -16,6 +16,7 @@
 #include "igesio/common/errors.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/nurbs_algorithms.h"
+#include "igesio/entities/surfaces/algorithms/curve_surface_inversion.h"
 #include "entities/curves/algorithms/polygonal_approximation.h"
 
 namespace {
@@ -175,9 +176,13 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 曲線 B(t) = (u(t), v(t))
+    // BPTR=0 (ベース曲線の省略) を許容する。一部CAD (CATIA等) はモデル空間曲線 C と
+    // 曲面 S のみを出力し、パラメータ空間のベース曲線 B を省略する。この場合
+    // base_curve_ は UnsetID を保持し、読み込みの参照解決後に
+    // ReconstructOmittedBaseCurve() で B = S^{-1}∘C として再構築する。
     try {
         base_curve_ = PointerContainer<false, ICurve>(
-                GetObjectIDFromParameters(pd, 2, de2id));
+                GetObjectIDFromParameters(pd, 2, de2id, /*allow_unset_id=*/true));
     } catch (const std::exception& e) {
         throw igesio::DataFormatError(
                 "CurveOnAParametricSurface: Invalid base curve reference."
@@ -207,7 +212,10 @@ CurveOnSurface::GetUnresolvedPDReferences() const {
     if (!surface_.IsPointerSet()) {
         unresolved.insert(surface_.GetID());
     }
-    if (!base_curve_.IsPointerSet()) {
+    // BPTR=0 (省略) のときは UnsetID を保持する。これは「未解決の参照」ではなく
+    // 後段で再構築する対象のため、未解決集合には加えない (UnsetID を探さない)。
+    if (!base_curve_.IsPointerSet()
+            && base_curve_.GetID() != IDGenerator::UnsetID()) {
         unresolved.insert(base_curve_.GetID());
     }
     if (!curve_.IsPointerSet()) {
@@ -527,6 +535,36 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
     }
 
     return generated_curve;
+}
+
+std::shared_ptr<i_ent::ICurve> CurveOnSurface::ReconstructOmittedBaseCurve() {
+    // BPTR=0 (省略) かつS・Cが解決済みのときのみ再構築する
+    if (base_curve_.GetID() != IDGenerator::UnsetID()) return nullptr;
+    if (!surface_.IsPointerSet() || !curve_.IsPointerSet()) return nullptr;
+
+    auto surf_opt = surface_.TryGetEntity<ISurface>();
+    auto curve_opt = curve_.TryGetEntity<ICurve>();
+    if (!surf_opt || !curve_opt) return nullptr;
+
+    // CをSのパラメータ空間へ逆射影する (単一弧モード; Type 142は連続を仮定)
+    auto arcs = InvertCurveOntoSurface(*surf_opt.value(), *curve_opt.value(), {});
+    if (arcs.empty() || arcs.front().uv_points.size() < 2) return nullptr;
+
+    // パラメータ空間の折れ線としてBを生成する (各点 (u, v, 0))
+    auto base = std::make_shared<LinearPath>(arcs.front().uv_points);
+    // B は曲面のパラメータ空間にあるため EUF=05 (2D Parametric)・物理従属に設定
+    base->SetEntityUseFlag(i_ent::EntityUseFlag::k2DParametric);
+    base->SetSubordinateEntitySwitch(
+            i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
+
+    // base_curve_に設定する (新規IDのためOverwritePointer経由)。
+    // ドメイン包含チェック等で失敗した場合は再構築を諦め nullptr を返す
+    try {
+        SetBaseCurve(base);
+    } catch (const std::exception&) {
+        return nullptr;
+    }
+    return base;
 }
 
 

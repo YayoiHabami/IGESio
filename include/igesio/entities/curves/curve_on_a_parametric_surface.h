@@ -228,6 +228,19 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
         preferred_representation_ = pref;
     }
 
+    /// @brief 省略されたベース曲線BをC・Sから再構築する
+    ///
+    /// BPTR=0 (ベース曲線の省略; CATIA等) のとき、モデル空間曲線Cを曲面Sの
+    /// パラメータ空間へ逆射影して B = S^{-1}∘C を生成し、base_curve_に設定する。
+    /// 生成したBは Entity Use Flag=05 (2D Parametric)・物理従属に設定される。
+    ///
+    /// @return 再構築したB (呼び出し側でモデルへ登録する). 以下の場合は`nullptr`:
+    ///         - base_curve_が省略 (UnsetID) でない (既に設定済み)
+    ///         - 曲面Sまたは曲線Cが未解決
+    ///         - 逆射影または設定に失敗した
+    /// @note S・Cの参照が解決済みであること (読み込みの参照解決後) を前提とする。
+    std::shared_ptr<ICurve> ReconstructOmittedBaseCurve();
+
 
 
  protected:
