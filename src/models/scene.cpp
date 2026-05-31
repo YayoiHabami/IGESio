@@ -67,6 +67,37 @@ bool Scene::TrySelectWithLock(SelectionSet& set, const ObjectID& id) {
     return true;
 }
 
+std::optional<ObjectID> Scene::SelectOwningAssembly(
+        SelectionSet& set, const ObjectID& picked) {
+    if (!root_) return std::nullopt;
+    // ピックされたエンティティの所有Assemblyを逆引きで特定する
+    Assembly* owner = root_->FindOwner(picked);
+    if (owner == nullptr) return std::nullopt;
+    // 所有ノードの全子孫メンバをロック/フィルタ尊重で選択する
+    for (const auto& id : owner->GetEntityIDs(/*recursive=*/true)) {
+        TrySelectWithLock(set, id);
+    }
+    return owner->GetID();
+}
+
+std::optional<ObjectID> Scene::DeselectOwningAssembly(
+        SelectionSet& set, const ObjectID& picked) {
+    if (!root_) return std::nullopt;
+    Assembly* owner = root_->FindOwner(picked);
+    if (owner == nullptr) return std::nullopt;
+    // 所有ノードの全子孫メンバを選択から外す (解除はロックを問わない)
+    for (const auto& id : owner->GetEntityIDs(/*recursive=*/true)) {
+        set.Deselect(id);
+    }
+    return owner->GetID();
+}
+
+SelectionGranularity Scene::Granularity() const { return selection_granularity_; }
+
+void Scene::SetGranularity(const SelectionGranularity granularity) {
+    selection_granularity_ = granularity;
+}
+
 PickFilter& Scene::Filter() { return pick_filter_; }
 
 const PickFilter& Scene::Filter() const { return pick_filter_; }

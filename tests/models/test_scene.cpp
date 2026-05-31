@@ -12,6 +12,9 @@
  * - アンカー(SelectionSet::Active) と アクティブセット(Scene) の区別
  * - Scene::Filter (ピックフィルタ既定値)
  * - Assembly::IsEffectivelySelectable / Scene::TrySelectWithLock (lock/フィルタ尊重)
+ * - Scene::SelectOwningAssembly (所有Assemblyのメンバ一括選択)
+ * - Scene::DeselectOwningAssembly (所有Assemblyのメンバ一括解除; グループトグル用)
+ * - Scene::Granularity / SetGranularity (選択粒度の既定値と切替)
  *
  * TODO: 編集コンテキスト(ActiveContext)は将来用の枠のみのため検証は最小限とする.
  *       サブエンティティ選択(faces/edges/vertices)は将来課題のため対象外.
@@ -214,4 +217,114 @@ TEST(SceneTest, TrySelectWithLock_RejectsWhenBodiesFilterDisabled) {
 
     EXPECT_FALSE(scene.TrySelectWithLock(scene.ActiveSelection(), arc->GetID()));
     EXPECT_FALSE(scene.ActiveSelection().Contains(arc->GetID()));
+}
+
+
+
+// SelectOwningAssembly: 所有ノードのメンバのみ一括選択し、所有AssemblyのIDを返す
+TEST(SceneTest, SelectOwningAssembly_SelectsMembersOfOwningNode) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto child = std::make_shared<i_mod::Assembly>();
+    root->AddChildAssembly(child);
+    auto arc_root = MakeArc();  // root直接所有 (所有ノードの外)
+    auto arc_a = MakeArc();
+    auto arc_b = MakeArc();
+    root->AddEntity(arc_root);
+    child->AddEntity(arc_a);
+    child->AddEntity(arc_b);
+    i_mod::Scene scene(root);
+
+    const auto owner = scene.SelectOwningAssembly(
+            scene.ActiveSelection(), arc_a->GetID());
+    ASSERT_TRUE(owner.has_value());
+    EXPECT_EQ(owner.value(), child->GetID());        // 所有ノードはchild
+    const auto& sel = scene.ActiveSelection();
+    EXPECT_TRUE(sel.Contains(arc_a->GetID()));
+    EXPECT_TRUE(sel.Contains(arc_b->GetID()));       // 同ノードの兄弟も選択
+    EXPECT_FALSE(sel.Contains(arc_root->GetID()));   // 所有ノード外は非選択
+}
+
+// SelectOwningAssembly: ロックされた子ノードのメンバはスキップする
+TEST(SceneTest, SelectOwningAssembly_SkipsLockedMembers) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto locked = std::make_shared<i_mod::Assembly>();
+    root->AddChildAssembly(locked);
+    auto arc_a = MakeArc();  // root直下 (選択可)
+    auto arc_b = MakeArc();  // lockedノード内 (選択不可)
+    root->AddEntity(arc_a);
+    locked->AddEntity(arc_b);
+    locked->Metadata().lock.selectable = false;
+    i_mod::Scene scene(root);
+
+    // arc_aをピック -> 所有ノードはroot -> 全子孫(arc_a, arc_b)が対象
+    const auto owner = scene.SelectOwningAssembly(
+            scene.ActiveSelection(), arc_a->GetID());
+    ASSERT_TRUE(owner.has_value());
+    EXPECT_EQ(owner.value(), root->GetID());
+    const auto& sel = scene.ActiveSelection();
+    EXPECT_TRUE(sel.Contains(arc_a->GetID()));    // 選択可
+    EXPECT_FALSE(sel.Contains(arc_b->GetID()));   // ロックでスキップ
+}
+
+// SelectOwningAssembly: ツリーに無いIDは nullopt を返し、選択は変化しない
+TEST(SceneTest, SelectOwningAssembly_ReturnsNulloptForUnknownId) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto arc = MakeArc();
+    root->AddEntity(arc);
+    i_mod::Scene scene(root);
+
+    const auto owner = scene.SelectOwningAssembly(
+            scene.ActiveSelection(), MakeId());
+    EXPECT_FALSE(owner.has_value());
+    EXPECT_TRUE(scene.ActiveSelection().Empty());
+}
+
+// DeselectOwningAssembly: 所有ノードのメンバのみ一括解除し、他ノードは残す
+TEST(SceneTest, DeselectOwningAssembly_DeselectsMembersOfOwningNode) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto child = std::make_shared<i_mod::Assembly>();
+    root->AddChildAssembly(child);
+    auto arc_root = MakeArc();  // root直接所有 (所有ノードの外)
+    auto arc_a = MakeArc();
+    auto arc_b = MakeArc();
+    root->AddEntity(arc_root);
+    child->AddEntity(arc_a);
+    child->AddEntity(arc_b);
+    i_mod::Scene scene(root);
+    auto& sel = scene.ActiveSelection();
+    // 全体を選択しておく (root所有 = 全子孫)
+    scene.SelectOwningAssembly(sel, arc_root->GetID());
+    ASSERT_TRUE(sel.Contains(arc_a->GetID()));
+    ASSERT_TRUE(sel.Contains(arc_root->GetID()));
+
+    const auto owner = scene.DeselectOwningAssembly(sel, arc_a->GetID());
+    ASSERT_TRUE(owner.has_value());
+    EXPECT_EQ(owner.value(), child->GetID());      // 所有ノードはchild
+    EXPECT_FALSE(sel.Contains(arc_a->GetID()));    // childのメンバは解除
+    EXPECT_FALSE(sel.Contains(arc_b->GetID()));
+    EXPECT_TRUE(sel.Contains(arc_root->GetID()));  // 所有ノード外は残る
+}
+
+// DeselectOwningAssembly: ツリーに無いIDは nullopt を返し、選択は変化しない
+TEST(SceneTest, DeselectOwningAssembly_ReturnsNulloptForUnknownId) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    auto arc = MakeArc();
+    root->AddEntity(arc);
+    i_mod::Scene scene(root);
+    scene.ActiveSelection().Select(arc->GetID());
+
+    const auto owner = scene.DeselectOwningAssembly(
+            scene.ActiveSelection(), MakeId());
+    EXPECT_FALSE(owner.has_value());
+    EXPECT_TRUE(scene.ActiveSelection().Contains(arc->GetID()));  // 変化なし
+}
+
+// 選択粒度の既定はbody単位で、SetGranularityで切り替えられる
+TEST(SceneTest, Granularity_DefaultsToBodyAndIsSettable) {
+    auto root = std::make_shared<i_mod::Assembly>();
+    i_mod::Scene scene(root);
+
+    EXPECT_EQ(scene.Granularity(), i_mod::SelectionGranularity::kBody);
+    scene.SetGranularity(i_mod::SelectionGranularity::kAssembly);
+    EXPECT_EQ(scene.Granularity(), i_mod::SelectionGranularity::kAssembly);
 }

@@ -248,6 +248,15 @@ void IgesViewerGUI::RenderControls() {
     // ピックフィルタ (v1はbodies=エンティティ単位のみ尊重)
     ImGui::Checkbox("Pick bodies", &scene_->Filter().bodies);
 
+    // 選択粒度: body単位 / 所有Assembly一括 (Sceneが権威)
+    bool assembly_select = scene_->Granularity()
+            == models::SelectionGranularity::kAssembly;
+    if (ImGui::Checkbox("Select assembly", &assembly_select)) {
+        scene_->SetGranularity(assembly_select
+                ? models::SelectionGranularity::kAssembly
+                : models::SelectionGranularity::kBody);
+    }
+
     ImGui::End();
 }
 
@@ -364,6 +373,37 @@ void IgesViewerGUI::HandleClickSelection(
 
     const ObjectID id = hits.front().id;
     const Vector3d pos = hits.front().hit.position;
+
+    // Assembly一括選択モード: 所有Assemblyのメンバをまとめて選択する
+    if (scene_->Granularity() == models::SelectionGranularity::kAssembly) {
+        if (ctrl) {
+            // 複数選択修飾: グループ単位でトグル
+            // (ピック要素が選択済みなら、その所有グループを一括解除)
+            if (selection.Contains(id)) {
+                scene_->DeselectOwningAssembly(selection, id);
+                // 解除済みメンバの交差座標を取り除く (他グループの座標は残す)
+                for (auto it = selected_hit_positions_.begin();
+                     it != selected_hit_positions_.end();) {
+                    if (selection.Contains(it->first)) {
+                        ++it;
+                    } else {
+                        it = selected_hit_positions_.erase(it);
+                    }
+                }
+            } else if (scene_->SelectOwningAssembly(selection, id)) {
+                selected_hit_positions_[id] = pos;
+            }
+        } else {
+            // 複数選択修飾なし: 選択集合を所有グループへ置換
+            selection.Clear();
+            selected_hit_positions_.clear();
+            if (scene_->SelectOwningAssembly(selection, id)) {
+                selected_hit_positions_[id] = pos;
+            }
+        }
+        return;
+    }
+
     if (ctrl) {
         // 複数選択修飾: 選択状態をトグル
         if (selection.Contains(id)) {
