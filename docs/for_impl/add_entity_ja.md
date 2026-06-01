@@ -123,7 +123,7 @@ class MyNewEntity : public EntityBase, public virtual ICurve3D {
     std::array<double, 2> GetParameterRange() const override;
     bool IsClosed() const override;
     std::optional<CurveDerivatives>
-    TryGetDerivatives(const double, const unsigned int) const override;
+    TryGetDefinedDerivatives(const double, const unsigned int) const override;
     numerics::BoundingBox GetDefinedBoundingBox() const override;
 
     // --- 描画用アクセサ (必要な場合) ---
@@ -173,7 +173,7 @@ class MyNewEntity : public EntityBase, public virtual ICurve3D {
 | --- | --- |
 | `GetParameterRange() const` | パラメータ範囲 `{t_start, t_end}` を返す |
 | `IsClosed() const` | 曲線が閉じているかを返す |
-| `TryGetDerivatives(double, unsigned int) const` | パラメータ $t$ における $n$ 階導関数を返す |
+| `TryGetDefinedDerivatives(double, unsigned int) const` | 定義空間におけるパラメータ $t$ の $n$ 階導関数を返す(M_entity未適用) |
 | `GetDefinedBoundingBox() const` | 定義空間における軸平行バウンディングボックスを返す |
 | `Transform(optional<Vector3d>, bool) const` (protected) | 変換行列を適用して座標/ベクトルを変換する |
 
@@ -184,7 +184,7 @@ class MyNewEntity : public EntityBase, public virtual ICurve3D {
 | `GetParameterRange() const` | パラメータ範囲 `{{u_min, u_max}, {v_min, v_max}}` を返す |
 | `IsUClosed() const` | u方向に閉じているかを返す |
 | `IsVClosed() const` | v方向に閉じているかを返す |
-| `TryGetDerivatives(double, double, unsigned int) const` | パラメータ $(u, v)$ における偏導関数を返す |
+| `TryGetDefinedDerivatives(double, double, unsigned int) const` | 定義空間におけるパラメータ $(u, v)$ の偏導関数を返す(M_entity未適用) |
 | `GetDefinedBoundingBox() const` | 定義空間における軸平行バウンディングボックスを返す |
 | `Transform(optional<Vector3d>, bool) const` (protected) | 変換行列を適用して座標/ベクトルを変換する |
 
@@ -226,7 +226,7 @@ i_ent::MyNewEntity::MyNewEntity(
 
 ### ICurve / ISurfaceの実装
 
-`TryGetDerivatives()`が最も重要な実装となる。パラメータ $t$ における位置 $\mathbf{C}(t)$ と各次の導関数 $\mathbf{C}'(t), \mathbf{C}''(t), \ldots$ を計算して返す。計算できない場合は`std::nullopt`を返す。
+`TryGetDefinedDerivatives()`が最も重要な実装となる。定義空間(M_entity未適用)におけるパラメータ $t$ の位置 $\mathbf{C}(t)$ と各次の導関数 $\mathbf{C}'(t), \mathbf{C}''(t), \ldots$ を計算して返す。計算できない場合は`std::nullopt`を返す。モデル空間版の`TryGetDerivatives()`は基底クラスが定義空間版にM_entityを1回適用して提供するため、各エンティティで実装する必要はない。集約系(複合曲線等)は構成要素のモデル空間版`TryGetDerivatives()`を集約すること。
 
 `GetDefinedBoundingBox()`では、定義空間における幾何形状を包む軸平行な直方体を返す。ただし、定義空間はDEレコードの変換行列を適用する前の座標系であることに注意すること。
 
@@ -288,7 +288,7 @@ EntityRenderer
 
 | 方針 | 適用条件 |
 | --- | --- |
-| **追加作業なし** | `ICurve`を継承し、`GetParameterRange()`と`TryGetDerivatives()`が正しく実装されていれば`ICurveGraphics`が自動的に使用される。`ISurface`に対しては`ISurfaceGraphics`。まず汎用描画で動作を確認し、必要に応じて専用実装に移行することを推奨する。 |
+| **追加作業なし** | `ICurve`を継承し、`GetParameterRange()`と`TryGetDefinedDerivatives()`が正しく実装されていれば`ICurveGraphics`が自動的に使用される。`ISurface`に対しては`ISurfaceGraphics`。まず汎用描画で動作を確認し、必要に応じて専用実装に移行することを推奨する。 |
 | **専用Graphicsクラスを作成** | 特殊な描画モード（GPU上でのテッセレーション、ジオメトリシェーダー等）が必要な場合や、汎用クラスでは精度・パフォーマンスが不十分な場合。 |
 | **複合ノード (統合EntityGraphics) を使用** | 子エンティティをそれぞれ独立して描画する複合エンティティの場合。 |
 
@@ -319,7 +319,7 @@ EntityRenderer
   - [ ] `SetMainPDParameters()`の実装 (PDデータの解析・メンバ変数への設定)
   - [ ] `GetMainPDParameters()`の実装 (シリアライズ用)
   - [ ] `ValidatePD()`の実装
-  - [ ] `TryGetDerivatives()`の実装
+  - [ ] `TryGetDefinedDerivatives()`の実装
   - [ ] `GetParameterRange()`の実装
   - [ ] `IsClosed()` or `IsUClosed()` / `IsVClosed()`の実装
   - [ ] `GetDefinedBoundingBox()`の実装

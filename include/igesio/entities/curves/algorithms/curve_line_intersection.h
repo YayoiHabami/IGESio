@@ -7,7 +7,7 @@
  *
  * @details
  * ICurveの具象クラスに依存せず、以下のAPIのみを使用する:
- *   - TryGetDerivatives(t, 1) : 定義空間における |C'(t)| の取得
+ *   - TryGetDerivatives(t, 1) : モデル空間における |C'(t)| の取得（ノルムのみ使用）
  *   - TryGetPointAt(t) / TryGetTangentAt(t) : ワールド空間の点・単位接線
  *   - GetParameterRange() : パラメータ範囲（無限範囲はクランプする）
  *   - GetBoundingBox() : バウンディングボックス（広域棄却の外接球に使用）

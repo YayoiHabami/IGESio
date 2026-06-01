@@ -33,15 +33,39 @@ std::shared_ptr<NSurface> CreatePlane() {
         0., 0., 1., 1.,   // Knot vector in U
         0., 0., 1., 1.,   // Knot vector in V
         1., 1., 1., 1.,   // Weights
+        // 制御点はIGES規格どおり第1添字i (u方向) が最速で並べる
+        // (P(0,0), P(1,0), P(0,1), P(1,1))
         -25., 25., 25.,   // Control point (0,0)
-        -25., 25., -25.,  // Control point (0,1)
         25., 25., 25.,    // Control point (1,0)
+        -25., 25., -25.,  // Control point (0,1)
         25., 25., -25.,   // Control point (1,1)
         0., 1., 0., 1.    // Parameter range in U and V
     };
     auto nurbs_s = std::make_shared<i_ent::RationalBSplineSurface>(param);
 
     return nurbs_s;
+}
+
+/// @brief 非対称な双線形パッチ (u方向とv方向で別の向きに伸びる) を生成する
+/// @return 4隅が P(0,0)=(0,0,0), P(1,0)=(10,0,0), P(0,1)=(0,20,0),
+///         P(1,1)=(10,20,0) の平面パッチ. u方向はx軸、v方向はy軸に対応する.
+/// @note 制御点はIGES規格どおり第1添字i (u方向) が最速で並べる.
+///       u/vを取り違えるとS(1,0)とS(0,1)が入れ替わるため、転置バグの検出に使う.
+std::shared_ptr<NSurface> CreateAsymmetricBilinearPatch() {
+    auto param = igesio::IGESParameterVector{
+        1, 1,  // K1, K2 (Number of control points - 1 in U and V)
+        1, 1,  // M1, M2 (Degree in U and V)
+        false, false, true, false, false,  // PROP1-5
+        0., 0., 1., 1.,   // Knot vector in U
+        0., 0., 1., 1.,   // Knot vector in V
+        1., 1., 1., 1.,   // Weights
+        0.,  0.,  0.,     // Control point (0,0)
+        10., 0.,  0.,     // Control point (1,0)
+        0.,  20., 0.,     // Control point (0,1)
+        10., 20., 0.,     // Control point (1,1)
+        0., 1., 0., 1.    // Parameter range in U and V
+    };
+    return std::make_shared<i_ent::RationalBSplineSurface>(param);
 }
 
 }  // namespace
@@ -69,6 +93,30 @@ TEST(RationalBSplineSurface, TryGetDefinedPointAt) {
     }
 }
 
+// TryGetDefinedPointAtのテスト (u/v方向の取り違え検出)
+// - 非対称な双線形パッチについて、S(1,0)がu方向の制御点P(1,0)=(10,0,0)に、
+//   S(0,1)がv方向の制御点P(0,1)=(0,20,0)に一致することを確認する.
+//   制御点をv最速で読む転置バグがあると両者が入れ替わって失敗する.
+TEST(RationalBSplineSurface, TryGetDefinedPointAt_RespectsUVOrdering) {
+    auto patch = CreateAsymmetricBilinearPatch();
+    auto result = patch->Validate();
+    ASSERT_TRUE(result.is_valid) << result.Message();
+
+    auto p10 = patch->TryGetDefinedPointAt(1.0, 0.0);  // S(U(1), V(0)) = P(1,0)
+    auto p01 = patch->TryGetDefinedPointAt(0.0, 1.0);  // S(U(0), V(1)) = P(0,1)
+    ASSERT_TRUE(p10.has_value());
+    ASSERT_TRUE(p01.has_value());
+
+    // S(1,0) は u方向の制御点 P(1,0) = (10, 0, 0)
+    EXPECT_TRUE(i_num::IsApproxEqual(p10->x(), 10.0)) << "S(1,0) = " << p10->transpose();
+    EXPECT_TRUE(i_num::IsApproxEqual(p10->y(), 0.0)) << "S(1,0) = " << p10->transpose();
+    EXPECT_TRUE(i_num::IsApproxEqual(p10->z(), 0.0)) << "S(1,0) = " << p10->transpose();
+    // S(0,1) は v方向の制御点 P(0,1) = (0, 20, 0)
+    EXPECT_TRUE(i_num::IsApproxEqual(p01->x(), 0.0)) << "S(0,1) = " << p01->transpose();
+    EXPECT_TRUE(i_num::IsApproxEqual(p01->y(), 20.0)) << "S(0,1) = " << p01->transpose();
+    EXPECT_TRUE(i_num::IsApproxEqual(p01->z(), 0.0)) << "S(0,1) = " << p01->transpose();
+}
+
 // TryGetDefinedNormalAtのテスト
 // - 平面エンティティについて、全ての法線ベクトルが (0,1,0)であることを確認する
 TEST(RationalBSplineSurface, TryGetDefinedNormalAt) {
@@ -86,4 +134,29 @@ TEST(RationalBSplineSurface, TryGetDefinedNormalAt) {
             EXPECT_TRUE(i_num::IsApproxEqual((*n_opt).z(), 0.0));
         }
     }
+}
+
+// P (曲面): U(0)がノット域S(0)=0を超えて外れる (CATIA等) → 評価側 (clamp済み基底)
+// が描画可能なため、ValidatePDは警告 (kWarning) を出すがis_valid=true (描画ブロックしない)。
+TEST(RationalBSplineSurface, KnotRangeOutside_IsValidWithWarning) {
+    auto param = igesio::IGESParameterVector{
+        1, 1, 1, 1,                       // K1, K2, M1, M2
+        true, true, false, true, true,    // PROP1-5
+        0., 0., 1., 1.,                   // u knots → S(0)=0, S(N1)=1
+        0., 0., 1., 1.,                   // v knots
+        1., 1., 1., 1.,                   // weights
+        -25., 25., 25.,                   // P(0,0)
+        25., 25., 25.,                    // P(1,0)
+        -25., 25., -25.,                  // P(0,1)
+        25., 25., -25.,                   // P(1,1)
+        -0.01, 1., 0., 1.                 // U(0)=-0.01 (ノット域S(0)=0を超過)
+    };
+    const i_ent::RationalBSplineSurface surf(param);
+    const auto result = surf.ValidatePD();
+    EXPECT_TRUE(result.is_valid);  // 描画はブロックしない
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
 }

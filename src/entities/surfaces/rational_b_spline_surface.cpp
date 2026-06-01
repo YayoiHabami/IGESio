@@ -101,18 +101,24 @@ igesio::IGESParameterVector RationalBSplineSurface::GetMainPDParameters() const 
     // ノットベクトル T (v方向)
     for (const auto& v : v_knots_) params.push_back(v);
 
-    // 重み W
-    for (int i = 0; i < weights_.rows(); ++i) {
-        for (int j = 0; j < weights_.cols(); ++j) {
+    // 重み W (IGESのストリーム順: 第1添字i (u方向) が最速で変化する)
+    for (int j = 0; j < weights_.cols(); ++j) {
+        for (int i = 0; i < weights_.rows(); ++i) {
             params.push_back(weights_(i, j));
         }
     }
 
-    // 制御点 P = (x_ij, y_ij, z_ij)
-    for (int i = 0; i < control_points_.cols(); ++i) {
-        params.push_back(control_points_(0, i));
-        params.push_back(control_points_(1, i));
-        params.push_back(control_points_(2, i));
+    // 制御点 P = (x_ij, y_ij, z_ij) (IGESのストリーム順: 第1添字iが最速).
+    // 格納規約 col = i * (K2 + 1) + j に従い、iを内側ループで出力する
+    const int n_i = static_cast<int>(k1p1);  // K1 + 1
+    const int n_j = static_cast<int>(k2p1);  // K2 + 1
+    for (int j = 0; j < n_j; ++j) {
+        for (int i = 0; i < n_i; ++i) {
+            const int col = i * n_j + j;
+            params.push_back(control_points_(0, col));
+            params.push_back(control_points_(1, col));
+            params.push_back(control_points_(2, col));
+        }
     }
 
     // 曲面のパラメータ範囲 (U(0), U(1), V(0), V(1))
@@ -201,17 +207,22 @@ size_t RationalBSplineSurface::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 重み W
+    // IGESのストリームは第1添字i (u方向) が最速で変化する
+    // (W(0,0), W(1,0), ..., W(K1,0), W(0,1), ...) ため、iを内側ループとする
     weights_ = MatrixXd(k1 + 1, k2 + 1);
-    for (int i = 0; i <= k1; ++i) {
-        for (int j = 0; j <= k2; ++j) {
+    for (int j = 0; j <= k2; ++j) {
+        for (int i = 0; i <= k1; ++i) {
             weights_(i, j) = pd.access_as<double>(index++);
         }
     }
 
     // 制御点 P
+    // 重みと同様、IGESのストリームは第1添字i (u方向) が最速で変化する
+    // (P(0,0), P(1,0), ..., P(K1,0), P(0,1), ...) ため、iを内側ループとする.
+    // 格納規約 col = i * (k2 + 1) + j は維持する
     control_points_ = Matrix3Xd(3, (k1 + 1) * (k2 + 1));
-    for (int i = 0; i <= k1; ++i) {
-        for (int j = 0; j <= k2; ++j) {
+    for (int j = 0; j <= k2; ++j) {
+        for (int i = 0; i <= k1; ++i) {
             auto col = i * (k2 + 1) + j;
             control_points_(0, col) = pd.access_as<double>(index++);
             control_points_(1, col) = pd.access_as<double>(index++);
@@ -264,6 +275,9 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
             }
         }
         // S(0) <= U(0) < U(1) <= S(N1); See Section B.6
+        // CAD出力は U(0)/U(1) がノット域を僅かに外れることがある (曲線Pと同様)。
+        // 評価側 TryComputeBasisFunctions は t を域内へ丸めるため描画可能。
+        // よって幾何的品質の指摘 (kWarning) とし描画はブロックしない。
         auto s0 = u_knots_[m1], sn = u_knots_[u_knots_.size() - m1];
         if (s0 > parameter_range_[0] || parameter_range_[1] > sn) {
             errors.emplace_back("Knots S(0), S(N1) must satisfy "
@@ -271,7 +285,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
                 + std::to_string(s0) + ", U(0) = "
                 + std::to_string(parameter_range_[0]) + ", U(1) = "
                 + std::to_string(parameter_range_[1]) + ", S(N1) = "
-                + std::to_string(sn));
+                + std::to_string(sn), igesio::ValidationSeverity::kWarning);
         }
     }
     if (v_knots_.size() != k2 + m2 + 2) {
@@ -289,7 +303,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
                 break;
             }
         }
-        // T(0) <= V(0) < V(1) <= T(N2); See Section B.6
+        // T(0) <= V(0) < V(1) <= T(N2); (S(0)/U と同様にkWarning)
         auto t0 = v_knots_[m2], tn = v_knots_[v_knots_.size() - m2];
         if (t0 > parameter_range_[2] || parameter_range_[3] > tn) {
             errors.emplace_back("Knots T(0), T(N2) must satisfy "
@@ -297,7 +311,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
                 + std::to_string(t0) + ", V(0) = "
                 + std::to_string(parameter_range_[2]) + ", V(1) = "
                 + std::to_string(parameter_range_[3]) + ", T(N2) = "
-                + std::to_string(tn));
+                + std::to_string(tn), igesio::ValidationSeverity::kWarning);
         }
     }
 
@@ -369,7 +383,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
  */
 
 std::optional<i_ent::SurfaceDerivatives>
-RationalBSplineSurface::TryGetDerivatives(
+RationalBSplineSurface::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // パラメータ範囲チェック
     if (u < parameter_range_[0] || u > parameter_range_[1] ||

@@ -21,7 +21,7 @@
  *
  * TODO:
  *   - TryGetSignedCurvature の通常点（circle NURBS での κ_s = +1/R）テスト
- *   - LeftTangentAt / RightTangentAt の解析値との数値比較テスト
+ *   - TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt の解析値との数値比較テスト
  */
 #include <gtest/gtest.h>
 
@@ -60,7 +60,7 @@ constexpr double kTol = 1e-9;
 /// P0=(0,0,0), P1=(1,0,0), P2=(2,0,0) (共線)
 /// GetLinearSegments: [{0,1},{1,2}]
 /// GetCornerParams:   [1.0] (内部ノット t=1, mult=1 >= degree=1)
-/// LeftTangentAt(1-h) = RightTangentAt(1+h) = (1,0,0) (直線上なので外角=0)
+/// TryGetDefinedLeftTangentAt(1-h) = TryGetDefinedRightTangentAt(1+h) = (1,0,0) (直線上なので外角=0)
 std::shared_ptr<RationalBSplineCurve> MakeNURBS_Deg1_Straight() {
     const auto param = igesio::IGESParameterVector{
         2, 1,                       // K=2, M=1
@@ -537,6 +537,88 @@ TEST(RationalBSplineCurveNurbsCtorTest, Collinear_IsValid) {
         std::array<double, 2>{0.0, 2.0});
 
     EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// A: PROP1=1 (平面フラグ) だが法線(0,0,0) のPDデータ (SolidWorks 等) → ValidatePDが通る
+// 読み込み時に法線ゼロなら non-planar 扱いに揃えるため、不整合エラーを出さない
+TEST(RationalBSplineCurvePDCtorTest, PlanarFlagWithZeroNormal_IsValid) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        true, false, true, false,      // PROP1=true(平面フラグ), PROP3=true
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット (K+M+2=6 個)
+        1.0, 1.0, 1.0,                 // 重み (K+1=3 個)
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        0.0, 1.0,                      // V=[0,1]
+        0.0, 0.0, 0.0                  // 法線 = (0,0,0)  ← Aの状況
+    };
+    const RationalBSplineCurve nurbs(param);
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// P: V(0)/V(1) がノット域 [T(0), T(N)]=[0,1] を許容内 (~5e-4 < tol=1e-3) で外れる
+// (CATIA等) → ValidatePDが通る。span=1なのでrange_tol = 1e-3
+TEST(RationalBSplineCurvePDCtorTest, KnotRangeSlightlyOutside_IsValid) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット → T(0)=0, T(N)=1
+        1.0, 1.0, 1.0,                 // 重み
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        -0.0005, 1.0005,               // V=[-5e-4, 1+5e-4] (僅かに域外)
+        0.0, 0.0, 1.0                  // 法線
+    };
+    const RationalBSplineCurve nurbs(param);
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// P境界: Vがノット域を許容を超えて (1e-2 > tol=1e-3) 外れる
+// → 評価側がtを域内へ丸めるため描画可能。
+// よってkWarningを出すが is_valid=true (描画ブロックしない)
+TEST(RationalBSplineCurvePDCtorTest, KnotRangeFarOutside_IsValidWithWarning) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット → T(0)=0, T(N)=1
+        1.0, 1.0, 1.0,                 // 重み
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        -0.01, 1.0,                    // V(0)=-1e-2 (許容超過の域外)
+        0.0, 0.0, 1.0                  // 法線
+    };
+    const RationalBSplineCurve nurbs(param);
+    const auto result = nurbs.ValidatePD();
+    EXPECT_TRUE(result.is_valid);  // 描画はブロックしない
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
+}
+
+// P companion: V(0) < T(0) (許容内) の曲線をV(0)で評価してもクラッシュせず点が返る
+// (基底関数TryComputeBasisFunctionsのスパンindexクランプの回帰テスト)
+TEST(RationalBSplineCurvePDCtorTest, EvalAtParamStartBelowKnotDomain_NoCrash) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット → T(0)=0, T(N)=1
+        1.0, 1.0, 1.0,                 // 重み
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        -0.0005, 1.0005,               // V(0)=-5e-4 < T(0)=0 (ノット域を僅か下回る)
+        0.0, 0.0, 1.0                  // 法線
+    };
+    const RationalBSplineCurve nurbs(param);
+    ASSERT_TRUE(nurbs.ValidatePD().is_valid);
+    // 域下限を僅かに下回るV(0)で評価 → 範囲外参照クラッシュせず点を返す
+    const auto pt = nurbs.TryGetPointAt(-0.0005);
+    EXPECT_TRUE(pt.has_value());
 }
 
 // k=1（制御点2点）→ ComputePlaneNormal が即 nullopt を返し ValidatePD が通る

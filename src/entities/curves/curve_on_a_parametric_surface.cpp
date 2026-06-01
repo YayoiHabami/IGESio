@@ -7,6 +7,8 @@
  */
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"
 
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -16,6 +18,7 @@
 #include "igesio/common/errors.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/nurbs_algorithms.h"
+#include "igesio/entities/surfaces/algorithms/curve_surface_inversion.h"
 #include "entities/curves/algorithms/polygonal_approximation.h"
 
 namespace {
@@ -27,6 +30,7 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CurveOnSurface;
 using igesio::Vector3d;
+using igesio::Vector2d;
 
 /// @brief S(u,v) と B(t) から C(t) を生成する
 std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
@@ -79,6 +83,48 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     }
 }
 
+/// @brief パラメータ空間の点列(u,v,0)から、退化を除去したベース曲線Bを構築する
+///
+/// 連続重複点をスケール相対の許容で除去し、`is_closed`(=モデル曲線Cが閉じているか)に
+/// 応じて kPlanarLoop(閉) / kPlanarPolyline(開) の`LinearPath`を生成する。
+/// 下流のトリム領域テッセレーション(`ComputeContainmentPolygons`)は閉曲線かつ非退化
+/// (各点で`GetPointAt`が有効) を前提とするため、ここで両者を満たすよう整える。
+///
+/// @param uv_points (u, v, 0) のサンプル列
+/// @param is_closed 閉ループとして構築するか
+/// @return 構築したLinearPath。点が退化して構築できない場合は `nullptr`
+std::shared_ptr<i_ent::LinearPath> BuildParamSpaceBaseCurve(
+        const std::vector<Vector3d>& uv_points, const bool is_closed) {
+    // uv の広がりからスケール相対の重複許容を決める (退化判定に用いる)
+    Vector2d lo(std::numeric_limits<double>::infinity(),
+                std::numeric_limits<double>::infinity());
+    Vector2d hi = -lo;
+    for (const auto& p : uv_points) {
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) continue;
+        lo = lo.cwiseMin(Vector2d(p.x(), p.y()));
+        hi = hi.cwiseMax(Vector2d(p.x(), p.y()));
+    }
+    if (!lo.allFinite() || !hi.allFinite()) return nullptr;
+    const double tol = std::max(1e-12, 1e-7 * (hi - lo).norm());
+
+    // 非有限点を除外しつつ連続重複を間引く
+    std::vector<Vector2d> uv;
+    uv.reserve(uv_points.size());
+    for (const auto& p : uv_points) {
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) continue;
+        const Vector2d q(p.x(), p.y());
+        if (uv.empty() || (uv.back() - q).norm() > tol) uv.push_back(q);
+    }
+    // 閉ループ: 先頭と一致する末尾点は閉辺と二重化するため除去する
+    if (is_closed && uv.size() >= 2 && (uv.front() - uv.back()).norm() <= tol) {
+        uv.pop_back();
+    }
+    // 退化チェック (閉ループは3点以上、開折れ線は2点以上)
+    if (uv.size() < (is_closed ? 3u : 2u)) return nullptr;
+
+    return std::make_shared<i_ent::LinearPath>(uv, is_closed);
+}
+
 }  // namespace
 
 
@@ -97,6 +143,16 @@ CurveOnSurface::CurveOnAParametricSurface(
       base_curve_(IDGenerator::UnsetID()),
       curve_(IDGenerator::UnsetID()) {
     InitializePD(de2id);
+
+    // 仕様上 Type 142 の Entity Use Flag (Status Number 5〜6桁) は 00 (Geometry)
+    // でなければならないが、一部CAD (SolidWorks / NX 等) はトリム境界として
+    // 05 (2-D Parametric) で出力する。読み込みを通すため、00 以外であれば
+    // 00 へ正規化する。検証 (IsValid) は 00 を要求し続けるため (出力は厳格)、
+    // ここで仕様準拠の値に寄せる (パラメータ空間性は BPTR の構造で表現され、
+    // 142 本体の幾何解釈は自身の Entity Use Flag を参照しない)。
+    if (GetEntityUseFlag() != i_ent::EntityUseFlag::kGeometry) {
+        SetEntityUseFlag(i_ent::EntityUseFlag::kGeometry);
+    }
 }
 
 CurveOnSurface::CurveOnAParametricSurface(
@@ -165,9 +221,13 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
     }
 
     // 曲線 B(t) = (u(t), v(t))
+    // BPTR=0 (ベース曲線の省略) を許容する。一部CAD (CATIA等) はモデル空間曲線 C と
+    // 曲面 S のみを出力し、パラメータ空間のベース曲線 B を省略する。この場合
+    // base_curve_ は UnsetID を保持し、読み込みの参照解決後に
+    // ReconstructOmittedBaseCurve() で B = S^{-1}∘C として再構築する。
     try {
         base_curve_ = PointerContainer<false, ICurve>(
-                GetObjectIDFromParameters(pd, 2, de2id));
+                GetObjectIDFromParameters(pd, 2, de2id, /*allow_unset_id=*/true));
     } catch (const std::exception& e) {
         throw igesio::DataFormatError(
                 "CurveOnAParametricSurface: Invalid base curve reference."
@@ -197,7 +257,10 @@ CurveOnSurface::GetUnresolvedPDReferences() const {
     if (!surface_.IsPointerSet()) {
         unresolved.insert(surface_.GetID());
     }
-    if (!base_curve_.IsPointerSet()) {
+    // BPTR=0 (省略) のときは UnsetID を保持する。これは「未解決の参照」ではなく
+    // 後段で再構築する対象のため、未解決集合には加えない (UnsetID を探さない)。
+    if (!base_curve_.IsPointerSet()
+            && base_curve_.GetID() != IDGenerator::UnsetID()) {
         unresolved.insert(base_curve_.GetID());
     }
     if (!curve_.IsPointerSet()) {
@@ -297,8 +360,11 @@ igesio::ValidationResult CurveOnSurface::ValidatePD() const {
                 errors.emplace_back("Base curve is invalid: " + result.Message());
             }
         }
+        // ベース曲線Bはパラメータ空間 (z=0) にあるべきだが、僅かに外れても
+        // (x,y)=(u,v)として使用/描画可能。幾何的品質の指摘 (kWarning) とする。
         if (!GetBaseCurve()->GetBoundingBox().IsOnZPlane()) {
-            errors.emplace_back("Base curve is not on a plane parallel to the XY-plane.");
+            errors.emplace_back("Base curve is not on a plane parallel to the XY-plane.",
+                                igesio::ValidationSeverity::kWarning);
         }
     }
 
@@ -355,7 +421,7 @@ std::array<double, 2> CurveOnSurface::GetParameterRange() const {
 
 
 std::optional<i_ent::CurveDerivatives>
-CurveOnSurface::TryGetDerivatives(const double t, const unsigned int n) const {
+CurveOnSurface::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     if (!base_curve_.IsPointerSet() || !surface_.IsPointerSet()) {
         return std::nullopt;
     }
@@ -517,6 +583,40 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
     }
 
     return generated_curve;
+}
+
+std::shared_ptr<i_ent::ICurve> CurveOnSurface::ReconstructOmittedBaseCurve() {
+    // BPTR=0 (省略) かつS・Cが解決済みのときのみ再構築する
+    if (base_curve_.GetID() != IDGenerator::UnsetID()) return nullptr;
+    if (!surface_.IsPointerSet() || !curve_.IsPointerSet()) return nullptr;
+
+    auto surf_opt = surface_.TryGetEntity<ISurface>();
+    auto curve_opt = curve_.TryGetEntity<ICurve>();
+    if (!surf_opt || !curve_opt) return nullptr;
+
+    // 再構築はbest-effort。逆射影・近似・ドメイン包含チェック等で例外が出ても
+    // 読み込み全体を止めずnullptrを返す (当該境界は非致命的にスキップ)。
+    try {
+        // CをSのパラメータ空間へ逆射影する (単一弧モード; Type 142は連続を仮定)
+        auto arcs = InvertCurveOntoSurface(*surf_opt.value(), *curve_opt.value(), {});
+        if (arcs.empty() || arcs.front().uv_points.size() < 2) return nullptr;
+
+        // パラメータ空間のベース曲線Bを生成する。トリム境界Cが閉ループならBも閉じ、
+        // 退化点列は除去する (下流テッセレーションが閉曲線・非退化を前提とするため)。
+        auto base = BuildParamSpaceBaseCurve(
+                arcs.front().uv_points, curve_opt.value()->IsClosed());
+        if (!base) return nullptr;
+        // B は曲面のパラメータ空間にあるため EUF=05 (2D Parametric)・物理従属に設定
+        base->SetEntityUseFlag(i_ent::EntityUseFlag::k2DParametric);
+        base->SetSubordinateEntitySwitch(
+                i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
+
+        // base_curve_に設定する (新規IDのためOverwritePointer経由)
+        SetBaseCurve(base);
+        return base;
+    } catch (const std::exception&) {
+        return nullptr;
+    }
 }
 
 

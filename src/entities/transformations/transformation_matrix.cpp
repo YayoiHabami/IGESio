@@ -107,87 +107,94 @@ size_t TransMatrix::SetMainPDParameters(const pointer2ID& de2id) {
 igesio::ValidationResult TransMatrix::ValidatePD() const {
     std::vector<ValidationError> errors;
 
-    // 回転行列が直交正規であることを確認（全フォーム共通）
+    // 回転行列が直交正規であることを確認（全フォーム共通）。
+    // 直交正規でなくても行列は適用可能 (描画できる) ため、
+    // これらは幾何的品質の指摘 (kWarning) とし描画をブロックしない。
+    // CAD (CATIA等) は僅かに非正規直交な行列を出力する。
     const auto& rot = rotation_;
+    constexpr auto kWarn = igesio::ValidationSeverity::kWarning;
 
     // 各列が単位ベクトルであることを確認
     if (!i_num::IsApproxOne(rot.col(0).norm())) {
-        errors.emplace_back("First column of rotation matrix is not a unit vector.");
+        errors.emplace_back("First column of rotation matrix is not a unit vector.", kWarn);
     }
     if (!i_num::IsApproxOne(rot.col(1).norm())) {
-        errors.emplace_back("Second column of rotation matrix is not a unit vector.");
+        errors.emplace_back("Second column of rotation matrix is not a unit vector.", kWarn);
     }
     if (!i_num::IsApproxOne(rot.col(2).norm())) {
-        errors.emplace_back("Third column of rotation matrix is not a unit vector.");
+        errors.emplace_back("Third column of rotation matrix is not a unit vector.", kWarn);
     }
 
     // 列同士が直交していることを確認
     if (!i_num::IsApproxZero(rot.col(0).dot(rot.col(1)))) {
-        errors.emplace_back("Column 1 and column 2 of rotation matrix are not orthogonal.");
+        errors.emplace_back("Column 1 and column 2 of rotation matrix are not orthogonal.", kWarn);
     }
     if (!i_num::IsApproxZero(rot.col(0).dot(rot.col(2)))) {
-        errors.emplace_back("Column 1 and column 3 of rotation matrix are not orthogonal.");
+        errors.emplace_back("Column 1 and column 3 of rotation matrix are not orthogonal.", kWarn);
     }
     if (!i_num::IsApproxZero(rot.col(1).dot(rot.col(2)))) {
-        errors.emplace_back("Column 2 and column 3 of rotation matrix are not orthogonal.");
+        errors.emplace_back("Column 2 and column 3 of rotation matrix are not orthogonal.", kWarn);
     }
 
     // 行列式を計算
     double det = rotation_.determinant();
 
-    // フォーム番号ごとの検証
+    // フォーム番号ごとの検証 (フォーム整合性も適用可能=kWarning)
     switch (form_number_) {
         case 0:  // デフォルトフォーム - 右手系直交正規行列
             if (std::abs(det - 1.0) > i_num::kGeometryTolerance) {
                 errors.emplace_back("For form 0, determinant of "
-                                    "rotation matrix must be +1 (right-handed).");
+                                    "rotation matrix must be +1 (right-handed).", kWarn);
             }
             break;
 
         case 1:  // 左手系直交正規行列
             if (std::abs(det + 1.0) > i_num::kGeometryTolerance) {
                 errors.emplace_back("For form 1, determinant of "
-                                    "rotation matrix must be -1 (left-handed).");
+                                    "rotation matrix must be -1 (left-handed).", kWarn);
             }
             break;
 
         case 10:  // 直交座標系 - Rは単位行列であるべき
-            // 各要素が単位行列と一致するか確認
-            if (i_num::IsApproxIdentity(rot, i_num::kGeometryTolerance)) {
-                errors.emplace_back("For form 10, rotation matrix must be identity.");
+            // 単位行列でない場合は警告 (Rは単位行列である必要がある)
+            if (!i_num::IsApproxIdentity(rot, i_num::kGeometryTolerance)) {
+                errors.emplace_back("For form 10, rotation matrix must be identity.", kWarn);
             }
             break;
 
         case 11: {  // 円筒座標系
             // 第3列が[0, 0, 1]であること
             Vector3d col_2 = rot.col(2);
-            if (i_num::IsApproxUnitVector(col_2, 2, i_num::kGeometryTolerance)) {
-                errors.emplace_back("For form 11, third column must be [0, 0, 1].");
+            if (!i_num::IsApproxUnitVector(col_2, 2, i_num::kGeometryTolerance)) {
+                errors.emplace_back("For form 11, third column must be [0, 0, 1].", kWarn);
             }
 
-            // 最初の2列がxy平面上にあること
-            if (i_num::IsApproxZero(rot(2, 0)) || i_num::IsApproxZero(rot(2, 1))) {
-                errors.emplace_back("For form 11, first two columns must be in the xy-plane.");
+            // 最初の2列がxy平面上にあること (第3行が0であること)
+            if (!i_num::IsApproxZero(rot(2, 0)) || !i_num::IsApproxZero(rot(2, 1))) {
+                errors.emplace_back("For form 11, first two columns must be in the xy-plane.",
+                                    kWarn);
             }
 
             // 第1列が[cos(θ), sin(θ), 0]、第2列が[-sin(θ), cos(θ), 0]であること
             if (std::abs(rot(0, 0) - rot(1, 1)) > i_num::kGeometryTolerance ||
                 std::abs(rot(1, 0) + rot(0, 1)) > i_num::kGeometryTolerance) {
                 errors.emplace_back("For form 11, rotation matrix "
-                                    "must follow cylindrical coordinate structure.");
+                                    "must follow cylindrical coordinate structure.", kWarn);
             }
             break;
         }
         case 12:  // 球座標系
             // 第3列の第3成分が0であること
-            if (i_num::IsApproxZero(rot(2, 2))) {
-                errors.emplace_back("For form 12, third component of third column must be 0.");
+            if (!i_num::IsApproxZero(rot(2, 2))) {
+                errors.emplace_back("For form 12, third component of third column must be 0.",
+                                    kWarn);
             }
 
             // 球座標系に対する追加チェックは複雑なため省略
             break;
 
         default:
+            // 未知のフォーム番号は構造的問題 (解釈不能) のためkError維持
             errors.emplace_back("Invalid form number for Transformation Matrix.");
             break;
     }
@@ -230,16 +237,14 @@ bool TransMatrix::SetReference(
         de_transformation_matrix_.Reset();
         return true;
     }
-    // 循環参照のチェック (子要素を見ていって循環参照がないか確認)
-    auto current = de_transformation_matrix_.GetPointer();
-    while (current) {
-        if (current->GetID() == transformation->GetID()) {
-            return false;  // 循環参照がある場合は設定しない
-        }
-        current = current->GetRefTransformation();
+    // 自身(this)からtransformationへの参照が循環を生む場合は設定しない
+    if (i_ent::CreatesTransformationCycle(GetID(), transformation)) {
+        return false;
     }
-    // 循環参照がない場合は設定
-    de_transformation_matrix_.SetPointer(transformation);
+    // 新規エンティティではde_transformation_matrix_のid_がUnsetIDであり、
+    // SetPointerはID不一致のため何も設定しない (黙って無視される). 参照先IDを
+    // 設定したうえでポインタを保持するため、OverwritePointerを使用する.
+    de_transformation_matrix_.OverwritePointer(transformation);
     return true;
 }
 

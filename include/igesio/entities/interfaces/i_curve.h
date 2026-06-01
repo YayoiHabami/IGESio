@@ -59,7 +59,7 @@ struct CurveDerivatives {
 ///       - 常にオーバーライドするべきもの
 ///         - `IsClosed`
 ///         - `GetParameterRange`
-///         - `TryGetDerivatives`
+///         - `TryGetDefinedDerivatives`
 ///         - `Transform` (protected): IGeometry由来
 ///         - `GetDefinedBoundingBox`: IGeometry由来
 class ICurve : public virtual IEntityIdentifier,
@@ -122,19 +122,29 @@ class ICurve : public virtual IEntityIdentifier,
     /// @return t が角点の場合は`true`
     bool IsCorner(const double t, const double eps = 1e-9) const;
 
+    /// @brief 角点における定義空間の左側単位接線ベクトルT⁻(t)を返す
+    /// @param t パラメータ値
+    /// @return 定義空間の左側単位接線ベクトル. 計算できない場合は`std::nullopt`
+    /// @note デフォルト実装は (t - h) における導関数の方向で近似する.
+    ///       解析的に既知のサブクラスはオーバーライド可能
+    virtual std::optional<Vector3d> TryGetDefinedLeftTangentAt(const double t) const;
+
     /// @brief 角点における左側単位接線ベクトルT⁻(t)を返す
     /// @param t パラメータ値
     /// @return 左側単位接線ベクトル. 計算できない場合は`std::nullopt`
-    /// @note デフォルト実装は (t - h) における導関数の方向で近似する.
+    std::optional<Vector3d> TryGetLeftTangentAt(const double t) const;
+
+    /// @brief 角点における定義空間の右側単位接線ベクトルT⁺(t)を返す
+    /// @param t パラメータ値
+    /// @return 定義空間の右側単位接線ベクトル. 計算できない場合は`std::nullopt`
+    /// @note デフォルト実装は (t + h) における導関数の方向で近似する.
     ///       解析的に既知のサブクラスはオーバーライド可能
-    virtual std::optional<Vector3d> LeftTangentAt(const double t) const;
+    virtual std::optional<Vector3d> TryGetDefinedRightTangentAt(const double t) const;
 
     /// @brief 角点における右側単位接線ベクトルT⁺(t)を返す
     /// @param t パラメータ値
     /// @return 右側単位接線ベクトル. 計算できない場合は`std::nullopt`
-    /// @note デフォルト実装は (t + h) における導関数の方向で近似する.
-    ///       解析的に既知のサブクラスはオーバーライド可能
-    virtual std::optional<Vector3d> RightTangentAt(const double t) const;
+    std::optional<Vector3d> TryGetRightTangentAt(const double t) const;
 
     /// @brief 角点における外角αを返す
     /// @param t パラメータ値（角点であること）
@@ -155,17 +165,30 @@ class ICurve : public virtual IEntityIdentifier,
     /// @param t パラメータ値
     /// @param n 何階まで計算するか; 例えば2を指定した場合、0階 C(t) から2階 C''(t) まで計算
     /// @return 導関数 C'(t), C''(t)、計算できない場合は`std::nullopt`
+    /// @note M_entity未適用の定義空間の値を返す. 各具象クラスでオーバーライドする.
+    ///       集約系(CompositeCurve等)は構成曲線をそれぞれのモデル空間
+    ///       (構成曲線の`TryGetDerivatives(t, n)`)で評価して集約すること
     virtual std::optional<CurveDerivatives>
-    TryGetDerivatives(const double, const unsigned int) const = 0;
+    TryGetDefinedDerivatives(const double, const unsigned int) const = 0;
+
+    /// @brief モデル空間における曲線のn階導関数 C^n(t) を計算する
+    /// @param t パラメータ値
+    /// @param n 何階まで計算するか; 例えば2を指定した場合、0階 C(t) から2階 C''(t) まで計算
+    /// @return 導関数 M_entity·C^k_def. 0階は点(R·v+T)、1階以上はベクトル(R·v)
+    ///         として変換される. 計算できない場合は`std::nullopt`
+    /// @note 定義空間版は`TryGetDefinedDerivatives(t, n)`. 定義空間の各階に
+    ///       M_entityを1回だけ適用する
+    std::optional<CurveDerivatives>
+    TryGetDerivatives(const double, const unsigned int) const;
 
     /// @brief 配置を適用した曲線のn階導関数 C^n(t) を計算する
     /// @param t パラメータ値
     /// @param n 何階まで計算するか
-    /// @param placement 定義空間に後掛けする配置行列(基準階層までの累積変換)
+    /// @param placement モデル空間に後掛けする配置行列(基準階層までの累積変換)
     /// @return 配置適用後の導関数 placement·(M_entity·C^k_def). 0階は点(R·v+T)、
     ///         1階以上はベクトル(R·v)として変換される. 計算できない場合は`std::nullopt`
-    /// @note 定義空間版は`TryGetDerivatives(t, n)`. placementに単位行列を渡すと
-    ///       M_entityのみを適用した実空間の導関数となる
+    /// @note 定義空間版は`TryGetDefinedDerivatives(t, n)`. placementに単位行列を渡すと
+    ///       M_entityのみを適用したモデル空間の導関数(`TryGetDerivatives(t, n)`)となる
     std::optional<CurveDerivatives>
     TryGetDerivatives(const double, const unsigned int, const Matrix4d&) const;
 

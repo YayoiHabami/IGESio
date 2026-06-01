@@ -23,11 +23,19 @@ set(TEST_SOURCES
     curves/test_rational_b_spline_curve.cpp
     curves/test_signed_curvature.cpp
     curves/test_curve_line_intersection.cpp
+    curves/algorithms/test_extremal_polygon.cpp
+
+    # Structures
+    structures/test_color_definition.cpp
+
+    # Transformations
+    transformations/test_transformation_matrix.cpp
 
     # Surfaces
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
     surfaces/test_surface_line_intersection.cpp
+    surfaces/test_curve_surface_inversion.cpp
 
     # Views
     views/test_curve_view.cpp

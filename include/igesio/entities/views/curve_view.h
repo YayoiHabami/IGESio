@@ -110,19 +110,19 @@ class CurveView : public ICurve {
     std::array<double, 2> GetParameterRange() const override {
         return base_->GetParameterRange();
     }
-    /// @brief 基底の配置適用版`TryGetDerivatives(t, n, placement)`を可視化する
-    /// @note 2引数版をオーバーライドすると名前隠蔽により3引数版が隠れるため、
-    ///       `using`で再公開する. これによりCurveViewを具象型で保持したまま
-    ///       配置適用版を呼べる
+    /// @brief 基底のモデル空間版/配置適用版`TryGetDerivatives`を可視化する
+    /// @note 継承された非virtualの`TryGetDerivatives(t, n)`および配置適用版
+    ///       `TryGetDerivatives(t, n, placement)`を具象型のまま呼べるよう
+    ///       `using`で明示的に再公開する
     using ICurve::TryGetDerivatives;
     /// @brief ビューの定義空間における導関数を取得する
     /// @param t パラメータ値
     /// @param n 何階まで計算するか
-    /// @return 元エンティティのM_entity適用後の導関数
+    /// @return 元エンティティのM_entity適用後(モデル空間)の導関数
     /// @note 継承された`TryGet*`系はこれに`Transform`(=placement_)を適用するため、
     ///       `placement_·(M_entity·C_def)`が得られる
     std::optional<CurveDerivatives>
-    TryGetDerivatives(const double t, const unsigned int n) const override {
+    TryGetDefinedDerivatives(const double t, const unsigned int n) const override {
         return base_->TryGetDerivatives(t, n, Matrix4d::Identity());
     }
 

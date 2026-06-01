@@ -261,8 +261,8 @@ $$\kappa_s(t_c) = \begin{cases}
 | `IsInLinearSegment(t)` | `bool` | $t$ が直線部に含まれるかを判定する |
 | `GetCornerParams()` | `vector<double>` | 角点のパラメータ値のリストを返す |
 | `IsCorner(t)` | `bool` | $t$ が角点かどうかを判定する |
-| `LeftTangentAt(t)` | `optional<Vector3d>` | 角点 $t$ における左側単位接線ベクトル $T^-(t)$ を返す |
-| `RightTangentAt(t)` | `optional<Vector3d>` | 角点 $t$ における右側単位接線ベクトル $T^+(t)$ を返す |
+| `TryGetDefinedLeftTangentAt(t)` | `optional<Vector3d>` | 角点 $t$ における定義空間の左側単位接線ベクトル $T^-(t)$ を返す |
+| `TryGetDefinedRightTangentAt(t)` | `optional<Vector3d>` | 角点 $t$ における定義空間の右側単位接線ベクトル $T^+(t)$ を返す |
 | `CornerExteriorAngle(t, n)` | `optional<double>` | 角点 $t$ における外角 $\alpha$ [rad] を返す |
 | `TryGetSignedCurvature(t, n)` | `optional<double>` | 符号付き曲率 $\kappa_s(t)$ を返す（角点・直線部も含む） |
 
@@ -388,10 +388,10 @@ auto param = igesio::IGESParameterVector{
     false, false, true, false, false,         // PROP1-5
     0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
     0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-    1., 1., 1., 1., 1., 1.,                   // Weights W(0,0) to W(0,5)
+    1., 1., 1., 1., 1., 1.,                   // Weights W(0,0) to W(5,0)
     // ... (中略) ...
-    1., 1., 1., 1., 1., 1.,                   // Weights W(5,0) to W(5,5)
-    // Control points (36 points, each with x, y, z)
+    1., 1., 1., 1., 1., 1.,                   // Weights W(0,5) to W(5,5)
+    // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
     -25., -25., -10.,  // Control point (0,0)
     // ... (中略) ...
     25., 25., -10.,    // Control point (5,5)

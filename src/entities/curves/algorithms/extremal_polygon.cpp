@@ -127,6 +127,50 @@ bool SegmentsIntersect2D(const std::array<double, 2>& a,
     return (d1 * d2 < 0.0) && (d3 * d4 < 0.0);
 }
 
+/// @brief 点が2次元単純多角形の内部または境界(eps以内)にあるかを判定する
+///
+/// 境界は辺までの距離 <= eps で判定し、内部は even-odd ray casting (向き非依存)
+/// で判定する. 含有不変条件の検証(FindContainmentViolations)に用いる.
+///
+/// @param p 判定する点 (2次元)
+/// @param poly 多角形の頂点列 (2次元)
+/// @param eps 境界とみなす距離の閾値
+/// @return 内部または境界上にある場合 true
+bool PointInOrOnPolygon2D(const std::array<double, 2>& p,
+                          const std::vector<std::array<double, 2>>& poly,
+                          double eps) {
+    const int n = static_cast<int>(poly.size());
+    if (n < 3) return false;
+
+    // 境界判定: 各辺までの距離が eps 以下なら境界上とみなす
+    for (int i = 0; i < n; ++i) {
+        const auto& a = poly[i];
+        const auto& b = poly[(i + 1) % n];
+        const double abx = b[0] - a[0], aby = b[1] - a[1];
+        const double len2 = abx * abx + aby * aby;
+        double s = 0.0;
+        if (len2 > 0.0) {
+            s = ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / len2;
+            s = std::max(0.0, std::min(1.0, s));
+        }
+        const double dx = p[0] - (a[0] + s * abx);
+        const double dy = p[1] - (a[1] + s * aby);
+        if (dx * dx + dy * dy <= eps * eps) return true;
+    }
+
+    // 内部判定: even-odd ray casting
+    bool inside = false;
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+        const auto& pi = poly[i];
+        const auto& pj = poly[j];
+        if (((pi[1] > p[1]) != (pj[1] > p[1])) &&
+            (p[0] < (pj[0] - pi[0]) * (p[1] - pi[1]) / (pj[1] - pi[1]) + pi[0])) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
 // ===========================================================================
 // 直線交差 (3D)
 // ===========================================================================
@@ -161,15 +205,31 @@ Vector3d LineIntersect(const Vector3d& p1, const Vector3d& d1,
 
 /// @brief 曲線上の点tにおける「前進方向」単位接線ベクトルを返す
 ///
-/// 角点では右側接線T⁺(t)を使用し、通常点ではTryGetDefinedTangentAtを使用する.
+/// 角点では右側接線T⁺(t) (TryGetRightTangentAt) を使用し、通常点では
+/// TryGetTangentAtを使用する.
 ///
 /// @param curve 対象曲線
 /// @param t パラメータ値
 /// @return 前進方向単位接線ベクトル. 取得できない場合はstd::nullopt
 std::optional<Vector3d>
 GetForwardTangentAt(const i_ent::ICurve& curve, double t) {
-    if (curve.IsCorner(t)) return curve.RightTangentAt(t);
-    return curve.TryGetDefinedTangentAt(t);
+    if (curve.IsCorner(t)) return curve.TryGetRightTangentAt(t);
+    return curve.TryGetTangentAt(t);
+}
+
+/// @brief 曲線上の点tにおける「到達方向」単位接線ベクトルを返す
+///
+/// 角点では左側接線T⁻(t) (TryGetLeftTangentAt) を使用し、通常点では
+/// TryGetTangentAtを使用する. cc/vc で「Pbへ到達する側」の接線として用いる.
+/// 平滑点ではT⁻=T⁺で前進方向と一致するが、角点では弧側(到達側)の接線となる.
+///
+/// @param curve 対象曲線
+/// @param t パラメータ値
+/// @return 到達方向の単位接線ベクトル. 取得できない場合はstd::nullopt
+std::optional<Vector3d>
+GetBackwardTangentAt(const i_ent::ICurve& curve, double t) {
+    if (curve.IsCorner(t)) return curve.TryGetLeftTangentAt(t);
+    return curve.TryGetTangentAt(t);
 }
 
 // ===========================================================================
@@ -255,6 +315,14 @@ double FindZeroCurvature(const i_ent::ICurve& curve,
         double result = i_num::FindRootScalar(
             kappa, ta, tb, eps * std::abs(tb - ta), 200);
         if (result > t_max) result -= period;
+        // ブラケット[ta,tb]内に角点(曲率∞)が含まれると、toms748の補間が
+        // 非有限なresultを返し得る。その場合は契約どおり区間中点へフォール
+        // バックする(∞をboostのルート探索に渡すとNaNになるのを防ぐ)。
+        if (!std::isfinite(result)) {
+            double t_mid = 0.5 * (ta + tb);
+            if (t_mid > t_max) t_mid -= period;
+            return t_mid;
+        }
         return result;
     } catch (const std::exception&) {
         double t_mid = 0.5 * (ta + tb);
@@ -405,11 +473,20 @@ std::vector<double> InsertCorners(const i_ent::ICurve& curve,
 }
 
 /// @brief 直線部の始端・終端をサンプル点列に追加して昇順に返す
+/// @param segs 直線区間のリスト
+/// @param ts 追加先のパラメータ値列
+/// @param t0 パラメータ範囲の下限
+/// @param t1 パラメータ範囲の上限
+/// @note 端点を [t0, t1) にクランプする. 継ぎ目 t==t1 は閉曲線で C(t1)=C(t0) と
+///       重複し、ゼロ長辺の原因となるため除外する (InsertCorners と整合)
 std::vector<double> InsertLinearEndpoints(
         const std::vector<std::array<double, 2>>& segs,
-        std::vector<double> ts) {
+        std::vector<double> ts, double t0, double t1) {
+    const double seam_tol = 1e-9 * (t1 - t0);
     for (const auto& seg : segs) {
         for (const double endpoint : {seg[0], seg[1]}) {
+            // 範囲外・継ぎ目 (t1≡t0) は除外する
+            if (endpoint < t0 || endpoint >= t1 - seam_tol) continue;
             bool already = false;
             for (double t : ts) {
                 if (std::abs(t - endpoint) < 1e-12) {
@@ -536,6 +613,12 @@ std::pair<std::vector<double>, std::vector<double>> FindCurvatureExtrema(
         const double k_i = kappa[i];
         const double k_n = kappa[nxt];
 
+        // 角点では曲率が±∞となる (TryGetSignedCurvature)。∞は平滑な曲率の
+        // 極値ではなく、角点はInsertCornersで別途追加されるため、ここでの
+        // 極値探索の対象から除外する。∞をMinimizeScalar (boost) に渡すと
+        // 放物線補間でNaNのt_optが返り、後段のGetPointAtで例外となるのを防ぐ。
+        if (!std::isfinite(k_i)) continue;
+
         const double lb = ts[i] - dt;
         const double ub = ts[i] + dt;
 
@@ -545,7 +628,9 @@ std::pair<std::vector<double>, std::vector<double>> FindCurvatureExtrema(
                 const auto res = i_num::MinimizeScalar(
                     [&](double t) { return -kappa_fn(t); },
                     lb, ub, tol);
-                maxima.push_back(res.t_opt);
+                // ブラケット[lb,ub]が角点(∞)を含む場合、boostが非有限な
+                // t_optを返し得る。その場合はサンプル点にフォールバックする。
+                maxima.push_back(std::isfinite(res.t_opt) ? res.t_opt : ts[i]);
             } catch (const std::exception&) {
                 maxima.push_back(ts[i]);
             }
@@ -556,7 +641,7 @@ std::pair<std::vector<double>, std::vector<double>> FindCurvatureExtrema(
             try {
                 const auto res = i_num::MinimizeScalar(
                     kappa_fn, lb, ub, tol);
-                minima.push_back(res.t_opt);
+                minima.push_back(std::isfinite(res.t_opt) ? res.t_opt : ts[i]);
             } catch (const std::exception&) {
                 minima.push_back(ts[i]);
             }
@@ -624,12 +709,13 @@ SamplePoints(const i_ent::ICurve& curve,
     }
 
     ts = InsertCorners(curve, ts);
-    ts = InsertLinearEndpoints(linear_segs, ts);
+    ts = InsertLinearEndpoints(linear_segs, ts, t0, t1);
 
-    // 3次元座標を計算する
+    // 3次元座標を計算する。tは曲率極値・角点由来で閉曲線の周期正規化により
+    // [t0, t1] を僅かに外れ得るため、GetPointAtの範囲外例外を避けてクランプする。
     std::vector<Vector3d> pts;
     pts.reserve(ts.size());
-    for (double t : ts) pts.push_back(curve.GetPointAt(t));
+    for (double t : ts) pts.push_back(curve.GetPointAt(std::clamp(t, t0, t1)));
     return {ts, pts};
 }
 
@@ -741,9 +827,11 @@ i_num::PolygonData BuildPolygonVertices(
             continue;
         }
 
-        // 各点の前進方向接線を取得する
+        // Pa は前進方向(出発側)、Pb は後退方向(到達側)の接線を取得する。
+        // 角点では出発側=T⁺ / 到達側=T⁻ となり、Pb が接合コーナーの場合に
+        // 弧側の接線で囲えるようにする(平滑点では両者一致)。
         const auto da_opt = GetForwardTangentAt(curve, ta);
-        const auto db_opt = GetForwardTangentAt(curve, tb);
+        const auto db_opt = GetBackwardTangentAt(curve, tb);
 
         if (!da_opt.has_value() || !db_opt.has_value()) {
             // 接線取得失敗 → 保守的に Pa のみ追加
@@ -800,6 +888,121 @@ i_num::PolygonData BuildPolygonVertices(
 }
 
 // ===========================================================================
+// 後処理: 重複除去・含有検証
+// ===========================================================================
+
+/// @brief 多角形の隣接・継ぎ目で一致する頂点を統合してゼロ長辺を除去する
+///
+/// 接合点や角点で cc/vc/cv が接点と一致する頂点を出す、また直線端点が継ぎ目で
+/// 重複する等により生じるゼロ長辺(隣接する同一頂点)を除去する.
+/// 一致する頂点同士は on_curve=true 側(曲線パラメータ付き)を優先して残す.
+///
+/// @param poly 入力多角形
+/// @return ゼロ長辺を除去した多角形
+i_num::PolygonData DedupPolygon(const i_num::PolygonData& poly) {
+    constexpr double kDedupTol = 1e-9;
+    i_num::PolygonData out;
+    const int n = poly.Count();
+    if (n == 0) return out;
+
+    for (int i = 0; i < n; ++i) {
+        if (!out.vertices.empty() &&
+            (out.vertices.back() - poly.vertices[i]).norm() <= kDedupTol) {
+            // 直前と一致 → on_curve=true 側を優先して残す
+            const size_t last = out.vertices.size() - 1;
+            if (poly.on_curve[i] && !out.on_curve[last]) {
+                out.vertices[last] = poly.vertices[i];
+                out.on_curve[last] = true;
+                out.curve_params[last] = poly.curve_params[i];
+            }
+            continue;
+        }
+        out.vertices.push_back(poly.vertices[i]);
+        out.on_curve.push_back(poly.on_curve[i]);
+        out.curve_params.push_back(poly.curve_params[i]);
+    }
+
+    // 継ぎ目 (先頭と末尾) の一致を除去する
+    while (out.Count() >= 2 &&
+           (out.vertices.front() - out.vertices.back()).norm() <= kDedupTol) {
+        const size_t last = out.vertices.size() - 1;
+        if (out.on_curve[last] && !out.on_curve[0]) {
+            out.vertices[0] = out.vertices[last];
+            out.on_curve[0] = true;
+            out.curve_params[0] = out.curve_params[last];
+        }
+        out.vertices.pop_back();
+        out.on_curve.pop_back();
+        out.curve_params.pop_back();
+    }
+    return out;
+}
+
+/// @brief 含有不変条件の違反を検出し、サンプルに追加すべき曲線パラメータを返す
+///
+/// 外包: 曲線点(均等サンプル)が多角形の外側にあれば、その曲線パラメータを追加する.
+///       追加点は次の再構築で接点(接線)として分類され、凸部を接線で囲うようになる.
+/// 内包: 多角形の辺中点が曲線領域の外側にあれば、その辺の曲線区間中点を追加する.
+///
+/// @param poly 検証対象の多角形
+/// @param circumscribed 外包なら true, 内包なら false
+/// @param u, v 平面基底
+/// @param t_uniform 均等サンプルのパラメータ列
+/// @param region2d 曲線領域 (均等点の2次元射影; 外包では曲線点列としても使用)
+/// @param period パラメータ範囲の幅
+/// @param t1 パラメータ範囲の上限
+/// @param eps_geom 境界とみなす距離の閾値
+/// @return 追加すべき曲線パラメータの列 (空なら違反なし)
+std::vector<double> FindContainmentViolations(
+        const i_num::PolygonData& poly,
+        bool circumscribed,
+        const Vector3d& u, const Vector3d& v,
+        const std::vector<double>& t_uniform,
+        const std::vector<std::array<double, 2>>& region2d,
+        double period, double t1, double eps_geom) {
+    const int n = poly.Count();
+    if (n < 3) return {};
+
+    std::vector<std::array<double, 2>> poly2d(n);
+    for (int i = 0; i < n; ++i) {
+        poly2d[i] = ProjectTo2D(poly.vertices[i], u, v);
+    }
+
+    std::vector<double> add;
+    if (circumscribed) {
+        // 曲線点が多角形の外なら、その曲線パラメータを追加する
+        for (size_t k = 0; k < t_uniform.size(); ++k) {
+            if (!PointInOrOnPolygon2D(region2d[k], poly2d, eps_geom)) {
+                add.push_back(t_uniform[k]);
+            }
+        }
+    } else {
+        // 多角形の辺中点が曲線領域の外なら、辺の曲線区間中点を追加する
+        for (int i = 0; i < n; ++i) {
+            const Vector3d mid =
+                0.5 * (poly.vertices[i] + poly.vertices[(i + 1) % n]);
+            if (PointInOrOnPolygon2D(ProjectTo2D(mid, u, v),
+                                     region2d, eps_geom)) {
+                continue;
+            }
+            std::pair<int, int> idx;
+            try {
+                idx = poly.GetCurveParamIndex(i);
+            } catch (const std::exception&) {
+                continue;
+            }
+            double pa = poly.curve_params[idx.first];
+            double pb = poly.curve_params[idx.second];
+            if (pb < pa) pb += period;  // 周期跨ぎ
+            double tc = 0.5 * (pa + pb);
+            if (tc >= t1) tc -= period;
+            add.push_back(tc);
+        }
+    }
+    return add;
+}
+
+// ===========================================================================
 // 主関数
 // ===========================================================================
 
@@ -839,16 +1042,48 @@ i_num::PolygonData ComputeExtremalPolygon(
     const double orient_sign = CheckCurveProperties(
         curve, pts_uniform, normal);
 
+    // 含有検証用の平面基底と曲線領域(均等点の射影)を用意する
+    const auto [u, v] = BuildPlaneBasis(normal);
+    std::vector<std::array<double, 2>> region2d(kNInit);
+    for (int i = 0; i < kNInit; ++i) {
+        region2d[i] = ProjectTo2D(pts_uniform[i], u, v);
+    }
+
     // 多角形構築のためのサンプル点を生成する
-    const auto [ts, pts] = SamplePoints(
-        curve, normal, t_uniform, n_vert);
+    std::vector<double> ts = SamplePoints(
+        curve, normal, t_uniform, n_vert).first;
 
-    // 各点を頂点/接点に分類する
-    const auto is_contact = ClassifyPoints(
-        curve, ts, circumscribed, normal, orient_sign, eps);
+    // 含有不変条件を満たすまで、違反点をサンプルに追加して再構築する。
+    // (案A: 分類/構成が不変条件を満たすことを仮定せず、構築後に強制する。
+    //  これにより変曲点・接合コーナー・粗標本化に起因する内包性違反を解消する。)
+    constexpr int kMaxRefine = 6;
+    constexpr double kViolationEps = 1e-7;
+    i_num::PolygonData polygon;
+    for (int iter = 0; ; ++iter) {
+        std::vector<Vector3d> pts;
+        pts.reserve(ts.size());
+        // tは曲率極値・違反点由来で [t0, t1] を僅かに外れ得るためクランプする
+        for (double t : ts) pts.push_back(curve.GetPointAt(std::clamp(t, t0, t1)));
 
-    // 多角形頂点列を構築する
-    return BuildPolygonVertices(curve, ts, pts, is_contact, normal);
+        // 各点を頂点/接点に分類し、多角形を構築・重複除去する
+        const auto is_contact = ClassifyPoints(
+            curve, ts, circumscribed, normal, orient_sign, eps);
+        polygon = DedupPolygon(
+            BuildPolygonVertices(curve, ts, pts, is_contact, normal));
+
+        if (iter >= kMaxRefine) break;
+
+        // 含有違反を検出し、違反があれば違反点をサンプルへ追加して再試行する
+        const auto extra = FindContainmentViolations(
+            polygon, circumscribed, u, v, t_uniform, region2d,
+            period, t1, kViolationEps);
+        if (extra.empty()) break;
+
+        ts.insert(ts.end(), extra.begin(), extra.end());
+        ts = Dedup(ts, curve.IsClosed(), period, 1e-6);
+    }
+
+    return polygon;
 }
 
 }  // namespace

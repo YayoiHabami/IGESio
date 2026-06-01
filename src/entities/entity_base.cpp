@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/entity_base.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -311,9 +312,33 @@ bool EntityBase::OverwriteView(
     return true;
 }
 
+bool igesio::entities::CreatesTransformationCycle(
+        const ObjectID& self_id,
+        const std::shared_ptr<const ITransformation>& transformation) {
+    if (!transformation) return false;
+    // 自己参照
+    if (transformation->GetID() == self_id) return true;
+    // transformationの参照チェーンを辿り、self_idに戻れば循環
+    std::vector<ObjectID> visited;
+    auto current = transformation->GetRefTransformation();
+    while (current) {
+        const ObjectID& cur_id = current->GetID();
+        if (cur_id == self_id) return true;
+        // 既存データ (不正なIGES等) 起因の循環で無限ループしないための保護
+        if (std::find(visited.begin(), visited.end(), cur_id) != visited.end()) {
+            break;
+        }
+        visited.push_back(cur_id);
+        current = current->GetRefTransformation();
+    }
+    return false;
+}
+
 bool EntityBase::OverwriteTransformationMatrix(
         const std::shared_ptr<const ITransformation>& transformation_matrix) {
     if (!transformation_matrix) return false;
+    // 循環参照となる場合は設定しない (非変換エンティティでは発火しない)
+    if (CreatesTransformationCycle(GetID(), transformation_matrix)) return false;
     de_transformation_matrix_.OverwriteID(transformation_matrix->GetID());
     de_transformation_matrix_.SetPointer(transformation_matrix);
     return true;

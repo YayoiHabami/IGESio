@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 
+#include <algorithm>
 #include <array>
 #include <utility>
 #include <vector>
@@ -277,7 +278,13 @@ size_t RationalBSplineCurve::SetMainPDParameters(const pointer2ID& de2id) {
         normal_vector_ = Vector3d(x, y, z);
         is_planar_ = true;  // 法線ベクトルが定義されている場合は平面的
     } else {
+        // 法線が(0,0,0)の場合は平面を一意に定義できないためnon-planarとして扱う。
+        // PROP1=1でも法線ゼロのデータ (SolidWorks 等) はここでis_planar_をfalseに
+        // 揃え、不変条件is_planar_ ⟺ normal_vector_.has_value()を保つ。
+        // is_planar_/normal_vector_はValidatePD専用であり、出力 (GetMainPDParameters)
+        // はComputePlaneNormalで幾何から再判定するため出力には影響しない。
         normal_vector_.reset();
+        is_planar_ = false;
     }
 
     return index;
@@ -307,13 +314,20 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
         errors.emplace_back("Knots vector cannot be empty.");
     }
     auto t0 = knots_[degree_], tn = knots_[knots_.size() - degree_];
-    if (t0 > parameter_range_[0] || parameter_range_[1] > tn) {
-        // See Section B.4
+    // See Section B.4. CAD出力 (CATIA等) は V(0)/V(1) がノット域 [T(0), T(N)] を
+    // 僅か (~1e-4) 外れることがあるため、スケール相対の許容で上限/下限比較を緩める
+    // (値はクランプせず原値保持; B-1)。評価側TryComputeBasisFunctionsは
+    // parameter_rangeで判定しtを域内へ丸めるため、僅かな超過があっても安全に評価できる。
+    const double range_tol = std::max(i_num::kParameterTolerance, 1e-3 * (tn - t0));
+    if (!i_num::IsApproxLEQ(t0, parameter_range_[0], range_tol) ||
+        !i_num::IsApproxLEQ(parameter_range_[1], tn, range_tol)) {
+        // 評価側がtを域内へ丸めるため描画可能。幾何的品質の指摘 (kWarning) とする。
         errors.emplace_back("Knots T(0), T(N) must satisfy T(0) <= V(0) < V(1) <= T(N). "
                 "Got T(0) = " + std::to_string(t0) +
                 ", V(0) = " + std::to_string(parameter_range_[0]) +
                 ", V(1) = " + std::to_string(parameter_range_[1]) +
-                ", T(N) = " + std::to_string(tn) + ".");
+                ", T(N) = " + std::to_string(tn) + ".",
+                igesio::ValidationSeverity::kWarning);
     }
 
     // 重みの検証
@@ -341,8 +355,11 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
     if (parameter_range_[0] >= parameter_range_[1]) {
         errors.emplace_back("Invalid parameter range: V(0) must be less than V(1).");
     }
+    // 平面フラグと法線の整合: 読み込み時に法線ゼロならis_planar_=falseに揃えるため
+    // 通常は発生しないが、整合性のため幾何的品質の指摘 (kWarning) としブロックしない。
     if (is_planar_ && !normal_vector_) {
-        errors.emplace_back("Normal vector is not defined, but the curve is planar.");
+        errors.emplace_back("Normal vector is not defined, but the curve is planar.",
+                            igesio::ValidationSeverity::kWarning);
     }
 
     return MakeValidationResult(std::move(errors));
@@ -439,7 +456,7 @@ bool RationalBSplineCurve::IsClosed() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-RationalBSplineCurve::TryGetDerivatives(const double t, const unsigned int n) const {
+RationalBSplineCurve::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     auto basis = ::TryComputeBasisFunctions(t, static_cast<int>(n), *this);
     if (!basis) {
         return std::nullopt;

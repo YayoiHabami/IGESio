@@ -228,6 +228,16 @@ bool IsPointInPolygon(
     const std::vector<Vector3d> approx_verts = ExtractApproxByParam(
         polygons.approximate, param_start, param_end, is_wrap);
 
+    // poly_verts/approx_vertsが空の場合 (退化したトリム境界などで対応頂点が無い)、
+    // 再構成多角形を形成できない。下の`.end()-1`/`.rend()-1`は空 (デフォルト構築)
+    // vectorのvalue-initialized iteratorをseekしてクラッシュ (MSVCデバッグアサート
+    // "cannot seek value-initialized vector iterator") するため、ここで安全に返す。
+    // 退化したトリム境界は領域を囲まないため「外部」とみなす (C層: 退化データでも例外/
+    // 未定義動作を起こさない)。
+    if (poly_verts.empty() || approx_verts.empty()) {
+        return false;
+    }
+
     // 再構成多角形の構築
     // poly_verts (順方向, 末端除く) + approx_verts (逆方向, 末端除く) で閉多角形を形成する
     std::vector<Vector3d> reconstructed;

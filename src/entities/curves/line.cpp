@@ -137,7 +137,7 @@ std::array<double, 2> Line::GetParameterRange() const {
 bool Line::IsClosed() const { return false; }
 
 std::optional<i_ent::CurveDerivatives>
-Line::TryGetDerivatives(const double t, const unsigned int n) const {
+Line::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
     // パラメータtが定義域内にあるかチェック
     if (t < range[0] || t > range[1]) {

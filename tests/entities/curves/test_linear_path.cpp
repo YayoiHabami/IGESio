@@ -9,7 +9,7 @@
  *   [LinearPath オーバライド]
  *     GetLinearSegments(), IsInLinearSegment(t, eps)
  *     GetCornerParams(),   IsCorner(t, eps)
- *     LeftTangentAt(t),    RightTangentAt(t)
+ *     TryGetDefinedLeftTangentAt(t),    TryGetDefinedRightTangentAt(t)
  *   [ICurve デフォルト実装; LinearPath の挙動を通じて確認]
  *     CornerExteriorAngle(t, n), TryGetSignedCurvature(t, n)
  *
@@ -90,7 +90,7 @@ std::shared_ptr<LinearPath> MakeSquareCCWLoop() {
 }
 
 /// @brief 3頂点（縮退：末尾辺の長さがゼロ）: A(0,0)→B(1,0)→C(1,0), length=1
-/// @note  RightTangentAt が縮退辺（長さゼロ）に対して nullopt を返すか確認するため
+/// @note  TryGetDefinedRightTangentAt が縮退辺（長さゼロ）に対して nullopt を返すか確認するため
 std::shared_ptr<LinearPath> MakeDegenerateEndEdge() {
     return std::make_shared<LinearPath>(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}, {1.0, 0.0}}, false);
@@ -269,14 +269,14 @@ TEST(LinearPathCornerTest, IsCorner_EpsBoundary) {
 
 
 /**
- * LeftTangentAt / RightTangentAt のテスト
+ * TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt のテスト
  */
 
 // 直角左折れの角点：左接線が入射辺方向
 TEST(LinearPathTangentAtTest, LeftTurn_Corner_LeftTangent) {
     auto lp = MakeLeftTurnOpen();  // A(0,0)→B(1,0)→C(1,1)
     // B での入射辺 AB の方向は (1,0,0)
-    auto result = lp->LeftTangentAt(1.0);
+    auto result = lp->TryGetDefinedLeftTangentAt(1.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -286,7 +286,7 @@ TEST(LinearPathTangentAtTest, LeftTurn_Corner_LeftTangent) {
 TEST(LinearPathTangentAtTest, LeftTurn_Corner_RightTangent) {
     auto lp = MakeLeftTurnOpen();  // A(0,0)→B(1,0)→C(1,1)
     // B での出射辺 BC の方向は (0,1,0)
-    auto result = lp->RightTangentAt(1.0);
+    auto result = lp->TryGetDefinedRightTangentAt(1.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(0.0, 1.0, 0.0), kTol));
@@ -297,7 +297,7 @@ TEST(LinearPathTangentAtTest, LeftTurn_Corner_RightTangent) {
 TEST(LinearPathTangentAtTest, NonLoopStart_LeftTangent_DefaultImpl) {
     auto lp = MakeTwoVertexOpen();  // A(0,0)→B(3,4), length=5
     // t=0 は角点でないためデフォルト実装 → 始点の接線 = AB 方向 = (3,4,0)/5
-    auto result = lp->LeftTangentAt(0.0);
+    auto result = lp->TryGetDefinedLeftTangentAt(0.0);
 
     ASSERT_TRUE(result.has_value());
     const Vector3d expected(3.0 / 5.0, 4.0 / 5.0, 0.0);
@@ -308,7 +308,7 @@ TEST(LinearPathTangentAtTest, NonLoopStart_LeftTangent_DefaultImpl) {
 TEST(LinearPathTangentAtTest, NonLoopEnd_RightTangent_DefaultImpl) {
     auto lp = MakeTwoVertexOpen();  // A(0,0)→B(3,4), length=5
     // t=5 は角点でないためデフォルト実装 → 終点の接線 = AB 方向 = (3,4,0)/5
-    auto result = lp->RightTangentAt(5.0);
+    auto result = lp->TryGetDefinedRightTangentAt(5.0);
 
     ASSERT_TRUE(result.has_value());
     const Vector3d expected(3.0 / 5.0, 4.0 / 5.0, 0.0);
@@ -319,7 +319,7 @@ TEST(LinearPathTangentAtTest, NonLoopEnd_RightTangent_DefaultImpl) {
 TEST(LinearPathTangentAtTest, Loop_t0_LeftTangent) {
     auto lp = MakeSquareCCWLoop();  // A(0,0)→B(1,0)→C(1,1)→D(0,1)
     // 閉鎖辺 D(0,1)→A(0,0): 方向 = (0,-1,0)
-    auto result = lp->LeftTangentAt(0.0);
+    auto result = lp->TryGetDefinedLeftTangentAt(0.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(0.0, -1.0, 0.0), kTol));
@@ -329,7 +329,7 @@ TEST(LinearPathTangentAtTest, Loop_t0_LeftTangent) {
 TEST(LinearPathTangentAtTest, Loop_t0_RightTangent) {
     auto lp = MakeSquareCCWLoop();  // A(0,0)→B(1,0)→C(1,1)→D(0,1)
     // 辺 A(0,0)→B(1,0): 方向 = (1,0,0)
-    auto result = lp->RightTangentAt(0.0);
+    auto result = lp->TryGetDefinedRightTangentAt(0.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -340,7 +340,7 @@ TEST(LinearPathTangentAtTest, DegenerateOutgoingEdge_RightTangent_Nullopt) {
     // A(0,0)→B(1,0)→C(1,0): B→C が縮退辺
     auto lp = MakeDegenerateEndEdge();
     // B の右接線（出射辺 B→C; 長さ 0）は nullopt
-    auto result = lp->RightTangentAt(1.0);
+    auto result = lp->TryGetDefinedRightTangentAt(1.0);
 
     EXPECT_FALSE(result.has_value());
 }
@@ -349,7 +349,7 @@ TEST(LinearPathTangentAtTest, DegenerateOutgoingEdge_RightTangent_Nullopt) {
 
 /**
  * CornerExteriorAngle のテスト
- * ICurve のデフォルト実装を LinearPath の LeftTangentAt / RightTangentAt を
+ * ICurve のデフォルト実装を LinearPath の TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt を
  * 通じて確認する
  */
 

@@ -137,8 +137,8 @@ std::vector<double> LinearPath::GetCornerParams() const {
     return corners;
 }
 
-std::optional<Vector3d> LinearPath::LeftTangentAt(const double t) const {
-    if (!IsCorner(t)) return ICurve::LeftTangentAt(t);
+std::optional<Vector3d> LinearPath::TryGetDefinedLeftTangentAt(const double t) const {
+    if (!IsCorner(t)) return ICurve::TryGetDefinedLeftTangentAt(t);
 
     const size_t n = GetCount();
     if (n < 2) return std::nullopt;
@@ -147,7 +147,7 @@ std::optional<Vector3d> LinearPath::LeftTangentAt(const double t) const {
     const auto vertex_lengths = ComputeVertexLengths(*this);
 
     const auto idx_opt = FindVertexIndex(vertex_lengths, t);
-    if (!idx_opt.has_value()) return ICurve::LeftTangentAt(t);
+    if (!idx_opt.has_value()) return ICurve::TryGetDefinedLeftTangentAt(t);
     const size_t idx = *idx_opt;
 
     // 入射辺: 前の頂点 → 現在の頂点
@@ -164,8 +164,8 @@ std::optional<Vector3d> LinearPath::LeftTangentAt(const double t) const {
     return (curr - prev) / seg_len;
 }
 
-std::optional<Vector3d> LinearPath::RightTangentAt(const double t) const {
-    if (!IsCorner(t)) return ICurve::RightTangentAt(t);
+std::optional<Vector3d> LinearPath::TryGetDefinedRightTangentAt(const double t) const {
+    if (!IsCorner(t)) return ICurve::TryGetDefinedRightTangentAt(t);
 
     const size_t n = GetCount();
     if (n < 2) return std::nullopt;
@@ -174,7 +174,7 @@ std::optional<Vector3d> LinearPath::RightTangentAt(const double t) const {
     const auto vertex_lengths = ComputeVertexLengths(*this);
 
     const auto idx_opt = FindVertexIndex(vertex_lengths, t);
-    if (!idx_opt.has_value()) return ICurve::RightTangentAt(t);
+    if (!idx_opt.has_value()) return ICurve::TryGetDefinedRightTangentAt(t);
     const size_t idx = *idx_opt;
 
     // 出射辺: 現在の頂点 → 次の頂点
@@ -218,7 +218,7 @@ std::array<double, 2> LinearPath::GetParameterRange() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-LinearPath::TryGetDerivatives(const double t, const unsigned int n) const {
+LinearPath::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     auto idx = GetSegmentIndexAt(t);
     if (!idx.has_value())  return std::nullopt;
 

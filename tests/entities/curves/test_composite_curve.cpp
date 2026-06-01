@@ -9,7 +9,7 @@
  *   [CompositeCurve オーバライド]
  *     GetLinearSegments(), IsInLinearSegment(t, eps)
  *     GetCornerParams(),   IsCorner(t, eps)
- *     LeftTangentAt(t),    RightTangentAt(t)
+ *     TryGetDefinedLeftTangentAt(t),    TryGetDefinedRightTangentAt(t)
  *   [ICurve デフォルト実装; CompositeCurve の挙動を通じて確認]
  *     CornerExteriorAngle(t, n), TryGetSignedCurvature(t, n)
  *
@@ -17,7 +17,7 @@
  *   - Line エンティティは GetLinearSegments() をオーバライドしないため、
  *     IsInLinearSegment のテストには LinearPath サブカーブを使用する。
  *   - 接合点は GetCornerParams() に常に角点として追加される（接線連続性は問わない）。
- *   - LeftTangentAt/RightTangentAt の接合点検出は内部で 1e-9 の固定誤差を使用する。
+ *   - TryGetDefinedLeftTangentAt/TryGetDefinedRightTangentAt の接合点検出は内部で 1e-9 の固定誤差を使用する。
  *
  * TODO:
  *   - 接合点の固定誤差（hardcoded 1e-9）の境界挙動テストを追加する
@@ -370,14 +370,14 @@ TEST(CompositeCurveCornerTest, NonCornerPoints_NotCorner) {
 
 
 /**
- * LeftTangentAt / RightTangentAt のテスト
+ * TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt のテスト
  */
 
 // 接合点での左接線: 直前の曲線の終端方向
 TEST(CompositeCurveTangentAtTest, Junction_LeftTangent_FromPrevCurve) {
     auto cc = MakeLineLine_LeftTurn();
     // 接合点 t=1: Line1(→(1,0)) の終端接線 = (1,0,0)
-    const auto result = cc->LeftTangentAt(1.0);
+    const auto result = cc->TryGetDefinedLeftTangentAt(1.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -387,7 +387,7 @@ TEST(CompositeCurveTangentAtTest, Junction_LeftTangent_FromPrevCurve) {
 TEST(CompositeCurveTangentAtTest, Junction_RightTangent_FromNextCurve) {
     auto cc = MakeLineLine_LeftTurn();
     // 接合点 t=1: Line2(→(0,1)) の始端接線 = (0,1,0)
-    const auto result = cc->RightTangentAt(1.0);
+    const auto result = cc->TryGetDefinedRightTangentAt(1.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(0.0, 1.0, 0.0), kTol));
@@ -396,8 +396,8 @@ TEST(CompositeCurveTangentAtTest, Junction_RightTangent_FromNextCurve) {
 // 直線上接合点: Left=Right (同方向)
 TEST(CompositeCurveTangentAtTest, Junction_Straight_BothTangentsSameDirection) {
     auto cc = MakeLineLine_Straight();
-    const auto left  = cc->LeftTangentAt(1.0);
-    const auto right = cc->RightTangentAt(1.0);
+    const auto left  = cc->TryGetDefinedLeftTangentAt(1.0);
+    const auto right = cc->TryGetDefinedRightTangentAt(1.0);
 
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
@@ -409,8 +409,8 @@ TEST(CompositeCurveTangentAtTest, Junction_Straight_BothTangentsSameDirection) {
 TEST(CompositeCurveTangentAtTest, SubcurveCorner_LeftTangent_Delegated) {
     auto cc = MakeLineLinearPath_LeftTurn();
     // t=2: 接合点は t=1, Path の角点 t=2 はサブカーブに委譲される
-    // Path.LeftTangentAt(t_local=1): 入射辺 (1,0,0)→(2,0,0) 方向 = (1,0,0)
-    const auto result = cc->LeftTangentAt(2.0);
+    // Path.TryGetDefinedLeftTangentAt(t_local=1): 入射辺 (1,0,0)→(2,0,0) 方向 = (1,0,0)
+    const auto result = cc->TryGetDefinedLeftTangentAt(2.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -419,8 +419,8 @@ TEST(CompositeCurveTangentAtTest, SubcurveCorner_LeftTangent_Delegated) {
 // サブカーブ角点の右接線: LinearPath に委譲
 TEST(CompositeCurveTangentAtTest, SubcurveCorner_RightTangent_Delegated) {
     auto cc = MakeLineLinearPath_LeftTurn();
-    // Path.RightTangentAt(t_local=1): 出射辺 (2,0,0)→(2,1,0) 方向 = (0,1,0)
-    const auto result = cc->RightTangentAt(2.0);
+    // Path.TryGetDefinedRightTangentAt(t_local=1): 出射辺 (2,0,0)→(2,1,0) 方向 = (0,1,0)
+    const auto result = cc->TryGetDefinedRightTangentAt(2.0);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(0.0, 1.0, 0.0), kTol));
@@ -430,7 +430,7 @@ TEST(CompositeCurveTangentAtTest, SubcurveCorner_RightTangent_Delegated) {
 TEST(CompositeCurveTangentAtTest, Interior_Delegated) {
     auto cc = MakeLineLine_LeftTurn();
     // t=0.5 (Line1 内部): Line1 の接線 = (1,0,0)
-    const auto result = cc->LeftTangentAt(0.5);
+    const auto result = cc->TryGetDefinedLeftTangentAt(0.5);
 
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*result, Vector3d(1.0, 0.0, 0.0), kTol));
@@ -440,7 +440,7 @@ TEST(CompositeCurveTangentAtTest, Interior_Delegated) {
 
 /**
  * CornerExteriorAngle のテスト
- * ICurve デフォルト実装を CompositeCurve の LeftTangentAt / RightTangentAt を
+ * ICurve デフォルト実装を CompositeCurve の TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt を
  * 通じて確認する
  */
 
@@ -632,4 +632,51 @@ TEST(CompositeCurveSignedCurvatureTest, NormalFlipped_SignFlipped) {
     ASSERT_TRUE(kappa_neg.has_value());
     EXPECT_TRUE(std::isinf(*kappa_pos) && *kappa_pos > 0.0);
     EXPECT_TRUE(std::isinf(*kappa_neg) && *kappa_neg < 0.0);
+}
+
+
+
+/**
+ * E: 連続性チェックの重大度 (severity) のテスト
+ *
+ * 連続性 (隣接曲線の端点一致) は幾何的品質の指摘でありkWarningとする。隙間があっても
+ * 曲線は描画可能なためis_valid (描画ゲート) はブロックしない。許容値は警告を出すか否かのみ
+ * を左右する。NOTE: 連続性は中間接合点 (index 1..n-2) で検査されるため隙間は中間接合に置く。
+ */
+
+// 端点が許容内 (scale~100 → tol=1e-3) の隙間 (3e-4) → 警告なし・is_valid=true
+TEST(CompositeCurveContinuityTest, SmallGap_IsValidNoWarning) {
+    auto cc = std::make_shared<CompositeCurve>();
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
+    // curve0の終点(100,0,0)とcurve1の始点(100.0003,0,0)に 3e-4 の隙間 (CADモデリング公差相当)
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{100.0003, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
+    const auto result = cc->ValidatePD();
+    EXPECT_TRUE(result.is_valid);
+    EXPECT_TRUE(result.errors.empty());  // 警告も出ない
+}
+
+// 明らかに大きい隙間 (10, scale~100で0.1相対) → 連続性警告は出るがis_valid=true
+// (描画ブロックしない=本修正の要点)。隙間量は警告閾値の具体値に依存しないよう、
+// あらゆる妥当な連続性許容を確実に超える大きさにしている。
+TEST(CompositeCurveContinuityTest, LargeGap_IsValidWithWarning) {
+    auto cc = std::make_shared<CompositeCurve>();
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
+    // curve0の終点(100,0,0)とcurve1の始点(110,0,0)に10の隙間 (真の不連続レベル)
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{110.0, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
+    const auto result = cc->ValidatePD();
+    EXPECT_TRUE(result.is_valid);  // 警告は描画をブロックしない (本修正の要点)
+    // 連続性の警告 (kWarning) が含まれる
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
 }

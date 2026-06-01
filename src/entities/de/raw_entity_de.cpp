@@ -62,7 +62,9 @@ bool IsValidValue(const int value, const DEValueType expected,
                   const int range_max = -1) {
     switch (expected) {
         case DEValueType::kNA:
-            return value == 0;  // N.A.は未定義 (デフォルト値の0のみを許容)
+            // <n.a.>はpostprocessorが値を無視するフィールド (Section 2.2.1)。
+            // 非ゼロ値でも弾かず任意値を許容する (preprocessorは空欄か0を書く)。
+            return true;
         case DEValueType::kInt:
             return (range_max > 0) ? (value >= 0 && value <= range_max) : (value >= 0);
         case DEValueType::kPtr:
@@ -93,7 +95,9 @@ bool IsValidValue(const int value, const DEValueType expected,
 /// @note 期待される数値は、'??'、'**'、'00'~'06'のいずれか
 bool IsValidStatusNumber(const int status_num, const char expected_1, const char expected_2) {
     if (expected_1 == '*' && expected_2 == '*') {
-        return (status_num == 0);  // '**'と'00'は機能的に同義 (Section 2.2.4.4)
+        // '**'はpostprocessorが値を無視するフィールド (Section 2.2.1 / 2.2.4.4)。
+        // どの値でも00として扱われるため、任意値を許容する (preprocessorは00を書く)。
+        return true;
     } else if (expected_1 == '?' && expected_2 == '?') {
         return true;  // 任意値
     } else if (expected_1 == '0') {
@@ -608,8 +612,11 @@ i_ent::ToRawEntityDE(const std::string& first, const std::string& second) {
         // Parameter 11: Entity Type Number (skip)
 
         // Parameter 12: Line Weight Number
+        // 仕様上 0 (システム既定) を取り得る表示属性であり、Fusion 360 / Inventor 等は
+        // 本フィールドを省略して出力する。他の表示属性フィールドと同様、空欄は
+        // kDefaultLineWeightNumber (0) にデフォルトする (読み込み寛容化の設計方針 A層)。
         tmp = second.substr(++i * w, w);
-        de.line_weight_number = igesio::FromIgesInteger(tmp, std::nullopt);
+        de.line_weight_number = igesio::FromIgesInteger(tmp, i_ent::kDefaultLineWeightNumber);
         de.SetIsDefault(12, i_util::IsOnlySpace(tmp));
 
         // Parameter 13: Color Number
@@ -767,6 +774,9 @@ void i_ent::IsValid(const i_ent::RawEntityDE& de) {
 
     switch (de.entity_type) {
         case EntityType::kNull:
+            // Nullエンティティのみフォーム番号が<n.a.>であり、任意値を許容する
+            // (IGES 5.3: Section 2.2.1)
+            is_form_valid = true;
             ::IsValid(de, {Na, Na, Na, Na, Na, Na, Na, Na, Na}, "********");
             break;
         case EntityType::kCircularArc:

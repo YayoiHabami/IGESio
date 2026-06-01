@@ -112,21 +112,21 @@ class SurfaceView : public ISurface {
     std::array<double, 4> GetParameterRange() const override {
         return base_->GetParameterRange();
     }
-    /// @brief 基底の配置適用版`TryGetDerivatives(u, v, order, placement)`を可視化する
-    /// @note 3引数版をオーバーライドすると名前隠蔽により4引数版が隠れるため、
-    ///       `using`で再公開する. これによりSurfaceViewを具象型で保持したまま
-    ///       配置適用版を呼べる
+    /// @brief 基底のモデル空間版/配置適用版`TryGetDerivatives`を可視化する
+    /// @note 継承された非virtualの`TryGetDerivatives(u, v, order)`および配置適用版
+    ///       `TryGetDerivatives(u, v, order, placement)`を具象型のまま呼べるよう
+    ///       `using`で明示的に再公開する
     using ISurface::TryGetDerivatives;
     /// @brief ビューの定義空間における偏導関数を取得する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v
     /// @param order 何階まで計算するか
-    /// @return 元エンティティのM_entity適用後の偏導関数
+    /// @return 元エンティティのM_entity適用後(モデル空間)の偏導関数
     /// @note 継承された`TryGet*`系はこれに`Transform`(=placement_)を適用するため、
     ///       `placement_·(M_entity·S_def)`が得られる
     std::optional<SurfaceDerivatives>
-    TryGetDerivatives(const double u, const double v,
-                      const unsigned int order) const override {
+    TryGetDefinedDerivatives(const double u, const double v,
+                             const unsigned int order) const override {
         return base_->TryGetDerivatives(u, v, order, Matrix4d::Identity());
     }
 
