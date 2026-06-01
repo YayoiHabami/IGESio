@@ -263,6 +263,10 @@ void IgesViewerGUI::AddEntity(std::shared_ptr<entities::EntityBase> entity) {
         std::cerr << "Entity " << entity->GetID() << " is invalid: "
                   << result.Message() << std::endl;
         return;
+    } else if (!result.errors.empty()) {
+        // 警告のみ (幾何的品質の指摘など): 描画は継続しつつ診断を表示する
+        std::cerr << "Entity " << entity->GetID() << " has warnings: "
+                  << result.Message() << std::endl;
     }
 
     const entities::EntityType type = entity->GetType();
