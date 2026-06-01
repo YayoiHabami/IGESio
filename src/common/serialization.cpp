@@ -230,11 +230,12 @@ std::pair<double, igesio::ValueFormat> igesio::FromIgesRealWithFormat(
 
     // 前後から空白を削除して実数に変換
     auto trimmed = igesio::trim(str);
-    if (!IsDigitOrSign(trimmed[0])) {
-        // 先頭が数字でない場合 (\t等の::stripで削除されない空白文字がある場合)
+    if (!IsDigitOrSign(trimmed[0]) && trimmed[0] != '.') {
+        // 先頭が数字・符号・小数点のいずれでもない場合
+        // (整数部のない実数 ".5" を許容し、"-.5" を受理することとの非対称を避ける)
         throw igesio::TypeConversionError(
                 "Invalid double value: '" + str + "'"
-                " The string must begin with a digit or sign character");
+                " The string must begin with a digit, sign, or decimal point");
     }
 
     try {

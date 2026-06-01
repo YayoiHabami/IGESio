@@ -8,8 +8,11 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <vector>
 
 #include "igesio/common/errors.h"
+#include "igesio/common/iges_metadata.h"
+#include "igesio/common/serialization.h"
 #include "igesio/entities/pd.h"
 
 namespace {
@@ -94,4 +97,76 @@ TEST(ToRawEntityPDTest, NormalCase) {
                      {"1", "1", "1", "0", "1", "0", "0.", "0.", "1.", "1.",
                       "1.", "1.", "1.", "1.", "0.", "0.", "1.", "0.", "0.",
                       "1.", "0.", "0.", "1."});
+}
+
+
+
+/******************************************************************************
+ * ToIGESParameterVectorの型分類のテスト
+ *
+ * pd.dataの各文字列を内容ヒューリスティック(ClassifyParameter)で型推定し、
+ * 整数→実数→文字列→言語ステートメントの順にフォールバック変換する。
+ * ここでは get_format(i).type が期待どおりに分類されるかを検証する。
+ *****************************************************************************/
+
+namespace {
+
+/// @brief 与えた文字列列をpd.dataに持つRawEntityPDを変換する
+/// @param data パラメータ文字列の列
+/// @return 分類・変換済みのIGESParameterVector
+/// @note typeは分類に影響しないためkNullを用いる
+igesio::IGESParameterVector ClassifyParameters(
+        const std::vector<std::string>& data) {
+    return i_ent::ToIGESParameterVector(
+            i_ent::RawEntityPD(i_ent::EntityType::kNull, data));
+}
+
+}  // namespace
+
+// 整数形式("123"/"+5"/"-7")はInteger型に分類される
+TEST(ToIGESParameterVectorTest, ClassifiesInteger) {
+    const auto v = ClassifyParameters({"123", "+5", "-7"});
+    ASSERT_EQ(v.size(), 3u);
+    for (size_t i = 0; i < v.size(); ++i) {
+        EXPECT_EQ(v.get_format(i).type, igesio::IGESParameterType::kInteger)
+                << "index " << i;
+    }
+}
+
+// 実数形式(".5"や指数部D/Eを含む)はReal型に分類される
+TEST(ToIGESParameterVectorTest, ClassifiesReal) {
+    const auto v = ClassifyParameters({"1.5", ".5", "1E-08", "1.0D+01"});
+    ASSERT_EQ(v.size(), 4u);
+    for (size_t i = 0; i < v.size(); ++i) {
+        EXPECT_EQ(v.get_format(i).type, igesio::IGESParameterType::kReal)
+                << "index " << i;
+    }
+}
+
+// Hollerith形式("5Hhello"/"2HUM")はString型に分類される
+TEST(ToIGESParameterVectorTest, ClassifiesString) {
+    const auto v = ClassifyParameters({"5Hhello", "2HUM"});
+    ASSERT_EQ(v.size(), 2u);
+    for (size_t i = 0; i < v.size(); ++i) {
+        EXPECT_EQ(v.get_format(i).type, igesio::IGESParameterType::kString)
+                << "index " << i;
+    }
+}
+
+// 'D'を含み実数と誤推定されるが、変換に失敗してLanguage Statementへフォールバックする
+TEST(ToIGESParameterVectorTest, FallsBackToLanguageStatement) {
+    const auto v = ClassifyParameters({"DEGREE", "SOLIDWORKS"});
+    ASSERT_EQ(v.size(), 2u);
+    for (size_t i = 0; i < v.size(); ++i) {
+        EXPECT_EQ(v.get_format(i).type,
+                  igesio::IGESParameterType::kLanguageStatement) << "index " << i;
+    }
+}
+
+// 空パラメータはデフォルト値のString型として扱われる
+TEST(ToIGESParameterVectorTest, EmptyParameterIsDefaultString) {
+    const auto v = ClassifyParameters({""});
+    ASSERT_EQ(v.size(), 1u);
+    EXPECT_EQ(v.get_format(0).type, igesio::IGESParameterType::kString);
+    EXPECT_TRUE(v.get_format(0).is_default);
 }
