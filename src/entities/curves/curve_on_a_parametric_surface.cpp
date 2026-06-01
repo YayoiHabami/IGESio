@@ -360,8 +360,11 @@ igesio::ValidationResult CurveOnSurface::ValidatePD() const {
                 errors.emplace_back("Base curve is invalid: " + result.Message());
             }
         }
+        // ベース曲線Bはパラメータ空間 (z=0) にあるべきだが、僅かに外れても
+        // (x,y)=(u,v)として使用/描画可能。幾何的品質の指摘 (kWarning) とする。
         if (!GetBaseCurve()->GetBoundingBox().IsOnZPlane()) {
-            errors.emplace_back("Base curve is not on a plane parallel to the XY-plane.");
+            errors.emplace_back("Base curve is not on a plane parallel to the XY-plane.",
+                                igesio::ValidationSeverity::kWarning);
         }
     }
 

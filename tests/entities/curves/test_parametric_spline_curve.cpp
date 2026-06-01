@@ -166,3 +166,38 @@ TEST(ParametricSplineCurveCornerTest, Degree0_EndpointKnots_NotCorners) {
     EXPECT_FALSE(spline->IsCorner(2.0));
     EXPECT_TRUE(spline->IsCorner(1.0));
 }
+
+
+
+/**
+ * ValidatePDの重大度 (severity): セグメント間の不連続はkWarning
+ */
+
+// セグメント間に関数値の不連続 (seg0終点(1,0,0) != seg1始点(5,0,0)) がある → 折れ線として
+// 描画可能なためValidatePDは警告 (kWarning) を出すがis_valid=true (描画ブロックしない)。
+TEST(ParametricSplineCurveValidateTest, Discontinuity_IsValidWithWarning) {
+    const auto param = igesio::IGESParameterVector{
+        1, 1, 3, 2,          // CTYPE=1, H=1, NDIM=3, N=2
+        0.0, 1.0, 2.0,       // T(1), T(2), T(3)
+        // セグメント1: C(s)=(s, 0, 0) → 終点s=1で (1,0,0)
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        // セグメント2: C(s)=(5, s, 0) → 始点s=0で (5,0,0) ← 前セグメント終点と不連続
+        5.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        // 末端点 u=T(3)=2, s=1: C=(5,1,0)
+        5.0, 0.0, 0.0, 0.0,
+        1.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0
+    };
+    const ParametricSplineCurve spline(param);
+    const auto result = spline.ValidatePD();
+    EXPECT_TRUE(result.is_valid);  // 描画はブロックしない
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
+}

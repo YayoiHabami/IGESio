@@ -209,9 +209,12 @@ igesio::ValidationResult SurfaceOfRevolution::ValidatePD() const {
     // (例: 6.28318530717959 ≈ 2π+4e-15)ことがあるため(値はクランプせず原値を保持)。
     if (!(0.0 <= start_angle_ && start_angle_ < end_angle_
           && i_num::IsApproxLEQ(end_angle_, 2.0 * kPi))) {
+        // 角度は幾何的品質の指摘 (kWarning) とし描画はブロックしない
+        // (過回転でも周期的に評価でき、退化(start>=end)は何も描かないだけ)。
         errors.emplace_back("Invalid angles: Require 0 <= θstart < θend <= 2*pi, "
                             "but got θstart = " + std::to_string(start_angle_) + "[rad] and "
-                            "θend = " + std::to_string(end_angle_) + "[rad].");
+                            "θend = " + std::to_string(end_angle_) + "[rad].",
+                            igesio::ValidationSeverity::kWarning);
     }
 
     return MakeValidationResult(errors);

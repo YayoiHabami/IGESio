@@ -575,8 +575,10 @@ TEST(RationalBSplineCurvePDCtorTest, KnotRangeSlightlyOutside_IsValid) {
     EXPECT_TRUE(nurbs.ValidatePD().is_valid);
 }
 
-// P境界: Vがノット域を許容を超えて (1e-2 > tol=1e-3) 外れる → ValidatePDが落ちる
-TEST(RationalBSplineCurvePDCtorTest, KnotRangeFarOutside_IsInvalid) {
+// P境界: Vがノット域を許容を超えて (1e-2 > tol=1e-3) 外れる
+// → 評価側がtを域内へ丸めるため描画可能。
+// よってkWarningを出すが is_valid=true (描画ブロックしない)
+TEST(RationalBSplineCurvePDCtorTest, KnotRangeFarOutside_IsValidWithWarning) {
     const auto param = igesio::IGESParameterVector{
         2, 2,                          // K=2, M=2
         false, false, true, false,     // PROP1-4
@@ -589,7 +591,13 @@ TEST(RationalBSplineCurvePDCtorTest, KnotRangeFarOutside_IsInvalid) {
         0.0, 0.0, 1.0                  // 法線
     };
     const RationalBSplineCurve nurbs(param);
-    EXPECT_FALSE(nurbs.ValidatePD().is_valid);
+    const auto result = nurbs.ValidatePD();
+    EXPECT_TRUE(result.is_valid);  // 描画はブロックしない
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
 }
 
 // P companion: V(0) < T(0) (許容内) の曲線をV(0)で評価してもクラッシュせず点が返る

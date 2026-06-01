@@ -138,11 +138,13 @@ igesio::ValidationResult CircularArc::ValidatePD() const {
 
     std::vector<ValidationError> errors;
 
-    // 距離が等しいか確認する（許容範囲内で）
+    // 距離が等しいか確認する（許容範囲内で）。等距離でなくても円弧は描画可能なため、
+    // 幾何的品質の指摘 (kWarning) とし描画はブロックしない。
     if (!i_num::IsApproxEqual(r1, r2, i_num::kGeometryTolerance)) {
         // 点は中心から等距離でなければならない
         errors.push_back(ValidationError(
-                "Start and terminate points must be equidistant from the center.")
+                "Start and terminate points must be equidistant from the center.",
+                igesio::ValidationSeverity::kWarning)
                 << " Start distance: " << r1 << ", Terminate distance: " << r2);
     }
 

@@ -275,6 +275,9 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
             }
         }
         // S(0) <= U(0) < U(1) <= S(N1); See Section B.6
+        // CAD出力は U(0)/U(1) がノット域を僅かに外れることがある (曲線Pと同様)。
+        // 評価側 TryComputeBasisFunctions は t を域内へ丸めるため描画可能。
+        // よって幾何的品質の指摘 (kWarning) とし描画はブロックしない。
         auto s0 = u_knots_[m1], sn = u_knots_[u_knots_.size() - m1];
         if (s0 > parameter_range_[0] || parameter_range_[1] > sn) {
             errors.emplace_back("Knots S(0), S(N1) must satisfy "
@@ -282,7 +285,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
                 + std::to_string(s0) + ", U(0) = "
                 + std::to_string(parameter_range_[0]) + ", U(1) = "
                 + std::to_string(parameter_range_[1]) + ", S(N1) = "
-                + std::to_string(sn));
+                + std::to_string(sn), igesio::ValidationSeverity::kWarning);
         }
     }
     if (v_knots_.size() != k2 + m2 + 2) {
@@ -300,7 +303,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
                 break;
             }
         }
-        // T(0) <= V(0) < V(1) <= T(N2); See Section B.6
+        // T(0) <= V(0) < V(1) <= T(N2); (S(0)/U と同様にkWarning)
         auto t0 = v_knots_[m2], tn = v_knots_[v_knots_.size() - m2];
         if (t0 > parameter_range_[2] || parameter_range_[3] > tn) {
             errors.emplace_back("Knots T(0), T(N2) must satisfy "
@@ -308,7 +311,7 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
                 + std::to_string(t0) + ", V(0) = "
                 + std::to_string(parameter_range_[2]) + ", V(1) = "
                 + std::to_string(parameter_range_[3]) + ", T(N2) = "
-                + std::to_string(tn));
+                + std::to_string(tn), igesio::ValidationSeverity::kWarning);
         }
     }
 

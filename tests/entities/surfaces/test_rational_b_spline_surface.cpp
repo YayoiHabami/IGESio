@@ -135,3 +135,28 @@ TEST(RationalBSplineSurface, TryGetDefinedNormalAt) {
         }
     }
 }
+
+// P (曲面): U(0)がノット域S(0)=0を超えて外れる (CATIA等) → 評価側 (clamp済み基底)
+// が描画可能なため、ValidatePDは警告 (kWarning) を出すがis_valid=true (描画ブロックしない)。
+TEST(RationalBSplineSurface, KnotRangeOutside_IsValidWithWarning) {
+    auto param = igesio::IGESParameterVector{
+        1, 1, 1, 1,                       // K1, K2, M1, M2
+        true, true, false, true, true,    // PROP1-5
+        0., 0., 1., 1.,                   // u knots → S(0)=0, S(N1)=1
+        0., 0., 1., 1.,                   // v knots
+        1., 1., 1., 1.,                   // weights
+        -25., 25., 25.,                   // P(0,0)
+        25., 25., 25.,                    // P(1,0)
+        -25., 25., -25.,                  // P(0,1)
+        25., 25., -25.,                   // P(1,1)
+        -0.01, 1., 0., 1.                 // U(0)=-0.01 (ノット域S(0)=0を超過)
+    };
+    const i_ent::RationalBSplineSurface surf(param);
+    const auto result = surf.ValidatePD();
+    EXPECT_TRUE(result.is_valid);  // 描画はブロックしない
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
+}

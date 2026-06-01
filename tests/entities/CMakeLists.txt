@@ -28,6 +28,9 @@ set(TEST_SOURCES
     # Structures
     structures/test_color_definition.cpp
 
+    # Transformations
+    transformations/test_transformation_matrix.cpp
+
     # Surfaces
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp

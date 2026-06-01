@@ -321,11 +321,13 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
     const double range_tol = std::max(i_num::kParameterTolerance, 1e-3 * (tn - t0));
     if (!i_num::IsApproxLEQ(t0, parameter_range_[0], range_tol) ||
         !i_num::IsApproxLEQ(parameter_range_[1], tn, range_tol)) {
+        // 評価側がtを域内へ丸めるため描画可能。幾何的品質の指摘 (kWarning) とする。
         errors.emplace_back("Knots T(0), T(N) must satisfy T(0) <= V(0) < V(1) <= T(N). "
                 "Got T(0) = " + std::to_string(t0) +
                 ", V(0) = " + std::to_string(parameter_range_[0]) +
                 ", V(1) = " + std::to_string(parameter_range_[1]) +
-                ", T(N) = " + std::to_string(tn) + ".");
+                ", T(N) = " + std::to_string(tn) + ".",
+                igesio::ValidationSeverity::kWarning);
     }
 
     // 重みの検証
@@ -353,8 +355,11 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
     if (parameter_range_[0] >= parameter_range_[1]) {
         errors.emplace_back("Invalid parameter range: V(0) must be less than V(1).");
     }
+    // 平面フラグと法線の整合: 読み込み時に法線ゼロならis_planar_=falseに揃えるため
+    // 通常は発生しないが、整合性のため幾何的品質の指摘 (kWarning) としブロックしない。
     if (is_planar_ && !normal_vector_) {
-        errors.emplace_back("Normal vector is not defined, but the curve is planar.");
+        errors.emplace_back("Normal vector is not defined, but the curve is planar.",
+                            igesio::ValidationSeverity::kWarning);
     }
 
     return MakeValidationResult(std::move(errors));
