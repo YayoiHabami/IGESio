@@ -20,7 +20,7 @@ namespace igesio::graphics {
 /// @note このクラスは、ConicArcのうち、ConicType::kEllipseに対応する
 ///       描画用クラスである。
 class EllipseGraphics
-    : public EntityGraphics<entities::ConicArc, ShaderType::kEllipse> {
+    : public EntityGraphics<entities::ConicArc> {
  public:
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ

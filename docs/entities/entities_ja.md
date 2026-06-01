@@ -13,6 +13,7 @@
   - [`ISurface`](#isurface)
   - [`ITransformation`](#itransformation)
   - [`IColorDefinition`](#icolordefinition)
+- [変換ビュー（CurveView / SurfaceView）](#変換ビューcurveview--surfaceview)
 - [Annotations](#annotations)
 - [Structures](#structures)
   - [`UnsupportedEntity`](#unsupportedentity)
@@ -110,6 +111,16 @@
 > ```plaintext
 > IEntityIdentifier <─── IColorDefinition
 > ```
+
+## 変換ビュー（CurveView / SurfaceView）
+
+> Defined at [curve_view.h](../../include/igesio/entities/views/curve_view.h), [surface_view.h](../../include/igesio/entities/views/surface_view.h)
+
+　`CurveView`・`SurfaceView`は、既存の曲線・曲面エンティティに配置（座標変換）を後掛けして返す、読み取り専用の変換ビューです（Decoratorパターン）。`EntityBase`は継承せず、それぞれ`ICurve`・`ISurface`のみを継承するため、`const ICurve&`・`const ISurface&`を受け取る既存のアルゴリズムへそのまま渡せます。元エンティティは共有参照で保持し、書き換えません。
+
+　ビューは固有の`ObjectID`を持ちますが、エンティティタイプ・フォーム番号は元エンティティへ委譲します。元エンティティのIDは`IEntityIdentifier::GetSourceID()`で取得できます（通常のエンティティは`GetID()`と同じ値を返します）。これは、ピッキングで得られたビューから元エンティティを特定し、選択を集約する用途に用います。
+
+　主に[アセンブリ階層](../models/assembly_ja.md)に載せたエンティティを、特定の座標系（ワールド空間など）で問い合わせる際に用います。生成方法・座標系の指定・配置を適用した幾何問い合わせの詳細は、[座標フレームと変換ビュー](../models/coordinate_frames_ja.md)を参照してください。
 
 ## Annotations
 

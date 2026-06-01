@@ -3,6 +3,8 @@
 ## 目次
 
 - [目次](#目次)
+- [`IgesReader`クラス](#igesreaderクラス)
+- [中間データからの変換](#中間データからの変換)
 
 ## `IgesReader`クラス
 
@@ -54,3 +56,13 @@
   - 次の行が`kGlobal` (すなわち一つ前が3行目) の場合、`kGlobal`の行 (4行目) を読み込み、返します。
   - それ以外の場合、`std::nullopt`を返します。
 - `prev_section`がそれ以外の場合、`std::nullopt`を返します。
+
+## 中間データからの変換
+
+　`ConvertFromIntermediate`は、中間データ構造 (`IntermediateIgesData`) から`IgesData`を構築します。`IgesData`は、説明文・グローバルパラメータと、エンティティの集合を保持するルート`Assembly`で構成されます（[Assembly](../models/assembly_ja.md)を参照）。
+
+　処理は次の流れで行います。
+
+1. 全てのDEレコードのIDを予約します。
+2. `EntityFactory::CreateEntity`で各エンティティを生成し、ルート`Assembly`へ登録します。
+3. `BuildInitialTree`で初期ツリーを構築します。初期ツリーはフラットであり、全エンティティをルート`Assembly`の直下に置きます。

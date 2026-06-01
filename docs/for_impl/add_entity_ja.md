@@ -278,7 +278,7 @@ EntityRenderer
                                       └─ 同様
 ```
 
-`IEntityGraphics`は型消去基底クラスであり、各エンティティに対応した`EntityGraphics<T, ShaderType_>`テンプレートクラスの具体型として実装される。
+`IEntityGraphics`は型消去基底クラスであり、各エンティティに対応した`EntityGraphics<T>`テンプレートクラスの具体型として実装される。
 
 描画ループでは`EntityRenderer::Draw()`が`ShaderType`ごとにGLSLシェーダープログラムを切り替えながら、登録された`IEntityGraphics`の`Draw()`を順に呼び出す。
 
@@ -290,7 +290,7 @@ EntityRenderer
 | --- | --- |
 | **追加作業なし** | `ICurve`を継承し、`GetParameterRange()`と`TryGetDefinedDerivatives()`が正しく実装されていれば`ICurveGraphics`が自動的に使用される。`ISurface`に対しては`ISurfaceGraphics`。まず汎用描画で動作を確認し、必要に応じて専用実装に移行することを推奨する。 |
 | **専用Graphicsクラスを作成** | 特殊な描画モード（GPU上でのテッセレーション、ジオメトリシェーダー等）が必要な場合や、汎用クラスでは精度・パフォーマンスが不十分な場合。 |
-| **CompositeEntityGraphicsを使用** | 子エンティティをそれぞれ独立して描画する複合エンティティの場合。 |
+| **複合ノード (統合EntityGraphics) を使用** | 子エンティティをそれぞれ独立して描画する複合エンティティの場合。 |
 
 専用`Graphics`クラスを作成する場合の手順は[`docs/graphics/add_entity_graphics.md`](../graphics/add_entity_graphics.md)を参照すること。そちらのドキュメントに、ヘッダーの作成からGLSLシェーダーの登録、`factory.cpp`への追加まで詳細な手順が記載されている。
 

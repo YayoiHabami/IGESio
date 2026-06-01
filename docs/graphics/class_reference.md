@@ -4,17 +4,17 @@
 
 ### `IEntityGraphics` (`include/igesio/graphics/core/i_entity_graphics.h`)
 
-全描画クラスの型消去基底クラス。`EntityGraphics<T>` および `CompositeEntityGraphics<T>` が実装する。
+全描画クラスの型消去基底クラス。具体型は`EntityGraphics<T>`(複合ノードもこれが担う)が実装する。
 
 **主要な純粋仮想関数**
 
 | 関数 | 説明 |
 |---|---|
-| `Draw(shader, shader_type, viewport)` | 指定したShaderTypeが一致する場合に描画する |
-| `Draw(shader, viewport)` | ShaderTypeを問わず描画する |
+| `Draw(shader, shader_type, viewport, ctx)` | 指定したShaderTypeに一致する場合に描画する(選択等はctxからPULL) |
+| `Draw(shader, viewport, ctx)` | ShaderTypeを問わず描画する |
 | `Synchronize()` | エンティティの状態に基づいてOpenGLリソースを再構築する |
 | `SyncTexture()` | テクスチャリソースを同期する |
-| `GetShaderType()` | このオブジェクトが使用するShaderTypeを返す |
+| `GetShaderTypes()` | このオブジェクト(と子)が使用するShaderTypeの集合を返す |
 | `Cleanup()` | OpenGLリソースを解放する |
 | `IsDrawable()` | 描画可能な状態かを返す |
 
@@ -31,19 +31,18 @@
 | `SetGlobalParam(param)` | 描画グローバルパラメータを設定する |
 | `MaterialProperty()` | マテリアルプロパティへの参照を返す |
 
----
+### `EntityGraphics<T, has_surfaces>` (`include/igesio/graphics/core/entity_graphics.h`)
 
-### `EntityGraphics<T, ShaderType_, has_surfaces>` (`include/igesio/graphics/core/entity_graphics.h`)
-
-`IEntityGraphics` の汎用テンプレート実装。具体的なGraphicsクラスはこれを継承する。
+`IEntityGraphics`の汎用テンプレート実装。具体的なGraphicsクラスはこれを継承する。子のGraphicsを
+持てば複合ノードも担う。使用する`ShaderType`はテンプレート引数ではなく、コンストラクタ引数として
+渡してメンバ`shader_type_`に保持する。
 
 **テンプレートパラメータ**
 
 | パラメータ | 説明 |
 |---|---|
-| `T` | 対象エンティティ型。`IEntityIdentifier` を継承していること |
-| `ShaderType_` | このクラスが使用する `ShaderType` 値 |
-| `has_surfaces` | サーフェスを持つ場合 `true` (デフォルト `false`) |
+| `T` | 対象エンティティ型。`IEntityIdentifier`を継承していること |
+| `has_surfaces` | サーフェスを持つ場合`true`(デフォルト`false`) |
 
 **サブクラスで実装が必要なもの**
 
@@ -67,25 +66,21 @@
 | `use_entity_transform_` | `GetWorldTransform()` でエンティティ変換行列を合成するか |
 | `global_param_` | 描画グローバルパラメータ |
 | `material_property_` | マテリアルプロパティ |
+| `shader_type_` | このオブジェクトの主ShaderType (コンストラクタで指定) |
+| `child_graphics_` | 子GraphicsをShaderType別に保持する (複合ノード時) |
 
----
+### 複合ノード (子要素を持つ `EntityGraphics`)
 
-### `CompositeEntityGraphics<T>` (`include/igesio/graphics/core/composite_entity_graphics.h`)
-
-複数の子要素を持つエンティティ用の基底クラス。ShaderTypeは常に `kComposite`。
-子要素のGraphicsオブジェクトを `child_graphics_` マップで管理する。
-
-**主要な公開関数**
+複数の子要素を独立して描画するエンティティ(`CompositeCurve`(Type 102)等)は、専用基底ではなく
+統合`EntityGraphics`が子のGraphicsを`child_graphics_`(ShaderType別)で保持して表現する。主ShaderTypeは
+`kComposite`で、自身は固有のシェーダーコードを持たず、描画を子へ委譲する。
 
 | 関数 | 説明 |
 |---|---|
 | `AddChildGraphics(graphics)` | 子要素のGraphicsオブジェクトを追加する |
-| `GetShaderTypes()` | 子要素を含む全ShaderTypeを返す |
+| `GetShaderTypes()` | 自身と全子要素のShaderTypeの集合を返す |
 
-`SetWorldTransform()` は子要素にも変換行列を伝播させる。
-`SetColor()` / `ResetColor()` も子要素に伝播する。
-
----
+`SetWorldTransform()` / `SetColor()` / `ResetColor()` は子要素にも伝播する。
 
 ### `EntityRenderer` (`include/igesio/graphics/renderer.h`)
 
@@ -105,8 +100,45 @@
 | `Light()` | 光源への参照を返す |
 | `SetDisplaySize(w, h)` | 描画対象サイズを設定する |
 | `SetBackgroundColor(r, g, b, a)` | 背景色を設定する |
+| `SetScene(scene)` | 描画対象の`models::Scene`を設定する (rootと選択を一元管理) |
+| `MarkSceneDirty()` | ツリー変更を通知し、次回描画で再走査させる |
+| `PickEntities(...)` / `PickEntitiesInRect(...)` | レイ/矩形でヒットしたエンティティIDを返す |
 
----
+選択状態はレンダラではなく`models::Scene`/`SelectionSet`が保持する。レンダラはピッキングでIDを返すのみで、選択の確定は`Scene`(対話では`TrySelectWithLock`)が行う。
+
+## 状態関連クラス (PULL元)
+
+描画はこれらから状態をPULLする。詳細は`overview.md`§8を参照。
+
+### `models::Scene` (`include/igesio/models/scene.h`)
+
+| 関数 | 説明 |
+|---|---|
+| `Root()` / `RootPtr()` | モデルのルートAssemblyを取得する |
+| `ActiveSelection()` | アクティブな選択セットを取得する |
+| `CreateSelectionSet()` / `ActivateSelectionSet(id)` | 選択セットの作成・切替 |
+| `Filter()` | ピックフィルタ(`PickFilter`)を取得する |
+| `TrySelectWithLock(set, id)` | ロック/フィルタを尊重して選択する(対話ピック用) |
+
+### `models::SelectionSet` (`include/igesio/models/selection_set.h`)
+
+| 関数 | 説明 |
+|---|---|
+| `Select` / `Deselect` / `Toggle` / `Replace` / `Clear` | 選択集合の操作 |
+| `Contains(id)` / `Items()` | 選択状態の照会 |
+| `Active()` | アンカー(主選択)を取得する |
+
+### `models::PickFilter` (`include/igesio/models/pick_filter.h`)
+
+`faces` / `edges` / `vertices` / `bodies` の各ブール値。v1は`bodies`(エンティティ単位)のみ尊重する。
+
+### `graphics::DrawContext` (`include/igesio/graphics/core/draw_context.h`)
+
+| メンバ | 説明 |
+|---|---|
+| `selection` | 参照する`SelectionSet`(非所有) |
+| `highlight_color` | 選択ハイライト色 (RGBA) |
+| `IsHighlighted(id)` | 指定IDが選択中(ハイライト対象)かを返す |
 
 ## ファクトリ関数 (`include/igesio/graphics/factory.h`)
 
@@ -115,8 +147,6 @@
 | `CreateEntityGraphics(entity, gl)` | 任意の `IEntityIdentifier` から適切なGraphicsオブジェクトを作成する |
 | `CreateCurveGraphics(entity, gl)` | `ICurve` から曲線Graphicsオブジェクトを作成する |
 | `CreateSurfaceGraphics(entity, gl)` | `ISurface` から曲面Graphicsオブジェクトを作成する |
-
----
 
 ## 各エンティティのGraphicsクラス一覧
 
@@ -142,8 +172,6 @@
 | `ISurfaceGraphics` | ISurface 汎用 | `kGeneralSurface` | CPU離散化, VBO + EBO, 光源計算あり |
 | `RationalBSplineSurfaceGraphics` | Type 128 | `kRationalBSplineSurface` | GPUパラメトリック, テッセレーション + SSBO, 光源計算あり |
 
----
-
 ## MaterialProperty (`include/igesio/graphics/core/material_property.h`)
 
 IGESが保持しない、描画専用のマテリアルプロパティ。
@@ -156,8 +184,6 @@ IGESが保持しない、描画専用のマテリアルプロパティ。
 | `opacity` | `float` | 不透明度 (デフォルト: 1.0) |
 | `texture` | `Texture` | テクスチャ |
 
----
-
 ## Camera (`include/igesio/graphics/core/camera.h`)
 
 | 投影モード | 説明 |
@@ -165,8 +191,6 @@ IGESが保持しない、描画専用のマテリアルプロパティ。
 | `Perspective` | 透視投影 (デフォルト) |
 | `Orthographic` | 正投影 |
 | `Oblique` | 斜投影 |
-
----
 
 ## Light (`include/igesio/graphics/core/light.h`)
 

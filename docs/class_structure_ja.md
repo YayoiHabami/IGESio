@@ -30,7 +30,7 @@ flowchart TD
         end
         subgraph "rendering"
             direction LR
-            gr1[[Renderer]]
+            gr1[[EntityRenderer]]
             gr2[[Camera]]
             gr3[[Light]]
             gr4[[MaterialProperty]]
@@ -50,6 +50,9 @@ flowchart TD
         subgraph "models"
             direction LR
             em1[[IgesData]]
+            em2[[Assembly]]
+            em3[[Scene]]
+            em4[[SelectionSet]]
         end
     end
     subgraph "中間データ構造 (hidden)"
@@ -78,7 +81,7 @@ style y fill:#fff0, stroke:#fff0
 
 　IGESファイルに記述される各エンティティを表現するクラス群です。`igesio::entities::EntityBase`クラスを基底クラスとして、各エンティティタイプに対応する派生クラスが定義されています。エンティティクラスは、IGESファイルの入出力の際に中間データ構造と相互変換されます。
 
-　エンティティクラスは、複数のエンティティを取りまとめるデータ構造（models）によって管理されます。例えば、ファイルからのデータの入出力は`igesio::ReadIges`、`igesio::WriteIges`関数を利用し、その戻り値/引数として`igesio::models::IgesData`クラスが使用されます。ユーザーは、エンティティクラスを直接操作して、IGESデータを生成・編集・解析することができます。
+　エンティティの集合を取りまとめる責務は、`igesio::models::Assembly`クラスが担います。`Assembly`は再帰的なツリーノードであり、エンティティの平坦なマップと子`Assembly`を保持して階層構造を表現します。ファイルからのデータの入出力は`igesio::ReadIges`、`igesio::WriteIges`関数を利用し、その戻り値/引数として`igesio::models::IgesData`クラスが使用されますが、`IgesData`自身は説明文・グローバルパラメータとルート`Assembly`を保持する薄いラッパーであり、エンティティの管理はルート`Assembly`へ委ねられています。ユーザーは、エンティティクラスを直接操作して、IGESデータを生成・編集・解析することができます。詳細は[Assembly](./models/assembly_ja.md)を参照してください。
 
 　使用方法については、上記Entitiesドキュメントおよび[Examples](./examples_ja.md)を参照してください。
 
@@ -90,7 +93,7 @@ style y fill:#fff0, stroke:#fff0
   - `CircularArc` (エンティティ) → `CircularArcGraphics`
   - `Line` (エンティティ) → `SegmentGraphics` (線分、半直線)、`LineGraphics` (無限直線)
 
-　これらのグラフィックスクラスは`igesio::graphics::Renderer`クラスで生成・管理されるため、ユーザーは直接操作することは通常ありません。`Renderer`クラスは、描画するエンティティの追加・削除・更新や、カメラ操作、描画処理を担当します。ユーザーは`Renderer`クラスのインスタンスを通じて、3Dグラフィックス描画を制御します。
+　これらのグラフィックスクラスは`igesio::graphics::EntityRenderer`クラスで生成・管理されるため、ユーザーは直接操作することは通常ありません。`EntityRenderer`クラスは、描画するエンティティの追加・削除・更新や、カメラ操作、描画処理を担当します。描画対象のツリーや選択状態は`igesio::models::Scene`が保持し、`EntityRenderer`はこれを非所有参照して描画時に読み出します（選択状態はエンティティやレンダラではなく`Scene`が一元管理します）。ユーザーは`EntityRenderer`と`Scene`を通じて、3Dグラフィックス描画と選択を制御します。
 
 ## 4. その他非エンティティクラス
 

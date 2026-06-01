@@ -13,6 +13,8 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -29,14 +31,17 @@ namespace igesio::graphics {
 
 /// @brief エンティティの描画情報を管理するクラス
 /// @tparam T エンティティの型
-/// @tparam ShaderType_ このクラスが対応するシェーダーのタイプ
 /// @tparam has_surfaces Tがサーフェスを持つか (デフォルト: false)
+/// @note このクラスが対応するShaderTypeはコンストラクタ引数で受け取り、
+///       実行時メンバ`shader_type_`に保持する.
+/// @note 葉ノードは自前のVAOを`DrawImpl`で描画する. 複合ノード(`child_graphics_`に
+///       子を持つ)は描画を子へ委譲し、`DrawImpl`は空実装でよい (CompositeCurve等).
 /// @note 以下のメンバ関数のオーバーライドが必要
 ///       - `EntityGraphics`由来:
 ///         - `Cleanup`(public): VAO以外のOpenGLリソースを持つ場合
-///         - `DrawImpl`(protected): 常にオーバーライドが必要
-template<typename T, ShaderType ShaderType_,
-         bool has_surfaces = false, typename = std::enable_if_t<
+///         - `DrawImpl`(protected): 葉ノードでは常にオーバーライドが必要
+template<typename T, bool has_surfaces = false,
+         typename = std::enable_if_t<
         std::is_base_of_v<entities::IEntityIdentifier, T>>>
 class EntityGraphics : public IEntityGraphics {
  protected:
@@ -52,21 +57,31 @@ class EntityGraphics : public IEntityGraphics {
     GLenum draw_mode_ = GL_LINE_STRIP;
     /// @brief テクスチャのID (サーフェスを持つ場合に使用)
     GLuint texture_id_ = 0;
+    /// @brief このクラスが対応するシェーダーのタイプ
+    ShaderType shader_type_;
+    /// @brief 子要素の描画オブジェクト (複合ノードの場合に使用. 葉では空)
+    /// @note キーはShaderType. CompositeCurve(102)等、複数の子を異なるシェーダーで
+    ///       描画する場合に使用する. 子を持つノードは自前VAOを持たない.
+    std::unordered_map<ShaderType, std::vector<std::unique_ptr<IEntityGraphics>>>
+            child_graphics_;
 
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
+    /// @param shader_type このクラスが対応するシェーダーのタイプ
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
     /// @throw std::invalid_argument entityがnullptrの場合
     EntityGraphics(const std::shared_ptr<const T> entity,
                    const std::shared_ptr<IOpenGL> gl,
+                   ShaderType shader_type,
                    bool use_entity_transform)
             : IEntityGraphics(gl, use_entity_transform),
               entity_(entity),
               graphics_id_(IDGenerator::Generate(
                     ObjectType::kEntityGraphics,
-                    (entity != nullptr) ? static_cast<uint16_t>(entity->GetType()) : 0)) {
+                    (entity != nullptr) ? static_cast<uint16_t>(entity->GetType()) : 0)),
+              shader_type_(shader_type) {
         if (!entity_) {
             throw std::invalid_argument("Entity pointer cannot be null");
         }
@@ -89,7 +104,9 @@ class EntityGraphics : public IEntityGraphics {
           vao_(other.vao_),
           draw_mode_(other.draw_mode_),
           texture_id_(other.texture_id_),
-          graphics_id_(std::move(other.graphics_id_)) {
+          graphics_id_(std::move(other.graphics_id_)),
+          shader_type_(other.shader_type_),
+          child_graphics_(std::move(other.child_graphics_)) {
         // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
         other.entity_ = nullptr;
         other.vao_ = 0;
@@ -113,6 +130,8 @@ class EntityGraphics : public IEntityGraphics {
             draw_mode_ = other.draw_mode_;
             texture_id_ = other.texture_id_;
             graphics_id_ = std::move(other.graphics_id_);
+            shader_type_ = other.shader_type_;
+            child_graphics_ = std::move(other.child_graphics_);
 
             // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
             other.entity_ = nullptr;
@@ -143,49 +162,29 @@ class EntityGraphics : public IEntityGraphics {
     /// @param viewport ビューポートのサイズ (width, height)
     /// @note shader_typeに合致する要素がない場合は何もしない
     void Draw(GLuint shader, const ShaderType shader_type,
-              const std::pair<float, float>& viewport) const override {
-        // シェーダータイプが合致していることのみ確認
-        if (shader_type != ShaderType_) return;
-
-        Draw(shader, viewport);
+              const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
+        // 葉ノード: 固有シェーダーが一致する場合に自己描画する
+        if (HasSpecificShaderCode(shader_type_) && shader_type == shader_type_) {
+            Draw(shader, viewport, ctx);
+        }
+        // 複合ノード: 子要素を持つ場合は指定型の子へ委譲する
+        DrawChildGraphics(shader, shader_type, viewport, ctx);
     }
 
-    /// @brief エンティティの描画を行う
+    /// @brief エンティティの描画を行う (Drawフェーズ)
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void Draw(GLuint shader, const std::pair<float, float>& viewport) const override {
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    /// @note 「PULLした表示状態の適用 (ApplyRenderState)」と「ジオメトリ発行
+    ///       (DrawImpl)」に責務を分離する. 本フェーズは論理状態を保持しない.
+    void Draw(GLuint shader, const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
         if (!entity_) return;
         if (!IsDrawable()) return;
 
-        gl_->LineWidth(GetLineWidth());
-
-        // 全シェーダーで共通のuniform変数を設定
-        igesio::Matrix4f model = GetWorldTransform();
-        gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
-                              1, GL_FALSE, model.data());
-        gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
-                        1, GetColor().data());
-
-        // エンティティが面を持っている場合は関連するパラメータを設定
-        if constexpr (has_surfaces) {
-            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ambientStrength"),
-                           material_property_.ambient_strength);
-            gl_->Uniform1f(gl_->GetUniformLocation(shader, "specularStrength"),
-                           material_property_.specular_strength);
-            gl_->Uniform1i(gl_->GetUniformLocation(shader, "shininess"),
-                           material_property_.shininess);
-
-            // テクスチャの設定
-            gl_->Uniform1i(gl_->GetUniformLocation(shader, "useTexture"),
-                           material_property_.IsTextureUsable() ? 1 : 0);
-            if (material_property_.IsTextureUsable() && texture_id_ != 0) {
-                gl_->ActiveTexture(GL_TEXTURE0);
-                gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
-                gl_->Uniform1i(gl_->GetUniformLocation(shader, "textureSampler"), 0);
-            }
-        }
-
-        DrawImpl(shader, viewport);
+        ApplyRenderState(shader, ctx);  // PULLした表示状態 (変換/色/材質) を適用
+        DrawImpl(shader, viewport);      // ジオメトリ発行 (GL描画コマンド)
     }
 
     /// @brief テクスチャの設定を行う
@@ -218,7 +217,33 @@ class EntityGraphics : public IEntityGraphics {
     /// @brief 描画用のシェーダーのタイプを取得する
     /// @return 描画用のシェーダーのタイプ
     ShaderType GetShaderType() const override {
-        return ShaderType_;
+        return shader_type_;
+    }
+
+    /// @brief 全ての可能なシェーダータイプを取得する
+    /// @return 自身のShaderTypeと、子要素 (複合ノード) のShaderTypeの和集合
+    std::unordered_set<ShaderType> GetShaderTypes() const override {
+        std::unordered_set<ShaderType> types = {shader_type_};
+        for (const auto& [st, children] : child_graphics_) {
+            if (st != ShaderType::kComposite && !children.empty()) {
+                types.insert(st);
+            } else {
+                // 子要素自身がkCompositeの場合は、その子のShaderTypeも取得
+                for (const auto& child : children) {
+                    if (child) types.merge(child->GetShaderTypes());
+                }
+            }
+        }
+        return types;
+    }
+
+    /// @brief 子要素の描画オブジェクトを追加する (複合ノード化)
+    /// @param graphics 追加する描画オブジェクト
+    /// @note graphicsがnullptrの場合は何もしない. 子のShaderTypeでバケットへ格納する.
+    void AddChildGraphics(std::unique_ptr<IEntityGraphics>&& graphics) {
+        if (!graphics) return;
+        const auto st = graphics->GetShaderType();
+        child_graphics_[st].emplace_back(std::move(graphics));
     }
 
     /// @brief OpenGLリソースを解放する
@@ -233,12 +258,29 @@ class EntityGraphics : public IEntityGraphics {
             gl_->DeleteTextures(1, &texture_id_);
             texture_id_ = 0;
         }
+        // 子要素 (複合ノード) のリソースも解放する
+        for (auto& [st, list] : child_graphics_) {
+            for (auto& child : list) {
+                if (child) child->Cleanup();
+            }
+        }
+        child_graphics_.clear();
     }
 
     /// @brief 描画可能な状態かどうかを確認する
     /// @note GPUへパラメータを渡し、GPU上で離散点を計算する場合は
     ///       オーバーライド不要.
     bool IsDrawable() const override {
+        // 複合ノード: 全ての子要素が描画可能なら描画可
+        if (!child_graphics_.empty()) {
+            for (const auto& [st, list] : child_graphics_) {
+                for (const auto& child : list) {
+                    if (!child || !child->IsDrawable()) return false;
+                }
+            }
+            return true;
+        }
+        // 葉ノード
         return entity_ && vao_ != 0;
     }
 
@@ -247,6 +289,28 @@ class EntityGraphics : public IEntityGraphics {
     /**
      * パラメータの取得/設定
      */
+
+    /// @brief グローバル座標系への変換行列を設定する
+    /// @param matrix グローバル座標系への変換行列 (親→モデル空間)
+    /// @note 子要素 (複合ノード) を持つ場合は、matrix·M_entityを子へ伝播する.
+    void SetWorldTransform(const igesio::Matrix4f& matrix) override {
+        world_transform_ = matrix;
+        if (child_graphics_.empty()) return;
+
+        // 子要素には matrix·M_entity を伝播する (M_entityは各子が自前で扱わない前提)
+        igesio::Matrix4f child_transform = matrix;
+        if (auto ptr =
+                std::dynamic_pointer_cast<const entities::EntityBase>(entity_)) {
+            const igesio::Matrix4f m_entity = ptr->GetTransformationMatrix()
+                    .GetTransformation().template cast<float>();
+            child_transform = matrix * m_entity;
+        }
+        for (auto& [st, list] : child_graphics_) {
+            for (auto& child : list) {
+                if (child) child->SetWorldTransform(child_transform);
+            }
+        }
+    }
 
     /// @brief グローバル座標系への変換行列を取得する
     /// @return グローバル座標系への変換行列.
@@ -288,6 +352,18 @@ class EntityGraphics : public IEntityGraphics {
         return {color_[0], color_[1], color_[2], color_[3]};
     }
 
+    /// @brief メインの色を設定する
+    /// @param color メインの色 (RGBA; [0, 1]の範囲)
+    /// @note 子要素 (複合ノード) を持つ場合は子にも伝播する.
+    void SetColor(const std::array<GLfloat, 4>& color) override {
+        IEntityGraphics::SetColor(color);
+        for (auto& [st, list] : child_graphics_) {
+            for (auto& child : list) {
+                if (child) child->SetColor(color);
+            }
+        }
+    }
+
     /// @brief 色をデフォルトのエンティティの色に戻す
     void ResetColor() override {
         is_color_overridden_ = false;
@@ -298,6 +374,12 @@ class EntityGraphics : public IEntityGraphics {
             color_[1] = static_cast<GLfloat>(g) / 100.0f;
             color_[2] = static_cast<GLfloat>(b) / 100.0f;
             color_[3] = 1.0f;  // 不透明度は1.0f (完全に不透明)
+        }
+        // 子要素 (複合ノード) の色もデフォルトに戻す
+        for (auto& [st, list] : child_graphics_) {
+            for (auto& child : list) {
+                if (child) child->ResetColor();
+            }
         }
     }
 
@@ -386,6 +468,24 @@ class EntityGraphics : public IEntityGraphics {
     /// @return ワールド座標のサンプル. ISurface/ICurveでなければ空
     SelectionSamples GetSelectionSamples(
             const SelectionSampleParams& params) const override {
+        // 複合ノード: 子要素のサンプルを集約する (子はSetWorldTransform伝播済みの
+        // ためワールド座標で得られる. ここでworld_transform_を再適用しないこと)
+        if (!child_graphics_.empty()) {
+            SelectionSamples result;
+            for (const auto& [st, list] : child_graphics_) {
+                for (const auto& child : list) {
+                    if (!child) continue;
+                    auto cs = child->GetSelectionSamples(params);
+                    for (auto& pl : cs.polylines) {
+                        result.polylines.push_back(std::move(pl));
+                    }
+                    for (const auto& pt : cs.points) result.points.push_back(pt);
+                }
+            }
+            result.polylines_closed = false;
+            return result;
+        }
+
         if (!entity_) return {};
 
         // world_transform_ (親->ワールド) をdoubleへ昇格して適用する
@@ -608,6 +708,77 @@ class EntityGraphics : public IEntityGraphics {
     }
 
  protected:
+    /// @brief PULLした表示状態をuniformへ適用する (Drawフェーズの状態適用部)
+    /// @param shader プログラムシェーダーのID
+    /// @param ctx 表示コンテキスト
+    /// @note model(変換)・mainColor(選択ハイライト or エンティティ色)・線幅を設定し、
+    ///       has_surfaces時は材質/テクスチャを設定する. 論理状態は保持しない.
+    void ApplyRenderState(GLuint shader, const DrawContext& ctx) const {
+        gl_->LineWidth(GetLineWidth());
+
+        // 全シェーダーで共通のuniform変数を設定
+        igesio::Matrix4f model = GetWorldTransform();
+        gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
+                              1, GL_FALSE, model.data());
+        // 選択中はハイライト色をPULLし、そうでなければエンティティの色を使う
+        // (選択色をオブジェクトへ焼き込まない)
+        const std::array<GLfloat, 4> color =
+                ctx.IsHighlighted(GetEntityID()) ? ctx.highlight_color : GetColor();
+        gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
+                        1, color.data());
+
+        // エンティティが面を持っている場合は関連するパラメータを設定
+        if constexpr (has_surfaces) {
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ambientStrength"),
+                           material_property_.ambient_strength);
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "specularStrength"),
+                           material_property_.specular_strength);
+            gl_->Uniform1i(gl_->GetUniformLocation(shader, "shininess"),
+                           material_property_.shininess);
+
+            // テクスチャの設定
+            gl_->Uniform1i(gl_->GetUniformLocation(shader, "useTexture"),
+                           material_property_.IsTextureUsable() ? 1 : 0);
+            if (material_property_.IsTextureUsable() && texture_id_ != 0) {
+                gl_->ActiveTexture(GL_TEXTURE0);
+                gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
+                gl_->Uniform1i(gl_->GetUniformLocation(shader, "textureSampler"), 0);
+            }
+        }
+    }
+
+    /// @brief 子要素 (複合ノード) を指定シェーダータイプで描画する
+    /// @param shader プログラムシェーダーのID
+    /// @param shader_type 描画に使用するシェーダーのタイプ
+    /// @param viewport ビューポートのサイズ (width, height)
+    /// @param ctx 表示コンテキスト
+    /// @note 指定型の直接の子に加え、kCompositeの子へも再帰委譲する. 子が無ければ何もしない.
+    void DrawChildGraphics(GLuint shader, const ShaderType shader_type,
+                           const std::pair<float, float>& viewport,
+                           const DrawContext& ctx) const {
+        if (child_graphics_.empty()) return;
+        // 親(この複合ノード)が選択中なら、子のID判定に依らずハイライトさせる
+        DrawContext child_ctx = ctx;
+        if (ctx.IsHighlighted(GetEntityID())) child_ctx.force_highlight = true;
+
+        auto it = child_graphics_.find(shader_type);
+        if (it != child_graphics_.end()) {
+            for (const auto& child : it->second) {
+                if (child && child->IsDrawable()) {
+                    child->Draw(shader, shader_type, viewport, child_ctx);
+                }
+            }
+        }
+        auto cit = child_graphics_.find(ShaderType::kComposite);
+        if (cit != child_graphics_.end()) {
+            for (const auto& child : cit->second) {
+                if (child && child->IsDrawable()) {
+                    child->Draw(shader, shader_type, viewport, child_ctx);
+                }
+            }
+        }
+    }
+
     /// @brief エンティティの描画を実装する関数
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)

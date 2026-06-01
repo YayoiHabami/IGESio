@@ -6,6 +6,9 @@ add_library(igesio_models STATIC
 
     assembly.cpp
     flatten.cpp
+
+    selection_set.cpp
+    scene.cpp
 )
 
 # Set the source and include directories
