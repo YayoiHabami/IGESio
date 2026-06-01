@@ -729,12 +729,12 @@ class EntityGraphics : public IEntityGraphics {
 
         // エンティティが面を持っている場合は関連するパラメータを設定
         if constexpr (has_surfaces) {
-            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ambientStrength"),
-                           material_property_.ambient_strength);
-            gl_->Uniform1f(gl_->GetUniformLocation(shader, "specularStrength"),
-                           material_property_.specular_strength);
-            gl_->Uniform1i(gl_->GetUniformLocation(shader, "shininess"),
-                           material_property_.shininess);
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "roughness"),
+                           material_property_.roughness);
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "metallic"),
+                           material_property_.metallic);
+            gl_->Uniform1f(gl_->GetUniformLocation(shader, "ao"),
+                           material_property_.ao);
 
             // テクスチャの設定
             gl_->Uniform1i(gl_->GetUniformLocation(shader, "useTexture"),
