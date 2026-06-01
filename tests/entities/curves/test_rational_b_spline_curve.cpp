@@ -557,6 +557,62 @@ TEST(RationalBSplineCurvePDCtorTest, PlanarFlagWithZeroNormal_IsValid) {
     EXPECT_TRUE(nurbs.ValidatePD().is_valid);
 }
 
+// P: V(0)/V(1) がノット域 [T(0), T(N)]=[0,1] を許容内 (~5e-4 < tol=1e-3) で外れる
+// (CATIA等) → ValidatePDが通る。span=1なのでrange_tol = 1e-3
+TEST(RationalBSplineCurvePDCtorTest, KnotRangeSlightlyOutside_IsValid) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット → T(0)=0, T(N)=1
+        1.0, 1.0, 1.0,                 // 重み
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        -0.0005, 1.0005,               // V=[-5e-4, 1+5e-4] (僅かに域外)
+        0.0, 0.0, 1.0                  // 法線
+    };
+    const RationalBSplineCurve nurbs(param);
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
+// P境界: Vがノット域を許容を超えて (1e-2 > tol=1e-3) 外れる → ValidatePDが落ちる
+TEST(RationalBSplineCurvePDCtorTest, KnotRangeFarOutside_IsInvalid) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット → T(0)=0, T(N)=1
+        1.0, 1.0, 1.0,                 // 重み
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        -0.01, 1.0,                    // V(0)=-1e-2 (許容超過の域外)
+        0.0, 0.0, 1.0                  // 法線
+    };
+    const RationalBSplineCurve nurbs(param);
+    EXPECT_FALSE(nurbs.ValidatePD().is_valid);
+}
+
+// P companion: V(0) < T(0) (許容内) の曲線をV(0)で評価してもクラッシュせず点が返る
+// (基底関数TryComputeBasisFunctionsのスパンindexクランプの回帰テスト)
+TEST(RationalBSplineCurvePDCtorTest, EvalAtParamStartBelowKnotDomain_NoCrash) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        false, false, true, false,     // PROP1-4
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット → T(0)=0, T(N)=1
+        1.0, 1.0, 1.0,                 // 重み
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        -0.0005, 1.0005,               // V(0)=-5e-4 < T(0)=0 (ノット域を僅か下回る)
+        0.0, 0.0, 1.0                  // 法線
+    };
+    const RationalBSplineCurve nurbs(param);
+    ASSERT_TRUE(nurbs.ValidatePD().is_valid);
+    // 域下限を僅かに下回るV(0)で評価 → 範囲外参照クラッシュせず点を返す
+    const auto pt = nurbs.TryGetPointAt(-0.0005);
+    EXPECT_TRUE(pt.has_value());
+}
+
 // k=1（制御点2点）→ ComputePlaneNormal が即 nullopt を返し ValidatePD が通る
 TEST(RationalBSplineCurveNurbsCtorTest, TwoControlPoints_IsValid) {
     const RationalBSplineCurve nurbs(

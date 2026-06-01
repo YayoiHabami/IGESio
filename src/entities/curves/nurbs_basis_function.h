@@ -82,6 +82,11 @@ TryComputeBasisFunctions(const double t, const int num_derivatives,
         auto it = std::upper_bound(knots.begin(), knots.end(), clamped_t);
         j = std::distance(knots.begin(), it) - 1;
     }
+    // parameter_rangeがノット域 [knots[m], knots[k+1]] を僅かに下回る場合
+    // (CAD出力でV(0) < T(0)のとき; P対応で検証は通すが評価が域外に出る)、
+    // jがm未満 (負値も) となり以降のknots[j+1-p]等で範囲外参照を起こすため、
+    // 有効スパン [m, k] にクランプする。
+    j = std::clamp(j, m, k);
 
     // 基底関数とその導関数を計算 ("The NURBS Book", Algorithm A2.3)
     BasisFunctionResult result;

@@ -177,9 +177,10 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
 
     /// @brief 曲線を追加する
     /// @param curve 追加する曲線
-    /// @return 追加に成功した場合は`true`、失敗した場合は`false`
-    /// @note curveのSubordinateEntitySwitchはkPhysicallyDependent
-    ///       に設定される
+    /// @return 追加に成功した場合は`true`、curveがnullptrの場合は`false`
+    /// @note curveのSubordinateEntitySwitchはkPhysicallyDependentに設定される
+    /// @note 隣接曲線との連続性 (端点一致) は課さない。隙間があっても追加でき、
+    ///       連続性はValidatePDでkWarningとして報告される (描画はブロックしない)
     bool AddCurve(const std::shared_ptr<ICurve>&);
 
     // TODO: 曲線を削除するメソッドを追加する

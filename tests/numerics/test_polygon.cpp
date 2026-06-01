@@ -258,6 +258,20 @@ TEST(IsPointInPolygonTest, ZComponentIsIgnored) {
     EXPECT_TRUE(i_num::IsPointInPolygon(Vector3d(0.5, 0.3, -50.0), polygons));
 }
 
+// N回帰: approximateが空 (退化したトリム境界等で対応頂点が無い) でも、再構成パスの
+// `.rend()-1`等が value-initialized iterator をseekしてクラッシュせず安全に返る。
+// 境界帯の点 (外包内・内包外) で詳細再構成パスに入る。
+TEST(IsPointInPolygonTest, EmptyApproximate_DoesNotCrash) {
+    auto polygons = MakeUnitCirclePolygons();
+    polygons.approximate = i_num::PolygonData{};  // approximateを空にする
+    // (0.95, 0.4): 外包(接線正方形)内かつ内包(八角形)外 → 詳細再構成パスに入る
+    EXPECT_NO_THROW({
+        const bool inside =
+            i_num::IsPointInPolygon(Vector3d(0.95, 0.4, 0.0), polygons);
+        (void)inside;
+    });
+}
+
 /// @brief 境界域の点: 外包辺使用, 曲線の外側 → false (Step 3)
 ///
 /// (0.95, 0.4): dist≈1.031 > 1 (曲線外), 内包八角形外.

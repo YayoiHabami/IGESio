@@ -633,3 +633,50 @@ TEST(CompositeCurveSignedCurvatureTest, NormalFlipped_SignFlipped) {
     EXPECT_TRUE(std::isinf(*kappa_pos) && *kappa_pos > 0.0);
     EXPECT_TRUE(std::isinf(*kappa_neg) && *kappa_neg < 0.0);
 }
+
+
+
+/**
+ * E: 連続性チェックの重大度 (severity) のテスト
+ *
+ * 連続性 (隣接曲線の端点一致) は幾何的品質の指摘でありkWarningとする。隙間があっても
+ * 曲線は描画可能なためis_valid (描画ゲート) はブロックしない。許容値は警告を出すか否かのみ
+ * を左右する。NOTE: 連続性は中間接合点 (index 1..n-2) で検査されるため隙間は中間接合に置く。
+ */
+
+// 端点が許容内 (scale~100 → tol=1e-3) の隙間 (3e-4) → 警告なし・is_valid=true
+TEST(CompositeCurveContinuityTest, SmallGap_IsValidNoWarning) {
+    auto cc = std::make_shared<CompositeCurve>();
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
+    // curve0の終点(100,0,0)とcurve1の始点(100.0003,0,0)に 3e-4 の隙間 (CADモデリング公差相当)
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{100.0003, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
+    const auto result = cc->ValidatePD();
+    EXPECT_TRUE(result.is_valid);
+    EXPECT_TRUE(result.errors.empty());  // 警告も出ない
+}
+
+// 明らかに大きい隙間 (10, scale~100で0.1相対) → 連続性警告は出るがis_valid=true
+// (描画ブロックしない=本修正の要点)。隙間量は警告閾値の具体値に依存しないよう、
+// あらゆる妥当な連続性許容を確実に超える大きさにしている。
+TEST(CompositeCurveContinuityTest, LargeGap_IsValidWithWarning) {
+    auto cc = std::make_shared<CompositeCurve>();
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
+    // curve0の終点(100,0,0)とcurve1の始点(110,0,0)に10の隙間 (真の不連続レベル)
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{110.0, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
+    cc->AddCurve(std::make_shared<Line>(
+        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
+    const auto result = cc->ValidatePD();
+    EXPECT_TRUE(result.is_valid);  // 警告は描画をブロックしない (本修正の要点)
+    // 連続性の警告 (kWarning) が含まれる
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
+}

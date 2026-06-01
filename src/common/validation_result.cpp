@@ -50,34 +50,49 @@ void ValidationResult::Merge(const ValidationResult& other) {
 }
 
 void ValidationResult::AddError(const ValidationError& error) {
-    is_valid = false;
+    // kWarningはis_validに影響しない (描画/使用をブロックしない)
+    if (error.severity == igesio::ValidationSeverity::kError) {
+        is_valid = false;
+    }
     errors.push_back(error);
 }
 
 std::string ValidationResult::Message() const {
-    if (is_valid) {
+    if (errors.empty()) {
         return "Validation succeeded.";
-    } else {
-        std::string msg = "Validation failed with errors:\n";
-        for (const auto& error : errors) {
+    }
+    // is_valid (= kErrorなし) なら警告のみ。kErrorがあれば従来通り失敗扱い。
+    std::string msg = is_valid ? "Validation passed with warnings:\n"
+                               : "Validation failed with errors:\n";
+    for (const auto& error : errors) {
+        if (error.severity == igesio::ValidationSeverity::kWarning) {
+            msg += "- [warning] " + error.str() + "\n";
+        } else {
             msg += "- " + error.str() + "\n";
         }
-        return msg;
     }
+    return msg;
 }
 
-ValidationResult igesio::MakeValidationResult(std::vector<ValidationError>&& errors) {
-    if (errors.empty()) {
-        return ValidationResult::Success();
-    } else {
-        return ValidationResult{false, std::move(errors)};
+namespace {
+
+/// @brief エラーリストにkErrorが1つでも含まれるか
+bool HasError(const std::vector<ValidationError>& errors) {
+    for (const auto& e : errors) {
+        if (e.severity == igesio::ValidationSeverity::kError) return true;
     }
+    return false;
+}
+
+}  // namespace
+
+ValidationResult igesio::MakeValidationResult(std::vector<ValidationError>&& errors) {
+    // kErrorが無ければis_valid=true (警告のみは有効扱い)
+    const bool valid = !HasError(errors);
+    return ValidationResult{valid, std::move(errors)};
 }
 
 ValidationResult igesio::MakeValidationResult(const std::vector<ValidationError>& errors) {
-    if (errors.empty()) {
-        return ValidationResult::Success();
-    } else {
-        return ValidationResult{false, errors};
-    }
+    const bool valid = !HasError(errors);
+    return ValidationResult{valid, errors};
 }

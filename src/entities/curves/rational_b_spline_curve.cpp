@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 
+#include <algorithm>
 #include <array>
 #include <utility>
 #include <vector>
@@ -313,8 +314,13 @@ igesio::ValidationResult RationalBSplineCurve::ValidatePD() const {
         errors.emplace_back("Knots vector cannot be empty.");
     }
     auto t0 = knots_[degree_], tn = knots_[knots_.size() - degree_];
-    if (t0 > parameter_range_[0] || parameter_range_[1] > tn) {
-        // See Section B.4
+    // See Section B.4. CAD出力 (CATIA等) は V(0)/V(1) がノット域 [T(0), T(N)] を
+    // 僅か (~1e-4) 外れることがあるため、スケール相対の許容で上限/下限比較を緩める
+    // (値はクランプせず原値保持; B-1)。評価側TryComputeBasisFunctionsは
+    // parameter_rangeで判定しtを域内へ丸めるため、僅かな超過があっても安全に評価できる。
+    const double range_tol = std::max(i_num::kParameterTolerance, 1e-3 * (tn - t0));
+    if (!i_num::IsApproxLEQ(t0, parameter_range_[0], range_tol) ||
+        !i_num::IsApproxLEQ(parameter_range_[1], tn, range_tol)) {
         errors.emplace_back("Knots T(0), T(N) must satisfy T(0) <= V(0) < V(1) <= T(N). "
                 "Got T(0) = " + std::to_string(t0) +
                 ", V(0) = " + std::to_string(parameter_range_[0]) +

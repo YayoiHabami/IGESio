@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/composite_curve.h"
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <unordered_set>
@@ -233,21 +234,27 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
                 errors.emplace_back("Start point of " + str_i + " is not defined.");
                 continue;
             }
-            // 前の曲線の終点と現在の曲線の始点が一致するか確認
-            if (!i_num::IsApproxEqual(prev_end_point, *start_point,
-                                      i_num::kGeometryTolerance)) {
+            // 前の曲線の終点と現在の曲線の始点が一致するか確認。連続性の許容は座標
+            // スケールに対する相対値とする (絶対kGeometryTolerance=1e-9は、CADの
+            // モデリング公差由来の端点隙間に対し厳しすぎるため)。
+            const double scale = std::max(prev_end_point.norm(), start_point->norm());
+            const double continuity_tol = std::max(i_num::kGeometryTolerance, 1e-5 * scale);
+            // 連続性 (前曲線の終点=現曲線の始点) は幾何的品質の指摘でありkWarningとする。
+            // 隙間があっても曲線は使用/描画可能なためis_valid (描画ゲート) はブロックしない。
+            // 許容値は警告を出すか否かのみを左右する。CADは隙間を多用するため桁違いに大きい
+            // 隙間 (真の不連続) のみ警告したい。
+            if (!i_num::IsApproxEqual(prev_end_point, *start_point, continuity_tol)) {
                 errors.emplace_back("End point of the curve at index " + std::to_string(i - 1)
-                                    + " does not match start point of " + str_i + ".");
+                                    + " does not match start point of " + str_i + ".",
+                                    igesio::ValidationSeverity::kWarning);
+            }
+            // 端点一致の可否に関わらず、現在の曲線の終点を次の始点基準として更新する
+            // (接合点ごとに独立判定し、隙間が後続へ累積しないようにする)
+            if (!end_point) {
+                errors.emplace_back("End point of " + str_i + " is not defined.");
                 continue;
             }
-            // 現在の曲線の終点を次の曲線の始点として設定
-            if (i != curves_.size() - 1) {
-                if (!end_point) {
-                    errors.emplace_back("End point of " + str_i + " is not defined.");
-                    continue;
-                }
-                prev_end_point = *end_point;
-            }
+            prev_end_point = *end_point;
         }
     }
 
@@ -405,20 +412,12 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
         return false;  // 無効なポインタは追加できない
     }
 
-    // 終点が前の曲線の始点と一致するか確認
-    if (!curves_.empty()) {
-        auto last_curve = curves_.back().GetEntity<ICurve>();
-        if (!last_curve) {
-            return false;  // 最後の曲線が無効な場合は追加できない
-        }
-        auto last_end_point = last_curve->TryGetEndPoint();
-        auto new_start_point = curve->TryGetStartPoint();
-        if (!last_end_point || !new_start_point ||
-            !i_num::IsApproxEqual(*last_end_point, *new_start_point,
-                                  i_num::kGeometryTolerance)) {
-            return false;  // 終点と始点が一致しない場合は追加できない
-        }
-    }
+    // NOTE: 隣接曲線の連続性 (前曲線の終点=新曲線の始点) はここでは強制しない。
+    // CADの実出力は端点に隙間を持つことが多く、ファイル読み込み経路
+    // (SetMainPDParameters) も連続性を課さない。連続性はValidatePDでkWarningとして
+    // 報告する (描画はブロックしない)。AddCurveは単純な追加に徹し、構築経路と読み込み
+    // 経路で挙動を一貫させる (以前はここで1e-9の厳密一致を要求し隙間付き曲線を拒否
+    // していたが、これは過剰検証でありseverity方式へ移行した)。
 
     // SubordinateEntitySwitchをkPhysicallyDependentに設定
     if (auto entity_base = std::dynamic_pointer_cast<EntityBase>(curve)) {

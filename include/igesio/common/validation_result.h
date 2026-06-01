@@ -14,20 +14,38 @@
 
 namespace igesio {
 
+/// @brief 検証メッセージの重大度
+/// @note kErrorは構造的に不正で使用不可（描画ゲートで弾く）、kWarningは幾何的品質の
+///       問題等で使用は可能（描画はブロックしない）ことを表す。設計方針のように、
+///       黙らせるのでなく、問題点を等級づけるようにするための列挙型。
+enum class ValidationSeverity {
+    /// @brief 致命的: 構造的に不正で使用不可 (is_validをfalseにする)
+    kError,
+    /// @brief 警告: 幾何的品質等の指摘。使用/描画は可能 (is_validに影響しない)
+    kWarning,
+};
+
 /// @brief パラメータ検証時に生じたエラー情報を提供する構造体
 /// @note `v_err << "message"`のように、ストリーム出力演算子を使用して
 ///       エラーメッセージを追加することができる.
 struct ValidationError {
     /// @brief 検証に失敗した場合のエラーメッセージ
     std::string error_message;
+    /// @brief 重大度 (既定: kError)。kWarningは描画/使用をブロックしない品質指摘
+    ValidationSeverity severity = ValidationSeverity::kError;
 
     /// @brief デフォルトコンストラクタ (無効化)
     ValidationError() = delete;
 
-    /// @brief エラーメッセージを指定するコンストラクタ
+    /// @brief エラーメッセージと重大度を指定するコンストラクタ
     /// @param message エラーメッセージ
-    explicit ValidationError(const std::string& message) : error_message(message) {}
-    explicit ValidationError(std::string&& message) : error_message(std::move(message)) {}
+    /// @param sev 重大度 (既定: kError)
+    explicit ValidationError(const std::string& message,
+                             ValidationSeverity sev = ValidationSeverity::kError)
+        : error_message(message), severity(sev) {}
+    explicit ValidationError(std::string&& message,
+                             ValidationSeverity sev = ValidationSeverity::kError)
+        : error_message(std::move(message)), severity(sev) {}
 
     /// @brief コピーコンストラクタ
     ValidationError(const ValidationError& other) = default;
