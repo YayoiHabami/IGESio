@@ -59,6 +59,7 @@ add_library(igesio_entities STATIC
     curves/algorithms/curve_line_intersection.cpp
     curves/nurbs_algorithms.cpp
     surfaces/algorithms/surface_line_intersection.cpp
+    surfaces/algorithms/curve_surface_inversion.cpp
 
     # Factory
     factory.cpp

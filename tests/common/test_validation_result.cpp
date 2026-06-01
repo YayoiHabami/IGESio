@@ -157,6 +157,40 @@ TEST(ValidationResultTest, MessageMultipleFailures) {
 
 
 /**
+ * ValidationSeverity (重大度) のテスト
+ */
+
+// kWarningのAddErrorはis_validをブロックしない (メッセージは保持)
+TEST(ValidationResultTest, AddWarning_DoesNotInvalidate) {
+    igesio::ValidationResult result = igesio::ValidationResult::Success();
+    result.AddError(igesio::ValidationError(
+        "geom warning", igesio::ValidationSeverity::kWarning));
+    EXPECT_TRUE(result.is_valid);
+    EXPECT_EQ(result.errors.size(), 1u);
+}
+
+// 警告のみのリスト → is_valid=true (描画ブロックしない)
+TEST(MakeValidationResultTest, WarningsOnly_IsValid) {
+    std::vector<igesio::ValidationError> errors;
+    errors.emplace_back("w1", igesio::ValidationSeverity::kWarning);
+    errors.emplace_back("w2", igesio::ValidationSeverity::kWarning);
+    const auto result = igesio::MakeValidationResult(std::move(errors));
+    EXPECT_TRUE(result.is_valid);
+    EXPECT_EQ(result.errors.size(), 2u);
+}
+
+// 警告とエラーが混在 → is_valid=false (kErrorが優先)
+TEST(MakeValidationResultTest, WarningAndError_IsInvalid) {
+    std::vector<igesio::ValidationError> errors;
+    errors.emplace_back("w", igesio::ValidationSeverity::kWarning);
+    errors.emplace_back("e", igesio::ValidationSeverity::kError);
+    const auto result = igesio::MakeValidationResult(std::move(errors));
+    EXPECT_FALSE(result.is_valid);
+}
+
+
+
+/**
  * MakeValidationResult
  */
 

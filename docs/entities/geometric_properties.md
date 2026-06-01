@@ -257,8 +257,8 @@ This extension allows the sign of the signed curvature to be handled uniformly a
 | `IsInLinearSegment(t)` | `bool` | Determines whether $t$ is within a linear segment |
 | `GetCornerParams()` | `vector<double>` | Returns a list of parameter values at corner points |
 | `IsCorner(t)` | `bool` | Determines whether $t$ is a corner point |
-| `LeftTangentAt(t)` | `optional<Vector3d>` | Returns the left-side unit tangent vector $T^-(t)$ at corner point $t$ |
-| `RightTangentAt(t)` | `optional<Vector3d>` | Returns the right-side unit tangent vector $T^+(t)$ at corner point $t$ |
+| `TryGetDefinedLeftTangentAt(t)` | `optional<Vector3d>` | Returns the definition-space left-side unit tangent vector $T^-(t)$ at corner point $t$ |
+| `TryGetDefinedRightTangentAt(t)` | `optional<Vector3d>` | Returns the definition-space right-side unit tangent vector $T^+(t)$ at corner point $t$ |
 | `CornerExteriorAngle(t, n)` | `optional<double>` | Returns the exterior angle $\alpha$ [rad] at corner point $t$ |
 | `TryGetSignedCurvature(t, n)` | `optional<double>` | Returns the signed curvature $\kappa_s(t)$ (including at corners and on linear segments) |
 
@@ -386,10 +386,10 @@ auto param = igesio::IGESParameterVector{
     false, false, true, false, false,         // PROP1-5
     0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
     0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-    1., 1., 1., 1., 1., 1.,                   // Weights W(0,0) to W(0,5)
+    1., 1., 1., 1., 1., 1.,                   // Weights W(0,0) to W(5,0)
     // ...
-    1., 1., 1., 1., 1., 1.,                   // Weights W(5,0) to W(5,5)
-    // Control points (36 points, each with x, y, z)
+    1., 1., 1., 1., 1., 1.,                   // Weights W(0,5) to W(5,5)
+    // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
     -25., -25., -10.,  // Control point (0,0)
     // ...
     25., 25., -10.,    // Control point (5,5)

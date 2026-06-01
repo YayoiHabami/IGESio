@@ -120,8 +120,8 @@ class TrimmedSurface : public EntityBase, public virtual ISurface {
     /// @brief 定義空間におけるサーフェスの偏導関数を計算する
     /// @note トリム領域外の (u, v) に対してはstd::nulloptを返す
     std::optional<SurfaceDerivatives>
-    TryGetDerivatives(const double, const double,
-                      const unsigned int) const override;
+    TryGetDefinedDerivatives(const double, const double,
+                             const unsigned int) const override;
 
     /// @brief 定義空間における曲面のバウンディングボックスを取得する
     /// @note surface_->GetDefinedBoundingBox()に委譲する (保守的な上界)

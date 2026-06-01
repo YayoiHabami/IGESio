@@ -63,6 +63,8 @@ A rational B-spline surface $S(u, v)$ is defined by the following seven paramete
 - Weights $w_{i,j}\ (i = 0, \ldots, k_u; j = 0, \ldots, k_v)$ (total of $(k_u + 1) \times (k_v + 1)$)
 - Parameter ranges $u \in [u_{\text{start}}, u_{\text{end}}], \ v \in [v_{\text{start}}, v_{\text{end}}]$
 
+In the IGES Parameter Data section, the control points $P_{i,j}$ and weights $w_{i,j}$ are listed with the first index $i$ (the $u$ direction) varying fastest, i.e., in the order $P_{0,0}, P_{1,0}, \ldots, P_{k_u,0}, P_{0,1}, \ldots, P_{k_u,k_v}$.
+
 The parameter ranges $[u_{\text{start}}, u_{\text{end}}]$ and $[v_{\text{start}}, v_{\text{end}}]$ can be obtained via the `GetURange()` and `GetVRange()` functions, and satisfy the following:
 
 $$\begin{aligned}

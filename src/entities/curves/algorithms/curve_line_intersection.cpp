@@ -147,9 +147,10 @@ bool PassesBroadPhase(const ICurve& curve,
 /// 本項のみ有限差分（ワールド点の2階中心差分）で評価する。収束判定は解析的な
 /// φ'=w・C' で行うため、2次項の差分誤差は最終精度に影響しない。
 ///
-/// @note TryGetDerivativesは定義空間を返す。p0/dはワールド空間のため、
-///       C'(t)_world = |C'(t)_def| × (ワールド単位接線) として残差を評価する。
-///       IGES変換は直交行列+並進（スケールなし）なので |C'_world| = |C'_def|。
+/// @note TryGetDerivativesはモデル空間(M_entity適用済み)を返す。p0/dは累積配置を
+///       含むワールド空間のため、C'(t)_world = |C'(t)| × (ワールド単位接線) として
+///       残差を評価する。IGES変換は直交行列+並進（スケールなし）なので |C'| はモデル空間
+///       でもワールド空間でも不変であり、導関数からはノルムのみを用いる。
 ///
 /// @return 収束した最近傍点情報（線種sを満たすもの）、失敗の場合はnullopt
 std::optional<CurveLineIntersection> RunNewton(
@@ -162,7 +163,7 @@ std::optional<CurveLineIntersection> RunNewton(
     // 2次項の有限差分ステップ（パラメータ範囲に比例）
     const double h = std::max((pr.t_max - pr.t_min) * 1e-4, 1e-7);
     for (int iter = 0; iter < params.max_iter; ++iter) {
-        // 定義空間の1階導関数のノルム（ワールドでもノルム不変）
+        // 1階導関数のノルム（モデル空間/ワールドでノルム不変）
         const auto deriv = curve.TryGetDerivatives(t, 1);
         if (!deriv) return std::nullopt;
         const double cp_norm = (*deriv)[1].norm();

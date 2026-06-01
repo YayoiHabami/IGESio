@@ -63,6 +63,8 @@ Defined at [surfaces/rational_b_spline_surface.h](./../../../include/igesio/enti
 - 重み $w_{i,j}\ (i = 0, \ldots, k_u; j = 0, \ldots, k_v)$ ( $(k_u + 1) \times (k_v + 1)$ 個 )
 - パラメータ範囲 $u \in [u_{\text{start}}, u_{\text{end}}], \ v \in [v_{\text{start}}, v_{\text{end}}]$
 
+　また、IGESのパラメータデータ部では、制御点 $P_{i,j}$ と重み $w_{i,j}$ は、第1添字 $i$ ( $u$ 方向) が最も速く変化する順、すなわち $P_{0,0}, P_{1,0}, \ldots, P_{k_u,0}, P_{0,1}, \ldots, P_{k_u,k_v}$ の順に並びます。
+
 ここで、パラメータ範囲 $[u_{\text{start}}, u_{\text{end}}]$ および $[v_{\text{start}}, v_{\text{end}}]$ は`GetURange()`および`GetVRange()`関数で取得でき、以下の条件を満たします。
 
 $$\begin{aligned}

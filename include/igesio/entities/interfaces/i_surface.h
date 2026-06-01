@@ -76,7 +76,7 @@ class SurfaceDerivatives {
 ///         - `IsUClosed`
 ///         - `IsVClosed`
 ///         - `GetParameterRange`
-///         - `TryGetDerivatives`
+///         - `TryGetDefinedDerivatives`
 ///         - `Transform` (protected): IGeometry由来
 ///         - `GetDefinedBoundingBox`: IGeometry由来
 class ISurface : public virtual IEntityIdentifier,
@@ -144,19 +144,32 @@ class ISurface : public virtual IEntityIdentifier,
     /// @param order 何階まで計算するか; 例えば2を指定した場合、0階 S(u, v) から
     ///              2階 S^(2,0)(u, v), S^(1,1)(u, v), S^(0,2)(u, v) まで計算
     /// @return 偏導関数 S, Su, Sv, ...、計算できない場合は`std::nullopt`
+    /// @note M_entity未適用の定義空間の値を返す. 各具象クラスでオーバーライドする.
+    ///       集約系(RuledSurface等)は構成要素をそれぞれのモデル空間で評価して集約すること
     virtual std::optional<SurfaceDerivatives>
-    TryGetDerivatives(const double, const double, const unsigned int) const = 0;
+    TryGetDefinedDerivatives(const double, const double, const unsigned int) const = 0;
+
+    /// @brief モデル空間におけるサーフェスの偏導関数 S^(i,j)(u, v) を計算する
+    /// @param u パラメータ値 u
+    /// @param v パラメータ値 v
+    /// @param order 何階まで計算するか
+    /// @return 偏導関数 M_entity·S^(i,j)_def. S(0,0)は点(R·v+T)、それ以外は
+    ///         ベクトル(R·v)として変換される. 計算できない場合は`std::nullopt`
+    /// @note 定義空間版は`TryGetDefinedDerivatives(u, v, order)`. 定義空間の各偏導関数に
+    ///       M_entityを1回だけ適用する
+    std::optional<SurfaceDerivatives>
+    TryGetDerivatives(const double, const double, const unsigned int) const;
 
     /// @brief 配置を適用したサーフェスの偏導関数 S^(i,j)(u, v) を計算する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v
     /// @param order 何階まで計算するか
-    /// @param placement 定義空間に後掛けする配置行列(基準階層までの累積変換)
+    /// @param placement モデル空間に後掛けする配置行列(基準階層までの累積変換)
     /// @return 配置適用後の偏導関数 placement·(M_entity·S^(i,j)_def). S(0,0)は点
     ///         (R·v+T)、それ以外はベクトル(R·v)として変換される. 計算できない場合は
     ///         `std::nullopt`
-    /// @note 定義空間版は`TryGetDerivatives(u, v, order)`. placementに単位行列を渡すと
-    ///       M_entityのみを適用した実空間の偏導関数となる
+    /// @note 定義空間版は`TryGetDefinedDerivatives(u, v, order)`. placementに単位行列を
+    ///       渡すとM_entityのみを適用したモデル空間の偏導関数となる
     std::optional<SurfaceDerivatives>
     TryGetDerivatives(const double, const double, const unsigned int,
                       const Matrix4d&) const;

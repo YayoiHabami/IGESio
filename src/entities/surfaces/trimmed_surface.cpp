@@ -342,13 +342,14 @@ std::array<double, 4> TrimmedSurface::GetParameterRange() const {
 }
 
 std::optional<i_ent::SurfaceDerivatives>
-TrimmedSurface::TryGetDerivatives(
+TrimmedSurface::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // ドメイン外は nullopt
     if (!IsInDomain(u, v)) return std::nullopt;
 
     auto surf_opt = surface_.TryGetEntity<ISurface>();
     if (!surf_opt) return std::nullopt;
+    // トリム面の定義空間は基底曲面のモデル空間(M_base適用済み)とする
     return surf_opt.value()->TryGetDerivatives(u, v, order);
 }
 
@@ -494,27 +495,37 @@ void TrimmedSurface::BuildDomainCache() const {
 
     DomainCache cache;
 
-    // 外側境界 (N1=1 のとき)
+    // 外側境界 (N1=1 のとき)。ベース曲線が未設定/退化/非閉でテッセレーションが
+    // 例外を投げても読み込み全体を止めない (C層: グレースフル劣化。当該境界の領域
+    // キャッシュは空のまま)。GetBaseCurveは未設定時にruntime_errorを投げる。
     if (!outer_is_boundary_of_d_) {
-        auto ob_opt = outer_boundary_.TryGetEntity<CurveOnAParametricSurface>();
-        if (ob_opt) {
-            auto base = ob_opt.value()->GetBaseCurve();
-            if (base) {
-                cache.outer = i_ent::ComputeContainmentPolygons(
-                        *base, kContainmentPolygonDivisions, Vector3d(0, 0, 1));
+        try {
+            auto ob_opt = outer_boundary_.TryGetEntity<CurveOnAParametricSurface>();
+            if (ob_opt) {
+                auto base = ob_opt.value()->GetBaseCurve();
+                if (base) {
+                    cache.outer = i_ent::ComputeContainmentPolygons(
+                            *base, kContainmentPolygonDivisions, Vector3d(0, 0, 1));
+                }
             }
+        } catch (const std::exception&) {
+            // 当該境界はスキップ (cache.outerは空のまま)
         }
     }
 
-    // 内側境界
+    // 内側境界 (同上)
     for (const auto& inner : inner_boundaries_) {
-        auto ib_opt = inner.TryGetEntity<CurveOnAParametricSurface>();
-        if (ib_opt) {
-            auto base = ib_opt.value()->GetBaseCurve();
-            if (base) {
-                cache.inner.push_back(i_ent::ComputeContainmentPolygons(
-                        *base, kContainmentPolygonDivisions, Vector3d(0, 0, 1)));
+        try {
+            auto ib_opt = inner.TryGetEntity<CurveOnAParametricSurface>();
+            if (ib_opt) {
+                auto base = ib_opt.value()->GetBaseCurve();
+                if (base) {
+                    cache.inner.push_back(i_ent::ComputeContainmentPolygons(
+                            *base, kContainmentPolygonDivisions, Vector3d(0, 0, 1)));
+                }
             }
+        } catch (const std::exception&) {
+            // 当該境界はスキップ
         }
     }
 

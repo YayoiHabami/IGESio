@@ -319,12 +319,15 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
         auto first_derivative_k = ComputeSegmentValue(coeffs_k, 0, 1);
         auto second_derivative_k = ComputeSegmentValue(coeffs_k, 0, 2);
 
+        // 関数値・接線・曲率の連続性は幾何的品質の指摘 (kWarning) とし描画は
+        // ブロックしない (隙間/角があっても折れ線として描画できる)。
         // 関数値の連続性
         if (!i_num::IsApproxEqual(value_k_m1, value_k)) {
             errors.emplace_back("Discontinuity in function value at breakpoint T("
                 + std::to_string(k + 1) + ") = " + std::to_string(t_k) + "; "
                 + igesio::ToString(value_k_m1, true) + " != "
-                + igesio::ToString(value_k, true) + ".");
+                + igesio::ToString(value_k, true) + ".",
+                igesio::ValidationSeverity::kWarning);
         }
 
         // 接線の連続性 (H >= 1)
@@ -333,7 +336,8 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
                 errors.emplace_back("Discontinuity in tangent vector at breakpoint T("
                     + std::to_string(k + 1) + ") = " + std::to_string(t_k)
                     + "; " + igesio::ToString(first_derivative_k_m1, true) + " != "
-                    + igesio::ToString(first_derivative_k, true) + " for degree H >= 1.");
+                    + igesio::ToString(first_derivative_k, true) + " for degree H >= 1.",
+                    igesio::ValidationSeverity::kWarning);
             }
         }
         // 曲率の連続性 (H >= 2)
@@ -342,7 +346,8 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
                 errors.emplace_back("Discontinuity in curvature vector at breakpoint T("
                     + std::to_string(k + 1) + ") = " + std::to_string(t_k)
                     + "; " + igesio::ToString(second_derivative_k_m1, true) + " != "
-                    + igesio::ToString(second_derivative_k, true) + " for degree H >= 2.");
+                    + igesio::ToString(second_derivative_k, true) + " for degree H >= 2.",
+                    igesio::ValidationSeverity::kWarning);
             }
         }
     }
@@ -402,7 +407,7 @@ bool ParametricSplineCurve::IsClosed() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-ParametricSplineCurve::TryGetDerivatives(const double t, const unsigned int n) const {
+ParametricSplineCurve::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     // tが定義域内にあるか確認
     auto i_s_ptr = FindSegmentIndex(t);
     if (!i_s_ptr) return std::nullopt;

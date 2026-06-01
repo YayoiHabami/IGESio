@@ -65,7 +65,7 @@ std::shared_ptr<LinearPath> MakeUTurnLP() {
 
 /// @brief 半径 R=1.5 の全周円 (CCW 方向)
 /// @details TryGetDerivatives は CircularArc が提供し、
-///          LeftTangentAt / RightTangentAt は ICurve のデフォルト実装を使用する
+///          TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt は ICurve のデフォルト実装を使用する
 std::shared_ptr<CircularArc> MakeCircle() {
     return std::make_shared<CircularArc>(
         Vector2d{-0.75, 0.0}, 1.5);
@@ -169,7 +169,7 @@ TEST(CornerExteriorAngleTest, NonUnitNormal_SameResult) {
 
 
 
-/// @brief ICurve デフォルト実装の `LeftTangentAt` / `RightTangentAt` のテスト
+/// @brief ICurve デフォルト実装の `TryGetDefinedLeftTangentAt` / `TryGetDefinedRightTangentAt` のテスト
 /// @details CircularArc はこれらをオーバーライドしないため、ICurve の数値近似が用いられる
 class DefaultTangentAtTest : public ::testing::Test {};
 
@@ -177,34 +177,34 @@ class DefaultTangentAtTest : public ::testing::Test {};
 TEST(DefaultTangentAtTest, SmoothCurve_Interior_LeftApproxRight) {
     const auto circle = MakeCircle();
     const double t_mid = igesio::kPi;
-    const auto left  = circle->LeftTangentAt(t_mid);
-    const auto right = circle->RightTangentAt(t_mid);
+    const auto left  = circle->TryGetDefinedLeftTangentAt(t_mid);
+    const auto right = circle->TryGetDefinedRightTangentAt(t_mid);
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
     // 両者の方向差が微小であることを内積で確認
     EXPECT_NEAR(left->dot(*right), 1.0, kAngleTol);
 }
 
-/// @brief 始点では LeftTangentAt が nullopt でなく、始点での接線を返す
+/// @brief 始点では TryGetDefinedLeftTangentAt が nullopt でなく、始点での接線を返す
 /// @details デフォルト実装は t_eval = max(t-h, t_start) = t_start にクランプする.
 ///          これは非ループ LinearPath の始点で nullopt を返す解析実装とは異なる
 TEST(DefaultTangentAtTest, StartParam_LeftIsNotNullopt) {
     const auto circle = MakeCircle();
     const double t_start = circle->GetParameterRange()[0];
-    const auto left  = circle->LeftTangentAt(t_start);
-    const auto right = circle->RightTangentAt(t_start);
+    const auto left  = circle->TryGetDefinedLeftTangentAt(t_start);
+    const auto right = circle->TryGetDefinedRightTangentAt(t_start);
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
     // クランプ後は同じ点で評価されるため、方向もほぼ一致する
     EXPECT_NEAR(left->dot(*right), 1.0, kAngleTol);
 }
 
-/// @brief 終点でも RightTangentAt が nullopt でなく、終点での接線を返す
+/// @brief 終点でも TryGetDefinedRightTangentAt が nullopt でなく、終点での接線を返す
 TEST(DefaultTangentAtTest, EndParam_RightIsNotNullopt) {
     const auto circle = MakeCircle();
     const double t_end = circle->GetParameterRange()[1];
-    const auto left  = circle->LeftTangentAt(t_end);
-    const auto right = circle->RightTangentAt(t_end);
+    const auto left  = circle->TryGetDefinedLeftTangentAt(t_end);
+    const auto right = circle->TryGetDefinedRightTangentAt(t_end);
     ASSERT_TRUE(left.has_value());
     ASSERT_TRUE(right.has_value());
     EXPECT_NEAR(left->dot(*right), 1.0, kAngleTol);

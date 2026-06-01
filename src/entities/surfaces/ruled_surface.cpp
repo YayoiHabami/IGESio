@@ -214,7 +214,7 @@ igesio::ValidationResult RuledSurface::ValidatePD() const {
  */
 
 std::optional<i_ent::SurfaceDerivatives>
-RuledSurface::TryGetDerivatives(
+RuledSurface::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!curve1_.IsPointerSet() || !curve2_.IsPointerSet()) {

@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/curves/composite_curve.h"
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <unordered_set>
@@ -233,21 +234,27 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
                 errors.emplace_back("Start point of " + str_i + " is not defined.");
                 continue;
             }
-            // 前の曲線の終点と現在の曲線の始点が一致するか確認
-            if (!i_num::IsApproxEqual(prev_end_point, *start_point,
-                                      i_num::kGeometryTolerance)) {
+            // 前の曲線の終点と現在の曲線の始点が一致するか確認。連続性の許容は座標
+            // スケールに対する相対値とする (絶対kGeometryTolerance=1e-9は、CADの
+            // モデリング公差由来の端点隙間に対し厳しすぎるため)。
+            const double scale = std::max(prev_end_point.norm(), start_point->norm());
+            const double continuity_tol = std::max(i_num::kGeometryTolerance, 1e-5 * scale);
+            // 連続性 (前曲線の終点=現曲線の始点) は幾何的品質の指摘でありkWarningとする。
+            // 隙間があっても曲線は使用/描画可能なためis_valid (描画ゲート) はブロックしない。
+            // 許容値は警告を出すか否かのみを左右する。CADは隙間を多用するため桁違いに大きい
+            // 隙間 (真の不連続) のみ警告したい。
+            if (!i_num::IsApproxEqual(prev_end_point, *start_point, continuity_tol)) {
                 errors.emplace_back("End point of the curve at index " + std::to_string(i - 1)
-                                    + " does not match start point of " + str_i + ".");
+                                    + " does not match start point of " + str_i + ".",
+                                    igesio::ValidationSeverity::kWarning);
+            }
+            // 端点一致の可否に関わらず、現在の曲線の終点を次の始点基準として更新する
+            // (接合点ごとに独立判定し、隙間が後続へ累積しないようにする)
+            if (!end_point) {
+                errors.emplace_back("End point of " + str_i + " is not defined.");
                 continue;
             }
-            // 現在の曲線の終点を次の曲線の始点として設定
-            if (i != curves_.size() - 1) {
-                if (!end_point) {
-                    errors.emplace_back("End point of " + str_i + " is not defined.");
-                    continue;
-                }
-                prev_end_point = *end_point;
-            }
+            prev_end_point = *end_point;
         }
     }
 
@@ -296,7 +303,7 @@ std::vector<double> CompositeCurve::GetCornerParams() const {
     return result;
 }
 
-std::optional<Vector3d> CompositeCurve::LeftTangentAt(const double t) const {
+std::optional<Vector3d> CompositeCurve::TryGetDefinedLeftTangentAt(const double t) const {
     const auto offsets = ComputeCurveOffsets(*this);
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
@@ -304,16 +311,16 @@ std::optional<Vector3d> CompositeCurve::LeftTangentAt(const double t) const {
             // 直前の構成曲線 (i-1) の終端における左接線
             auto curve = curves_[i - 1].GetEntity<ICurve>();
             if (!curve) break;
-            return curve->LeftTangentAt(curve->GetParameterRange()[1]);
+            return curve->TryGetDefinedLeftTangentAt(curve->GetParameterRange()[1]);
         }
     }
     // 非接合点: 該当する構成曲線に委譲
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (!curve) return std::nullopt;
-    return curve->LeftTangentAt(t_local);
+    return curve->TryGetDefinedLeftTangentAt(t_local);
 }
 
-std::optional<Vector3d> CompositeCurve::RightTangentAt(const double t) const {
+std::optional<Vector3d> CompositeCurve::TryGetDefinedRightTangentAt(const double t) const {
     const auto offsets = ComputeCurveOffsets(*this);
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
@@ -321,13 +328,13 @@ std::optional<Vector3d> CompositeCurve::RightTangentAt(const double t) const {
             // 直後の構成曲線 (i) の始端における右接線
             auto curve = curves_[i].GetEntity<ICurve>();
             if (!curve) break;
-            return curve->RightTangentAt(curve->GetParameterRange()[0]);
+            return curve->TryGetDefinedRightTangentAt(curve->GetParameterRange()[0]);
         }
     }
     // 非接合点: 該当する構成曲線に委譲
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (!curve) return std::nullopt;
-    return curve->RightTangentAt(t_local);
+    return curve->TryGetDefinedRightTangentAt(t_local);
 }
 
 
@@ -374,9 +381,11 @@ std::array<double, 2> CompositeCurve::GetParameterRange() const {
 }
 
 std::optional<i_ent::CurveDerivatives>
-CompositeCurve::TryGetDerivatives(const double t, const unsigned int n) const {
+CompositeCurve::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     auto [curve, t_local] = GetCurveAtParameter(t);
     if (curve) {
+        // 合成の定義空間は、構成曲線をそれぞれのモデル空間(M_sub適用済み)に
+        // 配置したもの. よって構成曲線のモデル空間導関数を集約する
         return curve->TryGetDerivatives(t_local, n);
     }
     // パラメータtが範囲外の場合
@@ -403,20 +412,12 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
         return false;  // 無効なポインタは追加できない
     }
 
-    // 終点が前の曲線の始点と一致するか確認
-    if (!curves_.empty()) {
-        auto last_curve = curves_.back().GetEntity<ICurve>();
-        if (!last_curve) {
-            return false;  // 最後の曲線が無効な場合は追加できない
-        }
-        auto last_end_point = last_curve->TryGetEndPoint();
-        auto new_start_point = curve->TryGetStartPoint();
-        if (!last_end_point || !new_start_point ||
-            !i_num::IsApproxEqual(*last_end_point, *new_start_point,
-                                  i_num::kGeometryTolerance)) {
-            return false;  // 終点と始点が一致しない場合は追加できない
-        }
-    }
+    // NOTE: 隣接曲線の連続性 (前曲線の終点=新曲線の始点) はここでは強制しない。
+    // CADの実出力は端点に隙間を持つことが多く、ファイル読み込み経路
+    // (SetMainPDParameters) も連続性を課さない。連続性はValidatePDでkWarningとして
+    // 報告する (描画はブロックしない)。AddCurveは単純な追加に徹し、構築経路と読み込み
+    // 経路で挙動を一貫させる (以前はここで1e-9の厳密一致を要求し隙間付き曲線を拒否
+    // していたが、これは過剰検証でありseverity方式へ移行した)。
 
     // SubordinateEntitySwitchをkPhysicallyDependentに設定
     if (auto entity_base = std::dynamic_pointer_cast<EntityBase>(curve)) {

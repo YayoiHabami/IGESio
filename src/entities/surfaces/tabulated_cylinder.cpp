@@ -252,7 +252,7 @@ std::array<double, 4> TabulatedCylinder::GetParameterRange() const {
 }
 
 std::optional<i_ent::SurfaceDerivatives>
-TabulatedCylinder::TryGetDerivatives(
+TabulatedCylinder::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!directrix_.IsPointerSet()) return std::nullopt;

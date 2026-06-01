@@ -56,6 +56,27 @@ TEST(CircularArcTest, ConstructorFromDEAndParameters) {
     EXPECT_TRUE(result.is_valid) << result.Message();
 }
 
+// H: 始終点が中心から等距離でないPDデータ (ファイル読込相当) → 等距離でなくても円弧は
+// 描画可能なためValidatePDは警告 (kWarning) を出すがis_valid=true (描画ブロックしない)。
+// NOTE: プログラム的コンストラクタは非等距離でthrowするためPDコンストラクタで構築する。
+TEST(CircularArcTest, NotEquidistant_IsValidWithWarning) {
+    auto de = i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kCircularArc);
+    igesio::IGESParameterVector parameters{
+        0.0,        // z_t
+        0.0, 0.0,   // center
+        1.0, 0.0,   // start (中心からの距離 r1 = 1)
+        0.0, 2.0,   // terminate (r2 = 2) → 等距離でない
+    };
+    const CircularArc arc(de, parameters);  // PDコンストラクタはthrowしない
+    const auto result = arc.Validate();
+    EXPECT_TRUE(result.is_valid);  // 描画はブロックしない (本対処の要点)
+    bool has_warning = false;
+    for (const auto& e : result.errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
+    }
+    EXPECT_TRUE(has_warning);
+}
+
 // 中心点と始点・終点から円弧を生成するコンストラクタ
 TEST(CircularArcTest, ConstructorFromCenterStartTerminate) {
     Vector2d center(0.0, 0.0);

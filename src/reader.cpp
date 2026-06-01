@@ -9,6 +9,7 @@
 
 #include <array>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -16,6 +17,7 @@
 #include "igesio/utils/iges_string_utils.h"
 #include "igesio/utils/iges_binary_reader.h"
 #include "igesio/entities/factory.h"
+#include "igesio/entities/curves/curve_on_a_parametric_surface.h"
 
 
 
@@ -340,6 +342,31 @@ void BuildInitialTree(i_model::Assembly& root) {
     (void)root;
 }
 
+/// @brief ベース曲線Bが省略された Type 142 についてBをC・Sから再構築する
+///
+/// BPTR=0 (CATIA 等) の CurveOnAParametricSurfaceは、参照解決後にモデル空間曲線Cと
+/// 曲面Sからパラメータ空間のベース曲線 B = S^{-1}∘C を再構築できる. 再構築したBは
+/// 出力時に DE/BPTR を付与するためルート直下へ登録する.
+/// @param root 全エンティティが登録され参照解決済みのルート Assembly
+void ReconstructOmittedBaseCurves(i_model::Assembly& root) {
+    // 反復中にentities_を変更しないよう、対象のType 142を先に収集する
+    std::vector<std::shared_ptr<i_ent::CurveOnAParametricSurface>> targets;
+    for (const auto& [id, entity] : root.GetEntities()) {
+        if (auto cos = std::dynamic_pointer_cast<
+                i_ent::CurveOnAParametricSurface>(entity)) {
+            targets.push_back(cos);
+        }
+    }
+    // 各Type 142についてBを再構築し、生成できたBをモデルへ登録する.
+    // 再構築不要 (Bが省略されていない) / 失敗の場合はnullptrが返る.
+    for (auto& cos : targets) {
+        auto base = cos->ReconstructOmittedBaseCurve();
+        if (auto eb = std::dynamic_pointer_cast<i_ent::EntityBase>(base)) {
+            root.AddEntity(eb);
+        }
+    }
+}
+
 }  // namespace
 
 
@@ -415,6 +442,10 @@ i_model::IgesData igesio::ConvertFromIntermediate(
                     "Details: " + std::string(e.what()));
         }
     }
+
+    // ベース曲線Bが省略されたType 142 (CATIA等) について、参照解決済みの
+    // モデル空間曲線Cと曲面SからB = S^{-1}∘Cを再構築する.
+    ReconstructOmittedBaseCurves(iges.Root());
 
     // 読み込んだエンティティから初期ツリー(子Assembly階層)を導出する
     BuildInitialTree(iges.Root());

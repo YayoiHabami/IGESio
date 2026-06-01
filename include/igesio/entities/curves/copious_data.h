@@ -47,7 +47,7 @@ class CopiousData : public CopiousDataBase,
     /// @param n 何階まで計算するか; 例えば2を指定した場合、0階 C(t) から2階 C''(t) まで計算
     /// @return 1階以上については常にゼロベクトルを返す
     std::optional<CurveDerivatives>
-    TryGetDerivatives(const double, const unsigned int) const override;
+    TryGetDefinedDerivatives(const double, const unsigned int) const override;
 
     /// @brief 曲線の全長を取得する
     /// @return 曲線の全長

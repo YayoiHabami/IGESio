@@ -188,7 +188,7 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     ///              2階 S^(2,0)(u, v), S^(1,1)(u, v), S^(0,2)(u, v) まで計算
     /// @return 偏導関数 S, Su, Sv, ...、計算できない場合は`std::nullopt`
     std::optional<SurfaceDerivatives>
-    TryGetDerivatives(const double, const double, const unsigned int) const override;
+    TryGetDefinedDerivatives(const double, const double, const unsigned int) const override;
 
     /// @brief 定義空間における曲面のバウンディングボックスを取得する
     numerics::BoundingBox GetDefinedBoundingBox() const override;

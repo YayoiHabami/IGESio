@@ -327,8 +327,9 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @brief Transformation Matrix (7th field of DE) の参照先を変更する
     /// @param transformation_matrix 新しく参照するTransformation Matrix Entity
     ///        (Type 124) のポインタ
-    /// @return 上書きに失敗した場合 (transformation_matrixがnullptrの場合)
-    ///         は`false`を返す
+    /// @return 上書きに失敗した場合は`false`を返す.
+    ///         transformation_matrixがnullptrの場合、または参照により変換行列の
+    ///         参照チェーンが循環する場合に失敗する.
     bool OverwriteTransformationMatrix(const std::shared_ptr<const ITransformation>&);
 
     /// @brief Label Display Associativity (8th field of DE) を取得する
@@ -489,6 +490,19 @@ class EntityBase : public virtual IEntityIdentifier {
         return false;
     }
 };
+
+
+
+/// @brief self_idのエンティティからtransformationへ参照を張ると、変換行列の
+///        参照チェーン (ITransformation::GetRefTransformation) が循環するかを判定する
+/// @param self_id 参照元エンティティのID (新たに張る辺の始点)
+/// @param transformation 参照先の変換行列 (nullの場合は循環なしとみなす)
+/// @return 循環する場合はtrue
+/// @note DEフィールド7は単一ポインタのため参照構造は連結リストとなる.
+///       transformationのチェーンを辿りself_idに戻れば循環と判定する.
+bool CreatesTransformationCycle(
+        const ObjectID& self_id,
+        const std::shared_ptr<const ITransformation>& transformation);
 
 }  // namespace igesio::entities
 

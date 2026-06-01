@@ -165,7 +165,8 @@ class IGESParameterVector {
     /// @note 以下の場合のみ、型が変換可能とする (文字列のベクトルからの自動変換を想定):
     ///       ① T = bool ⇒ data_[index]の型がintかつ値が0 or 1;
     ///       ② T = int ⇒ 他の型からの変換は許可しない;
-    ///       ③ T = double ⇒ 他の型からの変換は許可しない;
+    ///       ③ T = double ⇒ data_[index]の型がintの場合のみ変換可能
+    ///         (Realフィールドへの整数表記を許容; 出力時は小数点付きとなる);
     ///       ④ T = std::string ⇒ 他の型からの変換は許可しない;
     ///       ⑤ T = ObjectID ⇒ data_[index]の型がintであり、指定されたint値に対応する
     ///         ObjectIDが存在する場合
@@ -206,6 +207,17 @@ class IGESParameterVector {
                     data_[index] = obj_id.value();
                     return obj_id.value();
                 }
+            }
+        } else if constexpr (std::is_same_v<T, double>) {
+            // double型の場合、int型からは変換可能
+            // (Realフィールドへ整数表記で出力するCAD出力を許容するため)
+            if (std::holds_alternative<int>(data_[index])) {
+                int val = std::get<int>(data_[index]);
+                // 元の整数表記を反映したRealフォーマットに更新 (小数部なし)
+                formats_[index] = ValueFormat::Real(
+                        false, formats_[index].has_plus_sign, true, false);
+                data_[index] = static_cast<double>(val);
+                return std::get<double>(data_[index]);
             }
         }
 

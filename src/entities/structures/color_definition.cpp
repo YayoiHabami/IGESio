@@ -31,6 +31,14 @@ ColorDef::ColorDefinition(const RawEntityDE& de_record,
                           const ObjectID& iges_id)
         : EntityBase(de_record, parameters, de2id, iges_id) {
     InitializePD(de2id);
+
+    // 仕様上 Type 314 の Color Number (DEフィールド13) は 1〜8 が必須だが、
+    // 一部CAD (Fusion 360 等) は 0/未指定で出力する。読み込みを通すため、
+    // 0/未指定の場合は定義RGBに最も近い標準色へ正規化する。検証 (IsValid) は
+    // 1〜8 を要求し続けるため (出力は厳格)、ここで仕様準拠の値に寄せる。
+    if (de_color_.GetValue() == 0) {
+        de_color_.SetColor(GetClosestStandardColor(rgb_));
+    }
 }
 
 ColorDef::ColorDefinition(const std::array<double, 3>& rgb,
