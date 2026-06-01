@@ -711,10 +711,11 @@ SamplePoints(const i_ent::ICurve& curve,
     ts = InsertCorners(curve, ts);
     ts = InsertLinearEndpoints(linear_segs, ts, t0, t1);
 
-    // 3次元座標を計算する
+    // 3次元座標を計算する。tは曲率極値・角点由来で閉曲線の周期正規化により
+    // [t0, t1] を僅かに外れ得るため、GetPointAtの範囲外例外を避けてクランプする。
     std::vector<Vector3d> pts;
     pts.reserve(ts.size());
-    for (double t : ts) pts.push_back(curve.GetPointAt(t));
+    for (double t : ts) pts.push_back(curve.GetPointAt(std::clamp(t, t0, t1)));
     return {ts, pts};
 }
 
@@ -1061,7 +1062,8 @@ i_num::PolygonData ComputeExtremalPolygon(
     for (int iter = 0; ; ++iter) {
         std::vector<Vector3d> pts;
         pts.reserve(ts.size());
-        for (double t : ts) pts.push_back(curve.GetPointAt(t));
+        // tは曲率極値・違反点由来で [t0, t1] を僅かに外れ得るためクランプする
+        for (double t : ts) pts.push_back(curve.GetPointAt(std::clamp(t, t0, t1)));
 
         // 各点を頂点/接点に分類し、多角形を構築・重複除去する
         const auto is_contact = ClassifyPoints(

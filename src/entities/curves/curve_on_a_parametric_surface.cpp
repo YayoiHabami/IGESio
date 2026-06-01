@@ -7,6 +7,8 @@
  */
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"
 
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -28,6 +30,7 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CurveOnSurface;
 using igesio::Vector3d;
+using igesio::Vector2d;
 
 /// @brief S(u,v) と B(t) から C(t) を生成する
 std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
@@ -78,6 +81,48 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     } catch (const std::exception&) {
         return std::make_shared<i_ent::LinearPath>(projected_vertices);
     }
+}
+
+/// @brief パラメータ空間の点列(u,v,0)から、退化を除去したベース曲線Bを構築する
+///
+/// 連続重複点をスケール相対の許容で除去し、`is_closed`(=モデル曲線Cが閉じているか)に
+/// 応じて kPlanarLoop(閉) / kPlanarPolyline(開) の`LinearPath`を生成する。
+/// 下流のトリム領域テッセレーション(`ComputeContainmentPolygons`)は閉曲線かつ非退化
+/// (各点で`GetPointAt`が有効) を前提とするため、ここで両者を満たすよう整える。
+///
+/// @param uv_points (u, v, 0) のサンプル列
+/// @param is_closed 閉ループとして構築するか
+/// @return 構築したLinearPath。点が退化して構築できない場合は `nullptr`
+std::shared_ptr<i_ent::LinearPath> BuildParamSpaceBaseCurve(
+        const std::vector<Vector3d>& uv_points, const bool is_closed) {
+    // uv の広がりからスケール相対の重複許容を決める (退化判定に用いる)
+    Vector2d lo(std::numeric_limits<double>::infinity(),
+                std::numeric_limits<double>::infinity());
+    Vector2d hi = -lo;
+    for (const auto& p : uv_points) {
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) continue;
+        lo = lo.cwiseMin(Vector2d(p.x(), p.y()));
+        hi = hi.cwiseMax(Vector2d(p.x(), p.y()));
+    }
+    if (!lo.allFinite() || !hi.allFinite()) return nullptr;
+    const double tol = std::max(1e-12, 1e-7 * (hi - lo).norm());
+
+    // 非有限点を除外しつつ連続重複を間引く
+    std::vector<Vector2d> uv;
+    uv.reserve(uv_points.size());
+    for (const auto& p : uv_points) {
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) continue;
+        const Vector2d q(p.x(), p.y());
+        if (uv.empty() || (uv.back() - q).norm() > tol) uv.push_back(q);
+    }
+    // 閉ループ: 先頭と一致する末尾点は閉辺と二重化するため除去する
+    if (is_closed && uv.size() >= 2 && (uv.front() - uv.back()).norm() <= tol) {
+        uv.pop_back();
+    }
+    // 退化チェック (閉ループは3点以上、開折れ線は2点以上)
+    if (uv.size() < (is_closed ? 3u : 2u)) return nullptr;
+
+    return std::make_shared<i_ent::LinearPath>(uv, is_closed);
 }
 
 }  // namespace
@@ -546,25 +591,29 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::ReconstructOmittedBaseCurve() {
     auto curve_opt = curve_.TryGetEntity<ICurve>();
     if (!surf_opt || !curve_opt) return nullptr;
 
-    // CをSのパラメータ空間へ逆射影する (単一弧モード; Type 142は連続を仮定)
-    auto arcs = InvertCurveOntoSurface(*surf_opt.value(), *curve_opt.value(), {});
-    if (arcs.empty() || arcs.front().uv_points.size() < 2) return nullptr;
-
-    // パラメータ空間の折れ線としてBを生成する (各点 (u, v, 0))
-    auto base = std::make_shared<LinearPath>(arcs.front().uv_points);
-    // B は曲面のパラメータ空間にあるため EUF=05 (2D Parametric)・物理従属に設定
-    base->SetEntityUseFlag(i_ent::EntityUseFlag::k2DParametric);
-    base->SetSubordinateEntitySwitch(
-            i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
-
-    // base_curve_に設定する (新規IDのためOverwritePointer経由)。
-    // ドメイン包含チェック等で失敗した場合は再構築を諦め nullptr を返す
+    // 再構築はbest-effort。逆射影・近似・ドメイン包含チェック等で例外が出ても
+    // 読み込み全体を止めずnullptrを返す (当該境界は非致命的にスキップ)。
     try {
+        // CをSのパラメータ空間へ逆射影する (単一弧モード; Type 142は連続を仮定)
+        auto arcs = InvertCurveOntoSurface(*surf_opt.value(), *curve_opt.value(), {});
+        if (arcs.empty() || arcs.front().uv_points.size() < 2) return nullptr;
+
+        // パラメータ空間のベース曲線Bを生成する。トリム境界Cが閉ループならBも閉じ、
+        // 退化点列は除去する (下流テッセレーションが閉曲線・非退化を前提とするため)。
+        auto base = BuildParamSpaceBaseCurve(
+                arcs.front().uv_points, curve_opt.value()->IsClosed());
+        if (!base) return nullptr;
+        // B は曲面のパラメータ空間にあるため EUF=05 (2D Parametric)・物理従属に設定
+        base->SetEntityUseFlag(i_ent::EntityUseFlag::k2DParametric);
+        base->SetSubordinateEntitySwitch(
+                i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
+
+        // base_curve_に設定する (新規IDのためOverwritePointer経由)
         SetBaseCurve(base);
+        return base;
     } catch (const std::exception&) {
         return nullptr;
     }
-    return base;
 }
 
 

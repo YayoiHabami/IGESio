@@ -277,7 +277,13 @@ size_t RationalBSplineCurve::SetMainPDParameters(const pointer2ID& de2id) {
         normal_vector_ = Vector3d(x, y, z);
         is_planar_ = true;  // 法線ベクトルが定義されている場合は平面的
     } else {
+        // 法線が(0,0,0)の場合は平面を一意に定義できないためnon-planarとして扱う。
+        // PROP1=1でも法線ゼロのデータ (SolidWorks 等) はここでis_planar_をfalseに
+        // 揃え、不変条件is_planar_ ⟺ normal_vector_.has_value()を保つ。
+        // is_planar_/normal_vector_はValidatePD専用であり、出力 (GetMainPDParameters)
+        // はComputePlaneNormalで幾何から再判定するため出力には影響しない。
         normal_vector_.reset();
+        is_planar_ = false;
     }
 
     return index;

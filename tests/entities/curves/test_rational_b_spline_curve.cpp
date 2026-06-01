@@ -539,6 +539,24 @@ TEST(RationalBSplineCurveNurbsCtorTest, Collinear_IsValid) {
     EXPECT_TRUE(nurbs.ValidatePD().is_valid);
 }
 
+// A: PROP1=1 (平面フラグ) だが法線(0,0,0) のPDデータ (SolidWorks 等) → ValidatePDが通る
+// 読み込み時に法線ゼロなら non-planar 扱いに揃えるため、不整合エラーを出さない
+TEST(RationalBSplineCurvePDCtorTest, PlanarFlagWithZeroNormal_IsValid) {
+    const auto param = igesio::IGESParameterVector{
+        2, 2,                          // K=2, M=2
+        true, false, true, false,      // PROP1=true(平面フラグ), PROP3=true
+        0.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // ノット (K+M+2=6 個)
+        1.0, 1.0, 1.0,                 // 重み (K+1=3 個)
+        0.0, 0.0, 0.0,                 // P0
+        1.0, 1.0, 0.0,                 // P1
+        2.0, 0.0, 0.0,                 // P2
+        0.0, 1.0,                      // V=[0,1]
+        0.0, 0.0, 0.0                  // 法線 = (0,0,0)  ← Aの状況
+    };
+    const RationalBSplineCurve nurbs(param);
+    EXPECT_TRUE(nurbs.ValidatePD().is_valid);
+}
+
 // k=1（制御点2点）→ ComputePlaneNormal が即 nullopt を返し ValidatePD が通る
 TEST(RationalBSplineCurveNurbsCtorTest, TwoControlPoints_IsValid) {
     const RationalBSplineCurve nurbs(

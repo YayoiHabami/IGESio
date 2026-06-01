@@ -159,10 +159,13 @@ i_num::PolygonData i_ent::ComputeApproximatePolygon(
     }
 
     // Step 3: PolygonDataの構築
+    // uは固定点 (inscribed/circumscribedの曲率パラメータ等) 由来で、閉曲線の周期
+    // 正規化などにより [t_min, t_max] を僅かに外れることがある。GetPointAt の範囲外
+    // 例外を避けるため評価時に範囲へクランプする (C層: 数値誤差でも例外を投げない)。
     std::vector<Vector3d> vertices;
     vertices.reserve(result_params.size());
     for (double u : result_params) {
-        vertices.push_back(curve.GetPointAt(u));
+        vertices.push_back(curve.GetPointAt(std::clamp(u, t_min, t_max)));
     }
     const std::vector<bool> on_curve(result_params.size(), true);
 
