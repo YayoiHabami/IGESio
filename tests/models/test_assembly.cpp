@@ -13,6 +13,10 @@
  *             FindOwner (再インデックス)
  *   - クエリ: GetEntityIDs / FindEntitiesByType / FindEntitiesByUseFlag /
  *             FindEntities
+ *   - 編集 (P9 B-1/B-2/B-3/B-4): FindReferrers / RemoveEntity / RemoveChildAssembly /
+ *                       Clear / MoveEntityTo / MoveChildAssemblyTo / Set*Recursive /
+ *                       ComposeGlobalTransform / ValidateSelfContainedRecursive /
+ *                       IsEffectivelyEditable (kReject/kCascade/kOrphan)
  *
  * 座標系・ビュー・WorldBB系 (ResolvePlacement/GetCurveView/GetSurfaceView/
  * GetWorldBoundingBox) は test_assembly_coords.cpp で扱う。
@@ -76,6 +80,41 @@ FindReferencingPair(const Assembly& root) {
         }
     }
     return std::nullopt;
+}
+
+/// @brief assemblyに直接登録済みで、他のどのエンティティからも参照されていないIDを探す
+/// @return 参照されていないエンティティのID. 見つからない場合はstd::nullopt
+std::optional<ObjectID> FindUnreferenced(const Assembly& a) {
+    for (const auto& id : a.GetEntityIDs(false)) {
+        if (a.FindReferrers(id).empty()) return id;
+    }
+    return std::nullopt;
+}
+
+/// @brief referrerをroot直下、referentをchild内に配置した「外部→子内」参照ツリー
+struct InboundFixture {
+    /// @brief ルートAssembly
+    std::shared_ptr<Assembly> root;
+    /// @brief childサブツリー (referentを所有)
+    std::shared_ptr<Assembly> child;
+    /// @brief root直下に置いた参照元のID
+    ObjectID referrer_id;
+    /// @brief child内に置いた参照先のID
+    ObjectID referent_id;
+};
+
+/// @brief srcの参照ペアを使い、referrer=root直下・referent=child内 のツリーを構築する
+/// @param src 参照ペアの供給元 (ロード済みルート)
+/// @return 構築したツリー. 参照ペアが見つからない場合はstd::nullopt
+std::optional<InboundFixture> MakeInboundTree(const Assembly& src) {
+    auto pair = FindReferencingPair(src);
+    if (!pair.has_value()) return std::nullopt;
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+    root->AddEntity(src.GetEntity(pair->first));    // referrer は root直下
+    child->AddEntity(src.GetEntity(pair->second));  // referent は child内
+    return InboundFixture{root, child, pair->first, pair->second};
 }
 
 }  // namespace
@@ -307,4 +346,373 @@ TEST_F(AssemblyTest, FindEntities_RecursiveCountsMatchSubsets) {
               count_in(root_ents, type_pred));
     EXPECT_EQ(root->FindEntities(type_pred, true).size(),
               count_in(ents, type_pred));
+}
+
+
+
+/**
+ * 編集・ライフサイクル (P9 B-1: FindReferrers / RemoveEntity)
+ */
+
+// FindReferrers: 参照しているエンティティ(referrer)を逆引きで返し、自己参照は含めない
+TEST_F(AssemblyTest, FindReferrers_ReturnsReferringEntities) {
+    auto pair = FindReferencingPair(data_->Root());
+    ASSERT_TRUE(pair.has_value()) << "参照を持つエンティティが見つからない";
+    const auto& [referrer_id, referent_id] = *pair;
+
+    Assembly root;
+    for (const auto& e : Entities()) root.AddEntity(e);
+
+    const auto referrers = root.FindReferrers(referent_id);
+    EXPECT_NE(std::find(referrers.begin(), referrers.end(), referrer_id),
+              referrers.end());
+    EXPECT_EQ(std::find(referrers.begin(), referrers.end(), referent_id),
+              referrers.end());  // 自己参照は対象外
+}
+
+// RemoveEntity(kReject): 参照されている要素は拒否、参照なし要素は削除する
+TEST_F(AssemblyTest, RemoveEntity_RejectRespectsReferrers) {
+    auto pair = FindReferencingPair(data_->Root());
+    ASSERT_TRUE(pair.has_value());
+    const auto referent_id = pair->second;
+
+    Assembly root;
+    for (const auto& e : Entities()) root.AddEntity(e);
+
+    // 参照されている要素(referent)はkRejectで削除できない
+    EXPECT_FALSE(root.RemoveEntity(referent_id, i_mdl::RemovalPolicy::kReject));
+    EXPECT_NE(root.GetEntity(referent_id), nullptr);
+
+    // 参照されていない要素は削除でき、逆引きからも除去される
+    const auto free_id = FindUnreferenced(root);
+    ASSERT_TRUE(free_id.has_value());
+    EXPECT_TRUE(root.RemoveEntity(*free_id, i_mdl::RemovalPolicy::kReject));
+    EXPECT_EQ(root.GetEntity(*free_id), nullptr);
+    EXPECT_EQ(root.FindOwner(*free_id), nullptr);
+}
+
+// RemoveEntity(kOrphan): 参照が残っても削除する (referrerは残る)
+TEST_F(AssemblyTest, RemoveEntity_OrphanRemovesDespiteReferrers) {
+    auto pair = FindReferencingPair(data_->Root());
+    ASSERT_TRUE(pair.has_value());
+    const auto& [referrer_id, referent_id] = *pair;
+
+    Assembly root;
+    for (const auto& e : Entities()) root.AddEntity(e);
+
+    EXPECT_TRUE(root.RemoveEntity(referent_id, i_mdl::RemovalPolicy::kOrphan));
+    EXPECT_EQ(root.GetEntity(referent_id), nullptr);  // referentは削除
+    EXPECT_NE(root.GetEntity(referrer_id), nullptr);  // referrerは残る
+}
+
+// RemoveEntity(kCascade): 参照元(referrer)も連鎖削除する
+TEST_F(AssemblyTest, RemoveEntity_CascadeRemovesReferrers) {
+    auto pair = FindReferencingPair(data_->Root());
+    ASSERT_TRUE(pair.has_value());
+    const auto& [referrer_id, referent_id] = *pair;
+
+    Assembly root;
+    for (const auto& e : Entities()) root.AddEntity(e);
+
+    EXPECT_TRUE(root.RemoveEntity(referent_id, i_mdl::RemovalPolicy::kCascade));
+    EXPECT_EQ(root.GetEntity(referent_id), nullptr);  // referent
+    EXPECT_EQ(root.GetEntity(referrer_id), nullptr);  // 参照元も連鎖削除
+}
+
+// RemoveEntity: 既に削除済み(未存在)のIDはfalseを返す
+TEST_F(AssemblyTest, RemoveEntity_ReturnsFalseWhenAlreadyRemoved) {
+    Assembly root;
+    for (const auto& e : Entities()) root.AddEntity(e);
+    const auto free_id = FindUnreferenced(root);
+    ASSERT_TRUE(free_id.has_value());
+
+    EXPECT_TRUE(root.RemoveEntity(*free_id, i_mdl::RemovalPolicy::kOrphan));
+    EXPECT_FALSE(root.RemoveEntity(*free_id, i_mdl::RemovalPolicy::kOrphan));
+}
+
+// RemoveEntity: 編集ロックされたノードのエンティティは削除を拒否する
+TEST_F(AssemblyTest, RemoveEntity_RejectsWhenLocked) {
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    const auto id = child->AddEntity(ents[0]);
+
+    child->Metadata().lock.editable = false;  // 編集不可
+    EXPECT_FALSE(root->RemoveEntity(id, i_mdl::RemovalPolicy::kOrphan));
+    EXPECT_NE(child->GetEntity(id), nullptr);
+
+    child->Metadata().lock.editable = true;   // 解除すれば削除可
+    EXPECT_TRUE(root->RemoveEntity(id, i_mdl::RemovalPolicy::kOrphan));
+    EXPECT_EQ(child->GetEntity(id), nullptr);
+}
+
+
+
+/**
+ * 編集・ライフサイクル (P9 B-2: RemoveChildAssembly / Clear / Move)
+ */
+
+// RemoveChildAssembly: サブツリー内で閉じた参照は削除を妨げない
+TEST_F(AssemblyTest, RemoveChildAssembly_AllowsIntraSubtreeReferences) {
+    auto pair = FindReferencingPair(data_->Root());
+    ASSERT_TRUE(pair.has_value());
+    const auto& [referrer_id, referent_id] = *pair;
+
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+    // referrer/referentの両方をchildに入れる(参照はサブツリー内で閉じる)
+    child->AddEntity(data_->Root().GetEntity(referrer_id));
+    child->AddEntity(data_->Root().GetEntity(referent_id));
+
+    EXPECT_TRUE(root->RemoveChildAssembly(child->GetID(),
+                                          i_mdl::RemovalPolicy::kReject));
+    EXPECT_TRUE(root->GetChildAssemblies().empty());
+    EXPECT_EQ(root->FindOwner(referent_id), nullptr);  // 逆引きからも除去
+}
+
+// RemoveChildAssembly(kReject): 外部からの参照(inbound)が残るなら拒否する
+TEST_F(AssemblyTest, RemoveChildAssembly_RejectsInboundReference) {
+    auto fx = MakeInboundTree(data_->Root());
+    ASSERT_TRUE(fx.has_value());
+
+    EXPECT_FALSE(fx->root->RemoveChildAssembly(fx->child->GetID(),
+                                               i_mdl::RemovalPolicy::kReject));
+    EXPECT_EQ(fx->root->GetChildAssemblies().size(), 1u);  // 無変更
+    EXPECT_NE(fx->child->GetEntity(fx->referent_id), nullptr);
+}
+
+// RemoveChildAssembly(kOrphan): 外部参照が残っても削除する (referrerは残る)
+TEST_F(AssemblyTest, RemoveChildAssembly_OrphanRemovesDespiteInbound) {
+    auto fx = MakeInboundTree(data_->Root());
+    ASSERT_TRUE(fx.has_value());
+
+    EXPECT_TRUE(fx->root->RemoveChildAssembly(fx->child->GetID(),
+                                              i_mdl::RemovalPolicy::kOrphan));
+    EXPECT_TRUE(fx->root->GetChildAssemblies().empty());
+    EXPECT_EQ(fx->root->FindOwner(fx->referent_id), nullptr);  // childは除去
+    EXPECT_NE(fx->root->GetEntity(fx->referrer_id), nullptr);  // referrerは残る
+}
+
+// RemoveChildAssembly(kCascade): 外部の参照元も連鎖削除する
+TEST_F(AssemblyTest, RemoveChildAssembly_CascadeRemovesOutsideReferrer) {
+    auto fx = MakeInboundTree(data_->Root());
+    ASSERT_TRUE(fx.has_value());
+
+    EXPECT_TRUE(fx->root->RemoveChildAssembly(fx->child->GetID(),
+                                              i_mdl::RemovalPolicy::kCascade));
+    EXPECT_TRUE(fx->root->GetChildAssemblies().empty());
+    EXPECT_EQ(fx->root->GetEntity(fx->referrer_id), nullptr);  // 参照元も削除
+}
+
+// RemoveChildAssembly: 直接の子でないIDはfalse、直接の子は削除できる
+TEST_F(AssemblyTest, RemoveChildAssembly_OnlyTargetsDirectChildren) {
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    auto grandchild = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+    child->AddChildAssembly(grandchild);
+
+    // 孫(間接)は対象外
+    EXPECT_FALSE(root->RemoveChildAssembly(grandchild->GetID()));
+    EXPECT_EQ(root->GetChildAssemblies().size(), 1u);
+    // 直接の子は削除できる (子孫も巻き込んで除去)
+    EXPECT_TRUE(root->RemoveChildAssembly(child->GetID()));
+    EXPECT_TRUE(root->GetChildAssemblies().empty());
+}
+
+// Clear: 自ノードのエンティティ・子Assemblyを除去し、逆引きからも消える
+TEST_F(AssemblyTest, Clear_RemovesEntitiesChildrenAndDeindexes) {
+    auto ents = Entities();
+    ASSERT_GE(ents.size(), 2u);
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+    const auto id0 = root->AddEntity(ents[0]);
+    const auto id1 = child->AddEntity(ents[1]);
+
+    root->Clear();
+    EXPECT_EQ(root->GetEntityCount(), 0u);
+    EXPECT_TRUE(root->GetChildAssemblies().empty());
+    EXPECT_EQ(root->FindOwner(id0), nullptr);
+    EXPECT_EQ(root->FindOwner(id1), nullptr);
+}
+
+// MoveEntityTo: 所有ノードを付け替え、逆引きownerを更新する
+TEST_F(AssemblyTest, MoveEntityTo_ReparentsAndUpdatesOwner) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+    const auto id = root->AddEntity(ents[0]);
+
+    root->MoveEntityTo(id, *child);
+    EXPECT_EQ(root->GetEntity(id), nullptr);
+    EXPECT_NE(child->GetEntity(id), nullptr);
+    EXPECT_EQ(root->FindOwner(id), child.get());
+}
+
+// MoveEntityTo: 異なるルート/未存在IDは例外
+TEST_F(AssemblyTest, MoveEntityTo_ThrowsForDifferentRootOrUnknownId) {
+    auto ents = Entities();
+    ASSERT_GE(ents.size(), 2u);
+    auto root1 = std::make_shared<Assembly>();
+    auto root2 = std::make_shared<Assembly>();
+    const auto id = root1->AddEntity(ents[0]);
+
+    // 異なるルートへの移動は不可
+    EXPECT_THROW(root1->MoveEntityTo(id, *root2), std::invalid_argument);
+    // ツリーに無いIDの移動は不可
+    auto child = std::make_shared<Assembly>();
+    root1->AddChildAssembly(child);
+    EXPECT_THROW(root1->MoveEntityTo(ents[1]->GetID(), *child),
+                 std::invalid_argument);
+}
+
+// MoveChildAssemblyTo: 子Assemblyを付け替え、逆引き(エンティティ→所有)は不変
+TEST_F(AssemblyTest, MoveChildAssemblyTo_ReparentsChild) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = std::make_shared<Assembly>();
+    auto a = std::make_shared<Assembly>();
+    auto b = std::make_shared<Assembly>();
+    root->AddChildAssembly(a);
+    root->AddChildAssembly(b);
+    const auto id = b->AddEntity(ents[0]);
+
+    root->MoveChildAssemblyTo(b->GetID(), *a);
+    ASSERT_EQ(root->GetChildAssemblies().size(), 1u);
+    EXPECT_EQ(root->GetChildAssemblies()[0], a);
+    ASSERT_EQ(a->GetChildAssemblies().size(), 1u);
+    EXPECT_EQ(a->GetChildAssemblies()[0], b);
+    EXPECT_EQ(b->GetParent().lock(), a);
+    EXPECT_EQ(root->FindOwner(id), b.get());  // 同一ルートのため逆引きは不変
+}
+
+// MoveChildAssemblyTo: 循環(子孫への移動)・非直接子は例外
+TEST_F(AssemblyTest, MoveChildAssemblyTo_ThrowsOnCycleOrNonDirectChild) {
+    auto root = std::make_shared<Assembly>();
+    auto a = std::make_shared<Assembly>();
+    auto b = std::make_shared<Assembly>();
+    root->AddChildAssembly(a);
+    a->AddChildAssembly(b);
+
+    // aをその子孫bの下へ移動 → 循環
+    EXPECT_THROW(root->MoveChildAssemblyTo(a->GetID(), *b),
+                 std::invalid_argument);
+    // bはrootの直接子でない
+    EXPECT_THROW(root->MoveChildAssemblyTo(b->GetID(), *a),
+                 std::invalid_argument);
+}
+
+
+
+/**
+ * 編集・ライフサイクル (P9 B-3: 一斉処理/変換, B-4: 自己完結検証)
+ */
+
+// SetVisibleRecursive: 自ノードと全子孫へ適用される
+TEST_F(AssemblyTest, SetVisibleRecursive_AppliesToSelfAndDescendants) {
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    auto grandchild = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+    child->AddChildAssembly(grandchild);
+
+    root->SetVisibleRecursive(false);
+    EXPECT_FALSE(root->Metadata().visible);
+    EXPECT_FALSE(child->Metadata().visible);
+    EXPECT_FALSE(grandchild->Metadata().visible);
+
+    root->SetVisibleRecursive(true);
+    EXPECT_TRUE(grandchild->Metadata().visible);
+}
+
+// SetSuppressedRecursive: 自ノードと全子孫へ適用される
+TEST_F(AssemblyTest, SetSuppressedRecursive_AppliesToSelfAndDescendants) {
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+
+    root->SetSuppressedRecursive(true);
+    EXPECT_TRUE(root->Metadata().suppressed);
+    EXPECT_TRUE(child->Metadata().suppressed);
+}
+
+// SetColorOverrideRecursive: 設定と解除(nullopt)が全子孫へ伝播する
+TEST_F(AssemblyTest, SetColorOverrideRecursive_AppliesAndClears) {
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+
+    const std::array<float, 3> red{1.0f, 0.0f, 0.0f};
+    root->SetColorOverrideRecursive(red);
+    ASSERT_TRUE(child->Metadata().color_override.has_value());
+    EXPECT_EQ(child->Metadata().color_override.value(), red);
+
+    root->SetColorOverrideRecursive(std::nullopt);
+    EXPECT_FALSE(root->Metadata().color_override.has_value());
+    EXPECT_FALSE(child->Metadata().color_override.has_value());
+}
+
+// SetOpacityOverrideRecursive: 設定と解除(nullopt)が全子孫へ伝播する
+TEST_F(AssemblyTest, SetOpacityOverrideRecursive_AppliesAndClears) {
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+
+    root->SetOpacityOverrideRecursive(0.5f);
+    ASSERT_TRUE(child->Metadata().opacity_override.has_value());
+    EXPECT_FLOAT_EQ(child->Metadata().opacity_override.value(), 0.5f);
+
+    root->SetOpacityOverrideRecursive(std::nullopt);
+    EXPECT_FALSE(child->Metadata().opacity_override.has_value());
+}
+
+// ComposeGlobalTransform: 親フレーム合成(left-multiply)で、子孫は再帰しない
+TEST_F(AssemblyTest, ComposeGlobalTransform_ComposesInParentFrameNonRecursive) {
+    auto root = std::make_shared<Assembly>();
+    auto child = std::make_shared<Assembly>();
+    root->AddChildAssembly(child);
+
+    // original: x方向に1並進, applied: Z軸90°回転 (非可換で順序を検証可能)
+    igesio::Matrix4d original = igesio::Matrix4d::Identity();
+    original(0, 3) = 1.0;
+    igesio::Matrix4d applied = igesio::Matrix4d::Identity();
+    applied(0, 0) = 0.0; applied(0, 1) = -1.0;
+    applied(1, 0) = 1.0; applied(1, 1) = 0.0;
+
+    root->SetGlobalTransform(original);
+    root->ComposeGlobalTransform(applied);
+
+    const igesio::Matrix4d expected = applied * original;
+    const igesio::Matrix4d got = root->GetGlobalTransform();
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 4; ++c) {
+            EXPECT_NEAR(got(r, c), expected(r, c), 1e-9);
+        }
+    }
+    // 子は再帰しない (恒等のまま)
+    EXPECT_TRUE(child->GetGlobalTransform().isApprox(
+            igesio::Matrix4d::Identity()));
+}
+
+// ValidateSelfContainedRecursive: 全参照が同一ノード内で解決すれば有効
+TEST_F(AssemblyTest, ValidateSelfContainedRecursive_TrueForResolvedTree) {
+    Assembly root;
+    for (const auto& e : Entities()) root.AddEntity(e);  // 全て同一ノード
+
+    EXPECT_TRUE(root.ValidateSelfContainedRecursive().is_valid);
+}
+
+// ValidateSelfContainedRecursive: ノードを跨ぐ参照を未解決として検出する
+TEST_F(AssemblyTest, ValidateSelfContainedRecursive_DetectsCrossNodeReference) {
+    auto fx = MakeInboundTree(data_->Root());
+    ASSERT_TRUE(fx.has_value());
+
+    // referrer(root直下)がreferent(child内)を参照 -> rootノードで未解決
+    EXPECT_FALSE(fx->root->ValidateSelfContainedRecursive().is_valid);
 }

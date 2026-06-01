@@ -21,8 +21,7 @@ namespace igesio::graphics {
 
 /// @brief RationalBSplineCurveエンティティの描画情報の管理クラス
 class RationalBSplineCurveGraphics
-    : public EntityGraphics<entities::RationalBSplineCurve,
-                            ShaderType::kRationalBSplineCurve> {
+    : public EntityGraphics<entities::RationalBSplineCurve> {
     /// @brief ノットベクトルのSSBO
     GLuint knots_ssbo_ = 0;
     /// @brief 制御点と重みのSSBO

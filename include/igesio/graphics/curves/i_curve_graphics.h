@@ -22,7 +22,7 @@ namespace igesio::graphics {
 
 /// @brief ICurveエンティティの描画情報の管理クラス
 class ICurveGraphics
-    : public EntityGraphics<entities::ICurve, ShaderType::kGeneralCurve> {
+    : public EntityGraphics<entities::ICurve> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
     GLuint vbo_ = 0;

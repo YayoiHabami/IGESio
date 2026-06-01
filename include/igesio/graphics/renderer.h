@@ -10,6 +10,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -17,6 +18,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
+#include "igesio/models/scene.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
 #include "igesio/graphics/core/light.h"
@@ -102,8 +104,20 @@ class EntityRenderer {
     /// @brief 描画全般に関する設定
     GraphicsSettings settings_;
 
-    /// @brief 選択中のエンティティID群
-    std::vector<ObjectID> selected_ids_;
+    /// @brief 描画対象のシーン (非所有).
+    ///        セッション状態(root + 選択 + フィルタ)を一元管理するシーン
+    /// @note nullptrの間は描画しない. 設定時は描画でツリーを走査し、各エンティティの
+    ///       ワールド変換と色/不透明度オーバーライドをリフレッシュしつつ、可視/抑制
+    ///       サブツリーをスキップする. sceneは本クラスより長く生存する必要がある.
+    const models::Scene* scene_ = nullptr;
+    /// @brief 描画リストの再構築 (ツリー走査) が必要か
+    /// @note ツリー編集・エンティティ追加削除で立てる. カメラ操作・選択変更だけの
+    ///       再描画ではキャッシュした描画リストを再利用し、走査しない
+    mutable bool scene_dirty_ = true;
+    /// @brief キャッシュした描画リスト (シェーダー別の描画オブジェクト. 非所有ポインタ)
+    /// @note scene_設定時にツリー走査で構築し、フレームを越えて再利用する.
+    ///       draw_objects_の要素を指すため、追加/削除時はdirty化して再構築する
+    mutable std::unordered_map<ShaderType, std::vector<IEntityGraphics*>> draw_list_;
 
  public:
     /// @brief コンストラクタ
@@ -210,6 +224,19 @@ class EntityRenderer {
     /// @return 描画オブジェクトを保持している場合はそのエンティティのShaderTypeを、
     ///         存在しない場合はShaderType::kNoneを返す
     ShaderType GetEntityShaderType(const ObjectID&) const;
+
+    /// @brief 描画対象のシーンを設定する
+    /// @param scene シーン (非所有). nullptrで描画を停止する
+    /// @note 設定後の描画では、scene->Root()のツリーを走査して各エンティティのワールド
+    ///       変換と色/不透明度オーバーライドをリフレッシュし、可視/抑制サブツリーを
+    ///       スキップする. 呼び出しで再走査を予約する. 選択ハイライトは
+    ///       scene->ActiveSelection()からPULLする. sceneは本クラスより長く生存すること.
+    void SetScene(const models::Scene* scene);
+
+    /// @brief シーン(ツリー)が変化したことを通知し、次回描画で再走査を予約する
+    /// @note 可視性・抑制・大域変換・構造を編集した後に呼ぶ.
+    ///       カメラ操作・選択変更だけの再描画では呼ぶ必要はない.
+    void MarkSceneDirty();
 
 
 
@@ -333,32 +360,6 @@ class EntityRenderer {
             const ScreenRect&, BoxSelectionMode,
             const SelectionSampleParams& = {}) const;
 
-    /// @brief 指定IDのエンティティを選択する
-    /// @param id エンティティのID
-    /// @note 既に選択中、または未登録の場合は何もしない
-    void Select(const ObjectID&);
-
-    /// @brief 指定IDのエンティティの選択を解除する
-    /// @param id エンティティのID
-    /// @note 選択されていない場合は何もしない
-    void Deselect(const ObjectID&);
-
-    /// @brief 指定IDのエンティティの選択状態をトグルする
-    /// @param id エンティティのID
-    void ToggleSelection(const ObjectID&);
-
-    /// @brief すべての選択を解除する
-    void ClearSelection();
-
-    /// @brief 指定IDのエンティティが選択中か
-    /// @param id エンティティのID
-    /// @return 選択中の場合はtrue
-    bool IsSelected(const ObjectID&) const;
-
-    /// @brief 選択中のエンティティID群を取得する
-    /// @return 選択中のエンティティIDのリスト
-    const std::vector<ObjectID>& GetSelectedIds() const { return selected_ids_; }
-
 
 
  protected:
@@ -427,23 +428,34 @@ class EntityRenderer {
     /// @note すでに同じIDのエンティティが存在する場合は何もしない
     void AddGraphicsObject(std::unique_ptr<IEntityGraphics>&&);
 
-    /// @brief 指定されたシェーダータイプに対応する描画オブジェクトを持つか
-    /// @param shader_type シェーダータイプ
-    /// @return kCompositeの子要素も含めて、指定されたシェーダータイプに対応する
-    ///         描画オブジェクトを持つ場合は`true`, そうでない場合は`false`.
-    bool HasGraphicsObject(const ShaderType shader_type) const;
-
     /// @brief 指定IDの描画オブジェクトを取得する
     /// @param id エンティティのID
     /// @return 描画オブジェクトのポインタ. 存在しない場合はnullptr
     /// @note 所有権は移譲しない (draw_objects_が保持し続ける)
     IEntityGraphics* FindGraphics(const ObjectID&) const;
 
-    /// @brief 全ての子要素のDrawメンバを呼び出す
-    /// @param program_id シェーダープログラムのID
-    /// @param shader_type シェーダータイプ
-    /// @param viewport ビューポートのサイズ (width, height)
-    void DrawChildren(GLuint, const ShaderType, const std::pair<float, float>&) const;
+    /// @brief scene_を走査して描画リストを再構築し、ワールド変換と色をリフレッシュする
+    /// @note dirty時のみ呼ぶ. ShouldRenderEntityは呼ばず、キャッシュ在席を描画対象条件
+    ///       とする (フィルタは投入時に適用済み).
+    void RebuildDrawList() const;
+
+    /// @brief Assemblyツリーを再帰走査する (RebuildDrawListの実体)
+    /// @param node 走査中のノード
+    /// @param parent_accum 親までの累積変換 (G_root·…·G_{n-1})
+    /// @param inherited_color 親までの最近接の色オーバーライド (無ければnullopt)
+    /// @param inherited_opacity 親までの最近接の不透明度オーバーライド (無ければnullopt)
+    /// @note 可視/抑制サブツリーはスキップ. node大域変換を掛けた累積をworld_transform_へ
+    ///       流し (M_entityは含めない)、graphicsをシェーダー別にdraw_list_へ収集する.
+    ///       色/不透明度の最近接オーバーライドを解決し、各描画オブジェクトへ
+    ///       フレーム毎にPUSHする (world_transform_と同じく派生キャッシュ扱い).
+    void WalkAssembly(const models::Assembly& node,
+                      const igesio::Matrix4d& parent_accum,
+                      const std::optional<std::array<float, 3>>& inherited_color,
+                      const std::optional<float>& inherited_opacity) const;
+
+    /// @brief キャッシュした描画リストをシェーダー単位で描画する
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    void ExecuteDrawList(const DrawContext& ctx) const;
 };
 
 }  // namespace igesio::graphics

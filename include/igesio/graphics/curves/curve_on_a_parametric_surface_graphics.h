@@ -22,8 +22,7 @@ namespace igesio::graphics {
 
 /// @brief CurveOnAParametricSurfaceエンティティの描画情報の管理クラス
 class CurveOnAParametricSurfaceGraphics
-    : public EntityGraphics<entities::CurveOnAParametricSurface,
-                            ShaderType::kComposite> {
+    : public EntityGraphics<entities::CurveOnAParametricSurface> {
  private:
     /// @brief C(t) 用の描画オブジェクト
     std::unique_ptr<IEntityGraphics> curve_graphics_;
@@ -68,9 +67,11 @@ class CurveOnAParametricSurfaceGraphics
     /// @param shader プログラムシェーダーのID
     /// @param shader_type 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
     /// @note shader_typeの子要素のみを描画する. 子要素の描画は
     ///       子要素に移譲する.
-    void Draw(GLuint, const ShaderType, const std::pair<float, float>&) const override;
+    void Draw(GLuint, const ShaderType, const std::pair<float, float>&,
+              const DrawContext&) const override;
 
     /// @brief レイとの交差判定が可能か
     /// @return 生成済みの3D曲線C(t)が交差判定可能な場合はtrue

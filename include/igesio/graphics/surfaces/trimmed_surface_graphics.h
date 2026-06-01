@@ -26,9 +26,7 @@ namespace igesio::graphics {
 ///       各グリッドエッジでの有効/無効の遷移点を2分探索で求め、
 ///       境界セルを凸多角形にクリッピングしてファン三角分割する。
 class TrimmedSurfaceGraphics
-    : public EntityGraphics<entities::TrimmedSurface,
-                            ShaderType::kGeneralSurface,
-                            true> {
+    : public EntityGraphics<entities::TrimmedSurface, true> {
     /// @brief 面のVBO
     GLuint vbo_ = 0;
     /// @brief 面のEBO

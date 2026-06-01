@@ -21,7 +21,7 @@ namespace igesio::graphics {
 
 /// @brief CopiousDataエンティティの描画情報の管理クラス
 class CopiousDataGraphics
-    : public EntityGraphics<entities::CopiousDataBase, ShaderType::kCopiousData> {
+    : public EntityGraphics<entities::CopiousDataBase> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
     GLuint vbo_ = 0;

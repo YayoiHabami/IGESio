@@ -27,7 +27,7 @@ constexpr size_t kMaxDegree = 5;
 RationalBSplineCurveGraphics::RationalBSplineCurveGraphics(
         const std::shared_ptr<const entities::RationalBSplineCurve> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, true) {
+        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineCurve, true) {
     Synchronize();
 }
 

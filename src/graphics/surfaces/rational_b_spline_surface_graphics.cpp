@@ -23,7 +23,7 @@ using igesio::graphics::RationalBSplineSurfaceGraphics;
 RationalBSplineSurfaceGraphics::RationalBSplineSurfaceGraphics(
         const std::shared_ptr<const entities::RationalBSplineSurface> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, true) {
+        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineSurface, true) {
     Synchronize();
 }
 

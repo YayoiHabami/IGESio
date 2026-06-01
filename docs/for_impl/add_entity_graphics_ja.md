@@ -17,7 +17,7 @@
   - [ステップ 5: シェーダーコード定義を登録する](#ステップ-5-シェーダーコード定義を登録する)
   - [ステップ 6: ファクトリ関数に登録する](#ステップ-6-ファクトリ関数に登録する)
   - [ステップ 7: CMakeLists.txt にソースファイルを追加する](#ステップ-7-cmakeliststxt-にソースファイルを追加する)
-- [パターン C: CompositeEntityGraphics を使う](#パターン-c-compositeentitygraphics-を使う)
+- [パターン C: 複合ノードを使う](#パターン-c-複合ノードを使う)
 - [変換行列 (world\_transform\_) の扱いについて](#変換行列-world_transform_-の扱いについて)
   - [`use_entity_transform_ = false` の場合 (CPU離散化)](#use_entity_transform_--false-の場合-cpu離散化)
   - [`use_entity_transform_ = true` の場合 (GPUパラメトリック)](#use_entity_transform_--true-の場合-gpuパラメトリック)
@@ -33,7 +33,7 @@
 | **汎用クラス流用** (対応不要) | `ICurve`を継承しており`GetParameterRange()`と `TryGetDerivatives()`が正しく実装されていれば、追加作業なしで`ICurveGraphics` (汎用CPU離散化) が自動で使用される。同様に`ISurface`に対しては`ISurfaceGraphics`が使われる。まず汎用描画で確認してから専用実装に移行するのが推奨の進め方。 |
 | **CPU離散化 (専用)** | 汎用と同じVBO方式を使いたいが、特殊な描画モード (`GL_POINTS`, `GL_LINES` 等) や前処理が必要な場合。`ICurveGraphics` / `ISurfaceGraphics`の継承も可能。 |
 | **GPUパラメトリック** | 形状が解析式で表現でき、テッセレーションでGPU上の精密な描画が望ましい場合 (円弧、NURBS等)。 |
-| **CompositeEntityGraphics** | 子エンティティの集合体であり、各子が独自のShaderTypeを持つ場合 (CompositeCurve等)。 |
+| **複合ノード** | 子エンティティの集合体であり、各子が独自のShaderTypeを持つ場合 (CompositeCurve等)。 |
 
 ## パターン A: 汎用クラスをそのまま使う (追加作業なし)
 
@@ -88,7 +88,7 @@ namespace igesio::graphics {
 
 /// @brief MyNewEntityエンティティの描画情報の管理クラス
 class MyNewEntityGraphics
-    : public EntityGraphics<entities::MyNewEntity, ShaderType::kMyNewCurve> {
+    : public EntityGraphics<entities::MyNewEntity> {
  public:
     /// @brief コンストラクタ
     explicit MyNewEntityGraphics(
@@ -121,13 +121,14 @@ class MyNewEntityGraphics
 **テンプレートパラメータの説明**
 
 ```
-EntityGraphics<T, ShaderType_, has_surfaces>
+EntityGraphics<T, has_surfaces>
   T             : 対象のエンティティ型 (IEntityIdentifier を継承していること)
-  ShaderType_   : 上で定義した ShaderType の値
   has_surfaces  : サーフェスを持つ場合 true (デフォルト false)
                   true にすると ambientStrength / specularStrength / shininess /
                   useTexture 等のマテリアルuniform変数が自動設定される
 ```
+
+使用する`ShaderType`はテンプレート引数ではなく、コンストラクタの第3引数として基底へ渡す(下記の例を参照)。
 
 ### ステップ 3: Graphicsクラスのソースファイルを作成する
 
@@ -150,7 +151,8 @@ using igesio::graphics::MyNewEntityGraphics;
 MyNewEntityGraphics::MyNewEntityGraphics(
         const std::shared_ptr<const entities::MyNewEntity> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, false) {  // false = エンティティ変換行列を含まない
+        // 第3引数=このクラスのShaderType、第4引数=エンティティ変換行列を含むか
+        : EntityGraphics(entity, gl, ShaderType::kMyNewCurve, false) {
     Synchronize();
 }
 
@@ -213,7 +215,8 @@ void MyNewEntityGraphics::DrawImpl(
 MyNewEntityGraphics::MyNewEntityGraphics(
         const std::shared_ptr<const entities::MyNewEntity> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, true) {  // true = エンティティ変換行列を含む
+        // 第3引数=このクラスのShaderType、第4引数=エンティティ変換行列を含むか
+        : EntityGraphics(entity, gl, ShaderType::kMyNewCurve, true) {
     Synchronize();
 }
 
@@ -350,14 +353,14 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
 
 `src/graphics/curves/` (または`src/graphics/surfaces/`) に追加したCPPファイルをCMakeLists.txtに登録する。
 
-## パターン C: CompositeEntityGraphics を使う
+## パターン C: 複合ノードを使う
 
-複数の子エンティティをそれぞれ独立して描画するエンティティの場合。
+複数の子エンティティをそれぞれ独立して描画するエンティティの場合。専用基底はなく、統合された`EntityGraphics`をそのまま使う。
 
-1. `CompositeEntityGraphics<T>`を継承したクラスを作成する。
+1. `EntityGraphics<T>`を継承したクラスを作成し、コンストラクタで基底へ`ShaderType::kComposite`を渡す。
 2. `Synchronize()`の中で各子要素のGraphicsオブジェクトを生成し、`AddChildGraphics()`で登録する。
-3. `factory.cpp`で子要素のGraphicsを追加する処理を実装する (既存の`CreateCompositeCurveGraphics()`を参照)。
-4. `ShaderType::kComposite`を使用するため、ShaderTypeの追加は不要。
+3. `factory.cpp`で子要素のGraphicsを追加する処理を実装する(既存の`CreateCompositeCurveGraphics()`を参照)。
+4. `ShaderType::kComposite`を使うため、新しいShaderTypeの追加は不要。`DrawImpl()`は空でよく、描画は型が一致する子へ自動的に委譲される。
 
 ## 変換行列 (world_transform_) の扱いについて
 

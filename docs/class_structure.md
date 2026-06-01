@@ -29,7 +29,7 @@ flowchart TD
         end
         subgraph "rendering"
             direction LR
-            gr1[[Renderer]]
+            gr1[[EntityRenderer]]
             gr2[[Camera]]
             gr3[[Light]]
             gr4[[MaterialProperty]]
@@ -49,6 +49,9 @@ flowchart TD
         subgraph "models"
             direction LR
             em1[[IgesData]]
+            em2[[Assembly]]
+            em3[[Scene]]
+            em4[[SelectionSet]]
         end
     end
     subgraph "Intermediate (hidden)"
@@ -77,7 +80,7 @@ It is possible to explicitly handle intermediate data structures by directly man
 
 This is a group of classes that represent each entity described in the IGES file. With the `igesio::entities::EntityBase` class as the base class, derived classes corresponding to each entity type are defined. Entity classes are mutually converted with intermediate data structures during IGES file input/output.
 
-Entity classes are managed by data structures (models) that organize multiple entities. For example, data input/output from files uses the `igesio::ReadIges` and `igesio::WriteIges` functions, and the `igesio::models::IgesData` class is used as its return value/argument. Users can directly manipulate entity classes to generate, edit, and analyze IGES data.
+The responsibility of organizing the collection of entities is held by the `igesio::models::Assembly` class. `Assembly` is a recursive tree node that holds a flat map of entities and child `Assembly` nodes to express a hierarchical structure. Data input/output from files uses the `igesio::ReadIges` and `igesio::WriteIges` functions, with the `igesio::models::IgesData` class as the return value/argument; `IgesData` itself is a thin wrapper holding the description, the global parameters, and the root `Assembly`, and entity management is delegated to the root `Assembly`. Users can directly manipulate entity classes to generate, edit, and analyze IGES data. See [Assembly](./models/assembly.md) for details.
 
 See the Entities document above and [Examples](./examples.md) for usage instructions.
 
@@ -89,7 +92,7 @@ This is a group of classes that generate data structures for 3D graphics renderi
     - `CircularArc` (entity) → `CircularArcGraphics`
     - `Line` (entity) → `SegmentGraphics` (line segment, half-line), `LineGraphics` (infinite line)
 
-Since these graphics classes are generated and managed by the `igesio::graphics::Renderer` class, users typically do not directly manipulate them. The `Renderer` class is responsible for adding, deleting, and updating entities to be drawn, as well as camera operations and rendering processes. Users control 3D graphics rendering through instances of the `Renderer` class.
+Since these graphics classes are generated and managed by the `igesio::graphics::EntityRenderer` class, users typically do not directly manipulate them. The `EntityRenderer` class is responsible for adding, deleting, and updating entities to be drawn, as well as camera operations and rendering. The tree to be drawn and the selection state are held by `igesio::models::Scene`; `EntityRenderer` holds a non-owning reference to it and reads it at render time (the selection state is managed by `Scene`, not by the entities or the renderer). Users control 3D graphics rendering and selection through `EntityRenderer` and `Scene`.
 
 ## 4. Other Non-Entity Classes
 

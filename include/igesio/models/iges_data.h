@@ -57,6 +57,10 @@ class IgesData {
     /// @brief ルートAssemblyを取得する (変更不可)
     /// @return ルートAssemblyへの参照
     const Assembly& Root() const { return *root_; }
+    /// @brief ルートAssemblyのshared_ptrを取得する
+    /// @return ルートAssemblyのshared_ptr
+    /// @note Scene等がrootを共有して実行時状態を載せるために用いる
+    std::shared_ptr<Assembly> RootPtr() const { return root_; }
 };
 
 }  // namespace igesio::models

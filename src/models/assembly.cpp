@@ -7,6 +7,7 @@
  */
 #include "igesio/models/assembly.h"
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -280,6 +281,22 @@ Assembly* Assembly::FindOwner(const ObjectID& id) const {
     return nullptr;
 }
 
+bool Assembly::IsEffectivelySelectable(const ObjectID& id) const {
+    const Assembly* node = FindOwner(id);
+    // ツリーに属さないIDは制限しない (選択可)
+    if (node == nullptr) return true;
+    // 所有ノードからrootまで lock.selectable をANDで畳む
+    for (const Assembly* n = node; n != nullptr; n = n->GetParent().lock().get()) {
+        if (!n->Metadata().lock.selectable) return false;
+    }
+    return true;
+}
+
+bool Assembly::IsEffectivelyEditable(const ObjectID& id) const {
+    // ツリーに属さないIDは制限しない (編集可)
+    return IsChainEditable(FindOwner(id));
+}
+
 std::vector<igesio::ObjectID>
 Assembly::GetEntityIDs(const bool recursive) const {
     std::vector<ObjectID> ids;
@@ -329,6 +346,245 @@ Assembly::FindEntitiesByUseFlag(const entities::EntityUseFlag flag,
     return FindEntities([flag](const entities::EntityBase& entity) {
         return entity.GetEntityUseFlag() == flag;
     }, recursive);
+}
+
+
+
+/**
+ * 編集・ライフサイクル (TODO 3-3)
+ */
+
+bool Assembly::IsInSubtree(const Assembly* node) const {
+    for (; node != nullptr; node = node->GetParent().lock().get()) {
+        if (node == this) return true;
+    }
+    return false;
+}
+
+bool Assembly::IsChainEditable(const Assembly* node) const {
+    for (; node != nullptr; node = node->GetParent().lock().get()) {
+        if (!node->Metadata().lock.editable) return false;
+    }
+    return true;
+}
+
+void Assembly::EraseEntity(Assembly* owner, const ObjectID& id) {
+    owner->entities_.erase(id);
+    RootRaw()->entity_index_.erase(id);
+}
+
+std::vector<igesio::ObjectID>
+Assembly::FindReferrers(const ObjectID& id) const {
+    std::vector<ObjectID> referrers;
+    // ルートの逆引きインデックスを使い、全子孫エンティティを走査する
+    const Assembly* root = RootRaw();
+    for (const auto& [eid, owner] : root->entity_index_) {
+        if (eid == id) continue;  // 自己参照は対象外
+        const auto entity = owner->GetEntity(eid);
+        if (!entity) continue;
+        for (const auto& ref : entity->GetReferencedEntityIDs()) {
+            if (ref == id) {
+                referrers.push_back(eid);
+                break;
+            }
+        }
+    }
+    return referrers;
+}
+
+void Assembly::RemoveCascade(const ObjectID& start) {
+    std::unordered_set<ObjectID> visited;
+    std::vector<ObjectID> stack{start};
+    while (!stack.empty()) {
+        const ObjectID cur = stack.back();
+        stack.pop_back();
+        if (!visited.insert(cur).second) continue;  // 既処理
+
+        Assembly* owner = FindOwner(cur);
+        // サブツリー外/未存在は触らない
+        if (owner == nullptr || !IsInSubtree(owner)) continue;
+        if (const auto entity = owner->GetEntity(cur)) {
+            // 物理従属子を閉包に追加
+            for (const auto& cid : entity->GetChildIDs()) stack.push_back(cid);
+        }
+        // 参照元も閉包に追加 (除去前に収集)
+        for (const auto& rid : FindReferrers(cur)) stack.push_back(rid);
+        EraseEntity(owner, cur);
+    }
+}
+
+bool Assembly::RemoveEntity(const ObjectID& id, const RemovalPolicy policy) {
+    Assembly* owner = FindOwner(id);
+    if (owner == nullptr) return false;        // ツリーに存在しない
+    if (!IsInSubtree(owner)) return false;     // このサブツリー外
+    if (!IsEffectivelyEditable(id)) return false;  // ロック(編集不可)
+
+    switch (policy) {
+        case RemovalPolicy::kReject:
+            // 参照が残るなら無変更で拒否する
+            if (!FindReferrers(id).empty()) return false;
+            EraseEntity(owner, id);
+            return true;
+        case RemovalPolicy::kOrphan:
+            // 参照は未解決のまま(被参照weak_ptrは自然失効)
+            EraseEntity(owner, id);
+            return true;
+        case RemovalPolicy::kCascade:
+            RemoveCascade(id);
+            return true;
+    }
+    return false;
+}
+
+bool Assembly::RemoveChildAssembly(const ObjectID& child_id,
+                                   const RemovalPolicy policy) {
+    // 直接の子から該当を探す
+    auto it = std::find_if(children_.begin(), children_.end(),
+            [&](const std::shared_ptr<Assembly>& c) {
+                return c && c->GetID() == child_id;
+            });
+    if (it == children_.end()) return false;
+    Assembly* child = it->get();
+    if (!IsChainEditable(child)) return false;  // ロック(編集不可)
+
+    // サブツリー内の全エンティティと、外部(サブツリー外)からの参照(inbound)を収集する
+    const auto inside = child->GetEntityIDs(/*recursive=*/true);
+    const std::unordered_set<ObjectID> inside_set(inside.begin(), inside.end());
+    std::vector<ObjectID> outside_referrers;
+    for (const auto& eid : inside) {
+        for (const auto& rid : FindReferrers(eid)) {
+            if (inside_set.find(rid) == inside_set.end()) {
+                outside_referrers.push_back(rid);
+            }
+        }
+    }
+
+    // kReject: 境界跨ぎ参照(外部→サブツリー内)が残るなら無変更で拒否する
+    if (policy == RemovalPolicy::kReject && !outside_referrers.empty()) {
+        return false;
+    }
+
+    // サブツリーのエンティティを逆引きから除去し、子をchildren_から外す
+    Assembly* root = RootRaw();
+    for (const auto& eid : inside) root->entity_index_.erase(eid);
+    children_.erase(it);  // shared_ptrが落ち、サブツリーが破棄される
+
+    // kCascade: 外部の参照元も連鎖削除する
+    if (policy == RemovalPolicy::kCascade) {
+        for (const auto& rid : outside_referrers) {
+            RemoveEntity(rid, RemovalPolicy::kCascade);
+        }
+    }
+    return true;
+}
+
+void Assembly::Clear() {
+    // 自ノード+全子孫のエンティティをルート逆引きから除去する
+    Assembly* root = RootRaw();
+    for (const auto& eid : GetEntityIDs(/*recursive=*/true)) {
+        root->entity_index_.erase(eid);
+    }
+    entities_.clear();
+    children_.clear();
+}
+
+void Assembly::MoveEntityTo(const ObjectID& id, Assembly& dest) {
+    if (RootRaw() != dest.RootRaw()) {
+        throw std::invalid_argument(
+            "MoveEntityTo: dest must share the same root");
+    }
+    Assembly* owner = FindOwner(id);
+    if (owner == nullptr) {
+        throw std::invalid_argument("MoveEntityTo: entity not found");
+    }
+    if (owner == &dest) return;  // 既にdest所属
+
+    auto entity = owner->GetEntity(id);
+    owner->entities_.erase(id);
+    dest.entities_[id] = entity;
+    dest.SetPointerIfUnset(entity);        // dest内で参照を張り直す
+    RootRaw()->entity_index_[id] = &dest;  // 逆引きownerを更新
+}
+
+void Assembly::MoveChildAssemblyTo(const ObjectID& child_id, Assembly& dest) {
+    if (RootRaw() != dest.RootRaw()) {
+        throw std::invalid_argument(
+            "MoveChildAssemblyTo: dest must share the same root");
+    }
+    auto it = std::find_if(children_.begin(), children_.end(),
+            [&](const std::shared_ptr<Assembly>& c) {
+                return c && c->GetID() == child_id;
+            });
+    if (it == children_.end()) {
+        throw std::invalid_argument(
+            "MoveChildAssemblyTo: not a direct child");
+    }
+    std::shared_ptr<Assembly> child = *it;
+
+    // 循環防止: destがchild自身またはその子孫である場合は不可
+    for (const Assembly* n = &dest; n != nullptr;
+         n = n->GetParent().lock().get()) {
+        if (n == child.get()) {
+            throw std::invalid_argument(
+                "MoveChildAssemblyTo: dest is within the moved subtree");
+        }
+    }
+
+    // children_から外し、destへ付け替える (同一ルートのため逆引きは不変)
+    children_.erase(it);
+    child->parent_ = dest.weak_from_this();
+    dest.children_.push_back(child);
+}
+
+void Assembly::SetVisibleRecursive(const bool visible) {
+    metadata_.visible = visible;
+    for (const auto& child : children_) {
+        if (child) child->SetVisibleRecursive(visible);
+    }
+}
+
+void Assembly::SetSuppressedRecursive(const bool suppressed) {
+    metadata_.suppressed = suppressed;
+    for (const auto& child : children_) {
+        if (child) child->SetSuppressedRecursive(suppressed);
+    }
+}
+
+void Assembly::SetColorOverrideRecursive(
+        const std::optional<std::array<float, 3>>& color) {
+    metadata_.color_override = color;
+    for (const auto& child : children_) {
+        if (child) child->SetColorOverrideRecursive(color);
+    }
+}
+
+void Assembly::SetOpacityOverrideRecursive(
+        const std::optional<float>& opacity) {
+    metadata_.opacity_override = opacity;
+    for (const auto& child : children_) {
+        if (child) child->SetOpacityOverrideRecursive(opacity);
+    }
+}
+
+void Assembly::ComposeGlobalTransform(const igesio::Matrix4d& transform) {
+    // 親フレームでの後付け合成 (左から掛ける)
+    global_transform_ = transform * global_transform_;
+}
+
+igesio::ValidationResult Assembly::ValidateSelfContainedRecursive() const {
+    ValidationResult result;
+    // 自ノードの未解決参照(同一ノード内で解決できない参照)を検査する
+    for (const auto& ref_id : GetUnresolvedReferences()) {
+        result.AddError(ValidationError(
+            "Reference to entity " + ToString(ref_id) +
+            " is not resolved within its owning Assembly node (ID " +
+            ToString(GetID()) + ")."));
+    }
+    // 全子孫へ再帰
+    for (const auto& child : children_) {
+        if (child) result.Merge(child->ValidateSelfContainedRecursive());
+    }
+    return result;
 }
 
 
