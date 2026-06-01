@@ -99,8 +99,11 @@ void CurveOnSurfaceGraphics::Draw(
     if (curve_graphics_ == nullptr) return;
 
     if (shader_type == curve_graphics_->GetShaderType()) {
+        // 142自身が選択中なら、委譲先の子(別ID)へハイライトを強制する
+        DrawContext child_ctx = ctx;
+        if (ctx.IsHighlighted(GetEntityID())) child_ctx.force_highlight = true;
         // 指定されたシェーダータイプに合致する場合、描画を行う
-        curve_graphics_->Draw(shader, viewport, ctx);
+        curve_graphics_->Draw(shader, viewport, child_ctx);
     }
 }
 

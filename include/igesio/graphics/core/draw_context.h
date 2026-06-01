@@ -28,12 +28,17 @@ struct DrawContext {
     const models::SelectionSet* selection = nullptr;
     /// @brief ハイライト色 (RGBA; [0, 1])
     std::array<float, 4> highlight_color = {1.0f, 0.6f, 0.0f, 1.0f};
+    /// @brief 親(複合/委譲ノード)が選択中で、子へハイライトを強制するか
+    /// @note 複合ノードは描画を子(別ID)へ委譲するため、親が選択された場合は本フラグを
+    ///       立てた複製コンテキストを子へ渡し、子のID判定に依らずハイライトさせる.
+    bool force_highlight = false;
 
     /// @brief 指定IDをハイライト表示すべきか
     /// @param id 判定対象のID
-    /// @return selectionが当該IDを含む場合はtrue
+    /// @return force_highlightが立つ、またはselectionが当該IDを含む場合はtrue
     bool IsHighlighted(const ObjectID& id) const {
-        return selection != nullptr && selection->Contains(id);
+        return force_highlight
+            || (selection != nullptr && selection->Contains(id));
     }
 };
 

@@ -757,11 +757,15 @@ class EntityGraphics : public IEntityGraphics {
                            const std::pair<float, float>& viewport,
                            const DrawContext& ctx) const {
         if (child_graphics_.empty()) return;
+        // 親(この複合ノード)が選択中なら、子のID判定に依らずハイライトさせる
+        DrawContext child_ctx = ctx;
+        if (ctx.IsHighlighted(GetEntityID())) child_ctx.force_highlight = true;
+
         auto it = child_graphics_.find(shader_type);
         if (it != child_graphics_.end()) {
             for (const auto& child : it->second) {
                 if (child && child->IsDrawable()) {
-                    child->Draw(shader, shader_type, viewport, ctx);
+                    child->Draw(shader, shader_type, viewport, child_ctx);
                 }
             }
         }
@@ -769,7 +773,7 @@ class EntityGraphics : public IEntityGraphics {
         if (cit != child_graphics_.end()) {
             for (const auto& child : cit->second) {
                 if (child && child->IsDrawable()) {
-                    child->Draw(shader, shader_type, viewport, ctx);
+                    child->Draw(shader, shader_type, viewport, child_ctx);
                 }
             }
         }

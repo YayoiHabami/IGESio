@@ -8,11 +8,14 @@
  * 対象: EntityGraphics::Draw が DrawContext (SelectionSet参照) を見て
  *       mainColorをハイライト色/エンティティ色で出し分けること. 選択状態は
  *       描画オブジェクトへ焼き込まれず、SelectionSetの変化に追従すること.
- * TODO: 祖先Assembly選択による実効ハイライトはP4以降 (本テストはエンティティ単位).
+ *       加えて、委譲ノード(複合: CompositeCurve 102)を選択した際、親の選択が
+ *       force_highlightとして子へ伝播し、子(別ID)もハイライトされること(回帰).
+ * TODO: 祖先Assembly選択による実効ハイライトはP4以降 (本テストはエンティティ/複合単位).
  */
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -20,6 +23,8 @@
 
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
+#include "igesio/entities/curves/composite_curve.h"
+#include "igesio/entities/curves/line.h"
 #include "igesio/models/selection_set.h"
 #include "igesio/graphics/core/draw_context.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
@@ -43,6 +48,18 @@ std::shared_ptr<i_ent::CircularArc> MakeArc() {
     return std::make_shared<i_ent::CircularArc>(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
+}
+
+/// @brief 2線分(直角折れ)からなるCompositeCurve(102)を生成する
+/// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment.
+///       親(102)と子(各Line)はそれぞれ別IDを持つ.
+std::shared_ptr<i_ent::CompositeCurve> MakeComposite() {
+    auto cc = std::make_shared<i_ent::CompositeCurve>();
+    cc->AddCurve(std::make_shared<i_ent::Line>(
+        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}));
+    cc->AddCurve(std::make_shared<i_ent::Line>(
+        igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0}));
+    return cc;
 }
 
 }  // namespace
@@ -123,4 +140,59 @@ TEST(SelectionPullTest, Draw_HighlightFollowsSelectionState) {
     for (int i = 0; i < 4; ++i) {
         EXPECT_NEAR(c[i], base[i], kTol) << "component " << i;
     }
+}
+
+
+
+// 複合(102)を選択すると、委譲先の子の描画でmainColorがハイライト色になる
+// (親の選択がforce_highlightとして子へ伝播する; 委譲ノードの選択ハイライト回帰)
+TEST(SelectionPullTest, Draw_CompositeHighlightsChildrenWhenParentSelected) {
+    auto gl = std::make_shared<MockOpenGL>();
+    auto composite = MakeComposite();
+    auto graphics = i_graph::CreateEntityGraphics(composite, gl);
+    ASSERT_NE(graphics, nullptr);
+
+    igesio::models::SelectionSet selection;
+    selection.Select(composite->GetID());  // 親(102)のIDを選択
+    i_graph::DrawContext ctx{};
+    ctx.selection = &selection;
+    ctx.highlight_color = kHighlight;
+
+    // 子の型(kSegment)で描画 -> 子へ委譲される
+    graphics->Draw(/*shader=*/1u, i_graph::ShaderType::kSegment,
+                   std::pair<float, float>{800.0f, 600.0f}, ctx);
+
+    ASSERT_EQ(gl->last_vec_by_name.count("mainColor"), 1u);
+    const auto& c = gl->last_vec_by_name.at("mainColor");
+    ASSERT_EQ(c.size(), 4u);
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_NEAR(c[i], kHighlight[i], kTol) << "component " << i;
+    }
+}
+
+// 親(102)が非選択なら、子はハイライトされない (force_highlightが立たない)
+TEST(SelectionPullTest, Draw_CompositeChildrenNotHighlightedWhenParentNotSelected) {
+    auto gl = std::make_shared<MockOpenGL>();
+    auto composite = MakeComposite();
+    auto graphics = i_graph::CreateEntityGraphics(composite, gl);
+    ASSERT_NE(graphics, nullptr);
+
+    igesio::models::SelectionSet selection;  // 空 (親も子も非選択)
+    i_graph::DrawContext ctx{};
+    ctx.selection = &selection;
+    ctx.highlight_color = kHighlight;
+
+    graphics->Draw(/*shader=*/1u, i_graph::ShaderType::kSegment,
+                   std::pair<float, float>{800.0f, 600.0f}, ctx);
+
+    ASSERT_EQ(gl->last_vec_by_name.count("mainColor"), 1u);
+    const auto& c = gl->last_vec_by_name.at("mainColor");
+    ASSERT_EQ(c.size(), 4u);
+    // ハイライト色とは異なる (子はエンティティ色のまま)
+    bool differs = false;
+    for (int i = 0; i < 4; ++i) {
+        if (std::fabs(c[i] - kHighlight[i]) > kTol) { differs = true; break; }
+    }
+    EXPECT_TRUE(differs)
+            << "non-selected composite child must not be highlighted";
 }
