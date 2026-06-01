@@ -415,6 +415,10 @@ void EntityRenderer::EnableTransparency(const bool enable) {
     }
 }
 
+bool EntityRenderer::IsTransparencyEnabled() const {
+    return settings_.enable_transparency;
+}
+
 
 
 /**

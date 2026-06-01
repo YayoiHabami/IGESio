@@ -1,6 +1,6 @@
 /**
  * @file examples/gui/iges_viewer_gui.cpp
- * @brief IGESのエンティティを表示するGUIクラス
+ * @brief IGESのエンティティを表示・編集する単一GUIクラスの実装
  * @author Yayoi Habami
  * @date 2025-08-05
  * @copyright 2025 Yayoi Habami
@@ -8,23 +8,36 @@
 #include "./iges_viewer_gui.h"
 
 #include <algorithm>
-#include <memory>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 #include <string>
+#include <vector>
+
+#include <igesio/reader.h>
 
 namespace {
 
 using IgesViewerGUI = igesio::graphics::IgesViewerGUI;
 using igesio::graphics::MouseButton;
 using igesio::graphics::ModifierKey;
+using igesio::graphics::ProjectionMode;
 
 /// @brief クリックと判定する移動量の閾値 [px]
-/// @note 押下から解放までの移動量がこの値未満であればクリック(ピッキング)、
-///       以上であればドラッグ(回転)とみなす
 constexpr double kClickThresholdPx = 5.0;
+/// @brief 左Outlinerパネルの幅 [px]
+constexpr float kOutlinerWidth = 260.0f;
+/// @brief 右Inspectorパネルの幅 [px]
+constexpr float kInspectorWidth = 320.0f;
+/// @brief 下部ステータスバーの高さ [px]
+constexpr float kStatusBarHeight = 28.0f;
+/// @brief 端アンカーパネル共通のウィンドウフラグ
+constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
 /// @brief GLFWのマウスボタン定数をMouseButtonへ変換する
-/// @param glfw_button GLFW_MOUSE_BUTTON_*
-/// @return 対応するMouseButton (未対応のボタンはkNone)
 MouseButton ToMouseButton(const int glfw_button) {
     switch (glfw_button) {
         case GLFW_MOUSE_BUTTON_LEFT: return MouseButton::kLeft;
@@ -35,9 +48,6 @@ MouseButton ToMouseButton(const int glfw_button) {
 }
 
 /// @brief GLFWの修飾キービットをModifierKeyへ変換する
-/// @param glfw_mods GLFW_MOD_* のOR
-/// @return Ctrl/Shift/Alt/Superのみを反映したModifierKey
-/// @note CapsLock等の無関係なビットは落とし、完全一致判定を可能にする
 ModifierKey ToModifierKey(const int glfw_mods) {
     ModifierKey mods = ModifierKey::kNone;
     if (glfw_mods & GLFW_MOD_CONTROL) mods = mods | ModifierKey::kCtrl;
@@ -47,14 +57,45 @@ ModifierKey ToModifierKey(const int glfw_mods) {
     return mods;
 }
 
+/// @brief 指定IDのAssemblyノードをツリーから探す (再帰)
+igesio::models::Assembly* FindAssemblyById(
+        igesio::models::Assembly& node, const igesio::ObjectID& id) {
+    if (node.GetID() == id) return &node;
+    for (const auto& child : node.GetChildAssemblies()) {
+        if (!child) continue;
+        if (auto* found = FindAssemblyById(*child, id)) return found;
+    }
+    return nullptr;
+}
+
+/// @brief 現在時刻を文字列で取得する (スクリーンショットのファイル名用)
+std::string CurrentTimeString(const std::string& format = "%Y-%m-%d %H%M%S") {
+    const auto now = std::chrono::system_clock::now();
+    const auto t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_buf{};
+#ifdef _WIN32
+    localtime_s(&tm_buf, &t);
+#else
+    localtime_r(&t, &tm_buf);
+#endif
+    std::ostringstream ss;
+    ss << std::put_time(&tm_buf, format.c_str());
+    return ss.str();
+}
+
 }  // namespace
 
 
 
+/**
+ * 初期化・終了
+ */
+
 IgesViewerGUI::IgesViewerGUI(
         const int width, const int height,
-        const int msaa_samples)
-        : renderer_(std::make_shared<OpenGL>(), width, height) {
+        const int msaa_samples, const std::string& initial_iges_file)
+        : renderer_(std::make_shared<OpenGL>(), width, height),
+          initial_iges_file_(initial_iges_file) {
     glfwSetErrorCallback(ErrorCallback);
     if (!glfwInit()) {
         throw std::runtime_error("Failed to initialize GLFW");
@@ -63,7 +104,6 @@ IgesViewerGUI::IgesViewerGUI(
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    // アンチエイリアス機能
     if (msaa_samples > 0) {
         glfwWindowHint(GLFW_SAMPLES, msaa_samples);
         msaa_samples_ = msaa_samples;
@@ -76,9 +116,8 @@ IgesViewerGUI::IgesViewerGUI(
     }
 
     glfwMakeContextCurrent(window_);
-    // thisポインタをウィンドウに保存
     glfwSetWindowUserPointer(window_, this);
-    glfwSwapInterval(1);  // V-Syncを有効化
+    glfwSwapInterval(1);
 
     if (!gladLoadGL(glfwGetProcAddress)) {
         glfwDestroyWindow(window_);
@@ -86,16 +125,16 @@ IgesViewerGUI::IgesViewerGUI(
         throw std::runtime_error("Failed to initialize GLAD");
     }
 
-    // コールバック関数を設定
     SetupCallbacks();
 
-    // ImGuiの初期化
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::StyleColorsDark();  // ダークテーマを使用
+    ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 400 core");
+
+    // 透過描画を有効化 (色/不透明度オーバーライドの表現用)
+    renderer_.EnableTransparency(true);
 
     // 空のSceneを生成し、レンダラへ束ねる (ロード時にBindSceneRootで差し替える)
     scene_ = std::make_unique<models::Scene>(std::make_shared<models::Assembly>());
@@ -103,75 +142,70 @@ IgesViewerGUI::IgesViewerGUI(
 }
 
 IgesViewerGUI::~IgesViewerGUI() {
-    // ImGuiの終了処理
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    // ウィンドウを破棄
     if (window_) {
         glfwDestroyWindow(window_);
         window_ = nullptr;
     }
-
-    // GLFWを終了
     glfwTerminate();
 }
 
 
 
 /**
- * 描画関連の関数 (public)
+ * 実行ループ
  */
 
 void IgesViewerGUI::Run(const bool vsync) {
-    // レンダラーの初期化
     renderer_.Initialize();
-    // V-Syncの設定
     glfwSwapInterval(vsync ? 1 : 0);
-    // MSAAの設定
     if (msaa_samples_ > 0) {
         renderer_.EnableAntialiasing(true);
     }
 
+    // 起動時ファイルの読み込み (Initialize後にGLが有効)
+    if (!initial_iges_file_.empty()) {
+        LoadIgesFile(initial_iges_file_);
+        initial_iges_file_.clear();
+    }
+
     while (!glfwWindowShouldClose(window_)) {
-        // イベントを待機
         glfwWaitEvents();
 
-        // ImGuiのウィジェットがアクティブな場合はポーリングに切り替える
-        if (ImGui::IsAnyItemActive()) {
-            needs_redraw_ = true;
-        }
+        if (ImGui::IsAnyItemActive()) needs_redraw_ = true;
+        if (!needs_redraw_) continue;
 
-        if (!needs_redraw_) {
-            continue;
-        }
-
-        // ImGuiの新しいフレームを開始
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Controls GUIの描画
-        RenderControls();
+        HandleHotkeys();
+        RenderMenuBar();
+        RenderLoadPopup();
+        RenderOutliner();
+        RenderInspector();
+        RenderStatusBar();
+        RenderViewportOverlay();
 
-        // 範囲選択のラバーバンドを描画 (foregroundドローリスト)
-        RenderBoxSelectionOverlay();
+        // 全パネル描画後に、遅延した構造編集を1回だけ実行する
+        // (ツリー走査中の変更によるダングリングを避ける)
+        if (pending_action_) {
+            auto action = pending_action_;
+            pending_action_ = nullptr;
+            action();
+        }
 
-        // OpenGLの描画
         renderer_.Draw();
-
-        // ImGuiの描画
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        // バッファをスワップ
         glfwSwapBuffers(window_);
     }
 }
 
 void IgesViewerGUI::CaptureScreenshot(const std::string& filename) {
-    // OpenGLのフレームバッファからピクセルデータを取得
     auto texture = renderer_.CaptureScreenshot();
     igesio::graphics::SaveTextureToFile(filename, texture);
 }
@@ -179,296 +213,313 @@ void IgesViewerGUI::CaptureScreenshot(const std::string& filename) {
 
 
 /**
- * 描画関連の関数 (protected)
+ * モデルの読み込み・同期
  */
 
+void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
+    try {
+        iges_data_ = igesio::ReadIges(filename);
+
+        // 既存の描画オブジェクト・キャッシュをクリア
+        for (auto& p : entities_) {
+            for (auto& entity : p.second) renderer_.RemoveEntity(entity->GetID());
+        }
+        entities_.clear();
+        show_entity_.clear();
+        focused_assembly_id_ = std::nullopt;
+        selected_hit_positions_.clear();
+        last_edit_status_.clear();
+
+        // エンティティを取得してレンダラ・キャッシュへ追加
+        for (const auto& pair : iges_data_.Root().GetEntities()) {
+            AddEntity(pair.second);
+        }
+
+        // シーンをモデルのrootへ束ねる (描画時にツリーを走査させる)
+        BindSceneRoot(iges_data_.RootPtr());
+        renderer_.Camera().Reset();
+        needs_redraw_ = true;
+    } catch (const std::exception& e) {
+        std::cerr << "Error loading IGES file: " << e.what() << std::endl;
+        last_edit_status_ = std::string("Load error: ") + e.what();
+    }
+}
+
+void IgesViewerGUI::AddEntity(std::shared_ptr<entities::EntityBase> entity) {
+    if (!entity->IsSupported()) {
+        std::cerr << "Entity type " << ToString(entity->GetType())
+                  << " is not supported." << std::endl;
+        return;
+    } else if (auto result = entity->Validate(); !result.is_valid) {
+        std::cerr << "Entity " << entity->GetID() << " is invalid: "
+                  << result.Message() << std::endl;
+        return;
+    }
+
+    const entities::EntityType type = entity->GetType();
+    if (entity->GetSubordinateEntitySwitch()
+            == entities::SubordinateEntitySwitch::kPhysicallyDependent) {
+        // 物理従属は親エンティティ経由で描画されるためスキップ
+        return;
+    } else if (type == entities::EntityType::kTransformationMatrix
+               || type == entities::EntityType::kColorDefinition) {
+        return;
+    }
+
+    if (!renderer_.AddEntity(entity)) {
+        std::cerr << "Failed to add entity " << entity->GetID() << std::endl;
+        return;
+    }
+    entities_[type].push_back(entity);
+    show_entity_[type] = true;
+}
+
+void IgesViewerGUI::UpdateEntities() {
+    for (auto& p : show_entity_) {
+        const bool show = p.second;
+        for (auto& entity : entities_[p.first]) {
+            if (show) {
+                renderer_.AddEntity(entity);
+            } else {
+                renderer_.RemoveEntity(entity->GetID());
+            }
+        }
+    }
+    needs_redraw_ = true;
+}
+
 void IgesViewerGUI::BindSceneRoot(std::shared_ptr<models::Assembly> root) {
-    // 新しいSceneを生成してから差し替える (renderer_のポインタを先に更新しダングリング回避)
+    // 新Sceneを生成 → レンダラのポインタを更新 → 旧Sceneを解放 (ダングリング回避)
     auto new_scene = std::make_unique<models::Scene>(std::move(root));
     renderer_.SetScene(new_scene.get());
     scene_ = std::move(new_scene);
     needs_redraw_ = true;
 }
 
-void IgesViewerGUI::RenderControls() {
-    ImGui::Begin("Controls");
-    ImGui::Text("Camera");
-    ImGui::Text("  - Middle Drag: Rotate");
-    ImGui::Text("  - Ctrl + Middle Drag: Pan");
-    ImGui::Text("  - Wheel / Shift + Middle Drag: Zoom");
-    ImGui::Text("Selection");
-    ImGui::Text("  - Left Click: Select");
-    ImGui::Text("  - Ctrl + Left Click: Multi-select");
-    ImGui::Text("  - Left Drag L->R: Box select (window)");
-    ImGui::Text("  - Left Drag R->L: Box select (crossing)");
-    ImGui::Text("  - Ctrl + Left Drag: Add to selection");
-    ImGui::Separator();
-
-    // カメラの位置とターゲットを表示
-    auto cam_pos = renderer_.Camera().GetPosition();
-    auto cam_target = renderer_.Camera().GetTarget();
-    ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)",
-                cam_pos[0], cam_pos[1], cam_pos[2]);
-    ImGui::Text("Camera Target: (%.2f, %.2f, %.2f)",
-                cam_target[0], cam_target[1], cam_target[2]);
-
-    // カメラの操作
-    if (ImGui::Button("Reset Camera")) {
-        renderer_.Camera().Reset();
-        needs_redraw_ = true;
+void IgesViewerGUI::OnModelEdited() {
+    auto& sel = scene_->ActiveSelection();
+    // 消えたIDを選択・hit座標から除去する
+    const std::vector<ObjectID> snapshot(sel.Items().begin(), sel.Items().end());
+    for (const auto& id : snapshot) {
+        if (scene_->Root().FindOwner(id) == nullptr) sel.Deselect(id);
     }
-    ImGui::Separator();
-
-    if (ImGui::ColorEdit3("Background",
-                      renderer_.GetBackgroundColorRef().data())) {
-        needs_redraw_ = true;
-    }
-    ImGui::Separator();
-
-    // 選択中エンティティの一覧 (型・ID・交差座標)
-    const auto& selected = scene_->ActiveSelection().Items();
-    ImGui::Text("Selected: %d", static_cast<int>(selected.size()));
-    for (const auto& id : selected) {
-        const auto type_str = ToString(renderer_.GetEntityShaderType(id));
-        auto it = selected_hit_positions_.find(id);
-        if (it != selected_hit_positions_.end()) {
-            const auto& p = it->second;
-            ImGui::Text("  [%d] %s  (%.3f, %.3f, %.3f)",
-                        id.ToInt(), type_str.c_str(), p.x(), p.y(), p.z());
+    for (auto it = selected_hit_positions_.begin();
+         it != selected_hit_positions_.end();) {
+        if (scene_->Root().FindOwner(it->first) == nullptr) {
+            it = selected_hit_positions_.erase(it);
         } else {
-            ImGui::Text("  [%d] %s", id.ToInt(), type_str.c_str());
+            ++it;
         }
     }
-    if (ImGui::Button("Deselect All")) {
-        scene_->ActiveSelection().Clear();
-        selected_hit_positions_.clear();
-        needs_redraw_ = true;
+    // ツリーから消えたエンティティの描画オブジェクトを除去し、型別キャッシュも剪定する
+    for (auto& p : entities_) {
+        auto& vec = p.second;
+        vec.erase(std::remove_if(vec.begin(), vec.end(),
+                [&](const std::shared_ptr<entities::EntityBase>& e) {
+                    if (scene_->Root().FindOwner(e->GetID()) != nullptr) {
+                        return false;
+                    }
+                    renderer_.RemoveEntity(e->GetID());
+                    return true;
+                }), vec.end());
     }
-
-    // ピックフィルタ (v1はbodies=エンティティ単位のみ尊重)
-    ImGui::Checkbox("Pick bodies", &scene_->Filter().bodies);
-
-    // 選択粒度: body単位 / 所有Assembly一括 (Sceneが権威)
-    bool assembly_select = scene_->Granularity()
-            == models::SelectionGranularity::kAssembly;
-    if (ImGui::Checkbox("Select assembly", &assembly_select)) {
-        scene_->SetGranularity(assembly_select
-                ? models::SelectionGranularity::kAssembly
-                : models::SelectionGranularity::kBody);
-    }
-
-    ImGui::End();
+    renderer_.MarkSceneDirty();
+    needs_redraw_ = true;
 }
 
 
 
 /**
- * コールバック関数
+ * パネル描画
  */
 
-void IgesViewerGUI::SetupCallbacks() {
-    // マウスボタン操作時のコールバック
-    glfwSetMouseButtonCallback(window_, [](GLFWwindow* window, int button,
-                                            int action, int mods) {
-        auto* viewer = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
-        viewer->MouseButtonCallback(button, action, mods);
-    });
+void IgesViewerGUI::RenderMenuBar() {
+    if (!ImGui::BeginMainMenuBar()) return;
 
-    // マウスカーソル位置変化時のコールバック
-    glfwSetCursorPosCallback(window_, [](GLFWwindow* window, double xpos, double ypos) {
-        auto* viewer = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
-        viewer->CursorPositionCallback(xpos, ypos);
-    });
-
-    // スクロールホイール操作時のコールバック
-    glfwSetScrollCallback(window_, [](GLFWwindow* window, double x_offset, double y_offset) {
-        auto* viewer = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
-        viewer->ScrollCallback(x_offset, y_offset);
-    });
-
-    // ウィンドウリサイズ時のコールバック
-    glfwSetFramebufferSizeCallback(window_, [](GLFWwindow* window, int width, int height) {
-        auto* viewer = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
-        viewer->FramebufferSizeCallback(width, height);
-    });
-}
-
-void IgesViewerGUI::MouseButtonCallback(
-        const int button, const int action, const int mods) {
-    if (ImGui::GetIO().WantCaptureMouse) return;
-
-    const MouseButton btn = ToMouseButton(button);
-    const ModifierKey mod = ToModifierKey(mods);
-
-    if (action == GLFW_PRESS) {
-        glfwGetCursorPos(window_, &last_x_, &last_y_);
-        press_x_ = last_x_;
-        press_y_ = last_y_;
-
-        // 押下したボタン+修飾キーから、ドラッグ操作モードを確定する
-        if (Matches(input_config_.rotate, btn, mod)) {
-            drag_mode_ = DragMode::kRotate;
-        } else if (Matches(input_config_.pan, btn, mod)) {
-            drag_mode_ = DragMode::kPan;
-        } else if (Matches(input_config_.zoom_drag, btn, mod)) {
-            drag_mode_ = DragMode::kZoom;
-        } else {
-            drag_mode_ = DragMode::kNone;
+    if (ImGui::BeginMenu("File")) {
+        if (ImGui::MenuItem("Load IGES...")) request_load_popup_ = true;
+        if (ImGui::MenuItem("Screenshot")) {
+            CaptureScreenshot("screenshot " + CurrentTimeString() + ".png");
+            last_edit_status_ = "Saved screenshot.";
         }
-
-        // 選択ボタン押下時は範囲選択の候補とする (回転は中ボタンのため衝突しない)
-        is_box_selecting_ = (btn == input_config_.select.button);
-    } else if (action == GLFW_RELEASE) {
-        drag_mode_ = DragMode::kNone;
-
-        // 選択ボタン以外の解放では何もしない
-        if (btn != input_config_.select.button) return;
-        is_box_selecting_ = false;
-
-        double x, y;
-        glfwGetCursorPos(window_, &x, &y);
-        const double dx = x - press_x_, dy = y - press_y_;
-        const bool is_click =
-                dx * dx + dy * dy < kClickThresholdPx * kClickThresholdPx;
-
-        if (is_click) {
-            // ウィンドウ座標 -> フレームバッファ座標へ換算
-            // (HiDPI環境ではウィンドウサイズとフレームバッファサイズが異なる)
-            int win_w = 0, win_h = 0;
-            glfwGetWindowSize(window_, &win_w, &win_h);
-            const auto [fb_w, fb_h] = renderer_.GetDisplaySize();
-            const double sx = (win_w > 0)
-                    ? static_cast<double>(fb_w) / win_w : 1.0;
-            const double sy = (win_h > 0)
-                    ? static_cast<double>(fb_h) / win_h : 1.0;
-
-            HandleClickSelection(x * sx, y * sy, mods);
-        } else {
-            // 閾値以上の移動は範囲選択 (矩形ドラッグ)
-            HandleBoxSelection(x, y, mods);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Exit")) {
+            glfwSetWindowShouldClose(window_, GLFW_TRUE);
         }
-        needs_redraw_ = true;
-    }
-}
-
-void IgesViewerGUI::HandleClickSelection(
-        const double x, const double y, const int mods) {
-    const Ray ray = renderer_.GetRayFromScreen(x, y);
-    const auto hits = renderer_.PickEntities(ray, x, y);
-    // 複数選択 (トグル) 修飾キーが押下されているか
-    const ModifierKey mod = ToModifierKey(mods);
-    const ModifierKey multi_mod = input_config_.multi_select_mod;
-    const bool ctrl = multi_mod != ModifierKey::kNone
-            && (mod & multi_mod) == multi_mod;
-
-    auto& selection = scene_->ActiveSelection();
-    if (hits.empty()) {
-        // 空クリック かつ 複数選択修飾なし のときのみ全解除
-        if (!ctrl) {
-            selection.Clear();
-            selected_hit_positions_.clear();
-        }
-        return;
+        ImGui::EndMenu();
     }
 
-    const ObjectID id = hits.front().id;
-    const Vector3d pos = hits.front().hit.position;
-
-    // Assembly一括選択モード: 所有Assemblyのメンバをまとめて選択する
-    if (scene_->Granularity() == models::SelectionGranularity::kAssembly) {
-        if (ctrl) {
-            // 複数選択修飾: グループ単位でトグル
-            // (ピック要素が選択済みなら、その所有グループを一括解除)
-            if (selection.Contains(id)) {
-                scene_->DeselectOwningAssembly(selection, id);
-                // 解除済みメンバの交差座標を取り除く (他グループの座標は残す)
-                for (auto it = selected_hit_positions_.begin();
-                     it != selected_hit_positions_.end();) {
-                    if (selection.Contains(it->first)) {
-                        ++it;
-                    } else {
-                        it = selected_hit_positions_.erase(it);
-                    }
+    if (ImGui::BeginMenu("View")) {
+        int mode = static_cast<int>(renderer_.Camera().GetProjectionMode());
+        if (ImGui::RadioButton("Perspective", &mode,
+                static_cast<int>(ProjectionMode::kPerspective))) {
+            renderer_.Camera().SetProjectionMode(ProjectionMode::kPerspective);
+            needs_redraw_ = true;
+        }
+        if (ImGui::RadioButton("Orthographic", &mode,
+                static_cast<int>(ProjectionMode::kOrthographic))) {
+            renderer_.Camera().SetProjectionMode(ProjectionMode::kOrthographic);
+            needs_redraw_ = true;
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Reset Camera")) {
+            renderer_.Camera().Reset();
+            needs_redraw_ = true;
+        }
+        if (ImGui::ColorEdit3("Background",
+                              renderer_.GetBackgroundColorRef().data())) {
+            needs_redraw_ = true;
+        }
+        bool aa = renderer_.IsAntialiasingEnabled();
+        if (ImGui::MenuItem("Antialiasing", nullptr, &aa)) {
+            renderer_.EnableAntialiasing(aa);
+            needs_redraw_ = true;
+        }
+        bool transparency = renderer_.IsTransparencyEnabled();
+        if (ImGui::MenuItem("Transparency", nullptr, &transparency)) {
+            renderer_.EnableTransparency(transparency);
+            needs_redraw_ = true;
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Filters")) {
+            if (ImGui::Checkbox("Show All", &show_all_)) {
+                for (auto& p : show_entity_) p.second = show_all_;
+                UpdateEntities();
+            }
+            ImGui::Separator();
+            bool changed = false;
+            for (auto& p : show_entity_) {
+                if (ImGui::Checkbox(ToString(p.first).c_str(), &p.second)) {
+                    changed = true;
+                    if (show_all_ && !p.second) show_all_ = false;
                 }
-            } else if (scene_->SelectOwningAssembly(selection, id)) {
-                selected_hit_positions_[id] = pos;
             }
-        } else {
-            // 複数選択修飾なし: 選択集合を所有グループへ置換
-            selection.Clear();
+            if (changed) UpdateEntities();
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Select")) {
+        int gran = (scene_->Granularity()
+                == models::SelectionGranularity::kAssembly) ? 1 : 0;
+        if (ImGui::RadioButton("Body", &gran, 0)) {
+            scene_->SetGranularity(models::SelectionGranularity::kBody);
+        }
+        if (ImGui::RadioButton("Assembly", &gran, 1)) {
+            scene_->SetGranularity(models::SelectionGranularity::kAssembly);
+        }
+        ImGui::Separator();
+        ImGui::Checkbox("Pick bodies", &scene_->Filter().bodies);
+        ImGui::Separator();
+        ImGui::TextDisabled("Removal policy");
+        ImGui::RadioButton("Reject", &removal_policy_, 0);
+        ImGui::RadioButton("Cascade", &removal_policy_, 1);
+        ImGui::RadioButton("Orphan", &removal_policy_, 2);
+        ImGui::Separator();
+        if (ImGui::MenuItem("Deselect All")) {
+            scene_->ActiveSelection().Clear();
             selected_hit_positions_.clear();
-            if (scene_->SelectOwningAssembly(selection, id)) {
-                selected_hit_positions_[id] = pos;
-            }
+            needs_redraw_ = true;
         }
-        return;
+        ImGui::EndMenu();
     }
 
-    if (ctrl) {
-        // 複数選択修飾: 選択状態をトグル
-        if (selection.Contains(id)) {
-            selection.Deselect(id);
-            selected_hit_positions_.erase(id);
-        } else if (scene_->TrySelectWithLock(selection, id)) {
-            selected_hit_positions_[id] = pos;
+    if (ImGui::BeginMenu("Help")) {
+        ImGui::TextDisabled("Camera");
+        ImGui::TextDisabled("  Middle Drag: Rotate");
+        ImGui::TextDisabled("  Ctrl + Middle: Pan");
+        ImGui::TextDisabled("  Wheel / Shift + Middle: Zoom");
+        ImGui::Separator();
+        ImGui::TextDisabled("Selection");
+        ImGui::TextDisabled("  Left Click (+Ctrl): Select / multi");
+        ImGui::TextDisabled("  Left Drag: Box select");
+        ImGui::Separator();
+        ImGui::TextDisabled("Hotkeys");
+        ImGui::TextDisabled("  Del: Delete   Ctrl+G: Group");
+        ImGui::TextDisabled("  Esc: Deselect   F: Reset camera");
+        ImGui::EndMenu();
+    }
+
+    ImGui::EndMainMenuBar();
+}
+
+void IgesViewerGUI::RenderLoadPopup() {
+    if (request_load_popup_) {
+        ImGui::OpenPopup("Load IGES");
+        request_load_popup_ = false;
+    }
+    if (ImGui::BeginPopupModal("Load IGES", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        static char path_buf[512] = "";
+        ImGui::InputText("Path", path_buf, IM_ARRAYSIZE(path_buf));
+        if (ImGui::Button("Load")) {
+            LoadIgesFile(path_buf);
+            ImGui::CloseCurrentPopup();
         }
-    } else {
-        // 複数選択修飾なし: 選択集合をid単独へ置換 (ロック要素は選択されない)
-        selection.Clear();
-        selected_hit_positions_.clear();
-        if (scene_->TrySelectWithLock(selection, id)) {
-            selected_hit_positions_[id] = pos;
-        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
     }
 }
 
-void IgesViewerGUI::HandleBoxSelection(
-        const double x, const double y, const int mods) {
-    // ウィンドウ座標 -> フレームバッファ座標へ換算 (HiDPI対応)
-    int win_w = 0, win_h = 0;
-    glfwGetWindowSize(window_, &win_w, &win_h);
-    const auto [fb_w, fb_h] = renderer_.GetDisplaySize();
-    const double sx = (win_w > 0) ? static_cast<double>(fb_w) / win_w : 1.0;
-    const double sy = (win_h > 0) ? static_cast<double>(fb_h) / win_h : 1.0;
-
-    ScreenRect rect;
-    rect.x_min = std::min(press_x_, x) * sx;
-    rect.x_max = std::max(press_x_, x) * sx;
-    rect.y_min = std::min(press_y_, y) * sy;
-    rect.y_max = std::max(press_y_, y) * sy;
-
-    // 左→右ドラッグで内包、右→左で交差 (AutoCAD流)
-    const BoxSelectionMode mode = (x - press_x_ >= 0.0)
-            ? BoxSelectionMode::kContained : BoxSelectionMode::kCrossing;
-    const auto ids = renderer_.PickEntitiesInRect(rect, mode);
-
-    // 複数選択 (追加) 修飾キーが押下されているか
-    const ModifierKey mod = ToModifierKey(mods);
-    const ModifierKey multi_mod = input_config_.multi_select_mod;
-    const bool additive = multi_mod != ModifierKey::kNone
-            && (mod & multi_mod) == multi_mod;
-
-    // 追加でなければ既存の選択を置換する
-    auto& selection = scene_->ActiveSelection();
-    if (!additive) {
-        selection.Clear();
-        selected_hit_positions_.clear();
+void IgesViewerGUI::RenderOutliner() {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->WorkPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(
+            ImVec2(kOutlinerWidth, vp->WorkSize.y - kStatusBarHeight),
+            ImGuiCond_Always);
+    if (ImGui::Begin("Outliner", nullptr, kPanelFlags)) {
+        RenderAssemblyNode(scene_->Root());
     }
-    // 範囲選択は単一の交点座標を持たないため hit_positions には登録しない
-    // (ロック要素・bodiesフィルタ無効時は選択されない)
-    for (const auto& id : ids) {
-        scene_->TrySelectWithLock(selection, id);
-    }
+    ImGui::End();
 }
 
-void IgesViewerGUI::RenderBoxSelectionOverlay() {
+void IgesViewerGUI::RenderInspector() {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+            ImVec2(vp->WorkPos.x + vp->WorkSize.x - kInspectorWidth,
+                   vp->WorkPos.y),
+            ImGuiCond_Always);
+    ImGui::SetNextWindowSize(
+            ImVec2(kInspectorWidth, vp->WorkSize.y - kStatusBarHeight),
+            ImGuiCond_Always);
+    if (ImGui::Begin("Inspector", nullptr, kPanelFlags)) {
+        RenderSelectionSection();
+        ImGui::Separator();
+        RenderPropertiesSection();
+    }
+    ImGui::End();
+}
+
+void IgesViewerGUI::RenderStatusBar() {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+            ImVec2(vp->WorkPos.x,
+                   vp->WorkPos.y + vp->WorkSize.y - kStatusBarHeight),
+            ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, kStatusBarHeight),
+                             ImGuiCond_Always);
+    const ImGuiWindowFlags flags = kPanelFlags
+            | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar;
+    if (ImGui::Begin("##StatusBar", nullptr, flags)) {
+        const char* mode = (scene_->Granularity()
+                == models::SelectionGranularity::kAssembly)
+                ? "Assembly" : "Body";
+        ImGui::Text("entities: %d | selected: %d | mode: %s | %s",
+                static_cast<int>(scene_->Root().GetEntityIDs(true).size()),
+                static_cast<int>(scene_->ActiveSelection().Size()),
+                mode, last_edit_status_.c_str());
+    }
+    ImGui::End();
+}
+
+void IgesViewerGUI::RenderViewportOverlay() {
     if (!is_box_selecting_) return;
 
-    // 閾値未満の移動はクリック扱いとなるためラバーバンドを描画しない
     const double dx = last_x_ - press_x_, dy = last_y_ - press_y_;
     if (dx * dx + dy * dy < kClickThresholdPx * kClickThresholdPx) return;
 
-    // ウィンドウ座標でラバーバンドを描画する (ImGui座標系に一致)
     const float x0 = static_cast<float>(std::min(press_x_, last_x_));
     const float y0 = static_cast<float>(std::min(press_y_, last_y_));
     const float x1 = static_cast<float>(std::max(press_x_, last_x_));
@@ -486,33 +537,568 @@ void IgesViewerGUI::RenderBoxSelectionOverlay() {
     draw_list->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), border);
 }
 
+void IgesViewerGUI::RenderAssemblyNode(models::Assembly& node) {
+    ImGui::PushID(node.GetID().ToInt());
+
+    // 可視チェック (このノードのサブツリー表示をトグル)
+    bool visible = node.Metadata().visible;
+    if (ImGui::Checkbox("##vis", &visible)) {
+        node.Metadata().visible = visible;
+        renderer_.MarkSceneDirty();
+        needs_redraw_ = true;
+    }
+    ImGui::SameLine();
+
+    const std::string label = node.Metadata().name.empty()
+            ? ("Assembly #" + std::to_string(node.GetID().ToInt()))
+            : node.Metadata().name;
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow
+            | ImGuiTreeNodeFlags_DefaultOpen;
+    if (focused_assembly_id_.has_value()
+            && *focused_assembly_id_ == node.GetID()) {
+        flags |= ImGuiTreeNodeFlags_Selected;
+    }
+    const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
+    if (ImGui::IsItemClicked()) focused_assembly_id_ = node.GetID();
+    RenderNodeContextMenu(node);
+
+    if (open) {
+        for (const auto& child : node.GetChildAssemblies()) {
+            if (child) RenderAssemblyNode(*child);
+        }
+        for (const auto& id : node.GetEntityIDs(/*recursive=*/false)) {
+            RenderEntityRow(id);
+        }
+        ImGui::TreePop();
+    }
+    ImGui::PopID();
+}
+
+void IgesViewerGUI::RenderEntityRow(const ObjectID& id) {
+    auto& sel = scene_->ActiveSelection();
+    const std::string label = "[" + std::to_string(id.ToInt()) + "] "
+            + ToString(renderer_.GetEntityShaderType(id));
+
+    ImGui::PushID(id.ToInt());
+    if (ImGui::Selectable(label.c_str(), sel.Contains(id))) {
+        if (ImGui::GetIO().KeyCtrl) {
+            // Ctrl: トグル (解除は常に可)
+            if (sel.Contains(id)) {
+                sel.Deselect(id);
+                selected_hit_positions_.erase(id);
+            } else {
+                scene_->TrySelectWithLock(sel, id);
+            }
+        } else {
+            sel.Clear();
+            selected_hit_positions_.clear();
+            scene_->TrySelectWithLock(sel, id);
+        }
+        needs_redraw_ = true;
+    }
+    ImGui::PopID();
+}
+
+void IgesViewerGUI::RenderNodeContextMenu(models::Assembly& node) {
+    if (!ImGui::BeginPopupContextItem()) return;
+    focused_assembly_id_ = node.GetID();
+
+    models::Assembly* np = &node;
+    if (ImGui::MenuItem("New child")) {
+        pending_action_ = [this, np]() {
+            auto created = std::make_shared<models::Assembly>();
+            created->Metadata().name = "Assembly";
+            np->AddChildAssembly(created);
+            renderer_.MarkSceneDirty();
+            needs_redraw_ = true;
+        };
+    }
+    if (ImGui::MenuItem("Group selection here")) {
+        const auto nid = node.GetID();
+        pending_action_ = [this, nid]() {
+            focused_assembly_id_ = nid;
+            GroupSelectionIntoNewAssembly();
+        };
+    }
+    if (ImGui::MenuItem("Clear")) {
+        pending_action_ = [this, np]() {
+            np->Clear();
+            OnModelEdited();
+        };
+    }
+    if (auto parent = node.GetParent().lock()) {
+        if (ImGui::MenuItem("Remove")) {
+            const auto nid = node.GetID();
+            std::shared_ptr<models::Assembly> par = parent;
+            pending_action_ = [this, par, nid]() {
+                if (par->RemoveChildAssembly(nid, CurrentRemovalPolicy())) {
+                    focused_assembly_id_ = std::nullopt;
+                    last_edit_status_ = "Removed assembly.";
+                    OnModelEdited();
+                } else {
+                    last_edit_status_ = "Remove rejected (try Cascade).";
+                }
+            };
+        }
+    }
+    ImGui::EndPopup();
+}
+
+void IgesViewerGUI::RenderSelectionSection() {
+    const auto& selected = scene_->ActiveSelection().Items();
+    ImGui::Text("Selection: %d", static_cast<int>(selected.size()));
+
+    if (ImGui::BeginChild("##sel_list", ImVec2(0, 120), true)) {
+        for (const auto& id : selected) {
+            const auto type_str = ToString(renderer_.GetEntityShaderType(id));
+            auto it = selected_hit_positions_.find(id);
+            if (it != selected_hit_positions_.end()) {
+                const auto& p = it->second;
+                ImGui::Text("[%d] %s  (%.3f, %.3f, %.3f)",
+                            id.ToInt(), type_str.c_str(), p.x(), p.y(), p.z());
+            } else {
+                ImGui::Text("[%d] %s", id.ToInt(), type_str.c_str());
+            }
+        }
+    }
+    ImGui::EndChild();
+
+    if (ImGui::Button("Delete selected")) DeleteSelectedEntities();
+    ImGui::SameLine();
+    if (ImGui::Button("Group")) GroupSelectionIntoNewAssembly();
+    ImGui::SameLine();
+    if (ImGui::Button("Deselect")) {
+        scene_->ActiveSelection().Clear();
+        selected_hit_positions_.clear();
+        needs_redraw_ = true;
+    }
+}
+
+void IgesViewerGUI::RenderPropertiesSection() {
+    ImGui::Text("Properties");
+    models::Assembly* node = FocusedNode();
+    if (node != nullptr) {
+        RenderAssemblyProperties(*node);
+        return;
+    }
+    // ノード未フォーカス時は主選択エンティティの情報を表示する
+    const auto active = scene_->ActiveSelection().Active();
+    if (!active.has_value()) {
+        ImGui::TextDisabled("(select an entity or assembly node)");
+        return;
+    }
+    const ObjectID id = *active;
+    ImGui::Text("Entity [%d]", id.ToInt());
+    ImGui::Text("Type: %s", ToString(renderer_.GetEntityShaderType(id)).c_str());
+    if (const auto* owner = scene_->Root().FindOwner(id)) {
+        ImGui::Text("Owner: Assembly #%d", owner->GetID().ToInt());
+    }
+    auto it = selected_hit_positions_.find(id);
+    if (it != selected_hit_positions_.end()) {
+        const auto& p = it->second;
+        ImGui::Text("Hit: (%.3f, %.3f, %.3f)", p.x(), p.y(), p.z());
+    }
+}
+
+void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
+    ImGui::Text("Assembly #%d", node.GetID().ToInt());
+
+    // 名前
+    char name_buf[128] = {};
+    const std::string& nm = node.Metadata().name;
+    nm.copy(name_buf, std::min(nm.size(), sizeof(name_buf) - 1));
+    if (ImGui::InputText("Name", name_buf, sizeof(name_buf))) {
+        node.Metadata().name = name_buf;
+    }
+
+    // 可視・抑制
+    bool node_visible = node.Metadata().visible;
+    if (ImGui::Checkbox("Visible", &node_visible)) {
+        node.SetVisibleRecursive(node_visible);
+        renderer_.MarkSceneDirty();
+        needs_redraw_ = true;
+    }
+    bool node_suppressed = node.Metadata().suppressed;
+    if (ImGui::Checkbox("Suppressed", &node_suppressed)) {
+        node.SetSuppressedRecursive(node_suppressed);
+        renderer_.MarkSceneDirty();
+        needs_redraw_ = true;
+    }
+
+    // 色オーバーライド
+    bool has_color = node.Metadata().color_override.has_value();
+    if (ImGui::Checkbox("Color override", &has_color)) {
+        node.Metadata().color_override = has_color
+                ? std::optional<std::array<float, 3>>(
+                        std::array<float, 3>{0.8f, 0.8f, 0.8f})
+                : std::nullopt;
+        renderer_.MarkSceneDirty();
+        needs_redraw_ = true;
+    }
+    if (node.Metadata().color_override.has_value()) {
+        if (ImGui::ColorEdit3("##color",
+                              node.Metadata().color_override->data())) {
+            renderer_.MarkSceneDirty();
+            needs_redraw_ = true;
+        }
+    }
+
+    // 不透明度オーバーライド
+    bool has_opacity = node.Metadata().opacity_override.has_value();
+    if (ImGui::Checkbox("Opacity override", &has_opacity)) {
+        node.Metadata().opacity_override =
+                has_opacity ? std::optional<float>(1.0f) : std::nullopt;
+        renderer_.MarkSceneDirty();
+        needs_redraw_ = true;
+    }
+    if (node.Metadata().opacity_override.has_value()) {
+        float opacity = *node.Metadata().opacity_override;
+        if (ImGui::SliderFloat("##opacity", &opacity, 0.0f, 1.0f)) {
+            node.Metadata().opacity_override = opacity;
+            renderer_.MarkSceneDirty();
+            needs_redraw_ = true;
+        }
+    }
+
+    // ロック
+    ImGui::Checkbox("Selectable", &node.Metadata().lock.selectable);
+    ImGui::SameLine();
+    ImGui::Checkbox("Editable", &node.Metadata().lock.editable);
+
+    // 変換ナッジ (並進; スケールなし前提)
+    static float translate[3] = {0.0f, 0.0f, 0.0f};
+    ImGui::InputFloat3("Translate", translate);
+    ImGui::SameLine();
+    if (ImGui::Button("Apply")) {
+        igesio::Matrix4d m = igesio::Matrix4d::Identity();
+        m(0, 3) = translate[0];
+        m(1, 3) = translate[1];
+        m(2, 3) = translate[2];
+        node.ComposeGlobalTransform(m);
+        renderer_.MarkSceneDirty();
+        needs_redraw_ = true;
+    }
+
+    ImGui::Separator();
+
+    // 構造操作 (いずれもツリー整合のため遅延実行する)
+    models::Assembly* np = &node;
+    if (ImGui::Button("New child")) {
+        pending_action_ = [this, np]() {
+            auto created = std::make_shared<models::Assembly>();
+            created->Metadata().name = "Assembly";
+            np->AddChildAssembly(created);
+            renderer_.MarkSceneDirty();
+            needs_redraw_ = true;
+        };
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Clear")) {
+        pending_action_ = [this, np]() {
+            np->Clear();
+            OnModelEdited();
+        };
+    }
+    if (auto parent = node.GetParent().lock()) {
+        ImGui::SameLine();
+        if (ImGui::Button("Remove")) {
+            const auto nid = node.GetID();
+            std::shared_ptr<models::Assembly> par = parent;
+            pending_action_ = [this, par, nid]() {
+                if (par->RemoveChildAssembly(nid, CurrentRemovalPolicy())) {
+                    focused_assembly_id_ = std::nullopt;
+                    last_edit_status_ = "Removed assembly.";
+                    OnModelEdited();
+                } else {
+                    last_edit_status_ = "Remove rejected (try Cascade).";
+                }
+            };
+        }
+    }
+}
+
+
+
+/**
+ * 編集操作
+ */
+
+igesio::models::Assembly* IgesViewerGUI::FocusedNode() {
+    if (!focused_assembly_id_.has_value()) return nullptr;
+    return FindAssemblyById(scene_->Root(), *focused_assembly_id_);
+}
+
+void IgesViewerGUI::DeleteSelectedEntities() {
+    auto& root = scene_->Root();
+    auto& sel = scene_->ActiveSelection();
+    const std::vector<ObjectID> ids(sel.Items().begin(), sel.Items().end());
+    const models::RemovalPolicy policy = CurrentRemovalPolicy();
+
+    int removed = 0, failed = 0;
+    for (const auto& id : ids) {
+        if (root.RemoveEntity(id, policy)) {
+            ++removed;
+        } else {
+            ++failed;
+        }
+    }
+    last_edit_status_ = "Deleted " + std::to_string(removed)
+            + (failed > 0 ? (", " + std::to_string(failed)
+                             + " rejected (referenced/locked).") : ".");
+    if (removed > 0) OnModelEdited();
+}
+
+void IgesViewerGUI::GroupSelectionIntoNewAssembly() {
+    auto& root = scene_->Root();
+    auto& sel = scene_->ActiveSelection();
+    if (sel.Empty()) return;
+
+    // フォーカス中ノードがあればその直下、無ければルート直下へまとめる
+    models::Assembly* parent = FocusedNode();
+    if (parent == nullptr) parent = &root;
+
+    auto group = std::make_shared<models::Assembly>();
+    group->Metadata().name = "Group";
+    parent->AddChildAssembly(group);
+
+    const std::vector<ObjectID> ids(sel.Items().begin(), sel.Items().end());
+    for (const auto& id : ids) {
+        if (root.FindOwner(id) != nullptr) root.MoveEntityTo(id, *group);
+    }
+    focused_assembly_id_ = group->GetID();
+    last_edit_status_ = "Grouped " + std::to_string(ids.size()) + " entities.";
+    OnModelEdited();
+}
+
+
+
+/**
+ * コールバック・入力
+ */
+
+void IgesViewerGUI::SetupCallbacks() {
+    glfwSetMouseButtonCallback(window_, [](GLFWwindow* window, int button,
+                                           int action, int mods) {
+        auto* v = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
+        v->MouseButtonCallback(button, action, mods);
+    });
+    glfwSetCursorPosCallback(window_, [](GLFWwindow* window,
+                                         double xpos, double ypos) {
+        auto* v = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
+        v->CursorPositionCallback(xpos, ypos);
+    });
+    glfwSetScrollCallback(window_, [](GLFWwindow* window,
+                                      double x_offset, double y_offset) {
+        auto* v = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
+        v->ScrollCallback(x_offset, y_offset);
+    });
+    glfwSetFramebufferSizeCallback(window_, [](GLFWwindow* window,
+                                               int width, int height) {
+        auto* v = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
+        v->FramebufferSizeCallback(width, height);
+    });
+    // キー入力は再描画を促し、ホットキーをフレーム内で評価できるようにする
+    // (ImGui_ImplGlfw_InitForOpenGLが本コールバックへチェーンする)
+    glfwSetKeyCallback(window_, [](GLFWwindow* window, int key, int scancode,
+                                   int action, int mods) {
+        auto* v = static_cast<IgesViewerGUI*>(glfwGetWindowUserPointer(window));
+        v->KeyCallback(key, action, mods);
+    });
+}
+
+void IgesViewerGUI::MouseButtonCallback(
+        const int button, const int action, const int mods) {
+    if (ImGui::GetIO().WantCaptureMouse) return;
+
+    const MouseButton btn = ToMouseButton(button);
+    const ModifierKey mod = ToModifierKey(mods);
+
+    if (action == GLFW_PRESS) {
+        glfwGetCursorPos(window_, &last_x_, &last_y_);
+        press_x_ = last_x_;
+        press_y_ = last_y_;
+
+        if (Matches(input_config_.rotate, btn, mod)) {
+            drag_mode_ = DragMode::kRotate;
+        } else if (Matches(input_config_.pan, btn, mod)) {
+            drag_mode_ = DragMode::kPan;
+        } else if (Matches(input_config_.zoom_drag, btn, mod)) {
+            drag_mode_ = DragMode::kZoom;
+        } else {
+            drag_mode_ = DragMode::kNone;
+        }
+
+        is_box_selecting_ = (btn == input_config_.select.button);
+    } else if (action == GLFW_RELEASE) {
+        drag_mode_ = DragMode::kNone;
+
+        if (btn != input_config_.select.button) return;
+        is_box_selecting_ = false;
+
+        double x, y;
+        glfwGetCursorPos(window_, &x, &y);
+        const double dx = x - press_x_, dy = y - press_y_;
+        const bool is_click =
+                dx * dx + dy * dy < kClickThresholdPx * kClickThresholdPx;
+
+        if (is_click) {
+            // ウィンドウ座標 -> フレームバッファ座標へ換算 (HiDPI対応)
+            int win_w = 0, win_h = 0;
+            glfwGetWindowSize(window_, &win_w, &win_h);
+            const auto [fb_w, fb_h] = renderer_.GetDisplaySize();
+            const double sx = (win_w > 0)
+                    ? static_cast<double>(fb_w) / win_w : 1.0;
+            const double sy = (win_h > 0)
+                    ? static_cast<double>(fb_h) / win_h : 1.0;
+            HandleClickSelection(x * sx, y * sy, mods);
+        } else {
+            HandleBoxSelection(x, y, mods);
+        }
+        needs_redraw_ = true;
+    }
+}
+
+void IgesViewerGUI::HandleClickSelection(
+        const double x, const double y, const int mods) {
+    const Ray ray = renderer_.GetRayFromScreen(x, y);
+    const auto hits = renderer_.PickEntities(ray, x, y);
+    const ModifierKey mod = ToModifierKey(mods);
+    const ModifierKey multi_mod = input_config_.multi_select_mod;
+    const bool ctrl = multi_mod != ModifierKey::kNone
+            && (mod & multi_mod) == multi_mod;
+
+    auto& selection = scene_->ActiveSelection();
+    if (hits.empty()) {
+        if (!ctrl) {
+            selection.Clear();
+            selected_hit_positions_.clear();
+        }
+        return;
+    }
+
+    const ObjectID id = hits.front().id;
+    const Vector3d pos = hits.front().hit.position;
+
+    // Assembly一括選択モード: 所有Assemblyのメンバをまとめて選択する
+    if (scene_->Granularity() == models::SelectionGranularity::kAssembly) {
+        if (ctrl) {
+            // グループ単位のトグル
+            if (selection.Contains(id)) {
+                scene_->DeselectOwningAssembly(selection, id);
+                for (auto it = selected_hit_positions_.begin();
+                     it != selected_hit_positions_.end();) {
+                    if (selection.Contains(it->first)) {
+                        ++it;
+                    } else {
+                        it = selected_hit_positions_.erase(it);
+                    }
+                }
+            } else if (scene_->SelectOwningAssembly(selection, id)) {
+                selected_hit_positions_[id] = pos;
+            }
+        } else {
+            selection.Clear();
+            selected_hit_positions_.clear();
+            if (scene_->SelectOwningAssembly(selection, id)) {
+                selected_hit_positions_[id] = pos;
+            }
+        }
+        return;
+    }
+
+    if (ctrl) {
+        if (selection.Contains(id)) {
+            selection.Deselect(id);
+            selected_hit_positions_.erase(id);
+        } else if (scene_->TrySelectWithLock(selection, id)) {
+            selected_hit_positions_[id] = pos;
+        }
+    } else {
+        selection.Clear();
+        selected_hit_positions_.clear();
+        if (scene_->TrySelectWithLock(selection, id)) {
+            selected_hit_positions_[id] = pos;
+        }
+    }
+}
+
+void IgesViewerGUI::HandleBoxSelection(
+        const double x, const double y, const int mods) {
+    int win_w = 0, win_h = 0;
+    glfwGetWindowSize(window_, &win_w, &win_h);
+    const auto [fb_w, fb_h] = renderer_.GetDisplaySize();
+    const double sx = (win_w > 0) ? static_cast<double>(fb_w) / win_w : 1.0;
+    const double sy = (win_h > 0) ? static_cast<double>(fb_h) / win_h : 1.0;
+
+    ScreenRect rect;
+    rect.x_min = std::min(press_x_, x) * sx;
+    rect.x_max = std::max(press_x_, x) * sx;
+    rect.y_min = std::min(press_y_, y) * sy;
+    rect.y_max = std::max(press_y_, y) * sy;
+
+    // 左→右ドラッグで内包、右→左で交差 (AutoCAD流)
+    const BoxSelectionMode mode = (x - press_x_ >= 0.0)
+            ? BoxSelectionMode::kContained : BoxSelectionMode::kCrossing;
+    const auto ids = renderer_.PickEntitiesInRect(rect, mode);
+
+    const ModifierKey mod = ToModifierKey(mods);
+    const ModifierKey multi_mod = input_config_.multi_select_mod;
+    const bool additive = multi_mod != ModifierKey::kNone
+            && (mod & multi_mod) == multi_mod;
+
+    auto& selection = scene_->ActiveSelection();
+    if (!additive) {
+        selection.Clear();
+        selected_hit_positions_.clear();
+    }
+    for (const auto& id : ids) {
+        scene_->TrySelectWithLock(selection, id);
+    }
+}
+
+void IgesViewerGUI::HandleHotkeys() {
+    ImGuiIO& io = ImGui::GetIO();
+    // テキスト入力中などキーボードをImGuiが使用中は無視する
+    if (io.WantCaptureKeyboard) return;
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+        DeleteSelectedEntities();
+    }
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_G)) {
+        GroupSelectionIntoNewAssembly();
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        scene_->ActiveSelection().Clear();
+        selected_hit_positions_.clear();
+        needs_redraw_ = true;
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_F)) {
+        renderer_.Camera().Reset();
+        needs_redraw_ = true;
+    }
+}
+
 void IgesViewerGUI::CursorPositionCallback(
         const double xpos, const double ypos) {
     const auto dx = static_cast<float>(xpos - last_x_);
     const auto dy = static_cast<float>(ypos - last_y_);
 
-    // 範囲選択中はカメラ操作を行わず、ラバーバンド更新のため再描画する
-    if (is_box_selecting_) {
-        needs_redraw_ = true;
-    }
+    if (is_box_selecting_) needs_redraw_ = true;
 
     switch (drag_mode_) {
         case DragMode::kRotate: {
-            // カメラをターゲットの周りで回転
             constexpr float kSensitivity = 0.006f;
             renderer_.Camera().Rotate(-dx * kSensitivity, -dy * kSensitivity);
             needs_redraw_ = true;
             break;
         }
         case DragMode::kPan: {
-            // カメラをパン (平行移動)
             constexpr float kSensitivity = 0.001f;
             renderer_.Camera().Pan(dx * kSensitivity, dy * kSensitivity);
             needs_redraw_ = true;
             break;
         }
         case DragMode::kZoom: {
-            // 上方向のドラッグでズームイン (Zoomは<1.0fでズームイン)
             constexpr float kSensitivity = 0.01f;
             renderer_.Camera().Zoom(1.0f + dy * kSensitivity);
             needs_redraw_ = true;
@@ -529,9 +1115,8 @@ void IgesViewerGUI::CursorPositionCallback(
 void IgesViewerGUI::ScrollCallback(
         const double x_offset, const double y_offset) {
     if (ImGui::GetIO().WantCaptureMouse) return;
-    float sensitivity = 0.1f;
-    float zoom_factor = 1.0f - static_cast<float>(y_offset) * sensitivity;
-
+    const float sensitivity = 0.1f;
+    const float zoom_factor = 1.0f - static_cast<float>(y_offset) * sensitivity;
     renderer_.Camera().Zoom(zoom_factor);
     needs_redraw_ = true;
 }
