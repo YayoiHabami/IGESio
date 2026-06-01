@@ -7,8 +7,10 @@ This section provides an overview of the sample code included in the `examples` 
 - [Table of Contents](#table-of-contents)
 - [GUI Applications](#gui-applications)
   - [iges\_viewer.cpp](#iges_viewercpp)
+    - [Window Layout](#window-layout)
     - [Loading IGES Files](#loading-iges-files)
     - [Viewer Controls](#viewer-controls)
+    - [Assembly Operations and Structural Editing](#assembly-operations-and-structural-editing)
 - [CUI Applications](#cui-applications)
   - [iges\_data\_from\_scratch.cpp](#iges_data_from_scratchcpp)
   - [iges\_data\_io.cpp](#iges_data_iocpp)
@@ -26,13 +28,22 @@ This is a sample code for the graphics module provided by this library. It loads
 
 **Figure: Screenshot of Iges Viewer**
 
-When you start the program, a window like the one above appears. By default, nothing is displayed until you load an IGES file using the "Controls" panel on the left. The Controls panel can be moved and resized.
+#### Window Layout
+
+The window consists of a menu bar at the top, an Outliner (assembly tree) on the left, an Inspector (selection summary and properties) on the right, a status bar at the bottom, and a viewport in the center. Each panel is anchored to an edge of the viewport.
+
+- Menu bar: File (load, screenshot, exit), View (projection mode, reset camera, antialiasing, transparency, per-type filters), Select (selection granularity, removal policy, deselect all), and Help.
+- Outliner: displays the model's assembly tree and entities hierarchically. Click a row to select it, and right-click a node to open a context menu.
+- Inspector: shows a summary of the current selection and lets you view and edit the properties (name, visibility, lock, and so on) of the focused assembly node.
+- Status bar: shows the result of the most recent edit and the current selection granularity, among others.
+
+Nothing is displayed immediately after startup. Load an IGES file from the "File" menu.
 
 #### Loading IGES Files
 
-Enter the file path in the "IGES File" field of the control panel and click the "Load IGES File" button. Please specify the file path as an absolute path. In the screenshot above, `examples/data/sample_curves.igs` is used as an example.
+Select "File" → "Load IGES..." from the menu bar to open a popup for entering a file path. Enter the file path as an absolute path and load it. If a file path is passed as a command-line argument, it is loaded automatically at startup.
 
-If the file loads successfully, curve entities are automatically added and displayed in the viewer. Unsupported entities or invalid data are skipped, and error messages are printed to the console.
+If the file loads successfully, the corresponding entities are displayed in the viewport and added to the tree in the Outliner. Unsupported entities or invalid data are skipped, and error messages are printed to the console.
 
 > Some IGES files may not display entities. This can happen if the entities are not supported by the library, or if the displayable entities are in a dependent state<sup>*</sup>.
 >
@@ -44,24 +55,44 @@ If the file loads successfully, curve entities are automatically added and displ
     - Middle drag: Rotate the view.
     - Ctrl + Middle drag: Pan (move the view).
     - Mouse wheel (or Shift + Middle drag): Zoom in/out.
-    - "Reset Camera" button resets the camera to its initial position.
+    - "Reset Camera" in the View menu, or the F key, resets the camera to its initial position.
 - Entity selection:
     - Left click: Select the entity under the cursor (highlighted).
     - Ctrl + Left click: Toggle selection (multi-select).
-    - Click on empty space: Clear all selections.
+    - Click on empty space, or the Esc key: Clear all selections.
     - Left drag (L→R): Select entities fully inside the rectangle (window selection).
     - Left drag (R→L): Select entities intersecting the rectangle (crossing selection).
     - Ctrl + Left drag: Add box-selected entities to the current selection.
-- Projection mode: Choose between two modes:
+- Selection granularity: Switch between "Body" and "Assembly" in the Select menu. With "Assembly", clicking an entity selects the members of its owning assembly at once.
+- Projection mode: Choose between two modes in the View menu:
     - Perspective: Shows objects with depth (default).
     - Orthographic: Parallel projection, commonly used in CAD.
-- Screenshot:
-  - Click the "Capture Screenshot" button to save the current view as a PNG image.
-  - The file is named in the format "screenshot YYYY-MM-DD HH-MM-SS.png" and saved to the execution directory.
-- Background color: Change the background color using the color picker.
-- Entity display controls:
-    - "Show All Entities" checkbox toggles visibility of all entities.
-    - Individual checkboxes allow toggling visibility by entity type.
+- Screenshot: Use "Screenshot" in the File menu to save the current view as a PNG image. The file is named in the format "screenshot YYYY-MM-DD HH-MM-SS.png" and saved to the execution directory.
+- Entity type visibility: Use "Filters" in the View menu to toggle visibility by entity type.
+
+#### Assembly Operations and Structural Editing
+
+The Outliner on the left displays a tree rooted at the model's root assembly. Expanding an assembly node lets you follow its child assemblies and owned entities. Clicking a node or entity row selects it and highlights it in the viewport.
+
+Structural editing is available from the context menu opened by right-clicking a node in the Outliner, from the buttons in the Inspector, or from keyboard shortcuts.
+
+- Context menu (right-click a node):
+    - New child: Create a new child assembly directly under the node.
+    - Group selection here: Group the selected entities into a new child assembly directly under the node.
+    - Clear: Remove all entities and all child assemblies of the node.
+    - Remove: Delete the node (child assembly).
+- Inspector (selection summary): "Delete selected" (delete the selection), "Group" (group the selection into a new assembly), and "Deselect" (clear the selection).
+- Removal policy: Use "Removal policy" in the Select menu to choose how an entity that is still referenced by others is handled on deletion.
+    - Reject: Reject deletion if a reference remains (default).
+    - Cascade: Also cascade-delete the referrers and physically dependent children.
+    - Orphan: Delete while leaving references unresolved.
+- Keyboard shortcuts:
+    - Del: Delete the selected entities.
+    - Ctrl + G: Group the selected entities into a new assembly.
+    - Esc: Clear all selections.
+    - F: Reset the camera to its initial position.
+
+> Currently, the initial tree at load time is flat (all entities are directly under the root). As a result, the "Assembly" selection granularity effectively selects everything. This is a forward-compatible implementation that becomes meaningful once child assemblies are generated automatically (with typed support for grouping entities).
 
 ## CUI Applications
 

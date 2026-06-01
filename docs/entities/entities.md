@@ -13,6 +13,7 @@ This document covers the interfaces for specific entities and individual entity 
   - [`ISurface`](#isurface)
   - [`ITransformation`](#itransformation)
   - [`IColorDefinition`](#icolordefinition)
+- [Transform Views (CurveView / SurfaceView)](#transform-views-curveview--surfaceview)
 - [Annotations](#annotations)
 - [Structures](#structures)
   - [`UnsupportedEntity`](#unsupportedentity)
@@ -110,6 +111,16 @@ The `ITransformation` class is the interface for the Transformation Matrix (Type
 > ```plaintext
 > IEntityIdentifier <─── IColorDefinition
 > ```
+
+## Transform Views (CurveView / SurfaceView)
+
+> Defined at [curve_view.h](../../include/igesio/entities/views/curve_view.h), [surface_view.h](../../include/igesio/entities/views/surface_view.h)
+
+`CurveView` and `SurfaceView` are read-only transform views (the Decorator pattern) that post-apply a placement (coordinate transform) to existing curve and surface entities. They do not inherit `EntityBase`; they inherit only `ICurve` and `ISurface` respectively, so they can be passed directly to existing algorithms that take `const ICurve&` / `const ISurface&`. The original entity is held by shared reference and is not modified.
+
+A view has its own `ObjectID`, but delegates its entity type and form number to the original entity. The original entity's ID is obtained via `IEntityIdentifier::GetSourceID()` (an ordinary entity returns the same value as `GetID()`). This is used to identify the original entity from a view obtained by picking and to aggregate selection.
+
+They are mainly used to query an entity placed in an [assembly hierarchy](../models/assembly.md) in a specific coordinate system (such as world space). For details on generation, frame specification, and placement-aware geometric queries, see [Coordinate Frames and Transform Views](../models/coordinate_frames.md).
 
 ## Annotations
 

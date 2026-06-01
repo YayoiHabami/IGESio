@@ -443,7 +443,7 @@ void EntityRenderer::Draw() const {
         gl_->Viewport(0, 0, display_width_, display_height_);
     }
 
-    // シーン(権威ツリー)が未設定なら描画しない (描画はScene走査に一本化)
+    // シーン(描画の基準ツリー)が未設定なら描画しない (描画はScene走査に一本化)
     if (scene_ == nullptr) return;
 
     // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)

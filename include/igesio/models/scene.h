@@ -4,8 +4,8 @@
  * @author Yayoi Habami
  * @date 2026-05-30
  * @copyright 2026 Yayoi Habami
- * @note Sceneはroot(モデル) + 選択セット群 + ピックフィルタ等の(a')セッション状態を保持する
- *       権威オブジェクト. GUI/ヘッドレスの双方がここを操作し、描画層(EntityRenderer)はconst
+ * @note Sceneはroot(モデル) + 選択セット群 + ピックフィルタ等の(a')セッション状態を一元管理する
+ *       オブジェクト. GUI/ヘッドレスの双方がここを操作し、描画層(EntityRenderer)はconst
  *       参照でPULLする. IgesData(I/O器)とはrootのshared_ptrを共有する.
  */
 #ifndef IGESIO_MODELS_SCENE_H_
@@ -35,7 +35,7 @@ enum class SelectionGranularity {
     kAssembly,
 };
 
-/// @brief セッション状態 (root + 選択セット群 + ピックフィルタ) を集約する権威オブジェクト
+/// @brief セッション状態 (root + 選択セット群 + ピックフィルタ) を一元管理するオブジェクト
 /// @note 複数ビュー(レンダラ)が同一Sceneを共有でき、非GUIコードも同じものを操作する.
 ///       選択セットのハンドルは一意なObjectIDを用いる (実Assembly IDとは別整数なので衝突なし).
 class Scene {

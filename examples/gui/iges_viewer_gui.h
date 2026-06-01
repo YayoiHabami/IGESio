@@ -51,7 +51,8 @@ class IgesViewerGUI {
     GLFWwindow* window_ = nullptr;
     /// @brief レンダラ
     EntityRenderer renderer_;
-    /// @brief セッション状態(root + 選択セット群 + ピックフィルタ)の権威オブジェクト
+    /// @brief セッション状態(root + 選択セット群 + ピックフィルタ)
+    ///        を一元管理するオブジェクト
     std::unique_ptr<models::Scene> scene_;
     /// @brief 表示中のIGESモデル(rootをSceneと共有する)
     models::IgesData iges_data_;

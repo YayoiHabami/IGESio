@@ -1,6 +1,6 @@
 /**
  * @file tests/models/test_scene.cpp
- * @brief Sceneクラス (セッション状態の権威オブジェクト) の検証
+ * @brief Sceneクラス (セッション状態を一元管理するオブジェクト) の検証
  * @author Yayoi Habami
  * @date 2026-05-30
  * @copyright 2026 Yayoi Habami

@@ -39,7 +39,7 @@ The following are module-specific documents. For files not listed, please refer 
 - **[Individual Entity Classes](entities/entities.md)**
     - Explanation of each interface.
     - Description of each entity class (code examples, diagrams, etc.).
-- **[Geometric Properties of Geometries](entities/geometric_properties_en.md)**
+- **[Geometric Properties of Geometries](entities/geometric_properties.md)**
     - Description of various geometric properties that can be calculated for curve and surface entities.
     - Also describes how to calculate various properties (code examples).
 - **[Intermediate Data Structure](intermediate_data_structure.md)**
@@ -70,10 +70,18 @@ Individual entity class documents are as follows. Currently, they include mathem
 
 ### graphics module
 
-- Currently, there are no documents.
+- **[Rendering System Overview (ja)](graphics/overview.md)**
+    - Overall structure of the rendering system, the `ShaderType` enum, and the rendering flow
+- **[Rendering System Class Reference (ja)](graphics/class_reference.md)**
+    - Member listings of rendering-related classes such as `IEntityGraphics` / `EntityRenderer` / `Scene` integration
 
 ### models module
 
+- **[Assembly (Hierarchical Entity Grouping)](models/assembly.md)**
+    - The `Assembly` class responsible for the collection of entities, and `IgesData` as a thin wrapper
+    - Tree structure, ownership and reference, structural editing, and the relationship with `Scene`
+- **[Coordinate Frames and Transform Views](models/coordinate_frames.md)**
+    - Placement-aware geometric queries, `CoordFrame`, `CurveView`/`SurfaceView`, and Flatten/Materialize
 - **[Intermediate Data Structure](intermediate_data_structure.md)**: Intermediate data structure when inputting/outputting IGES files
 
 ### numerics module
@@ -90,7 +98,7 @@ Individual entity class documents are as follows. Currently, they include mathem
 
 - **[Policy (ja)](policy_ja.md)**: About the library's design policy and interpretation of IGES specifications
 - **[Flow/Reader (ja)](flow/reader_ja.md)**: About the flow of the reading process
-- **[Entity Analysis (en)](entity-analysis.md)**: Analysis of the classification and parameters of each entity in IGES 5.3
+- **[Entity Analysis (en)](entity_analysis.md)**: Analysis of the classification and parameters of each entity in IGES 5.3
 - **[Additional Notes (ja)](additional_notes_ja.md)**: Other supplementary notes
 - **[TODO (ja)](todo.md)**: TODO list
 - For Implementers

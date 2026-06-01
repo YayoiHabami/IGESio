@@ -132,3 +132,7 @@
 >   - Graphics: uses general (curve/surface) shaders (not entity-specific)
 > - ❌: Planned but not yet implemented
 > - `-`: Not planned
+
+## Models
+
+- `igesio::models::Assembly` is an in-memory class that groups entities into a hierarchy. It is distinct from the IGES Solid Assembly entity (Type 184); I/O of Type 184 itself is not yet supported (see the table above).
