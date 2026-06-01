@@ -237,6 +237,16 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
         return id;
     }
 
+    /// @brief 複数のエンティティを一括で追加する
+    /// @param entities 追加するエンティティの配列
+    /// @throw std::invalid_argument いずれかのエンティティがnullptrの場合
+    /// @note 全エンティティをマップとルート逆引きインデックスへ登録した後、
+    ///       参照解決を1回だけ行う. 1件ずつ`AddEntity`を呼ぶ場合に生じる挿入
+    ///       ごとの全件走査 (O(N^2)) を回避し、O(エンティティ数+参照数)で完了する.
+    ///       多数のエンティティをまとめて読み込む場合に使用する.
+    void AddEntities(
+            const std::vector<std::shared_ptr<entities::EntityBase>>&);
+
     /// @brief エンティティが参照する全てのエンティティのポインタが設定済みか
     /// @return 一つでも未設定のポインタがある場合は`false`
     /// @note Directory Entry フィールド関連のメンバも含む. このノードのみを対象とする.

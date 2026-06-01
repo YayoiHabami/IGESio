@@ -181,69 +181,34 @@ std::string i_util::GetDataPart(const std::string& line,
 
 namespace {
 
-/// @brief 与えられた文字列の冒頭にあるH文字列の長さを取得する
-/// @param str 文字列
-/// @return H文字列の長さ
-/// @note 与えられた文字列の先頭にH文字列が存在しない場合 ('12,4Hello'等) は0を返す.
-///       具体的な処理としては、strに初めてHが現れるまでの文字が、
-///       すべて数字であればその数値を返し、それ以外の場合は0を返す.
-int GetHStringLength(const std::string& str) {
-    // 文字列中にHが存在しない場合は0を返す
-    auto h_pos = str.find('H');
-    if (h_pos == std::string::npos) return 0;
+/// @brief 連結データの指定位置から始まるパラメータの終端位置を求める
+/// @param connected 連結済みのデータ文字列
+/// @param pos 走査開始位置 (先頭の空白は呼び出し側で除去済みであること)
+/// @param delimiters パラメータ区切り文字とレコード区切り文字を並べた文字列
+/// @return パラメータの終端=区切り文字の位置. 区切り文字が見つからない場合は
+///         std::string::npos
+/// @note H文字列 (`<数字>H<内容>`) は内容に区切り文字を含みうるため、宣言長から
+///       終端を直接算出する. それ以外は次の区切り文字までをパラメータとする.
+///       H判定は「先頭の数字列の直後が'H'か」を有界に確認する (遠方のHは探さない).
+///       宣言長が0 ('0H'等) の場合は従来通り非H文字列として扱う.
+std::size_t FindParameterEnd(const std::string& connected, const std::size_t pos,
+                             const std::string& delimiters) {
+    // 先頭の数字列を走査する
+    std::size_t d = pos;
+    while (d < connected.size() && '0' <= connected[d] && connected[d] <= '9') ++d;
 
-    // 最初にHが現れるまでの文字がすべて数字かどうかを確認
-    int h_length = 0;
-    for (size_t i = 0; i < h_pos; ++i) {
-        // 最初のHまでの文字列に数字以外の文字が含まれている場合は0を返す
-        if (!('0' <= str[i] && str[i] <= '9')) return 0;
-        h_length = h_length * 10 + (str[i] - '0');
-    }
-    return h_length;
-}
-
-/// @brief 自由形式のデータから1つのパラメータを取得する
-/// @param str 文字列
-/// @param p_delim パラメータ区切り文字
-/// @param r_delim レコード区切り文字
-/// @return 文字列のペア:
-///   - std::string: パラメータの文字列
-///   - std::string: 残った文字列
-/// @note 例えば`"12,4Hello,3.14"`のような文字列を与えた場合、
-///       `"12"`と`",4Hello,3.14"`を返す. また、パラメータの前に半角スペースがある場合、
-///       例えば`"   12,4Hello,3.14"`のような文字列を与えた場合には、それらを削除して
-///       `"12"`と`",4Hello,3.14"`を返す.
-/// @throw igesio::SectionFormatError 区切り文字が存在しない場合、
-///        不正な文字列ステートメント（H文字列）が含まれる場合
-std::pair<std::string, std::string>
-GetParameterString(const std::string& str, const char p_delim, const char r_delim) {
-    // 冒頭のスペースを削除
-    auto tstr = i_util::ltrim(str);
-
-    // 冒頭のパラメータの終端位置を取得 (end of parameter)
-    int eop = 0;
-    auto h_length = GetHStringLength(tstr);
-    if (h_length == 0) {
-        // 現在のパラメータはH文字列ではない -> 区切り文字まで取得
-        eop = std::min(tstr.find(p_delim), tstr.find(r_delim));
-    } else {
-        // 現在のパラメータはH文字列 -> H文字列分だけ取得
-        eop = tstr.find('H') + h_length + 1;
+    // 数字列の直後が'H'ならH文字列 (宣言長が正のときのみ)
+    if (d > pos && d < connected.size() && connected[d] == 'H') {
+        std::size_t h_length = 0;
+        for (std::size_t i = pos; i < d; ++i) {
+            h_length = h_length * 10 + (connected[i] - '0');
+        }
+        // 内容 [d+1, d+1+h_length) の直後を終端とする (内容中の区切り文字は飛ばす)
+        if (h_length > 0) return d + 1 + h_length;
     }
 
-    if (eop == std::string::npos) {
-        // 区切り文字が存在しない場合はエラー
-        throw iio::SectionFormatError(
-                "No delimiter exists in the string: '" + tstr + "'");
-    } else if (eop + 1 > tstr.size() ||
-               tstr[eop] != p_delim && tstr[eop] != r_delim) {
-        // パラメータ終端位置の後ろに区切り文字がない場合はエラー
-        throw iio::SectionFormatError(
-                "No delimiter exists after the parameter (at pos " +
-                std::to_string(eop + 1) + "): '" + tstr + "'");
-    }
-
-    return {tstr.substr(0, eop), tstr.substr(eop)};
+    // 非H文字列: 次の区切り文字までをパラメータとする
+    return connected.find_first_of(delimiters, pos);
 }
 
 }  // namespace
@@ -251,23 +216,49 @@ GetParameterString(const std::string& str, const char p_delim, const char r_deli
 std::vector<std::string> i_util::ParseFreeFormattedData(
         const std::vector<std::string>& lines,
         const char p_delim, const char r_delim) {
-    // 全ての文字列を単純に結合
-    std::string connected = "";
+    // 全ての文字列を結合する (事前にreserveしてコピーを抑える)
+    std::size_t total = 0;
+    for (const auto& line : lines) total += line.size();
+    std::string connected;
+    connected.reserve(total);
     for (const auto& line : lines) connected += line;
 
-    // データごとに読み込み
-    std::vector<std::string> result = {};
+    const std::string delimiters{p_delim, r_delim};
+    const std::size_t n = connected.size();
+
+    // カーソルを前進させながらパラメータを切り出す (残り文字列をコピーしない)
+    std::vector<std::string> result;
+    std::size_t pos = 0;
     while (true) {
-        auto [param, rest] = GetParameterString(connected, p_delim, r_delim);
-        result.push_back(param);
+        // 先頭の空白をスキップする (従来のltrim相当)
+        while (pos < n && connected[pos] == ' ') ++pos;
+
+        // パラメータの終端 (区切り文字の位置) を求める
+        const std::size_t eop = FindParameterEnd(connected, pos, delimiters);
+        if (eop == std::string::npos) {
+            // 区切り文字が存在しない場合はエラー
+            throw iio::SectionFormatError(
+                    "No delimiter exists in the string: '" +
+                    connected.substr(pos) + "'");
+        } else if (eop >= n ||
+                   (connected[eop] != p_delim && connected[eop] != r_delim)) {
+            // パラメータ終端の後ろに区切り文字がない場合はエラー
+            // (H文字列の宣言長が実体を超える場合などに該当)
+            throw iio::SectionFormatError(
+                    "No delimiter exists after the parameter (at pos " +
+                    std::to_string(eop) + "): '" + connected.substr(pos) + "'");
+        }
+
+        // パラメータを取得する
+        result.push_back(connected.substr(pos, eop - pos));
 
         // 区切り文字がレコード区切り文字であれば終了
-        if (rest[0] == r_delim) break;
+        if (connected[eop] == r_delim) break;
 
-        // 区切り文字を削除
-        connected = rest.substr(1);
-        if (connected.empty()) {
-            // 文字列がなくなるまでにレコード区切り文字が存在しない場合はエラー
+        // パラメータ区切り文字を飛ばして次のパラメータへ
+        pos = eop + 1;
+        if (pos >= n) {
+            // レコード区切り文字が現れないまま文字列が尽きた場合はエラー
             throw iio::SectionFormatError(
                     "No record delimiter '" + std::string(1, r_delim) +
                     "' exists in the string: '" + connected + "'");

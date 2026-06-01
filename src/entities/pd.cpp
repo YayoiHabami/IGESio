@@ -255,6 +255,77 @@ std::vector<unsigned int> i_ent::GetChildDEPointer(
     }
 }
 
+namespace {
+
+/// @brief パラメータ文字列の推定型
+enum class ParamKind { kInteger, kReal, kString, kLanguage };
+
+/// @brief パラメータ文字列の内容から型を1パスで推定する
+/// @param str 非空のパラメータ文字列
+/// @return 推定した型
+/// @note 'H'を含めばString、'.'/'E'/'D'を含めばReal、数字と符号のみならInteger、
+///       それ以外はLanguageと推定する. 推定が外れても結果は呼び出し側の
+///       フォールバックで正される (誤推定時のみ無駄な例外が1回生じる).
+ParamKind ClassifyParameter(const std::string& str) {
+    bool has_real_marker = false;  // '.'/'E'/'D'のいずれかを含むか
+    bool only_int_chars = true;    // 数字・符号・空白のみで構成されるか
+    for (const char c : str) {
+        if (c == 'H') return ParamKind::kString;
+        if (c == '.' || c == 'E' || c == 'D') {
+            has_real_marker = true;
+        } else if (!(c >= '0' && c <= '9') && c != '+' && c != '-' && c != ' ') {
+            only_int_chars = false;
+        }
+    }
+    if (has_real_marker) return ParamKind::kReal;
+    if (only_int_chars) return ParamKind::kInteger;
+    return ParamKind::kLanguage;
+}
+
+/// @brief 整数への変換を試み、成功すればparamsへ追加する
+/// @param[out] params 追加先のパラメータベクタ
+/// @param str 変換する文字列
+/// @return 変換に成功した場合true、失敗した場合false
+bool TryAppendInteger(igesio::IGESParameterVector& params, const std::string& str) {
+    try {
+        auto [value, format] = igesio::FromIgesIntegerWithFormat(str, std::nullopt);
+        params.push_back(value, format);
+        return true;
+    } catch (const igesio::TypeConversionError&) {
+        return false;
+    }
+}
+
+/// @brief 実数への変換を試み、成功すればparamsへ追加する
+/// @param[out] params 追加先のパラメータベクタ
+/// @param str 変換する文字列
+/// @return 変換に成功した場合true、失敗した場合false
+bool TryAppendReal(igesio::IGESParameterVector& params, const std::string& str) {
+    try {
+        auto [value, format] = igesio::FromIgesRealWithFormat(str, std::nullopt);
+        params.push_back(value, format);
+        return true;
+    } catch (const igesio::TypeConversionError&) {
+        return false;
+    }
+}
+
+/// @brief 文字列(H付)への変換を試み、成功すればparamsへ追加する
+/// @param[out] params 追加先のパラメータベクタ
+/// @param str 変換する文字列
+/// @return 変換に成功した場合true、失敗した場合false
+bool TryAppendString(igesio::IGESParameterVector& params, const std::string& str) {
+    try {
+        auto [value, format] = igesio::FromIgesStringWithFormat(str, std::nullopt);
+        params.push_back(value, format);
+        return true;
+    } catch (const igesio::TypeConversionError&) {
+        return false;
+    }
+}
+
+}  // namespace
+
 igesio::IGESParameterVector
 i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
     IGESParameterVector params;
@@ -266,26 +337,28 @@ i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
             continue;
         }
 
-        try {  // 整数型への変換を試みる
-            auto [value, format] = igesio::FromIgesIntegerWithFormat(str, std::nullopt);
-            params.push_back(value, format);
-            continue;
-        } catch (const igesio::TypeConversionError&) {}
-
-        try {  // 実数型への変換を試みる
-            auto [value, format] = igesio::FromIgesRealWithFormat(str, std::nullopt);
-            params.push_back(value, format);
-            continue;
-        } catch (const igesio::TypeConversionError&) {}
-
-        try {  // 文字列型への変換を試みる
-            auto [value, format] = igesio::FromIgesStringWithFormat(str, std::nullopt);
-            params.push_back(value, format);
-            continue;
-        } catch (const igesio::TypeConversionError&) {}
-
-        auto [value, format] = igesio::FromIgesLanguageWithFormat(str, std::nullopt);
-        params.push_back(value, format);
+        // 内容から型を推定し、推定した型から順に変換を試みる.
+        // 推定が正しければ最初の試行で成功し、実数・文字列を整数として試す
+        // 従来の例外駆動判定で生じていた無駄なthrowを回避する.
+        // フォールスルー順は従来同様 整数→実数→文字列→Languageを維持する.
+        // 推定でスキップする変換は当該入力では必ず失敗するため、結果は不変.
+        switch (ClassifyParameter(str)) {
+            case ParamKind::kInteger:
+                if (TryAppendInteger(params, str)) continue;
+                [[fallthrough]];
+            case ParamKind::kReal:
+                if (TryAppendReal(params, str)) continue;
+                [[fallthrough]];
+            case ParamKind::kString:
+                if (TryAppendString(params, str)) continue;
+                [[fallthrough]];
+            case ParamKind::kLanguage:
+            default: {
+                auto [value, format] = igesio::FromIgesLanguageWithFormat(
+                        str, std::nullopt);
+                params.push_back(value, format);
+            }
+        }
     }
 
     return params;

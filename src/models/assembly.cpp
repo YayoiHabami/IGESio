@@ -170,6 +170,35 @@ void Assembly::SetPointerIfUnset(std::shared_ptr<entities::EntityBase> entity) {
     }
 }
 
+void Assembly::AddEntities(
+        const std::vector<std::shared_ptr<entities::EntityBase>>& entities) {
+    // 事前にreserveしてリハッシュを抑える
+    entities_.reserve(entities_.size() + entities.size());
+
+    // まず全エンティティをマップとルート逆引きインデックスへ登録する
+    for (const auto& entity : entities) {
+        if (!entity) {
+            throw std::invalid_argument("Entity pointer is null");
+        }
+        const auto id = entity->GetID();
+        entities_[id] = entity;
+        RegisterInIndex(id, this);
+    }
+
+    // 全件登録後に参照解決を1回だけ行う (O(エンティティ数+参照数)).
+    // 各エンティティの未解決参照のうち、このノードが持つものを解決することで、
+    // 前方参照・後方参照の双方が一括で解決される. 1件ずつAddEntityを呼ぶ場合に
+    // 生じる挿入ごとの全件走査 (O(N^2)) を回避するための経路.
+    for (const auto& [id, ent] : entities_) {
+        for (const auto& rid : ent->GetUnresolvedReferences()) {
+            auto it = entities_.find(rid);
+            if (it != entities_.end()) {
+                ent->SetUnresolvedReference(it->second);
+            }
+        }
+    }
+}
+
 bool Assembly::AreAllReferencesSet() const {
     auto unresolved = GetUnresolvedReferences();
     return unresolved.empty();

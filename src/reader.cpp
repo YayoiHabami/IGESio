@@ -8,10 +8,12 @@
 #include "igesio/reader.h"
 
 #include <array>
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "igesio/utils/iges_string_utils.h"
@@ -403,29 +405,41 @@ i_model::IgesData igesio::ConvertFromIntermediate(
                 iges_id, static_cast<uint16_t>(de.entity_type), de_pointer);
     }
 
-    // DEとPDを組み合わせてエンティティを生成し、IgesDataに追加
+    // PDのシーケンス番号からインデックスを引く対応表をO(N)で構築する
+    // (重複シーケンス番号は先頭を優先し、現行のfind_ifと同一挙動とする)
+    std::unordered_map<unsigned int, std::size_t> pd_seq_to_index;
+    pd_seq_to_index.reserve(intermediate.parameter_data_section.size());
+    for (std::size_t i = 0; i < intermediate.parameter_data_section.size(); ++i) {
+        pd_seq_to_index.emplace(
+                intermediate.parameter_data_section[i].sequence_number, i);
+    }
+
+    // 生成したエンティティを一旦集め、ループ後に一括登録する
+    // (1件ずつAddEntityすると内部の参照解決がO(N^2)になるため)
+    std::vector<std::shared_ptr<entities::EntityBase>> created;
+    created.reserve(intermediate.directory_entry_section.size());
+
+    // DEとPDを組み合わせてエンティティを生成する
     for (const auto& de : intermediate.directory_entry_section) {
-        // pd_pointerとシーケンス番号が一致するPDを探す
+        // pd_pointerとシーケンス番号が一致するPDを直接引く
         auto pd_pointer = de.parameter_data_pointer;
-        auto pd_it = std::find_if(
-                intermediate.parameter_data_section.begin(),
-                intermediate.parameter_data_section.end(),
-                [pd_pointer](const entities::RawEntityPD& pd) {
-                    return pd.sequence_number == pd_pointer;
-                });
-        if (pd_it == intermediate.parameter_data_section.end()) {
+        auto pd_it = pd_seq_to_index.find(pd_pointer);
+        if (pd_it == pd_seq_to_index.end()) {
             throw iio::DataFormatError(
                     "Parameter data record with pointer " +
                     std::to_string(pd_pointer) +
                     " not found for directory entry with sequence number " +
                     std::to_string(de.sequence_number) + ".");
         }
-        auto pd = *pd_it;
+        const auto& pd = intermediate.parameter_data_section[pd_it->second];
 
         // DEとPDを組み合わせてエンティティを生成
+        // (内訳計測のためToIGESParameterVectorとCreateEntityを分けて呼ぶ)
         try {
-            auto entity = entities::EntityFactory::CreateEntity(de, pd, de2id, iges_id);
-            iges.Root().AddEntity(entity);
+            auto params = entities::ToIGESParameterVector(pd);
+            auto entity = entities::EntityFactory::CreateEntity(
+                    de, params, de2id, iges_id);
+            created.push_back(std::move(entity));
         } catch (const std::out_of_range& e) {
             // エンティティがIGESファイル内に存在しないエンティティを参照している場合
             throw iio::DataFormatError(
@@ -442,6 +456,9 @@ i_model::IgesData igesio::ConvertFromIntermediate(
                     "Details: " + std::string(e.what()));
         }
     }
+
+    // 生成した全エンティティを一括登録する (参照解決は内部で1回だけ行われる)
+    iges.Root().AddEntities(created);
 
     // ベース曲線Bが省略されたType 142 (CATIA等) について、参照解決済みの
     // モデル空間曲線Cと曲面SからB = S^{-1}∘Cを再構築する.
