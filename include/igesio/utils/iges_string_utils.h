@@ -97,6 +97,9 @@ std::string GetDataPart(const std::string&, const SectionType);
 ///        各行の長さは問わない.
 /// @param p_delim パラメータ区切り文字
 /// @param r_delim レコード区切り文字
+/// @param data_part_width 各行で連結対象とする先頭文字数 (データ部の列幅).
+///        既定 (npos) では行全体を連結する. 生の行＋列幅を渡すことで、各行を
+///        GetDataPartで切り詰めてから渡す際の中間コピーを避けられる.
 /// @return データ部をパラメータ区切り文字で分割した文字列のベクタ
 /// @throw igesio::SectionFormatError 区切り文字が存在しない場合、
 ///        不正な文字列ステートメント（H文字列）が含まれる場合、
@@ -111,7 +114,8 @@ std::string GetDataPart(const std::string&, const SectionType);
 /// @note PDセクションのコメント (レコード区切り文字の後に追加されうる文字列) は
 ///       無視される (単純に切り捨てられ、返されない).
 std::vector<std::string>
-ParseFreeFormattedData(const std::vector<std::string>&, const char, const char);
+ParseFreeFormattedData(const std::vector<std::string>&, const char, const char,
+                       const std::size_t = std::string::npos);
 
 
 

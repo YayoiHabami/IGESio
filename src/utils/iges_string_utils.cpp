@@ -215,13 +215,17 @@ std::size_t FindParameterEnd(const std::string& connected, const std::size_t pos
 
 std::vector<std::string> i_util::ParseFreeFormattedData(
         const std::vector<std::string>& lines,
-        const char p_delim, const char r_delim) {
-    // 全ての文字列を結合する (事前にreserveしてコピーを抑える)
+        const char p_delim, const char r_delim,
+        const std::size_t data_part_width) {
+    // 各行のデータ部 (先頭data_part_width文字; 既定は行全体) を結合する.
+    // 生の行を渡してもらい、ここで切り詰めることで呼び出し側の中間コピーを避ける.
     std::size_t total = 0;
-    for (const auto& line : lines) total += line.size();
+    for (const auto& line : lines) total += std::min(line.size(), data_part_width);
     std::string connected;
     connected.reserve(total);
-    for (const auto& line : lines) connected += line;
+    for (const auto& line : lines) {
+        connected.append(line.data(), std::min(line.size(), data_part_width));
+    }
 
     const std::string delimiters{p_delim, r_delim};
     const std::size_t n = connected.size();

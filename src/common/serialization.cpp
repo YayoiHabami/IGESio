@@ -7,10 +7,14 @@
  */
 #include "igesio/common/serialization.h"
 
+#include <cerrno>
+#include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <utility>
 
 #include "igesio/common/errors.h"
@@ -67,39 +71,47 @@ std::string ConvertDToE(const std::string& str) {
     return result;
 }
 
-/// @brief 数値が単精度か否か
-/// @param str Real型の文字列
-/// @return 文字列内に 'E' が含まれている場合は単精度と判断
-bool IsSinglePrecision(const std::string& str) {
-    return str.find('E') != std::string::npos;
-}
+/// @brief Real型文字列のフォーマット情報
+struct RealFormatInfo {
+    /// @brief 整数部があるか
+    bool has_integer = false;
+    /// @brief 小数部があるか
+    bool has_fraction = false;
+    /// @brief 指数部 (E/D) があるか
+    bool has_exponent = false;
+    /// @brief 単精度 (E指数) か
+    bool is_single_precision = false;
+    /// @brief D指数表記を含むか (D->E変換が必要)
+    bool has_d = false;
+};
 
-/// @brief 数値に整数部があるか否か
-/// @param str Real型の文字列
-/// @return 文字列の先頭 (または先頭が符号の場合はその次の文字)
-///         が数字である場合は整数部があると判断
-bool HasIntegerPart(const std::string& str) {
-    if (str.empty()) return false;
-    size_t start = (str[0] == '+' || str[0] == '-') ? 1 : 0;
-    return start < str.size() && IsDigit(str[start]);
-}
-
-/// @brief 数値に小数部があるか否か
-/// @param str Real型の文字列
-/// @return 文字列内の '.' の次の文字が数字である場合は小数部があると判断
-bool HasFractionPart(const std::string& str) {
-    size_t dot_pos = str.find('.');
-    if (dot_pos == std::string::npos) return false;
-    // '.' の次の文字が数字であるかを確認
-    return dot_pos + 1 < str.size() && IsDigit(str[dot_pos + 1]);
-}
-
-/// @brief 数値に指数部があるか否か
-/// @param str Real型の文字列 (指数部は 'E' または 'D' で始まる)
-/// @return 文字列内に 'E' または 'D' が含まれている場合は指数部があると判断
-bool HasExponentPart(const std::string& str) {
-    return str.find('E') != std::string::npos ||
-           str.find('D') != std::string::npos;
+/// @brief Real型文字列の範囲 [begin, end) からフォーマット情報を算出する
+/// @param str 対象文字列
+/// @param begin 内容の開始位置 (前方の空白を除いた位置)
+/// @param end 内容の終端位置 (後方の空白を除いた次の位置; exclusive)
+/// @return フォーマット情報
+/// @note 文字列を確保せず、範囲を1パス走査して算出する
+RealFormatInfo AnalyzeRealFormat(const std::string& str,
+                                 const std::size_t begin, const std::size_t end) {
+    RealFormatInfo info;
+    // 整数部: 先頭 (符号があればその次) が数字か
+    const std::size_t int_pos =
+            (str[begin] == '+' || str[begin] == '-') ? begin + 1 : begin;
+    info.has_integer = (int_pos < end) && IsDigit(str[int_pos]);
+    // 小数部・指数部を1パスで走査して判定する
+    for (std::size_t i = begin; i < end; ++i) {
+        const char c = str[i];
+        if (c == '.') {
+            if (i + 1 < end && IsDigit(str[i + 1])) info.has_fraction = true;
+        } else if (c == 'E') {
+            info.has_exponent = true;
+            info.is_single_precision = true;
+        } else if (c == 'D') {
+            info.has_exponent = true;
+            info.has_d = true;
+        }
+    }
+    return info;
 }
 
 }  // namespace
@@ -188,34 +200,37 @@ std::pair<int, igesio::ValueFormat> igesio::FromIgesIntegerWithFormat(
         return {default_value.value(), ValueFormat::Integer(true)};
     }
 
-    // 前後から空白を削除して整数に変換
-    auto trimmed = igesio::trim(str);
-    if (!IsDigitOrSign(trimmed[0])) {
-        // 先頭が数字でない場合 (\t等の::stripで削除されない空白文字がある場合)
+    // 前後の空白は確保せずに範囲で扱う (空白のみはAssert...で除外済)
+    const std::size_t first = str.find_first_not_of(' ');
+    const std::size_t last = str.find_last_not_of(' ');  // inclusive
+    const char head = str[first];
+    if (!IsDigitOrSign(head)) {
+        // 先頭が数字でも符号でもない場合 (タブ等の::stripで残る空白文字を含む)
         throw igesio::TypeConversionError(
                 "Invalid integer value: '" + str + "'"
                 " The string must begin with a digit or sign character");
     }
+    // 符号がある場合、その直後は数字でなければならない ("+-42"等を弾く)
+    if ((head == '+' || head == '-') &&
+            (first + 1 > last || !IsDigit(str[first + 1]))) {
+        throw igesio::TypeConversionError("Invalid integer value: '" + str + "'");
+    }
 
-    try {
-        std::size_t pos = 0;
-        int value = std::stoi(trimmed, &pos);
-
-        // 変換して残った文字列が空でない場合はエラー
-        if (pos != trimmed.length()) {
-            throw igesio::TypeConversionError(
-                    "Invalid integer value: '" + str + "'");
-        }
-        return {value, ValueFormat::Integer(false, trimmed[0] == '+')};
-    } catch (const std::invalid_argument&) {
-        // 変換できなかった場合はエラー
-        throw igesio::TypeConversionError(
-                "Invalid integer value: '" + str + "'");
-    } catch (const std::out_of_range&) {
+    // from_charsは先頭'+'を受け付けないため'+'のみスキップする ('-'はfrom_charsが扱う)
+    const char* begin = str.data() + (head == '+' ? first + 1 : first);
+    const char* end = str.data() + last + 1;
+    int value = 0;
+    const auto result = std::from_chars(begin, end, value);
+    if (result.ec == std::errc::result_out_of_range) {
         // 範囲外の場合はエラー
         throw igesio::TypeConversionError(
                 "Integer value out of range: '" + str + "'");
+    } else if (result.ec != std::errc() || result.ptr != end) {
+        // 変換失敗、または数値の後ろに余分な文字が残る場合
+        throw igesio::TypeConversionError(
+                "Invalid integer value: '" + str + "'");
     }
+    return {value, ValueFormat::Integer(false, head == '+')};
 }
 
 std::pair<double, igesio::ValueFormat> igesio::FromIgesRealWithFormat(
@@ -228,56 +243,68 @@ std::pair<double, igesio::ValueFormat> igesio::FromIgesRealWithFormat(
         return {default_value.value(), ValueFormat::Real(true)};
     }
 
-    // 前後から空白を削除して実数に変換
-    auto trimmed = igesio::trim(str);
-    if (!IsDigitOrSign(trimmed[0]) && trimmed[0] != '.') {
+    // 前後の空白は確保せずに範囲で扱う (空白のみはAssert...で除外済)
+    const std::size_t first = str.find_first_not_of(' ');
+    const std::size_t last = str.find_last_not_of(' ');  // inclusive
+    const std::size_t end_pos = last + 1;                // exclusive
+    const char head = str[first];
+    if (!IsDigitOrSign(head) && head != '.') {
         // 先頭が数字・符号・小数点のいずれでもない場合
         // (整数部のない実数 ".5" を許容し、"-.5" を受理することとの非対称を避ける)
         throw igesio::TypeConversionError(
                 "Invalid double value: '" + str + "'"
                 " The string must begin with a digit, sign, or decimal point");
     }
+    // 符号がある場合、その直後は数字または小数点でなければならない ("+-4.2"等を弾く)
+    if ((head == '+' || head == '-') &&
+            (first + 1 >= end_pos ||
+             !(IsDigit(str[first + 1]) || str[first + 1] == '.'))) {
+        throw igesio::TypeConversionError("Invalid real value: '" + str + "'");
+    }
 
-    try {
-        // 単精度か否かを判断し、互換性のためにDをEに変換
-        auto is_single_precision = IsSinglePrecision(trimmed);
-        std::size_t pos = 0;
-        double value = std::stod(ConvertDToE(trimmed), &pos);
+    // フォーマット情報を範囲から算出する (確保なし)
+    const RealFormatInfo info = AnalyzeRealFormat(str, first, end_pos);
+    const bool has_plus_sign = (head == '+');
 
-        // その他のフォーマット情報を取得
-        bool has_plus_sign = trimmed[0] == '+';
-        bool has_integer = HasIntegerPart(trimmed);
-        bool has_fraction = HasFractionPart(trimmed);
-        bool has_exponent = HasExponentPart(trimmed);
-
-        // 変換して残った文字列が空でない場合はエラー
-        if (pos != trimmed.length()) {
+    // 数値へ変換する.
+    // NOTE: MinGWのlibstdc++はfrom_chars<double>を提供しないため、整数と異なり
+    //       実数はstrtodで変換する (stodと同じ変換だが、c_str()上を直接パースして
+    //       trim/部分文字列の確保を避ける). 'D'指数のみ事前にD->E変換する.
+    double value = 0.0;
+    char* endptr = nullptr;
+    errno = 0;
+    if (info.has_d) {
+        // D指数表記を含む稀なケースはD->E変換してから変換する (確保あり)
+        const std::string conv = ConvertDToE(str.substr(first, last - first + 1));
+        value = std::strtod(conv.c_str(), &endptr);
+        if (endptr != conv.c_str() + conv.size()) {
             throw igesio::TypeConversionError(
                     "Invalid real value: '" + str + "'");
         }
-
-        // アンダーフローの明示的なチェック
-        // Windows&Clangでは、std::stodが2.225...e-309のような値を与えられても
-        // 0.0を返すことがあるため、明示的にチェックする
-        if (std::isfinite(value) && value != 0.0) {
-            if (std::abs(value) < std::numeric_limits<double>::min()) {
-                throw igesio::TypeConversionError(
-                        "Real value underflow: '" + str + "'");
-            }
+    } else {
+        value = std::strtod(str.c_str() + first, &endptr);
+        if (endptr != str.data() + end_pos) {
+            // 変換失敗、または数値の後ろに余分な文字が残る場合
+            throw igesio::TypeConversionError(
+                    "Invalid real value: '" + str + "'");
         }
-
-        return {value, ValueFormat::Real(
-                false, has_plus_sign, has_integer, has_fraction,
-                has_exponent, is_single_precision)};
-    } catch (const std::invalid_argument&) {
-        // 変換できなかった場合はエラー
-        throw igesio::TypeConversionError(
-                "Invalid real value: '" + str + "'");
-    } catch (const std::out_of_range&) {
-        // 範囲外の場合はエラー
-        throw igesio::TypeConversionError(
-                "Real value out of range: '" + str + "'");
     }
+    if (errno == ERANGE) {
+        // オーバーフロー(±HUGE_VAL)・アンダーフロー(0/非正規化数)
+        throw igesio::TypeConversionError("Real value out of range: '" + str + "'");
+    }
+
+    // アンダーフローの明示的なチェック
+    // Windows&Clangでは、std::stodが2.225...e-309のような値を与えられても
+    // 0.0を返すことがあるため、明示的にチェックする
+    if (std::isfinite(value) && value != 0.0 &&
+            std::abs(value) < std::numeric_limits<double>::min()) {
+        throw igesio::TypeConversionError("Real value underflow: '" + str + "'");
+    }
+
+    return {value, ValueFormat::Real(false, has_plus_sign, info.has_integer,
+                                     info.has_fraction, info.has_exponent,
+                                     info.is_single_precision)};
 }
 
 std::pair<std::string, igesio::ValueFormat> igesio::FromIgesStringWithFormat(

@@ -50,14 +50,16 @@ i_ent::RawEntityPD::RawEntityPD(
     : type(other.type),
       de_pointer(other.de_pointer),
       sequence_number(other.sequence_number),
-      data(other.data) {}
+      data(other.data),
+      data_types(other.data_types) {}
 
 i_ent::RawEntityPD::RawEntityPD(
         RawEntityPD&& other) noexcept
     : type(other.type),
       de_pointer(other.de_pointer),
       sequence_number(other.sequence_number),
-      data(std::move(other.data)) {}
+      data(std::move(other.data)),
+      data_types(std::move(other.data_types)) {}
 
 i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
         const RawEntityPD& other) {
@@ -66,6 +68,7 @@ i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
         de_pointer = other.de_pointer;
         sequence_number = other.sequence_number;
         data = other.data;
+        data_types = other.data_types;
     }
     return *this;
 }
@@ -77,6 +80,7 @@ i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
         de_pointer = other.de_pointer;
         sequence_number = other.sequence_number;
         data = std::move(other.data);
+        data_types = std::move(other.data_types);
     }
     return *this;
 }
@@ -85,31 +89,20 @@ i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
 
 i_ent::RawEntityPD i_ent::ToRawEntityPD(
         const std::vector<std::string>& lines,
-        const char p_delim, const char r_delim) {
-    i_ent::RawEntityPD ep;
-
-    // シーケンス番号を取得
-    auto sequence_number = iu::GetSequenceNumber(lines[0]);
-    // DEポインタを取得
-    auto de_pointer = iu::GetDEPointer(lines[0]);
-
-    // 各行のデータ部のみを取得
-    std::vector<std::string> data_lines {};
-    for (const auto& line : lines) {
-        // データ部のみを取得し、追加
-        std::string data = iu::GetDataPart(line, SectionType::kParameter);
-        data_lines.push_back(data);
-    }
-    // データ部をパラメータ区切り文字で分割
+        const char p_delim, const char r_delim,
+        const unsigned int de_pointer, const unsigned int sequence_number) {
+    // データ部 (各行の先頭kColDEPointer-1文字) をパラメータ区切り文字で分割する.
+    // 生の行をそのまま渡し、ParseFreeFormattedData内で切り詰めることで、
+    // 行ごとの部分文字列確保 (GetDataPart) を避ける.
     std::vector<std::string> data = iu::ParseFreeFormattedData(
-            data_lines, p_delim, r_delim);
+            lines, p_delim, r_delim, iio::kColDEPointer - 1);
 
     // エンティティタイプを取得
     auto type = i_ent::ToEntityType(std::stoi(data[0]));
     if (!type.has_value()) {
         throw iio::TypeConversionError(
                 "Invalid entity type: " + std::to_string(std::stoi(data[0])) +
-                " on line " + std::to_string(ep.sequence_number) +
+                " on line " + std::to_string(sequence_number) +
                 " of the Parameter Data section");
     }
 
@@ -117,6 +110,15 @@ i_ent::RawEntityPD i_ent::ToRawEntityPD(
         type.value(), de_pointer, sequence_number,
         // 1つ目の要素はエンティティタイプなので除外
         std::vector<std::string>(data.begin() + 1, data.end()));
+}
+
+i_ent::RawEntityPD i_ent::ToRawEntityPD(
+        const std::vector<std::string>& lines,
+        const char p_delim, const char r_delim) {
+    // lines[0]からDEポインタ・シーケンス番号を抽出して5引数版へ委譲する
+    return ToRawEntityPD(lines, p_delim, r_delim,
+                         iu::GetDEPointer(lines[0]),
+                         iu::GetSequenceNumber(lines[0]));
 }
 
 
@@ -329,6 +331,8 @@ bool TryAppendString(igesio::IGESParameterVector& params, const std::string& str
 igesio::IGESParameterVector
 i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
     IGESParameterVector params;
+    // パラメータ数は既知なので事前にreserveし、成長時の再確保を避ける
+    params.reserve(pd.data.size());
     for (const auto& str : pd.data) {
         if (str.empty()) {
             // 空のパラメータの場合は、とりあえずStringのデフォルト値を追加

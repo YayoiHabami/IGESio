@@ -14,6 +14,7 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "igesio/utils/iges_string_utils.h"
@@ -183,6 +184,8 @@ iio::IgesReader::ReadParameterDataRecord() {
 
     // DEポインタを取得
     auto de_pointer = i_util::GetDEPointer(std::get<0>(line.value()));
+    // シーケンス番号はGetLineが算出済み (末尾7桁) なので再抽出しない
+    const unsigned int sequence_number = std::get<2>(line.value());
 
     // データ部を取得
     std::vector<std::string> lines = {std::get<0>(line.value())};
@@ -206,8 +209,10 @@ iio::IgesReader::ReadParameterDataRecord() {
     // データが取得できない場合は終了
     if (lines.empty()) return std::nullopt;
 
+    // 既知のDEポインタ・シーケンス番号を渡し、lines[0]からの再抽出を省く
     return i_ent::ToRawEntityPD(
-            lines, parameter_delimiter_, record_delimiter_);
+            lines, parameter_delimiter_, record_delimiter_,
+            de_pointer, sequence_number);
 }
 
 std::optional<std::array<unsigned int, 4>>
@@ -307,10 +312,13 @@ i_model::IntermediateIgesData igesio::ReadIgesIntermediate(
     }
 
     // パラメータデータセクションを読み込む
+    // PDレコード数はDEレコード数と一致するため事前にreserveする
+    data.parameter_data_section.reserve(data.directory_entry_section.size());
     while (true) {
         auto pd = reader.ReadParameterDataRecord();
         if (!pd.has_value()) break;  // std::nulloptの場合は終了
-        data.parameter_data_section.push_back(pd.value());
+        // RawEntityPDをムーブして格納し、全パラメータ文字列の複製を避ける
+        data.parameter_data_section.push_back(std::move(*pd));
     }
 
     // ターミネートセクションを読み込む
@@ -436,9 +444,8 @@ i_model::IgesData igesio::ConvertFromIntermediate(
         // DEとPDを組み合わせてエンティティを生成
         // (内訳計測のためToIGESParameterVectorとCreateEntityを分けて呼ぶ)
         try {
-            auto params = entities::ToIGESParameterVector(pd);
             auto entity = entities::EntityFactory::CreateEntity(
-                    de, params, de2id, iges_id);
+                    de, entities::ToIGESParameterVector(pd), de2id, iges_id);
             created.push_back(std::move(entity));
         } catch (const std::out_of_range& e) {
             // エンティティがIGESファイル内に存在しないエンティティを参照している場合
