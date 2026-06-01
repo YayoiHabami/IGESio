@@ -83,6 +83,15 @@ std::string CurrentTimeString(const std::string& format = "%Y-%m-%d %H%M%S") {
     return ss.str();
 }
 
+/// @brief エンティティのタイプ文字列を取得する
+std::string GetEntityTypeString(const igesio::ObjectID& id) {
+    if (auto entity_type = id.GetIdentifier()->GetEntityType()) {
+        return igesio::entities::ToString(
+            static_cast<igesio::entities::EntityType>(*entity_type));
+    }
+    return "Unknown";
+}
+
 }  // namespace
 
 
@@ -577,7 +586,7 @@ void IgesViewerGUI::RenderAssemblyNode(models::Assembly& node) {
 void IgesViewerGUI::RenderEntityRow(const ObjectID& id) {
     auto& sel = scene_->ActiveSelection();
     const std::string label = "[" + std::to_string(id.ToInt()) + "] "
-            + ToString(renderer_.GetEntityShaderType(id));
+            + GetEntityTypeString(id);
 
     ImGui::PushID(id.ToInt());
     if (ImGui::Selectable(label.c_str(), sel.Contains(id))) {
@@ -650,7 +659,7 @@ void IgesViewerGUI::RenderSelectionSection() {
 
     if (ImGui::BeginChild("##sel_list", ImVec2(0, 120), true)) {
         for (const auto& id : selected) {
-            const auto type_str = ToString(renderer_.GetEntityShaderType(id));
+            const auto type_str = GetEntityTypeString(id);
             auto it = selected_hit_positions_.find(id);
             if (it != selected_hit_positions_.end()) {
                 const auto& p = it->second;
@@ -689,7 +698,8 @@ void IgesViewerGUI::RenderPropertiesSection() {
     }
     const ObjectID id = *active;
     ImGui::Text("Entity [%d]", id.ToInt());
-    ImGui::Text("Type: %s", ToString(renderer_.GetEntityShaderType(id)).c_str());
+    std::string type_str = GetEntityTypeString(id);
+    ImGui::Text("Type: %s", type_str.c_str());
     if (const auto* owner = scene_->Root().FindOwner(id)) {
         ImGui::Text("Owner: Assembly #%d", owner->GetID().ToInt());
     }
