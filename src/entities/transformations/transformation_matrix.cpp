@@ -237,15 +237,10 @@ bool TransMatrix::SetReference(
         de_transformation_matrix_.Reset();
         return true;
     }
-    // 循環参照のチェック (子要素を見ていって循環参照がないか確認)
-    auto current = de_transformation_matrix_.GetPointer();
-    while (current) {
-        if (current->GetID() == transformation->GetID()) {
-            return false;  // 循環参照がある場合は設定しない
-        }
-        current = current->GetRefTransformation();
+    // 自身(this)からtransformationへの参照が循環を生む場合は設定しない
+    if (i_ent::CreatesTransformationCycle(GetID(), transformation)) {
+        return false;
     }
-    // 循環参照がない場合は設定する.
     // 新規エンティティではde_transformation_matrix_のid_がUnsetIDであり、
     // SetPointerはID不一致のため何も設定しない (黙って無視される). 参照先IDを
     // 設定したうえでポインタを保持するため、OverwritePointerを使用する.

@@ -14,13 +14,12 @@
  *   kWarning のみであれば throw しない。
  * - フォーム別の構造チェック: フォーム0/1 (行列式の符号) およびフォーム10/11/12
  *   (FEM 用の特殊行列構造)
- * - 参照: SetReference / GetRefTransformation の基本動作
+ * - 参照: SetReference / OverwriteTransformationMatrix / GetRefTransformation の
+ *   基本動作と循環参照の棄却 (両APIが同一の循環判定を共有すること)
  *
  * TODO: 以下は本テストで未検証。
  *   - 未知のフォーム番号 (ValidatePD の default 節, kError) は SetMainPDParameters
  *     が構築時に throw するため (default 節へ到達しない)、単体テストは構成不可。
- *   - SetReference の循環参照検出は、自己参照や2要素の循環を弾かない実装に
- *     なっているため、循環の棄却は未検証 (set/get/clear の基本動作のみ検証)。
  */
 #include <gtest/gtest.h>
 
@@ -403,4 +402,117 @@ TEST(TransformationMatrixReferenceTest, SetReference_NullClearsReference) {
 
     EXPECT_TRUE(tm_a->SetReference(std::shared_ptr<i_ent::ITransformation>(nullptr)));
     EXPECT_EQ(tm_a->GetRefTransformation(), nullptr);
+}
+
+// 自己参照 (this -> this) は循環として棄却され、参照は設定されない
+// NOTE: SetReferenceはconst/非constの2オーバーロードを持つため、
+//       引数はITransformationのshared_ptrとして渡し曖昧さを避ける
+TEST(TransformationMatrixReferenceTest, SetReference_RejectsSelfReference) {
+    std::shared_ptr<i_ent::ITransformation> tm =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    EXPECT_FALSE(tm->SetReference(tm));
+    EXPECT_EQ(tm->GetRefTransformation(), nullptr);
+}
+
+// 2要素の循環 (a->b の後の b->a) は棄却され、bの参照は設定されない
+TEST(TransformationMatrixReferenceTest, SetReference_RejectsTwoNodeCycle) {
+    std::shared_ptr<i_ent::ITransformation> tm_a =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    std::shared_ptr<i_ent::ITransformation> tm_b =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    ASSERT_TRUE(tm_a->SetReference(tm_b));   // a -> b
+    EXPECT_FALSE(tm_b->SetReference(tm_a));  // b -> a は循環
+    EXPECT_EQ(tm_b->GetRefTransformation(), nullptr);
+}
+
+// 多段の循環 (a->b->c の後の c->a) は棄却される
+TEST(TransformationMatrixReferenceTest, SetReference_RejectsMultiNodeCycle) {
+    std::shared_ptr<i_ent::ITransformation> tm_a =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    std::shared_ptr<i_ent::ITransformation> tm_b =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    std::shared_ptr<i_ent::ITransformation> tm_c =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    ASSERT_TRUE(tm_a->SetReference(tm_b));   // a -> b
+    ASSERT_TRUE(tm_b->SetReference(tm_c));   // b -> c
+    EXPECT_FALSE(tm_c->SetReference(tm_a));  // c -> a は循環
+    EXPECT_EQ(tm_c->GetRefTransformation(), nullptr);
+}
+
+// 循環しない参照チェーン (a->b->c) は設定でき、各参照を辿れる (近道辺の誤棄却なし)
+TEST(TransformationMatrixReferenceTest, SetReference_AcyclicChainIsAccepted) {
+    std::shared_ptr<i_ent::ITransformation> tm_a =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    std::shared_ptr<i_ent::ITransformation> tm_b =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    std::shared_ptr<i_ent::ITransformation> tm_c =
+        std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    EXPECT_TRUE(tm_a->SetReference(tm_b));   // a -> b
+    EXPECT_TRUE(tm_b->SetReference(tm_c));   // b -> c
+
+    ASSERT_NE(tm_a->GetRefTransformation(), nullptr);
+    EXPECT_EQ(tm_a->GetRefTransformation()->GetID(), tm_b->GetID());
+    ASSERT_NE(tm_b->GetRefTransformation(), nullptr);
+    EXPECT_EQ(tm_b->GetRefTransformation()->GetID(), tm_c->GetID());
+}
+
+
+
+/**
+ * EntityBase::OverwriteTransformationMatrix (DEフィールド7) と循環参照の棄却
+ * @note OverwriteTransformationMatrixはオーバーロードが1つのため、引数に
+ *       shared_ptr<TransformationMatrix>をそのまま渡しても曖昧にならない。
+ */
+
+// OverwriteTransformationMatrixは変換行列を設定し、DEフィールド7に保持される
+TEST(TransformationMatrixReferenceTest,
+     OverwriteTransformationMatrix_StoresReference) {
+    auto tm_a = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    auto tm_b = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+
+    EXPECT_TRUE(tm_a->OverwriteTransformationMatrix(tm_b));
+    const auto stored = tm_a->GetTransformationMatrix().GetPointer();
+    ASSERT_NE(stored, nullptr);
+    EXPECT_EQ(stored->GetID(), tm_b->GetID());
+}
+
+// nullptrの場合はfalseを返し、参照は設定されない
+TEST(TransformationMatrixReferenceTest,
+     OverwriteTransformationMatrix_ReturnsFalseForNull) {
+    auto tm = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    EXPECT_FALSE(tm->OverwriteTransformationMatrix(
+        std::shared_ptr<const i_ent::ITransformation>(nullptr)));
+    EXPECT_EQ(tm->GetTransformationMatrix().GetPointer(), nullptr);
+}
+
+// 自己参照 (this -> this) は循環として棄却され、参照は設定されない
+TEST(TransformationMatrixReferenceTest,
+     OverwriteTransformationMatrix_RejectsSelfReference) {
+    auto tm = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    EXPECT_FALSE(tm->OverwriteTransformationMatrix(tm));
+    EXPECT_EQ(tm->GetTransformationMatrix().GetPointer(), nullptr);
+}
+
+// 2要素の循環 (a->b の後の b->a) は棄却され、bの参照は設定されない
+TEST(TransformationMatrixReferenceTest,
+     OverwriteTransformationMatrix_RejectsTwoNodeCycle) {
+    auto tm_a = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    auto tm_b = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    ASSERT_TRUE(tm_a->OverwriteTransformationMatrix(tm_b));   // a -> b
+    EXPECT_FALSE(tm_b->OverwriteTransformationMatrix(tm_a));  // b -> a は循環
+    EXPECT_EQ(tm_b->GetTransformationMatrix().GetPointer(), nullptr);
+}
+
+// SetReferenceで張った参照もOverwriteTransformationMatrixの循環判定で考慮される
+// (両APIが同一の循環判定ロジックを共有することの確認)
+TEST(TransformationMatrixReferenceTest,
+     OverwriteTransformationMatrix_DetectsCycleAcrossApis) {
+    auto tm_a = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    auto tm_b = std::make_shared<TransformationMatrix>(Matrix3d::Identity());
+    // a -> b をSetReferenceで設定 (オーバーロード曖昧回避のため明示キャスト)
+    ASSERT_TRUE(tm_a->SetReference(
+        std::static_pointer_cast<i_ent::ITransformation>(tm_b)));
+    // b -> a をOverwriteTransformationMatrixで設定 → 循環のため棄却
+    EXPECT_FALSE(tm_b->OverwriteTransformationMatrix(tm_a));
+    EXPECT_EQ(tm_b->GetTransformationMatrix().GetPointer(), nullptr);
 }
