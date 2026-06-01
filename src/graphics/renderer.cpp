@@ -273,9 +273,6 @@ void EntityRenderer::Initialize() {
 }
 
 void EntityRenderer::Cleanup() {
-    // 選択状態をクリア
-    selected_ids_.clear();
-
     // 描画オブジェクトのクリーンアップ
     for (auto& [shader_type, objects] : draw_objects_) {
         for (auto& [id, object] : objects) {
@@ -284,6 +281,9 @@ void EntityRenderer::Cleanup() {
         objects.clear();
     }
     draw_objects_.clear();
+    // キャッシュ描画リストも破棄する (draw_objects_の要素を指すため)
+    draw_list_.clear();
+    scene_dirty_ = true;
 
     // シェーダープログラムの削除
     for (auto& [shader_type, program_id] : shader_programs_) {
@@ -313,19 +313,19 @@ void EntityRenderer::AddGraphicsObject(
     // 新しい描画オブジェクトを追加
     draw_objects_[graphics->GetShaderType()][graphics->GetEntityID()]
             = std::move(graphics);
+    // 走査対象が増えたので次回描画で描画リストを再構築する
+    scene_dirty_ = true;
 }
 
 void EntityRenderer::RemoveEntity(const ObjectID& id) {
-    // 選択中であれば選択集合からも除去する (stale idの防止)
-    selected_ids_.erase(
-            std::remove(selected_ids_.begin(), selected_ids_.end(), id),
-            selected_ids_.end());
-
     for (auto& [shader_type, objects] : draw_objects_) {
         auto it = objects.find(id);
         if (it != objects.end()) {
             it->second->Cleanup();  // OpenGLリソースを解放
             objects.erase(it);  // 描画オブジェクトを削除
+            // draw_list_は当該ポインタを保持し得るため破棄し、次回再構築する
+            draw_list_.clear();
+            scene_dirty_ = true;
             return;  // 削除が完了したら終了
         }
     }
@@ -349,27 +349,6 @@ EntityRenderer::GetEntityShaderType(const ObjectID& id) const {
         }
     }
     return ShaderType::kNone;
-}
-
-bool EntityRenderer::HasGraphicsObject(const ShaderType shader_type) const {
-    // draw_objects_のキーを走査
-    auto it = draw_objects_.find(shader_type);
-    if (it != draw_objects_.end() && !it->second.empty()) {
-        return true;  // 指定されたシェーダータイプに対応する描画オブジェクトが存在する
-    }
-
-    // kCompositeな描画オブジェクトを走査
-    auto composite_it = draw_objects_.find(ShaderType::kComposite);
-    if (composite_it != draw_objects_.end()) {
-        for (const auto& [id, object] : composite_it->second) {
-            auto shaders = object->GetShaderTypes();
-            if (shaders.find(shader_type) != shaders.end()) {
-                return true;  // 子要素に指定されたシェーダータイプが存在する
-            }
-        }
-    }
-
-    return false;
 }
 
 
@@ -436,6 +415,10 @@ void EntityRenderer::EnableTransparency(const bool enable) {
     }
 }
 
+bool EntityRenderer::IsTransparencyEnabled() const {
+    return settings_.enable_transparency;
+}
+
 
 
 /**
@@ -460,24 +443,102 @@ void EntityRenderer::Draw() const {
         gl_->Viewport(0, 0, display_width_, display_height_);
     }
 
-    // ビュー行列と投影行列を取得
-    auto view_matrix = camera_.GetViewMatrix();
-    auto projection_matrix = camera_.GetProjectionMatrix(
-        static_cast<float>(display_width_) / display_height_);
+    // シーン(描画の基準ツリー)が未設定なら描画しない (描画はScene走査に一本化)
+    if (scene_ == nullptr) return;
 
-    // 各シェーダープログラムごとに描画
-    // TODO: 半透明 (opacity < 1.0) なオブジェクトについては、描画を保留する
-    //       (最後にまとめて、画面奥のものから描画するように変更する)
-    for (const auto& [shader_type, program_id] : shader_programs_) {
-        if (!HasGraphicsObject(shader_type)) {
-            // このシェーダータイプの描画オブジェクトがない、または
-            // 対応する描画オブジェクトが1つもない場合はスキップ
-            continue;
+    // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)
+    const DrawContext ctx{&scene_->ActiveSelection(), kSelectionColor};
+
+    // dirty時のみ描画リストを再構築し (Assemblyツリー走査)、それを実行する.
+    // カメラ操作・選択変更だけの再描画では走査せずキャッシュを再利用する
+    // (選択ハイライトは毎フレームctxからPULLされるため再walkは不要)
+    if (scene_dirty_) {
+        RebuildDrawList();
+        scene_dirty_ = false;
+    }
+    ExecuteDrawList(ctx);
+}
+
+void EntityRenderer::SetScene(const models::Scene* scene) {
+    scene_ = scene;
+    scene_dirty_ = true;
+}
+
+void EntityRenderer::MarkSceneDirty() {
+    scene_dirty_ = true;
+}
+
+void EntityRenderer::RebuildDrawList() const {
+    draw_list_.clear();
+    if (scene_ == nullptr) return;
+    WalkAssembly(scene_->Root(), igesio::Matrix4d::Identity(),
+                 std::nullopt, std::nullopt);
+}
+
+void EntityRenderer::WalkAssembly(
+        const models::Assembly& node, const igesio::Matrix4d& parent_accum,
+        const std::optional<std::array<float, 3>>& inherited_color,
+        const std::optional<float>& inherited_opacity) const {
+    const auto& meta = node.Metadata();
+    // 非表示・抑制のサブツリーは描画対象から除外する
+    if (!meta.visible || meta.suppressed) return;
+
+    const igesio::Matrix4d accum = parent_accum * node.GetGlobalTransform();
+    const igesio::Matrix4f accum_f = accum.cast<float>();
+
+    // 色/不透明度のオーバーライドは最近接が優先 (子の設定が祖先を上書きする)
+    const auto color_ovr = meta.color_override ? meta.color_override : inherited_color;
+    const auto opacity_ovr =
+            meta.opacity_override ? meta.opacity_override : inherited_opacity;
+
+    for (const auto& [id, entity] : node.GetEntities()) {
+        // キャッシュに在席する = 投入時フィルタを通過した描画対象
+        // (ここではShouldRenderEntity/Validateを呼ばない)
+        auto* graphics = FindGraphics(id);
+        if (graphics == nullptr) continue;
+
+        // ピッキング/描画の整合のためワールド変換をリフレッシュする.
+        // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける)
+        graphics->SetWorldTransform(accum_f);
+
+        // 解決したオーバーライドをフレーム毎にPUSHする (world_transform_と同じ派生キャッシュ).
+        // まずentity固有色へ戻し、指定があるRGB/不透明度のみ差し替える
+        // (選択ハイライトは描画時にPULLされ、これより優先される)
+        graphics->ResetColor();
+        if (color_ovr || opacity_ovr) {
+            const auto natural = graphics->GetColor();  // {base_rgb, material_opacity}
+            graphics->SetColor({
+                color_ovr ? (*color_ovr)[0] : natural[0],
+                color_ovr ? (*color_ovr)[1] : natural[1],
+                color_ovr ? (*color_ovr)[2] : natural[2],
+                opacity_ovr ? *opacity_ovr : natural[3]});
         }
 
-        gl_->UseProgram(program_id);
+        // バッチ描画のためシェーダー別に収集する (複合は子の各型へ収集される)
+        for (const auto st : graphics->GetShaderTypes()) {
+            if (HasSpecificShaderCode(st) && shader_programs_.count(st) > 0) {
+                draw_list_[st].push_back(graphics);
+            }
+        }
+    }
 
-        // 共通のuniform変数を設定
+    for (const auto& child : node.GetChildAssemblies()) {
+        if (child) WalkAssembly(*child, accum, color_ovr, opacity_ovr);
+    }
+}
+
+void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
+    const auto view_matrix = camera_.GetViewMatrix();
+    const auto projection_matrix = camera_.GetProjectionMatrix(
+        static_cast<float>(display_width_) / display_height_);
+    const std::pair<float, float> viewport{
+        static_cast<float>(display_width_), static_cast<float>(display_height_)};
+
+    for (const auto& [shader_type, program_id] : shader_programs_) {
+        auto it = draw_list_.find(shader_type);
+        if (it == draw_list_.end() || it->second.empty()) continue;
+
+        gl_->UseProgram(program_id);
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "view"),
                               1, GL_FALSE, view_matrix.data());
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
@@ -493,33 +554,10 @@ void EntityRenderer::Draw() const {
                             1, light_.color.data());
         }
 
-        // 各エンティティを描画
-        DrawChildren(program_id, shader_type,
-                     std::pair<float, float>{display_width_, display_height_});
-    }
-}
-
-void EntityRenderer::DrawChildren(
-        GLuint program_id, const ShaderType shader_type,
-        const std::pair<float, float>& viewport) const {
-    // 対応するシェーダーコードを持たない場合は何もしない
-    if (!HasSpecificShaderCode(shader_type)) return;
-
-    // shader_typeの直接の子要素を描画
-    auto it = draw_objects_.find(shader_type);
-    if (it != draw_objects_.end()) {
-        for (const auto& [id, object] : it->second) {
-            object->Draw(program_id, shader_type, viewport);
-        }
-    }
-
-    // kCompositeな描画オブジェクトの子要素を描画
-    auto composite_it = draw_objects_.find(ShaderType::kComposite);
-    if (composite_it != draw_objects_.end()) {
-        for (const auto& [id, object] : composite_it->second) {
-            // 仮にshader_typeに対応する子要素がなければ何も実行されないため、
-            // objectがshader_typeに対応する子要素を持つかは確認しない
-            object->Draw(program_id, shader_type, viewport);
+        for (auto* graphics : it->second) {
+            if (graphics && graphics->IsDrawable()) {
+                graphics->Draw(program_id, shader_type, viewport, ctx);
+            }
         }
     }
 }
@@ -689,48 +727,6 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
         }
     }
     return result;
-}
-
-void EntityRenderer::Select(const ObjectID& id) {
-    if (IsSelected(id)) return;
-
-    auto* graphics = FindGraphics(id);
-    if (!graphics) return;  // 未登録のIDは選択しない
-
-    graphics->SetColor(kSelectionColor);
-    selected_ids_.push_back(id);
-}
-
-void EntityRenderer::Deselect(const ObjectID& id) {
-    auto it = std::find(selected_ids_.begin(), selected_ids_.end(), id);
-    if (it == selected_ids_.end()) return;
-
-    if (auto* graphics = FindGraphics(id)) {
-        graphics->ResetColor();  // 元のエンティティの色へ復帰
-    }
-    selected_ids_.erase(it);
-}
-
-void EntityRenderer::ToggleSelection(const ObjectID& id) {
-    if (IsSelected(id)) {
-        Deselect(id);
-    } else {
-        Select(id);
-    }
-}
-
-void EntityRenderer::ClearSelection() {
-    for (const auto& id : selected_ids_) {
-        if (auto* graphics = FindGraphics(id)) {
-            graphics->ResetColor();
-        }
-    }
-    selected_ids_.clear();
-}
-
-bool EntityRenderer::IsSelected(const ObjectID& id) const {
-    return std::find(selected_ids_.begin(), selected_ids_.end(), id)
-            != selected_ids_.end();
 }
 
 i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) const {

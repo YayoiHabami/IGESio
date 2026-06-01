@@ -12,7 +12,7 @@
 #include <utility>
 
 #include "igesio/entities/curves/composite_curve.h"
-#include "igesio/graphics/core/composite_entity_graphics.h"
+#include "igesio/graphics/core/entity_graphics.h"
 
 
 
@@ -20,7 +20,7 @@ namespace igesio::graphics {
 
 /// @brief CompositeCurveの描画用クラス
 class CompositeCurveGraphics
-    : public CompositeEntityGraphics<entities::CompositeCurve> {
+    : public EntityGraphics<entities::CompositeCurve> {
  public:
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
@@ -37,6 +37,11 @@ class CompositeCurveGraphics
 
     /// @brief テクスチャ用の描画リソースを同期する
     void SyncTexture() override;
+
+ protected:
+    /// @brief 描画の実装
+    /// @note 複合ノードは子要素経由で描画するため、自前の描画は行わない (空実装).
+    void DrawImpl(GLuint, const std::pair<float, float>&) const override {}
 };
 
 }  // namespace igesio::graphics

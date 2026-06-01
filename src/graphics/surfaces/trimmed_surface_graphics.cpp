@@ -290,7 +290,7 @@ void BuildTriangleIndices(
 igesio::graphics::TrimmedSurfaceGraphics::TrimmedSurfaceGraphics(
         const std::shared_ptr<const entities::TrimmedSurface> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, true) {
+        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true) {
     Synchronize();
 }
 

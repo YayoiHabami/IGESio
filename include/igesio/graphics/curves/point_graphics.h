@@ -29,7 +29,7 @@ namespace igesio::graphics {
 ///       点をSubfigure Definitionで定義された図形で描画する必要があるため、
 ///       独立した描画クラスを用意する.
 class PointGraphics
-    : public EntityGraphics<entities::Point, ShaderType::kPoint> {
+    : public EntityGraphics<entities::Point> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
     GLuint vbo_ = 0;

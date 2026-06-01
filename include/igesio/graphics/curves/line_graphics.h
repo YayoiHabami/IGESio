@@ -20,7 +20,7 @@ namespace igesio::graphics {
 
 /// @brief 線分/半直線の描画用クラス
 class SegmentGraphics
-    : public EntityGraphics<entities::Line, ShaderType::kSegment> {
+    : public EntityGraphics<entities::Line> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
     GLuint vbo_ = 0;
@@ -83,7 +83,7 @@ class SegmentGraphics
 
 /// @brief 直線の描画用クラス
 class LineGraphics
-    : public EntityGraphics<entities::Line, ShaderType::kLine> {
+    : public EntityGraphics<entities::Line> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
     GLuint vbo_ = 0;

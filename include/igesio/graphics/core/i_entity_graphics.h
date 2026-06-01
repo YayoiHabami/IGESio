@@ -22,6 +22,7 @@
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/material_property.h"
 #include "igesio/graphics/core/ray.h"
+#include "igesio/graphics/core/draw_context.h"
 
 
 
@@ -72,7 +73,7 @@ enum class ShaderType {
     kRationalBSplineSurface,
 
     /// @brief 複数のシェーダーを使用する
-    /// @note CompositeEntityGraphicsを継承したクラスで使用される.
+    /// @note 子要素(child_graphics_)を持つEntityGraphics(複合ノード)で使用される.
     ///       Composite Curveなど、複数の子要素を持ち、それぞれの子要素で
     ///       異なるシェーダーを使用する場合に使用される.
     kComposite,
@@ -119,6 +120,11 @@ struct SelectionSamples {
 
 /// @brief EntityGraphicsの型消去クラス
 /// @note すべての描画用クラスの基底クラス
+/// @note 責務は2フェーズに分かれる:
+///       - Build: `Synchronize`/`SyncTexture` がエンティティのジオメトリから
+///         GPUリソース (VAO/テクスチャ等) を構築する. ジオメトリ変更時に再実行可.
+///       - Draw: `Draw(..., ctx)` が `DrawContext` からPULLした表示状態 (変換・色・
+///         材質・選択ハイライト) を適用して描画する. 論理状態は保持しない.
 class IEntityGraphics {
  protected:
     /// @brief エンティティの色 (RGBA)
@@ -197,13 +203,17 @@ class IEntityGraphics {
     /// @param shader プログラムシェーダーのID
     /// @param shader_type 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
     /// @note shader_typeに合致する要素がない場合は何もしない
-    virtual void Draw(GLuint, const ShaderType, const std::pair<float, float>&) const = 0;
+    virtual void Draw(GLuint, const ShaderType, const std::pair<float, float>&,
+                      const DrawContext&) const = 0;
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    virtual void Draw(GLuint, const std::pair<float, float>&) const = 0;
+    /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
+    virtual void Draw(GLuint, const std::pair<float, float>&,
+                      const DrawContext&) const = 0;
 
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、

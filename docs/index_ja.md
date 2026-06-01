@@ -75,10 +75,17 @@
 
 - **[描画システム概要](graphics/overview.md)**
   - 描画システムの全体構成、`ShaderType`列挙体、描画フローの説明
+- **[描画システム クラスリファレンス](graphics/class_reference.md)**
+  - `IEntityGraphics`/`EntityRenderer`/`Scene`連携など描画関連クラスのメンバ一覧
 
 
 ### modelsモジュール
 
+- **[Assembly（エンティティの階層グルーピング）](models/assembly_ja.md)**
+  - エンティティの集合を担う`Assembly`クラスと、薄いラッパーへ縮退した`IgesData`の説明
+  - ツリー構造・所有と参照・構造編集・`Scene`との関係
+- **[座標フレームと変換ビュー](models/coordinate_frames_ja.md)**
+  - 配置を適用した幾何問い合わせ、`CoordFrame`、`CurveView`/`SurfaceView`、Flatten/Materialize
 - **[中間データ構造](intermediate_data_structure_ja.md)**: IGESファイル入出力時の中間データ構造
 
 ### numericsモジュール

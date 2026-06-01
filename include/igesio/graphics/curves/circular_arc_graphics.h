@@ -18,7 +18,7 @@ namespace igesio::graphics {
 
 /// @brief CircularArcエンティティの描画情報の管理クラス
 class CircularArcGraphics
-    : public EntityGraphics<entities::CircularArc, ShaderType::kCircularArc> {
+    : public EntityGraphics<entities::CircularArc> {
  public:
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
