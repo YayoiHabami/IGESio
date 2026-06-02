@@ -111,6 +111,22 @@ struct RawEntityPD {
 RawEntityPD
 ToRawEntityPD(const std::vector<std::string>&, const char, const char);
 
+/// @brief RawEntityPDを取得する (DEポインタ・シーケンス番号を呼び出し側が指定する版)
+/// @param lines 1レコード分の文字列を格納したベクタ
+/// @param p_delim パラメータ区切り文字
+/// @param r_delim レコード区切り文字
+/// @param de_pointer DEポインタ (lines[0]から抽出済みの既知値)
+/// @param sequence_number シーケンス番号 (lines[0]の末尾7桁の既知値)
+/// @return RawEntityPD構造体
+/// @throw igesio::LineFormatError 1行の長さが規定値以外の場合
+/// @throw igesio::SectionFormatError 与えられた文字列が自由形式として不正な場合
+/// @throw igesio::TypeConversionError エンティティタイプの変換に失敗した場合
+/// @note 読み込みのホットパス用. lines[0]からのDEポインタ/シーケンス番号の
+///       再抽出 (GetDEPointer/GetSequenceNumber) を省くためのオーバーロード.
+RawEntityPD
+ToRawEntityPD(const std::vector<std::string>&, const char, const char,
+              const unsigned int, const unsigned int);
+
 /// @brief パラメータデータセクションにおける、エンティティのパラメータの数を取得する
 /// @param type エンティティタイプ
 /// @param data エンティティタイプを除いた、パラメータ区切り文字で分割したパラメータ

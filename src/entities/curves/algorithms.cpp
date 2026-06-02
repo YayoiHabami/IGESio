@@ -71,9 +71,9 @@ i_ent::ComputeContainmentPolygons(
         const Vector3d& reference_normal,
         double curvature_eps,
         double distance_eps) {
-    auto circumscribed = ComputeCircumscribedPolygon(
-        curve, n_vert, reference_normal, curvature_eps);
-    auto inscribed = ComputeInscribedPolygon(
+    // 外包・内包は前段 (均等サンプリング・曲線プロパティ計算等) を共有して
+    // 一度に計算する (個別呼び出しと結果は一致)
+    auto [circumscribed, inscribed] = ComputeExtremalPolygonPair(
         curve, n_vert, reference_normal, curvature_eps);
     auto approximate = ComputeApproximatePolygon(
         curve, inscribed, circumscribed, distance_eps);

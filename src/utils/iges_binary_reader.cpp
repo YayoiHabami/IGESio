@@ -10,6 +10,7 @@
 #include <array>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "igesio/utils/iges_string_utils.h"
@@ -69,9 +70,10 @@ DetectLineBreakChar(const std::array<char, 2>& bytes, const std::size_t bytes_re
 /// @throw igesio::LineFormatError kMaxColumn+1文字目までに
 ///        改行文字が見つからなかった場合
 /// @note 改行文字の末端までfsを読込 (次のfs.get()で次の行の1文字目を取得可能)
-std::vector<char>
+std::string
 ReadToNextLineBreak(std::ifstream& fs, const std::vector<char>& line_break) {
-    std::vector<char> line = {};
+    std::string line;
+    line.reserve(iio::kMaxColumn);
     std::size_t pos = 0;
     char c;
     bool line_break_found = false;
@@ -107,21 +109,16 @@ ReadToNextLineBreak(std::ifstream& fs, const std::vector<char>& line_break) {
     if (!line_break_found) {
         if (fs.eof()) {
             // EOFに達している場合、ターミネートセクションであればエラーを出さない
-            std::string line_s(line.begin(), line.end());
             try {
-                auto section_type = i_util::GetSectionType(line_s);
-                if (section_type == SType::kTerminate) return line;
+                if (i_util::GetSectionType(line) == SType::kTerminate) return line;
             } catch (...) {}
             // 何らかのエラーが発生した場合は、以下のエラーを投げる
         }
 
         // kMaxColumn+1文字目までに改行文字が見つからなかった場合
-        // 末尾に\0を追加してエラー
-        line.push_back('\0');
         throw iio::LineFormatError(
             "The line break character was not found within " +
-            std::to_string(iio::kMaxColumn) + " characters: " +
-            line.data());
+            std::to_string(iio::kMaxColumn) + " characters: " + line);
     }
     return line;
 }
@@ -250,11 +247,10 @@ std::tuple<std::string, ::SType, unsigned int> IBReader::GetLine() {
 
     // 次の改行文字まで読み込む (必ずしもkMaxColumn文字ではない)
     try {
-        auto line_v = ReadToNextLineBreak(file_, line_break_);
-        std::string line(line_v.begin(), line_v.end());
+        std::string line = ReadToNextLineBreak(file_, line_break_);
 
         // セクションの型とシーケンス番号を取得する (同時に行数などもチェックされる)
-        auto section_type = i_util::GetSectionType(line, IsCompressed());
+        const auto section_type = i_util::GetSectionType(line, IsCompressed());
         unsigned int sequence_number = 0;
         if (section_type != SType::kData) {
             // 圧縮形式のデータセクション以外の場合はシーケンス番号を取得
@@ -264,7 +260,7 @@ std::tuple<std::string, ::SType, unsigned int> IBReader::GetLine() {
         // セクションの順序とシーケンス番号を更新する
         UpdateSectionInfo(section_type, sequence_number);
 
-        return {line, section_type, sequence_number};
+        return {std::move(line), section_type, sequence_number};
     } catch (const iio::LineFormatError& e) {
         has_error_occurred_ = true;
         throw e;

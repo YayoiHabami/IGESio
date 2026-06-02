@@ -12,6 +12,8 @@
 #ifndef SRC_ENTITIES_CURVES_ALGORITHMS_EXTREMAL_POLYGON_H_
 #define SRC_ENTITIES_CURVES_ALGORITHMS_EXTREMAL_POLYGON_H_
 
+#include <utility>
+
 #include "igesio/numerics/matrix.h"
 #include "igesio/numerics/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
@@ -51,6 +53,27 @@ numerics::PolygonData ComputeCircumscribedPolygon(
 /// @throws std::invalid_argument curve が閉曲線でない場合、自己交差が検出された場合
 /// @throws std::runtime_error 接線・曲率の計算に失敗した場合
 numerics::PolygonData ComputeInscribedPolygon(
+    const ICurve& curve,
+    int n_vert,
+    const Vector3d& reference_normal,
+    double eps = 1e-9);
+
+/// @brief 外包多角形と内包多角形を一度に計算する (前段の共有による高速化)
+///
+/// 外包/内包に依存しない前段 (均等サンプリング・曲線プロパティ計算・初期サンプル
+/// 点生成) を一度だけ実行し、外包・内包の両多角形を構築する.
+/// ComputeCircumscribedPolygon と ComputeInscribedPolygon を個別に呼んだ場合と
+/// 結果は一致するが、共有前段ぶん高速.
+///
+/// @param curve 対象の閉曲線 (自己交差なし). 角点を含んでもよい.
+/// @param n_vert 初期分割数 (実際の頂点数はこれより多くなる場合あり)
+/// @param reference_normal 曲線が乗る平面の法線ベクトル (正規化不要)
+/// @param eps 曲率判定の閾値
+/// @return {外包多角形, 内包多角形} の頂点データ
+/// @throws std::invalid_argument curve が閉曲線でない場合、自己交差が検出された場合
+/// @throws std::runtime_error 接線・曲率の計算に失敗した場合
+std::pair<numerics::PolygonData, numerics::PolygonData>
+ComputeExtremalPolygonPair(
     const ICurve& curve,
     int n_vert,
     const Vector3d& reference_normal,

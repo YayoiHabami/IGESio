@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "igesio/common/parallel.h"
 #include "igesio/entities/views/curve_view.h"
 #include "igesio/entities/views/surface_view.h"
 
@@ -165,6 +166,35 @@ void Assembly::SetPointerIfUnset(std::shared_ptr<entities::EntityBase> entity) {
             if (ptr == entity->GetID()) {
                 // entityへの参照ポインタを設定
                 ent->SetUnresolvedReference(entity);
+            }
+        }
+    }
+}
+
+void Assembly::AddEntities(
+        const std::vector<std::shared_ptr<entities::EntityBase>>& entities) {
+    // 事前にreserveしてリハッシュを抑える
+    entities_.reserve(entities_.size() + entities.size());
+
+    // まず全エンティティをマップとルート逆引きインデックスへ登録する
+    for (const auto& entity : entities) {
+        if (!entity) {
+            throw std::invalid_argument("Entity pointer is null");
+        }
+        const auto id = entity->GetID();
+        entities_[id] = entity;
+        RegisterInIndex(id, this);
+    }
+
+    // 全件登録後に参照解決を1回だけ行う (O(エンティティ数+参照数)).
+    // 各エンティティの未解決参照のうち、このノードが持つものを解決することで、
+    // 前方参照・後方参照の双方が一括で解決される. 1件ずつAddEntityを呼ぶ場合に
+    // 生じる挿入ごとの全件走査 (O(N^2)) を回避するための経路.
+    for (const auto& [id, ent] : entities_) {
+        for (const auto& rid : ent->GetUnresolvedReferences()) {
+            auto it = entities_.find(rid);
+            if (it != entities_.end()) {
+                ent->SetUnresolvedReference(it->second);
             }
         }
     }
@@ -664,4 +694,16 @@ Assembly::GetWorldBoundingBox() const {
     if (zero_axes >= 2) return std::nullopt;
 
     return numerics::BoundingBox(lo, hi);
+}
+
+void Assembly::PrepareGeometryCaches(const bool recursive) const {
+    // 自ノード(必要なら全子孫)のエンティティをフラットに収集する.
+    // 各PrepareGeometryCacheは互いに独立 (それぞれ自身のキャッシュのみ書き込む) なので、
+    // ロックなしで並列実行できる. ParallelForEachが戻る前に全ワーカーを待ち合わせる.
+    const auto entities = FindEntities(
+            [](const i_ent::EntityBase&) { return true; }, recursive);
+    igesio::ParallelForEach(
+            entities, [](const std::shared_ptr<i_ent::EntityBase>& e) {
+        e->PrepareGeometryCache();
+    });
 }

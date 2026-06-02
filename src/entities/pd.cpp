@@ -50,14 +50,16 @@ i_ent::RawEntityPD::RawEntityPD(
     : type(other.type),
       de_pointer(other.de_pointer),
       sequence_number(other.sequence_number),
-      data(other.data) {}
+      data(other.data),
+      data_types(other.data_types) {}
 
 i_ent::RawEntityPD::RawEntityPD(
         RawEntityPD&& other) noexcept
     : type(other.type),
       de_pointer(other.de_pointer),
       sequence_number(other.sequence_number),
-      data(std::move(other.data)) {}
+      data(std::move(other.data)),
+      data_types(std::move(other.data_types)) {}
 
 i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
         const RawEntityPD& other) {
@@ -66,6 +68,7 @@ i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
         de_pointer = other.de_pointer;
         sequence_number = other.sequence_number;
         data = other.data;
+        data_types = other.data_types;
     }
     return *this;
 }
@@ -77,6 +80,7 @@ i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
         de_pointer = other.de_pointer;
         sequence_number = other.sequence_number;
         data = std::move(other.data);
+        data_types = std::move(other.data_types);
     }
     return *this;
 }
@@ -85,31 +89,20 @@ i_ent::RawEntityPD& i_ent::RawEntityPD::operator=(
 
 i_ent::RawEntityPD i_ent::ToRawEntityPD(
         const std::vector<std::string>& lines,
-        const char p_delim, const char r_delim) {
-    i_ent::RawEntityPD ep;
-
-    // シーケンス番号を取得
-    auto sequence_number = iu::GetSequenceNumber(lines[0]);
-    // DEポインタを取得
-    auto de_pointer = iu::GetDEPointer(lines[0]);
-
-    // 各行のデータ部のみを取得
-    std::vector<std::string> data_lines {};
-    for (const auto& line : lines) {
-        // データ部のみを取得し、追加
-        std::string data = iu::GetDataPart(line, SectionType::kParameter);
-        data_lines.push_back(data);
-    }
-    // データ部をパラメータ区切り文字で分割
+        const char p_delim, const char r_delim,
+        const unsigned int de_pointer, const unsigned int sequence_number) {
+    // データ部 (各行の先頭kColDEPointer-1文字) をパラメータ区切り文字で分割する.
+    // 生の行をそのまま渡し、ParseFreeFormattedData内で切り詰めることで、
+    // 行ごとの部分文字列確保 (GetDataPart) を避ける.
     std::vector<std::string> data = iu::ParseFreeFormattedData(
-            data_lines, p_delim, r_delim);
+            lines, p_delim, r_delim, iio::kColDEPointer - 1);
 
     // エンティティタイプを取得
     auto type = i_ent::ToEntityType(std::stoi(data[0]));
     if (!type.has_value()) {
         throw iio::TypeConversionError(
                 "Invalid entity type: " + std::to_string(std::stoi(data[0])) +
-                " on line " + std::to_string(ep.sequence_number) +
+                " on line " + std::to_string(sequence_number) +
                 " of the Parameter Data section");
     }
 
@@ -117,6 +110,15 @@ i_ent::RawEntityPD i_ent::ToRawEntityPD(
         type.value(), de_pointer, sequence_number,
         // 1つ目の要素はエンティティタイプなので除外
         std::vector<std::string>(data.begin() + 1, data.end()));
+}
+
+i_ent::RawEntityPD i_ent::ToRawEntityPD(
+        const std::vector<std::string>& lines,
+        const char p_delim, const char r_delim) {
+    // lines[0]からDEポインタ・シーケンス番号を抽出して5引数版へ委譲する
+    return ToRawEntityPD(lines, p_delim, r_delim,
+                         iu::GetDEPointer(lines[0]),
+                         iu::GetSequenceNumber(lines[0]));
 }
 
 
@@ -255,9 +257,82 @@ std::vector<unsigned int> i_ent::GetChildDEPointer(
     }
 }
 
+namespace {
+
+/// @brief パラメータ文字列の推定型
+enum class ParamKind { kInteger, kReal, kString, kLanguage };
+
+/// @brief パラメータ文字列の内容から型を1パスで推定する
+/// @param str 非空のパラメータ文字列
+/// @return 推定した型
+/// @note 'H'を含めばString、'.'/'E'/'D'を含めばReal、数字と符号のみならInteger、
+///       それ以外はLanguageと推定する. 推定が外れても結果は呼び出し側の
+///       フォールバックで正される (誤推定時のみ無駄な例外が1回生じる).
+ParamKind ClassifyParameter(const std::string& str) {
+    bool has_real_marker = false;  // '.'/'E'/'D'のいずれかを含むか
+    bool only_int_chars = true;    // 数字・符号・空白のみで構成されるか
+    for (const char c : str) {
+        if (c == 'H') return ParamKind::kString;
+        if (c == '.' || c == 'E' || c == 'D') {
+            has_real_marker = true;
+        } else if (!(c >= '0' && c <= '9') && c != '+' && c != '-' && c != ' ') {
+            only_int_chars = false;
+        }
+    }
+    if (has_real_marker) return ParamKind::kReal;
+    if (only_int_chars) return ParamKind::kInteger;
+    return ParamKind::kLanguage;
+}
+
+/// @brief 整数への変換を試み、成功すればparamsへ追加する
+/// @param[out] params 追加先のパラメータベクタ
+/// @param str 変換する文字列
+/// @return 変換に成功した場合true、失敗した場合false
+bool TryAppendInteger(igesio::IGESParameterVector& params, const std::string& str) {
+    try {
+        auto [value, format] = igesio::FromIgesIntegerWithFormat(str, std::nullopt);
+        params.push_back(value, format);
+        return true;
+    } catch (const igesio::TypeConversionError&) {
+        return false;
+    }
+}
+
+/// @brief 実数への変換を試み、成功すればparamsへ追加する
+/// @param[out] params 追加先のパラメータベクタ
+/// @param str 変換する文字列
+/// @return 変換に成功した場合true、失敗した場合false
+bool TryAppendReal(igesio::IGESParameterVector& params, const std::string& str) {
+    try {
+        auto [value, format] = igesio::FromIgesRealWithFormat(str, std::nullopt);
+        params.push_back(value, format);
+        return true;
+    } catch (const igesio::TypeConversionError&) {
+        return false;
+    }
+}
+
+/// @brief 文字列(H付)への変換を試み、成功すればparamsへ追加する
+/// @param[out] params 追加先のパラメータベクタ
+/// @param str 変換する文字列
+/// @return 変換に成功した場合true、失敗した場合false
+bool TryAppendString(igesio::IGESParameterVector& params, const std::string& str) {
+    try {
+        auto [value, format] = igesio::FromIgesStringWithFormat(str, std::nullopt);
+        params.push_back(value, format);
+        return true;
+    } catch (const igesio::TypeConversionError&) {
+        return false;
+    }
+}
+
+}  // namespace
+
 igesio::IGESParameterVector
 i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
     IGESParameterVector params;
+    // パラメータ数は既知なので事前にreserveし、成長時の再確保を避ける
+    params.reserve(pd.data.size());
     for (const auto& str : pd.data) {
         if (str.empty()) {
             // 空のパラメータの場合は、とりあえずStringのデフォルト値を追加
@@ -266,26 +341,28 @@ i_ent::ToIGESParameterVector(const RawEntityPD& pd) {
             continue;
         }
 
-        try {  // 整数型への変換を試みる
-            auto [value, format] = igesio::FromIgesIntegerWithFormat(str, std::nullopt);
-            params.push_back(value, format);
-            continue;
-        } catch (const igesio::TypeConversionError&) {}
-
-        try {  // 実数型への変換を試みる
-            auto [value, format] = igesio::FromIgesRealWithFormat(str, std::nullopt);
-            params.push_back(value, format);
-            continue;
-        } catch (const igesio::TypeConversionError&) {}
-
-        try {  // 文字列型への変換を試みる
-            auto [value, format] = igesio::FromIgesStringWithFormat(str, std::nullopt);
-            params.push_back(value, format);
-            continue;
-        } catch (const igesio::TypeConversionError&) {}
-
-        auto [value, format] = igesio::FromIgesLanguageWithFormat(str, std::nullopt);
-        params.push_back(value, format);
+        // 内容から型を推定し、推定した型から順に変換を試みる.
+        // 推定が正しければ最初の試行で成功し、実数・文字列を整数として試す
+        // 従来の例外駆動判定で生じていた無駄なthrowを回避する.
+        // フォールスルー順は従来同様 整数→実数→文字列→Languageを維持する.
+        // 推定でスキップする変換は当該入力では必ず失敗するため、結果は不変.
+        switch (ClassifyParameter(str)) {
+            case ParamKind::kInteger:
+                if (TryAppendInteger(params, str)) continue;
+                [[fallthrough]];
+            case ParamKind::kReal:
+                if (TryAppendReal(params, str)) continue;
+                [[fallthrough]];
+            case ParamKind::kString:
+                if (TryAppendString(params, str)) continue;
+                [[fallthrough]];
+            case ParamKind::kLanguage:
+            default: {
+                auto [value, format] = igesio::FromIgesLanguageWithFormat(
+                        str, std::nullopt);
+                params.push_back(value, format);
+            }
+        }
     }
 
     return params;
