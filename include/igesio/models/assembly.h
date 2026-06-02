@@ -237,6 +237,16 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
         return id;
     }
 
+    /// @brief 複数のエンティティを一括で追加する
+    /// @param entities 追加するエンティティの配列
+    /// @throw std::invalid_argument いずれかのエンティティがnullptrの場合
+    /// @note 全エンティティをマップとルート逆引きインデックスへ登録した後、
+    ///       参照解決を1回だけ行う. 1件ずつ`AddEntity`を呼ぶ場合に生じる挿入
+    ///       ごとの全件走査 (O(N^2)) を回避し、O(エンティティ数+参照数)で完了する.
+    ///       多数のエンティティをまとめて読み込む場合に使用する.
+    void AddEntities(
+            const std::vector<std::shared_ptr<entities::EntityBase>>&);
+
     /// @brief エンティティが参照する全てのエンティティのポインタが設定済みか
     /// @return 一つでも未設定のポインタがある場合は`false`
     /// @note Directory Entry フィールド関連のメンバも含む. このノードのみを対象とする.
@@ -507,6 +517,15 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @note ワールド空間(このノードを含むルートまでの全大域変換を適用)で計算する.
     ///       幾何かつ物理従属でないメンバのみを対象とし、退化BBは既存ガードに倣って除外する.
     std::optional<numerics::BoundingBox> GetWorldBoundingBox() const;
+
+    /// @brief 子孫エンティティの遅延幾何キャッシュを並列に事前構築する
+    /// @param recursive trueの場合は全子孫を含める (デフォルト: true)
+    /// @note 各エンティティのEntityBase::PrepareGeometryCache()を1回ずつ呼ぶ
+    ///       (TrimmedSurfaceの領域判定キャッシュ等). 重い遅延計算を描画/クエリ前に
+    ///       まとめて済ませるための一括処理. 読み込み・構造編集 (キャッシュを無効化する
+    ///       Set/Add/Remove系) が完了し、並列読み取りを始める前に1回呼ぶこと.
+    ///       本メソッドは内部で全ワーカーを待ち合わせてから返る.
+    void PrepareGeometryCaches(bool recursive = true) const;
 };
 
 }  // namespace igesio::models

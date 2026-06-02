@@ -64,13 +64,22 @@ project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Threads (std::thread/std::async backend for igesio/common/parallel.h).
+# Links pthread on Linux (GCC/Clang); a no-op on MSVC and macOS.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 # Option to enable coverage
 option(IGESIO_ENABLE_COVERAGE "Enable coverage reporting" OFF)
 
 # Coverage configuration
 if(IGESIO_ENABLE_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        add_compile_options(--coverage)
+        # -fprofile-update=atomic makes gcov counter increments atomic, which is
+        # required because the read pipeline runs instrumented code on multiple
+        # threads; the default (single) update mode races and produces corrupted
+        # (negative) counts that lcov/geninfo rejects.
+        add_compile_options(--coverage -fprofile-update=atomic)
         add_link_options(--coverage)
         message(STATUS "Coverage reporting enabled")
     else()

@@ -16,6 +16,10 @@ target_include_directories(igesio_common PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
+# Link Threads (std::async/std::thread backend for common/parallel.h).
+# PUBLIC so every library that depends on IGESio::common transitively links it.
+target_link_libraries(igesio_common PUBLIC Threads::Threads)
+
 # Handle Eigen dependency if enabled
 if(IGESIO_ENABLE_EIGEN)
     target_link_libraries(igesio_common PUBLIC

@@ -487,8 +487,12 @@ void TrimmedSurface::RemoveInnerBoundaryAt(size_t index) {
 
 
 /**
- * private methods
+ * キャッシュの構築
  */
+
+void TrimmedSurface::PrepareGeometryCache() const {
+    BuildDomainCache();
+}
 
 void TrimmedSurface::BuildDomainCache() const {
     if (domain_cache_) return;

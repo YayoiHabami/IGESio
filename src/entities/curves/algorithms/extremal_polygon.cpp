@@ -1006,6 +1006,130 @@ std::vector<double> FindContainmentViolations(
 // 主関数
 // ===========================================================================
 
+/// @brief 外包/内包多角形で共有できる前段の計算結果
+/// @note circumscribed に依存しない値をまとめ、外包・内包で再計算を避ける.
+struct ExtremalPolygonSharedData {
+    /// @brief パラメータ範囲の下限
+    double t0 = 0.0;
+    /// @brief パラメータ範囲の上限
+    double t1 = 0.0;
+    /// @brief パラメータ範囲の幅 (t1 - t0)
+    double period = 0.0;
+    /// @brief 均等分割されたパラメータ値列
+    std::vector<double> t_uniform;
+    /// @brief 向き符号 (符号付き面積の符号)
+    double orient_sign = 1.0;
+    /// @brief 含有検証用の平面基底 (u 軸)
+    Vector3d plane_u = Vector3d::Zero();
+    /// @brief 含有検証用の平面基底 (v 軸)
+    Vector3d plane_v = Vector3d::Zero();
+    /// @brief 曲線領域 (均等点の2次元射影)
+    std::vector<std::array<double, 2>> region2d;
+    /// @brief 多角形構築のための初期サンプル点 (パラメータ値列)
+    std::vector<double> ts_initial;
+};
+
+/// @brief 外包/内包多角形で共有する前段 (circumscribed 非依存) を計算する
+///
+/// @param curve 対象の閉曲線 (自己交差なし)
+/// @param n_vert 初期分割数
+/// @param normal 平面の参照法線ベクトル
+/// @return 共有前段データ
+/// @throws std::invalid_argument n_vert が 3 未満の場合
+ExtremalPolygonSharedData PrepareExtremalPolygonData(
+        const i_ent::ICurve& curve,
+        int n_vert,
+        const Vector3d& normal) {
+    if (n_vert < 3) {
+        throw std::invalid_argument(
+            "n_vert は 3 以上でなければなりません。n_vert: "
+            + std::to_string(n_vert));
+    }
+
+    // 均等サンプリング (CheckCurveProperties と FindCurvatureExtrema で共用)
+    constexpr int kNInit = 500;
+    ExtremalPolygonSharedData s;
+    const auto [t0, t1] = curve.GetParameterRange();
+    s.t0 = t0;
+    s.t1 = t1;
+    s.period = t1 - t0;
+
+    s.t_uniform.resize(kNInit);
+    std::vector<Vector3d> pts_uniform(kNInit);
+    for (int i = 0; i < kNInit; ++i) {
+        s.t_uniform[i] = t0 + s.period * i / kNInit;
+        pts_uniform[i] = curve.GetPointAt(s.t_uniform[i]);
+    }
+
+    // 閉曲線チェック・向き符号計算・自己交差チェック
+    s.orient_sign = CheckCurveProperties(curve, pts_uniform, normal);
+
+    // 含有検証用の平面基底と曲線領域(均等点の射影)を用意する
+    const auto [u, v] = BuildPlaneBasis(normal);
+    s.plane_u = u;
+    s.plane_v = v;
+    s.region2d.resize(kNInit);
+    for (int i = 0; i < kNInit; ++i) {
+        s.region2d[i] = ProjectTo2D(pts_uniform[i], u, v);
+    }
+
+    // 多角形構築のためのサンプル点を生成する
+    s.ts_initial = SamplePoints(curve, normal, s.t_uniform, n_vert).first;
+
+    return s;
+}
+
+/// @brief 共有前段をもとに外包/内包多角形を細分しながら構築する
+///
+/// @param curve 対象の閉曲線
+/// @param circumscribed 外包なら true, 内包なら false
+/// @param normal 平面の参照法線ベクトル
+/// @param eps 曲率判定の閾値
+/// @param s 共有前段 (PrepareExtremalPolygonData の結果)
+/// @return 多角形データ
+i_num::PolygonData RefineExtremalPolygon(
+        const i_ent::ICurve& curve,
+        bool circumscribed,
+        const Vector3d& normal,
+        double eps,
+        const ExtremalPolygonSharedData& s) {
+    // 含有不変条件を満たすまで、違反点をサンプルに追加して再構築する。
+    // (案A: 分類/構成が不変条件を満たすことを仮定せず、構築後に強制する。
+    //  これにより変曲点・接合コーナー・粗標本化に起因する内包性違反を解消する。)
+    constexpr int kMaxRefine = 6;
+    constexpr double kViolationEps = 1e-7;
+    // 細分は外包・内包で独立に行うため、初期サンプルをコピーして用いる
+    std::vector<double> ts = s.ts_initial;
+    i_num::PolygonData polygon;
+    for (int iter = 0; ; ++iter) {
+        std::vector<Vector3d> pts;
+        pts.reserve(ts.size());
+        // tは曲率極値・違反点由来で [t0, t1] を僅かに外れ得るためクランプする
+        for (double t : ts) {
+            pts.push_back(curve.GetPointAt(std::clamp(t, s.t0, s.t1)));
+        }
+
+        // 各点を頂点/接点に分類し、多角形を構築・重複除去する
+        const auto is_contact = ClassifyPoints(
+            curve, ts, circumscribed, normal, s.orient_sign, eps);
+        polygon = DedupPolygon(
+            BuildPolygonVertices(curve, ts, pts, is_contact, normal));
+
+        if (iter >= kMaxRefine) break;
+
+        // 含有違反を検出し、違反があれば違反点をサンプルへ追加して再試行する
+        const auto extra = FindContainmentViolations(
+            polygon, circumscribed, s.plane_u, s.plane_v, s.t_uniform,
+            s.region2d, s.period, s.t1, kViolationEps);
+        if (extra.empty()) break;
+
+        ts.insert(ts.end(), extra.begin(), extra.end());
+        ts = Dedup(ts, curve.IsClosed(), s.period, 1e-6);
+    }
+
+    return polygon;
+}
+
 /// @brief 外包/内包多角形の頂点列を計算する内部実装
 ///
 /// @param curve 対象の閉曲線 (自己交差なし)
@@ -1020,70 +1144,9 @@ i_num::PolygonData ComputeExtremalPolygon(
         bool circumscribed,
         const Vector3d& normal,
         double eps) {
-    if (n_vert < 3) {
-        throw std::invalid_argument(
-            "n_vert は 3 以上でなければなりません。n_vert: "
-            + std::to_string(n_vert));
-    }
-
-    // 均等サンプリング (CheckCurveProperties と FindCurvatureExtrema で共用)
-    constexpr int kNInit = 500;
-    const auto [t0, t1] = curve.GetParameterRange();
-    const double period = t1 - t0;
-
-    std::vector<double> t_uniform(kNInit);
-    std::vector<Vector3d> pts_uniform(kNInit);
-    for (int i = 0; i < kNInit; ++i) {
-        t_uniform[i] = t0 + period * i / kNInit;
-        pts_uniform[i] = curve.GetPointAt(t_uniform[i]);
-    }
-
-    // 閉曲線チェック・向き符号計算・自己交差チェック
-    const double orient_sign = CheckCurveProperties(
-        curve, pts_uniform, normal);
-
-    // 含有検証用の平面基底と曲線領域(均等点の射影)を用意する
-    const auto [u, v] = BuildPlaneBasis(normal);
-    std::vector<std::array<double, 2>> region2d(kNInit);
-    for (int i = 0; i < kNInit; ++i) {
-        region2d[i] = ProjectTo2D(pts_uniform[i], u, v);
-    }
-
-    // 多角形構築のためのサンプル点を生成する
-    std::vector<double> ts = SamplePoints(
-        curve, normal, t_uniform, n_vert).first;
-
-    // 含有不変条件を満たすまで、違反点をサンプルに追加して再構築する。
-    // (案A: 分類/構成が不変条件を満たすことを仮定せず、構築後に強制する。
-    //  これにより変曲点・接合コーナー・粗標本化に起因する内包性違反を解消する。)
-    constexpr int kMaxRefine = 6;
-    constexpr double kViolationEps = 1e-7;
-    i_num::PolygonData polygon;
-    for (int iter = 0; ; ++iter) {
-        std::vector<Vector3d> pts;
-        pts.reserve(ts.size());
-        // tは曲率極値・違反点由来で [t0, t1] を僅かに外れ得るためクランプする
-        for (double t : ts) pts.push_back(curve.GetPointAt(std::clamp(t, t0, t1)));
-
-        // 各点を頂点/接点に分類し、多角形を構築・重複除去する
-        const auto is_contact = ClassifyPoints(
-            curve, ts, circumscribed, normal, orient_sign, eps);
-        polygon = DedupPolygon(
-            BuildPolygonVertices(curve, ts, pts, is_contact, normal));
-
-        if (iter >= kMaxRefine) break;
-
-        // 含有違反を検出し、違反があれば違反点をサンプルへ追加して再試行する
-        const auto extra = FindContainmentViolations(
-            polygon, circumscribed, u, v, t_uniform, region2d,
-            period, t1, kViolationEps);
-        if (extra.empty()) break;
-
-        ts.insert(ts.end(), extra.begin(), extra.end());
-        ts = Dedup(ts, curve.IsClosed(), period, 1e-6);
-    }
-
-    return polygon;
+    const ExtremalPolygonSharedData s =
+        PrepareExtremalPolygonData(curve, n_vert, normal);
+    return RefineExtremalPolygon(curve, circumscribed, normal, eps, s);
 }
 
 }  // namespace
@@ -1108,6 +1171,22 @@ i_num::PolygonData ComputeInscribedPolygon(
         double eps) {
     return ComputeExtremalPolygon(
         curve, n_vert, /*circumscribed=*/false, reference_normal, eps);
+}
+
+std::pair<i_num::PolygonData, i_num::PolygonData>
+ComputeExtremalPolygonPair(
+        const ICurve& curve,
+        int n_vert,
+        const Vector3d& reference_normal,
+        double eps) {
+    // 外包/内包に依存しない前段を一度だけ計算して共有する
+    const ExtremalPolygonSharedData s =
+        PrepareExtremalPolygonData(curve, n_vert, reference_normal);
+    i_num::PolygonData circumscribed = RefineExtremalPolygon(
+        curve, /*circumscribed=*/true, reference_normal, eps, s);
+    i_num::PolygonData inscribed = RefineExtremalPolygon(
+        curve, /*circumscribed=*/false, reference_normal, eps, s);
+    return {std::move(circumscribed), std::move(inscribed)};
 }
 
 }  // namespace igesio::entities
