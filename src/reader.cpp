@@ -8,10 +8,13 @@
 #include "igesio/reader.h"
 
 #include <array>
+#include <cstdlib>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <tuple>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "igesio/utils/iges_string_utils.h"
@@ -181,6 +184,8 @@ iio::IgesReader::ReadParameterDataRecord() {
 
     // DEポインタを取得
     auto de_pointer = i_util::GetDEPointer(std::get<0>(line.value()));
+    // シーケンス番号はGetLineが算出済み (末尾7桁) なので再抽出しない
+    const unsigned int sequence_number = std::get<2>(line.value());
 
     // データ部を取得
     std::vector<std::string> lines = {std::get<0>(line.value())};
@@ -204,8 +209,10 @@ iio::IgesReader::ReadParameterDataRecord() {
     // データが取得できない場合は終了
     if (lines.empty()) return std::nullopt;
 
+    // 既知のDEポインタ・シーケンス番号を渡し、lines[0]からの再抽出を省く
     return i_ent::ToRawEntityPD(
-            lines, parameter_delimiter_, record_delimiter_);
+            lines, parameter_delimiter_, record_delimiter_,
+            de_pointer, sequence_number);
 }
 
 std::optional<std::array<unsigned int, 4>>
@@ -305,10 +312,13 @@ i_model::IntermediateIgesData igesio::ReadIgesIntermediate(
     }
 
     // パラメータデータセクションを読み込む
+    // PDレコード数はDEレコード数と一致するため事前にreserveする
+    data.parameter_data_section.reserve(data.directory_entry_section.size());
     while (true) {
         auto pd = reader.ReadParameterDataRecord();
         if (!pd.has_value()) break;  // std::nulloptの場合は終了
-        data.parameter_data_section.push_back(pd.value());
+        // RawEntityPDをムーブして格納し、全パラメータ文字列の複製を避ける
+        data.parameter_data_section.push_back(std::move(*pd));
     }
 
     // ターミネートセクションを読み込む
@@ -372,7 +382,8 @@ void ReconstructOmittedBaseCurves(i_model::Assembly& root) {
 
 
 i_model::IgesData igesio::ConvertFromIntermediate(
-        const models::IntermediateIgesData& intermediate) {
+        const models::IntermediateIgesData& intermediate,
+        const bool prepare_caches) {
     i_model::IgesData iges;
     iges.description = intermediate.start_section;
     iges.global_section = intermediate.global_section;
@@ -403,29 +414,40 @@ i_model::IgesData igesio::ConvertFromIntermediate(
                 iges_id, static_cast<uint16_t>(de.entity_type), de_pointer);
     }
 
-    // DEとPDを組み合わせてエンティティを生成し、IgesDataに追加
+    // PDのシーケンス番号からインデックスを引く対応表をO(N)で構築する
+    // (重複シーケンス番号は先頭を優先し、現行のfind_ifと同一挙動とする)
+    std::unordered_map<unsigned int, std::size_t> pd_seq_to_index;
+    pd_seq_to_index.reserve(intermediate.parameter_data_section.size());
+    for (std::size_t i = 0; i < intermediate.parameter_data_section.size(); ++i) {
+        pd_seq_to_index.emplace(
+                intermediate.parameter_data_section[i].sequence_number, i);
+    }
+
+    // 生成したエンティティを一旦集め、ループ後に一括登録する
+    // (1件ずつAddEntityすると内部の参照解決がO(N^2)になるため)
+    std::vector<std::shared_ptr<entities::EntityBase>> created;
+    created.reserve(intermediate.directory_entry_section.size());
+
+    // DEとPDを組み合わせてエンティティを生成する
     for (const auto& de : intermediate.directory_entry_section) {
-        // pd_pointerとシーケンス番号が一致するPDを探す
+        // pd_pointerとシーケンス番号が一致するPDを直接引く
         auto pd_pointer = de.parameter_data_pointer;
-        auto pd_it = std::find_if(
-                intermediate.parameter_data_section.begin(),
-                intermediate.parameter_data_section.end(),
-                [pd_pointer](const entities::RawEntityPD& pd) {
-                    return pd.sequence_number == pd_pointer;
-                });
-        if (pd_it == intermediate.parameter_data_section.end()) {
+        auto pd_it = pd_seq_to_index.find(pd_pointer);
+        if (pd_it == pd_seq_to_index.end()) {
             throw iio::DataFormatError(
                     "Parameter data record with pointer " +
                     std::to_string(pd_pointer) +
                     " not found for directory entry with sequence number " +
                     std::to_string(de.sequence_number) + ".");
         }
-        auto pd = *pd_it;
+        const auto& pd = intermediate.parameter_data_section[pd_it->second];
 
         // DEとPDを組み合わせてエンティティを生成
+        // (内訳計測のためToIGESParameterVectorとCreateEntityを分けて呼ぶ)
         try {
-            auto entity = entities::EntityFactory::CreateEntity(de, pd, de2id, iges_id);
-            iges.Root().AddEntity(entity);
+            auto entity = entities::EntityFactory::CreateEntity(
+                    de, entities::ToIGESParameterVector(pd), de2id, iges_id);
+            created.push_back(std::move(entity));
         } catch (const std::out_of_range& e) {
             // エンティティがIGESファイル内に存在しないエンティティを参照している場合
             throw iio::DataFormatError(
@@ -443,6 +465,9 @@ i_model::IgesData igesio::ConvertFromIntermediate(
         }
     }
 
+    // 生成した全エンティティを一括登録する (参照解決は内部で1回だけ行われる)
+    iges.Root().AddEntities(created);
+
     // ベース曲線Bが省略されたType 142 (CATIA等) について、参照解決済みの
     // モデル空間曲線Cと曲面SからB = S^{-1}∘Cを再構築する.
     ReconstructOmittedBaseCurves(iges.Root());
@@ -450,14 +475,20 @@ i_model::IgesData igesio::ConvertFromIntermediate(
     // 読み込んだエンティティから初期ツリー(子Assembly階層)を導出する
     BuildInitialTree(iges.Root());
 
+    if (prepare_caches) {
+        // エンティティのキャッシュを事前構築する
+        iges.Root().PrepareGeometryCaches(true);
+    }
+
     return iges;
 }
 
 i_model::IgesData igesio::ReadIges(const std::string& file_path,
-                                   const bool validate_strictly) {
+                                   const bool validate_strictly,
+                                   const bool prepare_caches) {
     // IGESファイルを読み込み、中間データ構造を生成
     auto intermediate = ReadIgesIntermediate(file_path, validate_strictly);
 
     // 中間データ構造からIgesDataクラスを生成
-    return ConvertFromIntermediate(intermediate);
+    return ConvertFromIntermediate(intermediate, prepare_caches);
 }

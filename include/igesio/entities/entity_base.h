@@ -445,6 +445,12 @@ class EntityBase : public virtual IEntityIdentifier {
         return nullptr;
     }
 
+    /// @brief 幾何計算用の遅延キャッシュを事前構築する
+    /// @note 既定では何もしない。遅延キャッシュを持つエンティティ (TrimmedSurface等) が
+    ///       オーバーライドして事前計算を行う。並列実行から1エンティティにつき1回だけ
+    ///       呼ばれる前提とする (同一エンティティへの同時呼び出しは想定しない)。
+    virtual void PrepareGeometryCache() const {}
+
     /// @brief エンティティが参照する全てのエンティティのIDを取得する
     /// @return 参照する全てのエンティティのID
     /// @note Directory Entry フィールド関連のメンバも含む

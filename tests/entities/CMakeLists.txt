@@ -24,6 +24,7 @@ set(TEST_SOURCES
     curves/test_signed_curvature.cpp
     curves/test_curve_line_intersection.cpp
     curves/algorithms/test_extremal_polygon.cpp
+    curves/algorithms/test_polygonal_approximation.cpp
 
     # Structures
     structures/test_color_definition.cpp

@@ -6,7 +6,7 @@
  * @copyright 2026 Yayoi Habami
  *
  * テスト対象 (Assembly):
- *   - エンティティ管理: AddEntity / GetEntity / GetEntityCount /
+ *   - エンティティ管理: AddEntity / AddEntities / GetEntity / GetEntityCount /
  *                       AreAllReferencesSet / GetUnresolvedReferences /
  *                       IsReady / Validate
  *   - ツリー: AddChildAssembly / GetParent / GetChildAssemblies / Root /
@@ -222,6 +222,118 @@ TEST_F(AssemblyTest, References_ResolveRegardlessOfAddOrder) {
         backward.AddEntity(*it);
     }
     EXPECT_TRUE(backward.AreAllReferencesSet());
+}
+
+
+
+/**
+ * エンティティ管理 (AddEntities: 一括追加)
+ *
+ * NOTE: Entities()はAddEntities経由でロード済み(reader.cpp)であり、各エンティティの
+ *       参照ポインタは設定済みである。そのためAddEntities内部の参照解決ループ自体は
+ *       no-opとなり、ここで検証するのはAssemblyの未解決判定(メンバシップ条件)という
+ *       観測可能な契約である。AddEntityループとの等価性(MatchesPerEntityAddEntity)が
+ *       最も強い保証となる。
+ */
+
+// 全件を一括追加すると、件数と各GetEntityが整合する
+TEST_F(AssemblyTest, AddEntities_StoresAllAndIsCountConsistent) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+
+    Assembly node;
+    node.AddEntities(ents);
+    EXPECT_EQ(node.GetEntityCount(), ents.size());
+    for (const auto& e : ents) {
+        EXPECT_EQ(node.GetEntity(e->GetID()), e);
+    }
+}
+
+// 相互参照する全件を一括追加すると、全参照が解決する
+TEST_F(AssemblyTest, AddEntities_ResolvesAllReferences) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+
+    Assembly node;
+    node.AddEntities(ents);
+    EXPECT_TRUE(node.AreAllReferencesSet());
+    EXPECT_TRUE(node.GetUnresolvedReferences().empty());
+}
+
+// 参照先が参照元より後ろに来る並び(前方参照を含む)でも、1パスで双方向に解決する
+TEST_F(AssemblyTest, AddEntities_ResolvesForwardAndBackwardReferences) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    // ベクタを逆順にし、前方参照を含む並びにする (バッチ解決の順序非依存を確認)
+    std::vector<EntityPtr> reversed(ents.rbegin(), ents.rend());
+
+    Assembly node;
+    node.AddEntities(reversed);
+    EXPECT_TRUE(node.AreAllReferencesSet());
+    EXPECT_TRUE(node.GetUnresolvedReferences().empty());
+}
+
+// 同じ集合をAddEntitiesとAddEntityループで追加した結果が一致する (Option Bの肝)
+TEST_F(AssemblyTest, AddEntities_MatchesPerEntityAddEntity) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+
+    Assembly batch;
+    batch.AddEntities(ents);
+
+    Assembly loop;
+    for (const auto& e : ents) loop.AddEntity(e);
+
+    EXPECT_EQ(batch.GetEntityCount(), loop.GetEntityCount());
+    EXPECT_EQ(batch.AreAllReferencesSet(), loop.AreAllReferencesSet());
+    EXPECT_EQ(batch.GetUnresolvedReferences(), loop.GetUnresolvedReferences());
+}
+
+// 一括追加後、ルート逆引きインデックスが機能する (RegisterInIndex実行の確認)
+TEST_F(AssemblyTest, AddEntities_RegistersInRootIndex) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto pair = FindReferencingPair(data_->Root());
+    ASSERT_TRUE(pair.has_value());
+
+    Assembly node;
+    node.AddEntities(ents);
+
+    // 全エンティティがFindOwnerで自ノードに解決される
+    for (const auto& e : ents) {
+        EXPECT_EQ(node.FindOwner(e->GetID()), &node);
+    }
+    // FindReferrersがreferentに対しreferrerを返す
+    const auto referrers = node.FindReferrers(pair->second);
+    EXPECT_NE(std::find(referrers.begin(), referrers.end(), pair->first),
+              referrers.end());
+}
+
+// nullptrを含むベクタの一括追加で例外
+TEST_F(AssemblyTest, AddEntities_ThrowsInvalidArgumentWhenNullPresent) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    const std::vector<EntityPtr> with_null = {ents[0], nullptr};
+
+    Assembly node;
+    EXPECT_THROW(node.AddEntities(with_null), std::invalid_argument);
+}
+
+// 空ベクタの一括追加は例外を投げず、件数を変えない
+TEST_F(AssemblyTest, AddEntities_EmptyVectorIsNoOp) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+
+    // 空ノードへの空追加
+    Assembly empty_node;
+    EXPECT_NO_THROW(empty_node.AddEntities({}));
+    EXPECT_EQ(empty_node.GetEntityCount(), 0u);
+
+    // 既存エンティティを持つノードへの空追加は件数不変
+    Assembly populated;
+    populated.AddEntity(ents[0]);
+    EXPECT_NO_THROW(populated.AddEntities({}));
+    EXPECT_EQ(populated.GetEntityCount(), 1u);
 }
 
 

@@ -192,16 +192,21 @@ ReadIgesIntermediate(const std::string&, const bool = false);
 
 /// @brief 中間データ構造からIgesDataクラスを生成する
 /// @param intermediate 中間データ構造
+/// @param prepare_caches エンティティのキャッシュを事前構築するかどうか
+///        (TrimmedSurfaceの領域判定キャッシュなど). デフォルトはtrue.
 /// @return 生成されたIgesDataクラス
 /// @throw igesio::DataFormatError パラメータの数や形式が不正な場合や、
 ///        参照されているエンティティが存在しない場合など
 models::IgesData
-ConvertFromIntermediate(const models::IntermediateIgesData&);
+ConvertFromIntermediate(const models::IntermediateIgesData&,
+                        const bool prepare_caches = true);
 
 /// @brief IGESファイルを読み込み、IgesDataクラスを返す
 /// @param file_path 読み込むIGESファイルのパス
 /// @param validate_strictly 仕様にのっとった厳密な検証を行うかどうか.
 ///        現状はDEセクションのデータ形式の検証のみを行う.
+/// @param prepare_caches エンティティのキャッシュを事前構築するかどうか
+///        (TrimmedSurfaceの領域判定キャッシュなど). デフォルトはtrue.
 /// @return 生成されたIgesDataクラス
 /// @throw igesio::FileOpenError ファイルが開けなかった場合
 /// @throw igesio::LineFormatError 行の長さが規定値以外の場合
@@ -210,7 +215,8 @@ ConvertFromIntermediate(const models::IntermediateIgesData&);
 ///        エンティティのPDパラメータが不正な場合や、参照が未解決の場合に発生する.
 /// @note 仕様に厳密には従っていないIGESファイルも存在するため、
 ///       validate_strictlyをtrueにする際は注意が必要.
-models::IgesData ReadIges(const std::string&, const bool = false);
+models::IgesData ReadIges(const std::string&,
+                          const bool = false, const bool = true);
 
 }  // namespace igesio
 

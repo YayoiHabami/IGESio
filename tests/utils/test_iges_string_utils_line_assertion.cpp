@@ -536,3 +536,33 @@ TEST(ParseFreeFormattedDataTest, ErrorCase) {
     EXPECT_THROW(i_util::ParseFreeFormattedData(lines, ',', ';'),
                  igesio::SectionFormatError);
 }
+
+// 宣言長0のHollerith("0H...")は非H文字列として分割する
+TEST(ParseFreeFormattedDataTest, ZeroLengthHollerith) {
+    // "0H"をH文字列(宣言長0)として扱うと'X'手前で切れ「終端の後ろに区切り文字
+    // がない」エラーになる。宣言長0は非H扱いとするのが正しい挙動。
+    std::vector<std::string> lines = {"0HX,1;"};
+    std::vector<std::string> expected = {"0HX", "1"};
+    EXPECT_EQ(i_util::ParseFreeFormattedData(lines, ',', ';'), expected);
+}
+
+// パラメータが1つだけのレコード("5;")
+TEST(ParseFreeFormattedDataTest, SingleParameterRecord) {
+    std::vector<std::string> lines = {"5;"};
+    std::vector<std::string> expected = {"5"};
+    EXPECT_EQ(i_util::ParseFreeFormattedData(lines, ',', ';'), expected);
+}
+
+// 区切り文字直後の先頭空白は除去される
+TEST(ParseFreeFormattedDataTest, LeadingSpacesAfterDelimiterTrimmed) {
+    std::vector<std::string> lines = {"1,  2,   3;"};
+    std::vector<std::string> expected = {"1", "2", "3"};
+    EXPECT_EQ(i_util::ParseFreeFormattedData(lines, ',', ';'), expected);
+}
+
+// レコード区切り文字が存在しない場合はSectionFormatError
+TEST(ParseFreeFormattedDataTest, ThrowsSectionFormatErrorWhenNoRecordDelimiter) {
+    std::vector<std::string> lines = {"1,2,3"};
+    EXPECT_THROW(i_util::ParseFreeFormattedData(lines, ',', ';'),
+                 igesio::SectionFormatError);
+}
