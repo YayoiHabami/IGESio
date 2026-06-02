@@ -543,6 +543,18 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
     const std::pair<float, float> viewport{
         static_cast<float>(display_width_), static_cast<float>(display_height_)};
 
+    // 光源パラメータを平坦バッファへ詰める (シェーダー間で共有のため一度だけ構築)
+    const int num_lights = std::min(static_cast<int>(lights_.size()), kMaxLights);
+    std::vector<float> light_pos(3 * num_lights);
+    std::vector<float> light_att(3 * num_lights);
+    std::vector<float> light_col(4 * num_lights);
+    for (int i = 0; i < num_lights; ++i) {
+        const auto& l = lights_[i];
+        std::copy_n(l.position.data(), 3, light_pos.begin() + 3 * i);
+        std::copy_n(l.attenuation.data(), 3, light_att.begin() + 3 * i);
+        std::copy_n(l.color.data(), 4, light_col.begin() + 4 * i);
+    }
+
     for (const auto& [shader_type, program_id] : shader_programs_) {
         auto it = draw_list_.find(shader_type);
         if (it == draw_list_.end() || it->second.empty()) continue;
@@ -553,14 +565,18 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
                               1, gl::kFalse, projection_matrix.data());
 
-        // 光源のパラメータを設定
+        // 光源のパラメータを設定 (配列uniformとして送信)
         if (UsesLighting(shader_type)) {
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPos_WorldSpace"),
-                            1, light_.position.data());
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuation"),
-                            1, light_.attenuation.data());
-            gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColor"),
-                            1, light_.color.data());
+            gl_->Uniform1i(gl_->GetUniformLocation(program_id, "numLights"),
+                           num_lights);
+            if (num_lights > 0) {
+                gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPositions"),
+                                num_lights, light_pos.data());
+                gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuations"),
+                                num_lights, light_att.data());
+                gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColors"),
+                                num_lights, light_col.data());
+            }
         }
 
         for (auto* graphics : it->second) {

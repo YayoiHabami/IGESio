@@ -95,8 +95,9 @@ class EntityRenderer {
     /// @brief カメラクラス
     graphics::Camera camera_;
 
-    /// @brief 光源クラス
-    graphics::Light light_;
+    /// @brief 光源リスト
+    /// @note 既定では方向光を1個保持する. 描画時はkMaxLightsまで送信される.
+    std::vector<graphics::Light> lights_ = { graphics::Light{} };
 
     /// @brief 描画に関するグローバルパラメータ (デフォルト)
     std::shared_ptr<const models::GraphicsGlobalParam> default_global_param_;
@@ -293,13 +294,14 @@ class EntityRenderer {
     /// @note カメラの各変数などはこの参照を通じて設定する
     graphics::Camera& Camera() { return camera_; }
 
-    /// @brief 光源の参照を取得する (const)
-    /// @return 光源の参照
-    const Light& Light() const { return light_; }
-    /// @brief 光源の参照を取得する (非const)
-    /// @return 光源の参照
-    /// @note 光源の各変数などはこの参照を通じて設定する
-    graphics::Light& Light() { return light_; }
+    /// @brief 光源リストの参照を取得する (const)
+    /// @return 光源リストの参照
+    const std::vector<Light>& Lights() const { return lights_; }
+    /// @brief 光源リストの参照を取得する (非const)
+    /// @return 光源リストの参照
+    /// @note 光源の追加・削除や各光源の設定はこの参照を通じて行う.
+    ///       要素数がkMaxLightsを超えた分は描画時に無視される.
+    std::vector<Light>& Lights() { return lights_; }
 
     /// @brief 描画全般に関する設定を取得する (const)
     const GraphicsSettings& Settings() const { return settings_; }

@@ -9,8 +9,10 @@
 //   - useTexture (uniform bool)
 //   - textureSampler (uniform sampler2D) - texture unit should be set to 0
 // - General:
-//   - lightPos_WorldSpace (uniform vec3)
-//   - lightColor (uniform vec4)
+//   - numLights (uniform int) - number of active lights ([0, MAX_LIGHTS])
+//   - lightPositions (uniform vec3[MAX_LIGHTS]) - direction or position
+//   - lightAttenuations (uniform vec3[MAX_LIGHTS]) - C, L, Q (zero => directional)
+//   - lightColors (uniform vec4[MAX_LIGHTS])
 //   - viewPos_WorldSpace (uniform vec3)
 //
 // THIS SHADER REQUIRES THE FOLLOWING INPUTS FROM THE PREVIOUS STAGE:
@@ -32,10 +34,12 @@ uniform float ao;
 uniform bool useTexture;
 uniform sampler2D textureSampler;
 
-// Light properties
-uniform vec3 lightPos_WorldSpace;  // Direction (for directional light) or position (for point light)
-uniform vec3 lightAttenuation;     // C, L, Q coefficients for point light
-uniform vec4 lightColor;
+// Light properties (must match kMaxLights on the C++ side)
+#define MAX_LIGHTS 8
+uniform int numLights;
+uniform vec3 lightPositions[MAX_LIGHTS];   // Direction (directional) or position (point)
+uniform vec3 lightAttenuations[MAX_LIGHTS];  // C, L, Q coefficients (zero => directional)
+uniform vec4 lightColors[MAX_LIGHTS];
 
 // Camera properties
 uniform vec3 viewPos_WorldSpace;
@@ -75,47 +79,27 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-void main() {
-    // --- Cook-Torrance BRDF ---
-
+// Cook-Torrance outgoing radiance contributed by a single light
+vec3 CalcLight(int i, vec3 N, vec3 V, vec3 albedo, float rough, vec3 F0) {
     // Determine light type (direction and distance attenuation)
-    vec3 lightDir;
+    vec3 L;
     float attenuation = 1.0;
-    if (lightAttenuation == vec3(0.0)) {
+    if (lightAttenuations[i] == vec3(0.0)) {
         // Directional light
-        lightDir = normalize(-lightPos_WorldSpace);
+        L = normalize(-lightPositions[i]);
     } else {
         // Point light
-        vec3 toLight = lightPos_WorldSpace - fragPos_WorldSpace;
-        float distance = length(toLight);
-        lightDir = normalize(toLight);
-        attenuation = 1.0 / (lightAttenuation.x +
-                             lightAttenuation.y * distance +
-                             lightAttenuation.z * distance * distance);
+        vec3 toLight = lightPositions[i] - fragPos_WorldSpace;
+        float dist = length(toLight);
+        L = normalize(toLight);
+        attenuation = 1.0 / (lightAttenuations[i].x +
+                             lightAttenuations[i].y * dist +
+                             lightAttenuations[i].z * dist * dist);
     }
-
-    // Clamp roughness to avoid a singularity in the NDF at roughness = 0
-    float rough = max(roughness, 0.04);
-
-    // Normal (two-sided), view, light and halfway vectors
-    vec3 N = normalize(fragNormal_WorldSpace);
-    if (!gl_FrontFacing) N = -N;  // Flip the normal on back faces (two-sided)
-    vec3 V = normalize(viewPos_WorldSpace - fragPos_WorldSpace);
-    vec3 L = lightDir;
     vec3 H = normalize(V + L);
-
-    // Base color (albedo): overlay texture in sRGB space, then linearize
-    vec4 surfaceColor = mainColor;
-    if (useTexture) {
-        // Overlay texture color using alpha blending
-        vec4 texColor = texture(textureSampler, fragTexCoord);
-        surfaceColor.rgb = (1.0 - texColor.a) * surfaceColor.rgb + texColor.a * texColor.rgb;
-    }
-    vec3 albedo = pow(surfaceColor.rgb, vec3(2.2));
-    vec3 radiance = pow(lightColor.rgb, vec3(2.2)) * attenuation;
+    vec3 radiance = pow(lightColors[i].rgb, vec3(2.2)) * attenuation;
 
     // Cook-Torrance specular BRDF
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
     vec3 F  = FresnelSchlick(max(dot(H, V), 0.0), F0);
     float NDF = DistributionGGX(N, H, rough);
     float Gg  = GeometrySmith(N, V, L, rough);
@@ -125,9 +109,36 @@ void main() {
     // Diffuse weight (energy conservation; metals have no diffuse)
     vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
 
-    // Outgoing radiance contributed by this light
     float NdotL = max(dot(N, L), 0.0);
-    vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
+    return (kD * albedo / PI + specular) * radiance * NdotL;
+}
+
+void main() {
+    // --- Cook-Torrance BRDF (multiple lights) ---
+
+    // Clamp roughness to avoid a singularity in the NDF at roughness = 0
+    float rough = max(roughness, 0.04);
+
+    // Normal (two-sided) and view direction
+    vec3 N = normalize(fragNormal_WorldSpace);
+    if (!gl_FrontFacing) N = -N;  // Flip the normal on back faces (two-sided)
+    vec3 V = normalize(viewPos_WorldSpace - fragPos_WorldSpace);
+
+    // Base color (albedo): overlay texture in sRGB space, then linearize
+    vec4 surfaceColor = mainColor;
+    if (useTexture) {
+        // Overlay texture color using alpha blending
+        vec4 texColor = texture(textureSampler, fragTexCoord);
+        surfaceColor.rgb = (1.0 - texColor.a) * surfaceColor.rgb + texColor.a * texColor.rgb;
+    }
+    vec3 albedo = pow(surfaceColor.rgb, vec3(2.2));
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
+    // Accumulate outgoing radiance over all active lights
+    vec3 Lo = vec3(0.0);
+    for (int i = 0; i < numLights; ++i) {
+        Lo += CalcLight(i, N, V, albedo, rough, F0);
+    }
 
     // Constant ambient term (placeholder for IBL), modulated by AO
     vec3 ambient = kAmbient * albedo * ao;
