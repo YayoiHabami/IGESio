@@ -382,7 +382,8 @@ void ReconstructOmittedBaseCurves(i_model::Assembly& root) {
 
 
 i_model::IgesData igesio::ConvertFromIntermediate(
-        const models::IntermediateIgesData& intermediate) {
+        const models::IntermediateIgesData& intermediate,
+        const bool prepare_caches) {
     i_model::IgesData iges;
     iges.description = intermediate.start_section;
     iges.global_section = intermediate.global_section;
@@ -474,14 +475,20 @@ i_model::IgesData igesio::ConvertFromIntermediate(
     // 読み込んだエンティティから初期ツリー(子Assembly階層)を導出する
     BuildInitialTree(iges.Root());
 
+    if (prepare_caches) {
+        // エンティティのキャッシュを事前構築する
+        iges.Root().PrepareGeometryCaches(true);
+    }
+
     return iges;
 }
 
 i_model::IgesData igesio::ReadIges(const std::string& file_path,
-                                   const bool validate_strictly) {
+                                   const bool validate_strictly,
+                                   const bool prepare_caches) {
     // IGESファイルを読み込み、中間データ構造を生成
     auto intermediate = ReadIgesIntermediate(file_path, validate_strictly);
 
     // 中間データ構造からIgesDataクラスを生成
-    return ConvertFromIntermediate(intermediate);
+    return ConvertFromIntermediate(intermediate, prepare_caches);
 }

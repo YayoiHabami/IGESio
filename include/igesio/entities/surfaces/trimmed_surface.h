@@ -131,6 +131,10 @@ class TrimmedSurface : public EntityBase, public virtual ISurface {
     /// @note キャッシュが未構築の場合はBuildDomainCache()を呼び出す
     bool IsInDomain(const double u, const double v) const override;
 
+    /// @brief 領域判定キャッシュを事前構築する (BuildDomainCacheに委譲)
+    /// @note Assembly::PrepareGeometryCachesから並列に呼ばれることを想定する
+    void PrepareGeometryCache() const override;
+
 
 
     /**
@@ -199,7 +203,8 @@ class TrimmedSurface : public EntityBase, public virtual ISurface {
 
  private:
     /// @brief 包含多角形キャッシュを構築する
-    /// @note domain_cache_が有効な場合は何もしない
+    /// @note domain_cache_が有効な場合は何もしない。同一インスタンスに対して同時に
+    ///       呼び出してはならない (内部のdomain_cache_を非同期に書き込むため)。
     void BuildDomainCache() const;
 };
 

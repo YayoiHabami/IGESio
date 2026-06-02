@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "igesio/common/parallel.h"
 #include "igesio/entities/views/curve_view.h"
 #include "igesio/entities/views/surface_view.h"
 
@@ -693,4 +694,16 @@ Assembly::GetWorldBoundingBox() const {
     if (zero_axes >= 2) return std::nullopt;
 
     return numerics::BoundingBox(lo, hi);
+}
+
+void Assembly::PrepareGeometryCaches(const bool recursive) const {
+    // 自ノード(必要なら全子孫)のエンティティをフラットに収集する.
+    // 各PrepareGeometryCacheは互いに独立 (それぞれ自身のキャッシュのみ書き込む) なので、
+    // ロックなしで並列実行できる. ParallelForEachが戻る前に全ワーカーを待ち合わせる.
+    const auto entities = FindEntities(
+            [](const i_ent::EntityBase&) { return true; }, recursive);
+    igesio::ParallelForEach(
+            entities, [](const std::shared_ptr<i_ent::EntityBase>& e) {
+        e->PrepareGeometryCache();
+    });
 }

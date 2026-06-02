@@ -64,6 +64,11 @@ project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Threads (std::thread/std::async backend for igesio/common/parallel.h).
+# Links pthread on Linux (GCC/Clang); a no-op on MSVC and macOS.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 # Option to enable coverage
 option(IGESIO_ENABLE_COVERAGE "Enable coverage reporting" OFF)
 

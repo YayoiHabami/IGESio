@@ -517,6 +517,15 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @note ワールド空間(このノードを含むルートまでの全大域変換を適用)で計算する.
     ///       幾何かつ物理従属でないメンバのみを対象とし、退化BBは既存ガードに倣って除外する.
     std::optional<numerics::BoundingBox> GetWorldBoundingBox() const;
+
+    /// @brief 子孫エンティティの遅延幾何キャッシュを並列に事前構築する
+    /// @param recursive trueの場合は全子孫を含める (デフォルト: true)
+    /// @note 各エンティティのEntityBase::PrepareGeometryCache()を1回ずつ呼ぶ
+    ///       (TrimmedSurfaceの領域判定キャッシュ等). 重い遅延計算を描画/クエリ前に
+    ///       まとめて済ませるための一括処理. 読み込み・構造編集 (キャッシュを無効化する
+    ///       Set/Add/Remove系) が完了し、並列読み取りを始める前に1回呼ぶこと.
+    ///       本メソッドは内部で全ワーカーを待ち合わせてから返る.
+    void PrepareGeometryCaches(bool recursive = true) const;
 };
 
 }  // namespace igesio::models
