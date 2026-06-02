@@ -75,7 +75,11 @@ option(IGESIO_ENABLE_COVERAGE "Enable coverage reporting" OFF)
 # Coverage configuration
 if(IGESIO_ENABLE_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        add_compile_options(--coverage)
+        # -fprofile-update=atomic makes gcov counter increments atomic, which is
+        # required because the read pipeline runs instrumented code on multiple
+        # threads; the default (single) update mode races and produces corrupted
+        # (negative) counts that lcov/geninfo rejects.
+        add_compile_options(--coverage -fprofile-update=atomic)
         add_link_options(--coverage)
         message(STATUS "Coverage reporting enabled")
     else()
