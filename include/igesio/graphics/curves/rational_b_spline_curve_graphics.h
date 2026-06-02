@@ -23,11 +23,11 @@ namespace igesio::graphics {
 class RationalBSplineCurveGraphics
     : public EntityGraphics<entities::RationalBSplineCurve> {
     /// @brief ノットベクトルのSSBO
-    GLuint knots_ssbo_ = 0;
+    gl::Uint knots_ssbo_ = 0;
     /// @brief 制御点と重みのSSBO
-    GLuint control_with_weights_ssbo_ = 0;
+    gl::Uint control_with_weights_ssbo_ = 0;
     /// @brief 参照点のSSBO
-    GLuint reference_points_ssbo_ = 0;
+    gl::Uint reference_points_ssbo_ = 0;
 
  public:
     /// @brief コンストラクタ
@@ -67,7 +67,7 @@ class RationalBSplineCurveGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 
     /// @brief 参照点
     /// @note テッセレーション数決定のために使用する、曲線上のいくつかの点.

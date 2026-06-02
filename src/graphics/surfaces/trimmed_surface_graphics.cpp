@@ -15,6 +15,7 @@
 namespace {
 
 namespace i_ent = igesio::entities;
+namespace gl = igesio::graphics::gl;
 using TrimmedSurf = i_ent::TrimmedSurface;
 using igesio::Vector3d;
 
@@ -237,7 +238,7 @@ void BuildTriangleIndices(
         const std::vector<bool>& is_valid,
         const std::vector<int>& h_cross,
         const std::vector<int>& v_cross,
-        std::vector<GLuint>& indices) {
+        std::vector<gl::Uint>& indices) {
     for (int i = 0; i < u_div; ++i) {
         for (int j = 0; j < v_div; ++j) {
             const int idx_bl = GridIdx(v_div, i, j);
@@ -253,12 +254,12 @@ void BuildTriangleIndices(
 
             if (bl && br && tr && tl) {
                 // 全有効 → 標準2三角形
-                indices.push_back(static_cast<GLuint>(idx_bl));
-                indices.push_back(static_cast<GLuint>(idx_br));
-                indices.push_back(static_cast<GLuint>(idx_tr));
-                indices.push_back(static_cast<GLuint>(idx_bl));
-                indices.push_back(static_cast<GLuint>(idx_tr));
-                indices.push_back(static_cast<GLuint>(idx_tl));
+                indices.push_back(static_cast<gl::Uint>(idx_bl));
+                indices.push_back(static_cast<gl::Uint>(idx_br));
+                indices.push_back(static_cast<gl::Uint>(idx_tr));
+                indices.push_back(static_cast<gl::Uint>(idx_bl));
+                indices.push_back(static_cast<gl::Uint>(idx_tr));
+                indices.push_back(static_cast<gl::Uint>(idx_tl));
                 continue;
             }
 
@@ -271,9 +272,9 @@ void BuildTriangleIndices(
                     v_cross[VCrossIdx(v_div, i, j)]);
 
             for (size_t k = 1; k + 1 < poly.size(); ++k) {
-                indices.push_back(static_cast<GLuint>(poly[0]));
-                indices.push_back(static_cast<GLuint>(poly[k]));
-                indices.push_back(static_cast<GLuint>(poly[k + 1]));
+                indices.push_back(static_cast<gl::Uint>(poly[0]));
+                indices.push_back(static_cast<gl::Uint>(poly[k]));
+                indices.push_back(static_cast<gl::Uint>(poly[k + 1]));
             }
         }
     }
@@ -305,10 +306,10 @@ igesio::graphics::TrimmedSurfaceGraphics::~TrimmedSurfaceGraphics() {
  */
 
 void igesio::graphics::TrimmedSurfaceGraphics::DrawImpl(
-        GLuint /*shader*/,
+        gl::Uint /*shader*/,
         const std::pair<float, float>& /*viewport*/) const {
     gl_->BindVertexArray(vao_);
-    gl_->DrawElements(GL_TRIANGLES, indices_.size(), GL_UNSIGNED_INT, 0);
+    gl_->DrawElements(gl::kTriangles, indices_.size(), gl::kUnsignedInt, 0);
     gl_->BindVertexArray(0);
 }
 
@@ -329,25 +330,25 @@ void igesio::graphics::TrimmedSurfaceGraphics::Synchronize() {
 
     gl_->BindVertexArray(vao_);
 
-    gl_->BindBuffer(GL_ARRAY_BUFFER, vbo_);
-    gl_->BufferData(GL_ARRAY_BUFFER,
+    gl_->BindBuffer(gl::kArrayBuffer, vbo_);
+    gl_->BufferData(gl::kArrayBuffer,
                     vertices_.size() * sizeof(float),
-                    vertices_.data(), GL_STATIC_DRAW);
+                    vertices_.data(), gl::kStaticDraw);
     // 位置 (location=0), 法線 (location=1), テクスチャ座標 (location=2)
-    gl_->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
+    gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse, 8 * sizeof(float),
                              nullptr);
     gl_->EnableVertexAttribArray(0);
-    gl_->VertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
+    gl_->VertexAttribPointer(1, 3, gl::kFloat, gl::kFalse, 8 * sizeof(float),
                              reinterpret_cast<const void*>(3 * sizeof(float)));
     gl_->EnableVertexAttribArray(1);
-    gl_->VertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
+    gl_->VertexAttribPointer(2, 2, gl::kFloat, gl::kFalse, 8 * sizeof(float),
                              reinterpret_cast<const void*>(6 * sizeof(float)));
     gl_->EnableVertexAttribArray(2);
 
-    gl_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
-    gl_->BufferData(GL_ELEMENT_ARRAY_BUFFER,
-                    indices_.size() * sizeof(GLuint),
-                    indices_.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kElementArrayBuffer, ebo_);
+    gl_->BufferData(gl::kElementArrayBuffer,
+                    indices_.size() * sizeof(gl::Uint),
+                    indices_.data(), gl::kStaticDraw);
 
     gl_->BindVertexArray(0);
 }

@@ -80,7 +80,7 @@ bool ICurveGraphics::IsDrawable() const {
  */
 
 void ICurveGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     gl_->BindVertexArray(vao_);
     gl_->DrawArrays(draw_mode_, 0, vertex_count_);
     gl_->BindVertexArray(0);
@@ -115,21 +115,21 @@ void ICurveGraphics::Synchronize() {
     if (vertices.empty()) return;
 
     vertex_count_ = vertices.size() / 3;
-    draw_mode_ = entity_->IsClosed() ? GL_LINE_LOOP : GL_LINE_STRIP;
+    draw_mode_ = entity_->IsClosed() ? gl::kLineLoop : gl::kLineStrip;
 
     // OpenGLバッファのセットアップ
     gl_->GenVertexArrays(1, &vao_);
     gl_->GenBuffers(1, &vbo_);
 
     gl_->BindVertexArray(vao_);
-    gl_->BindBuffer(GL_ARRAY_BUFFER, vbo_);
-    gl_->BufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float),
-                    vertices.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kArrayBuffer, vbo_);
+    gl_->BufferData(gl::kArrayBuffer, vertices.size() * sizeof(float),
+                    vertices.data(), gl::kStaticDraw);
 
-    gl_->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+    gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse,
                              3 * sizeof(float), (void*)0);
     gl_->EnableVertexAttribArray(0);
 
-    gl_->BindBuffer(GL_ARRAY_BUFFER, 0);
+    gl_->BindBuffer(gl::kArrayBuffer, 0);
     gl_->BindVertexArray(0);
 }

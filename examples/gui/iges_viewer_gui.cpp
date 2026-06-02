@@ -103,7 +103,7 @@ std::string GetEntityTypeString(const igesio::ObjectID& id) {
 IgesViewerGUI::IgesViewerGUI(
         const int width, const int height,
         const int msaa_samples, const std::string& initial_iges_file)
-        : renderer_(std::make_shared<OpenGL>(), width, height),
+        : renderer_(nullptr, width, height),
           initial_iges_file_(initial_iges_file) {
     glfwSetErrorCallback(ErrorCallback);
     if (!glfwInit()) {
@@ -128,10 +128,15 @@ IgesViewerGUI::IgesViewerGUI(
     glfwSetWindowUserPointer(window_, this);
     glfwSwapInterval(1);
 
-    if (!gladLoadGL(glfwGetProcAddress)) {
+    // コンテキストをカレント化した後にGLバックエンドをロードしてレンダラへ設定する
+    // (CreateGLBackendはロード失敗時にImplementationErrorを投げる)
+    try {
+        renderer_.SetGLBackend(CreateGLBackend(
+                reinterpret_cast<GLProcLoader>(glfwGetProcAddress)));
+    } catch (const std::exception&) {
         glfwDestroyWindow(window_);
         glfwTerminate();
-        throw std::runtime_error("Failed to initialize GLAD");
+        throw;
     }
 
     SetupCallbacks();

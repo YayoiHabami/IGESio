@@ -86,7 +86,7 @@ bool SegmentGraphics::IsDrawable() const {
  */
 
 void SegmentGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     gl_->BindVertexArray(vao_);
     gl_->DrawArrays(draw_mode_, 0, vertex_count_);
     gl_->BindVertexArray(0);
@@ -110,22 +110,22 @@ void SegmentGraphics::Synchronize() {
             static_cast<float>(start.z()), static_cast<float>(end.x()),
             static_cast<float>(end.y()), static_cast<float>(end.z())};
     vertex_count_ = 2;
-    draw_mode_ = GL_LINES;
+    draw_mode_ = gl::kLines;
 
     // OpenGLバッファのセットアップ
     gl_->GenVertexArrays(1, &vao_);
     gl_->GenBuffers(1, &vbo_);
 
     gl_->BindVertexArray(vao_);
-    gl_->BindBuffer(GL_ARRAY_BUFFER, vbo_);
-    gl_->BufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float),
-                    vertices.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kArrayBuffer, vbo_);
+    gl_->BufferData(gl::kArrayBuffer, vertices.size() * sizeof(float),
+                    vertices.data(), gl::kStaticDraw);
 
-    gl_->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+    gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse,
                              3 * sizeof(float), (void*)0);
     gl_->EnableVertexAttribArray(0);
 
-    gl_->BindBuffer(GL_ARRAY_BUFFER, 0);
+    gl_->BindBuffer(gl::kArrayBuffer, 0);
     gl_->BindVertexArray(0);
 }
 
@@ -196,7 +196,7 @@ bool LineGraphics::IsDrawable() const {
  */
 
 void LineGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     gl_->UseProgram(shader);
 
     auto line_type = entity_->GetLineType();
@@ -230,7 +230,7 @@ void LineGraphics::Synchronize() {
         static_cast<float>(dir.y()), static_cast<float>(dir.z())
     };
     vertex_count_ = 1;
-    draw_mode_ = GL_POINTS;
+    draw_mode_ = gl::kPoints;
 
 
     // OpenGLバッファのセットアップ
@@ -238,19 +238,19 @@ void LineGraphics::Synchronize() {
     gl_->GenBuffers(1, &vbo_);
 
     gl_->BindVertexArray(vao_);
-    gl_->BindBuffer(GL_ARRAY_BUFFER, vbo_);
-    gl_->BufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float),
-                    vertices.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kArrayBuffer, vbo_);
+    gl_->BufferData(gl::kArrayBuffer, vertices.size() * sizeof(float),
+                    vertices.data(), gl::kStaticDraw);
 
     // 全てのlineTypeで共通の頂点属性設定を使用
     // 位置属性 (aPos)
-    gl_->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse, 6 * sizeof(float), (void*)0);
     gl_->EnableVertexAttribArray(0);
     // 方向属性 (aDir)
-    gl_->VertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float),
+    gl_->VertexAttribPointer(1, 3, gl::kFloat, gl::kFalse, 6 * sizeof(float),
                              (void*)(3 * sizeof(float)));
     gl_->EnableVertexAttribArray(1);
 
-    gl_->BindBuffer(GL_ARRAY_BUFFER, 0);
+    gl_->BindBuffer(gl::kArrayBuffer, 0);
     gl_->BindVertexArray(0);
 }

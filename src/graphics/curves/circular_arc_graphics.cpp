@@ -36,7 +36,7 @@ CircularArcGraphics::~CircularArcGraphics() {
  */
 
 void CircularArcGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     // シェーダーのuniform変数を設定
     auto center = entity_->Center();
     gl_->Uniform3f(gl_->GetUniformLocation(shader, "center"),
@@ -57,7 +57,7 @@ void CircularArcGraphics::DrawImpl(
     // 描画
     gl_->BindVertexArray(vao_);
     // 1つの頂点からなるパッチを1つ描画する
-    gl_->DrawArrays(GL_PATCHES, 0, 1);
+    gl_->DrawArrays(gl::kPatches, 0, 1);
     gl_->BindVertexArray(0);
 }
 
@@ -70,11 +70,11 @@ void CircularArcGraphics::Synchronize() {
 
     // パッチの頂点数を1に設定
     // この設定はVAOに保存されるため、描画のたびに呼び出す必要はない
-    gl_->PatchParameteri(GL_PATCH_VERTICES, 1);
+    gl_->PatchParameteri(gl::kPatchVertices, 1);
 
     if (entity_->IsClosed()) {
-        draw_mode_ = GL_LINE_LOOP;
+        draw_mode_ = gl::kLineLoop;
     } else {
-        draw_mode_ = GL_LINE_STRIP;
+        draw_mode_ = gl::kLineStrip;
     }
 }

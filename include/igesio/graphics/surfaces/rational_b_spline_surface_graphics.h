@@ -23,14 +23,14 @@ namespace igesio::graphics {
 class RationalBSplineSurfaceGraphics
     : public EntityGraphics<entities::RationalBSplineSurface, true> {
     /// @brief u方向のノットベクトルのSSBO
-    GLuint knots_u_ssbo_ = 0;
+    gl::Uint knots_u_ssbo_ = 0;
     /// @brief v方向のノットベクトルのSSBO
-    GLuint knots_v_ssbo_ = 0;
+    gl::Uint knots_v_ssbo_ = 0;
     /// @brief 制御点と重みのSSBO
     /// @note vec4のx~zが制御点、wが重み
-    GLuint control_with_weights_ssbo_ = 0;
+    gl::Uint control_with_weights_ssbo_ = 0;
     /// @brief 参照点のSSBO
-    GLuint reference_points_ssbo_ = 0;
+    gl::Uint reference_points_ssbo_ = 0;
 
  public:
     /// @brief コンストラクタ
@@ -69,7 +69,7 @@ class RationalBSplineSurfaceGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 
     /// @brief 参照点
     /// @note テッセレーション数決定のために使用する、曲面上のいくつかの点

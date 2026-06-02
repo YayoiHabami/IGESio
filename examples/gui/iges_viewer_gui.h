@@ -4,10 +4,7 @@
  * @author Yayoi Habami
  * @date 2025-08-05
  * @copyright 2025 Yayoi Habami
- * @note このファイルは'glad/gl.h'をインクルードしているため、
- *       このファイルをインクルードする際は、他のOpenGL/GLFWヘッダを
- *       インクルードする前にこのファイルをインクルードすること.
- *       GUIは「メニューバー + 左Outliner + 右Inspector + 下StatusBar + 中央Viewport」
+ * @note GUIは「メニューバー + 左Outliner + 右Inspector + 下StatusBar + 中央Viewport」
  *       の固定レイアウト(ビューポート端にアンカー)で構成する.
  */
 #ifndef EXAMPLES_GUI_IGES_VIEWER_GUI_H_
@@ -22,7 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "igesio/graphics/core/open_gl.h"
+#include "igesio/graphics/core/gl_backend.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 

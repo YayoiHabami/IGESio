@@ -88,12 +88,12 @@ void CopiousDataGraphics::Synchronize() {
     auto type = entity_->GetDataType();
     if (CDType::kPlanarPoints <= type && type <= CDType::kSextuples) {
         // formが1-3の場合は、点群 (Copious Data) として描画
-        draw_mode_ = GL_POINTS;
+        draw_mode_ = gl::kPoints;
         // 点のサイズをシェーダーで制御可能にする
-        gl_->Enable(GL_PROGRAM_POINT_SIZE);
+        gl_->Enable(gl::kProgramPointSize);
     } else {
         // それ以外の場合は折れ線として描画
-        draw_mode_ = GL_LINE_STRIP;
+        draw_mode_ = gl::kLineStrip;
     }
 
     vertex_count_ = count;
@@ -101,14 +101,14 @@ void CopiousDataGraphics::Synchronize() {
     gl_->GenBuffers(1, &vbo_);
 
     gl_->BindVertexArray(vao_);
-    gl_->BindBuffer(GL_ARRAY_BUFFER, vbo_);
-    gl_->BufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float),
-                    vertices.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kArrayBuffer, vbo_);
+    gl_->BufferData(gl::kArrayBuffer, vertices.size() * sizeof(float),
+                    vertices.data(), gl::kStaticDraw);
 
-    gl_->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse, 3 * sizeof(float), (void*)0);
     gl_->EnableVertexAttribArray(0);
 
-    gl_->BindBuffer(GL_ARRAY_BUFFER, 0);
+    gl_->BindBuffer(gl::kArrayBuffer, 0);
     gl_->BindVertexArray(0);
 }
 
@@ -174,8 +174,8 @@ igesio::graphics::SelectionSamples CopiousDataGraphics::GetSelectionSamples(
 }
 
 void CopiousDataGraphics::DrawImpl(
-        GLuint, const std::pair<float, float>&) const {
-    if (draw_mode_ == GL_POINTS) {
+        gl::Uint, const std::pair<float, float>&) const {
+    if (draw_mode_ == gl::kPoints) {
         // 点のサイズを5ピクセルに設定
         gl_->PointSize(5.0f);
     }

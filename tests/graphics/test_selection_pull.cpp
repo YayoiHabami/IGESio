@@ -96,7 +96,7 @@ TEST(SelectionPullTest, Draw_UsesEntityColorWhenNotSelected) {
     auto graphics = i_graph::CreateEntityGraphics(arc, gl);
     ASSERT_NE(graphics, nullptr);
 
-    const std::array<GLfloat, 4> expected = graphics->GetColor();
+    const std::array<float, 4> expected = graphics->GetColor();
 
     igesio::models::SelectionSet selection;  // 空
     i_graph::DrawContext ctx{};
@@ -120,7 +120,7 @@ TEST(SelectionPullTest, Draw_HighlightFollowsSelectionState) {
     auto graphics = i_graph::CreateEntityGraphics(arc, gl);
     ASSERT_NE(graphics, nullptr);
 
-    const std::array<GLfloat, 4> base = graphics->GetColor();
+    const std::array<float, 4> base = graphics->GetColor();
 
     igesio::models::SelectionSet selection;
     selection.Select(arc->GetID());

@@ -111,7 +111,7 @@ igesio::graphics::SelectionSamples PointGraphics::GetSelectionSamples(
  */
 
 void PointGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     gl_->BindVertexArray(vao_);
     gl_->DrawArrays(draw_mode_, 0, 1);
     gl_->BindVertexArray(0);
@@ -127,13 +127,13 @@ void PointGraphics::Synchronize() {
     gl_->GenBuffers(1, &vbo_);
 
     gl_->BindVertexArray(vao_);
-    gl_->BindBuffer(GL_ARRAY_BUFFER, vbo_);
+    gl_->BindBuffer(gl::kArrayBuffer, vbo_);
     Vector3f position = entity_->GetDefinedPosition().cast<float>();
-    gl_->BufferData(GL_ARRAY_BUFFER, sizeof(float) * 3, position.data(), GL_STATIC_DRAW);
-    draw_mode_ = GL_POINTS;
+    gl_->BufferData(gl::kArrayBuffer, sizeof(float) * 3, position.data(), gl::kStaticDraw);
+    draw_mode_ = gl::kPoints;
 
-    gl_->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse, 3 * sizeof(float), (void*)0);
     gl_->EnableVertexAttribArray(0);
-    gl_->BindBuffer(GL_ARRAY_BUFFER, 0);
+    gl_->BindBuffer(gl::kArrayBuffer, 0);
     gl_->BindVertexArray(0);
 }

@@ -3,6 +3,7 @@ add_library(igesio_graphics STATIC
     core/camera.cpp
     core/texture.cpp
     core/i_entity_graphics.cpp
+    core/open_gl.cpp
     core/ray.cpp
 
     curves/i_curve_graphics.cpp          # general curves
@@ -68,6 +69,9 @@ target_link_libraries(igesio_graphics
         IGESio::utils
         IGESio::entities
         IGESio::models
+    PRIVATE
+        # gladは公開ヘッダに出さない (core/open_gl.cppのみが内部で使用).
+        # 静的ライブラリのため、リンク用アーカイブは利用側へ自動で伝播する.
         glad_gl_core_33
 )
 

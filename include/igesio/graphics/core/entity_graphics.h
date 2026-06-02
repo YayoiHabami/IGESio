@@ -52,11 +52,11 @@ class EntityGraphics : public IEntityGraphics {
     std::shared_ptr<const T> entity_;
 
     /// @brief エンティティの描画用の頂点配列オブジェクト (VAO) のID
-    GLuint vao_ = 0;
-    /// @brief エンティティの描画モード (GL_LINE_STRIP, GL_LINE_LOOPなど)
-    GLenum draw_mode_ = GL_LINE_STRIP;
+    gl::Uint vao_ = 0;
+    /// @brief エンティティの描画モード (gl::kLineStrip, gl::kLineLoopなど)
+    gl::Enum draw_mode_ = gl::kLineStrip;
     /// @brief テクスチャのID (サーフェスを持つ場合に使用)
-    GLuint texture_id_ = 0;
+    gl::Uint texture_id_ = 0;
     /// @brief このクラスが対応するシェーダーのタイプ
     ShaderType shader_type_;
     /// @brief 子要素の描画オブジェクト (複合ノードの場合に使用. 葉では空)
@@ -161,7 +161,7 @@ class EntityGraphics : public IEntityGraphics {
     /// @param shader_type 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
     /// @note shader_typeに合致する要素がない場合は何もしない
-    void Draw(GLuint shader, const ShaderType shader_type,
+    void Draw(gl::Uint shader, const ShaderType shader_type,
               const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override {
         // 葉ノード: 固有シェーダーが一致する場合に自己描画する
@@ -178,7 +178,7 @@ class EntityGraphics : public IEntityGraphics {
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
     /// @note 「PULLした表示状態の適用 (ApplyRenderState)」と「ジオメトリ発行
     ///       (DrawImpl)」に責務を分離する. 本フェーズは論理状態を保持しない.
-    void Draw(GLuint shader, const std::pair<float, float>& viewport,
+    void Draw(gl::Uint shader, const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override {
         if (!entity_) return;
         if (!IsDrawable()) return;
@@ -193,19 +193,19 @@ class EntityGraphics : public IEntityGraphics {
         if (!has_surfaces) return;
 
         gl_->GenTextures(1, &texture_id_);
-        gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
+        gl_->BindTexture(gl::kTexture2D, texture_id_);
 
         // テクスチャのパラメータを設定
-        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl_->TexParameteri(gl::kTexture2D, gl::kTextureWrapS, gl::kClampToEdge);
+        gl_->TexParameteri(gl::kTexture2D, gl::kTextureWrapT, gl::kClampToEdge);
+        gl_->TexParameteri(gl::kTexture2D, gl::kTextureMinFilter, gl::kLinear);
+        gl_->TexParameteri(gl::kTexture2D, gl::kTextureMagFilter, gl::kLinear);
 
-        GLenum format = (material_property_.texture.HasAlpha()) ? GL_RGBA : GL_RGB;
+        gl::Enum format = (material_property_.texture.HasAlpha()) ? gl::kRgba : gl::kRgb;
         auto [width, height] = material_property_.texture.GetSize();
-        gl_->TexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0,
-                        format, GL_UNSIGNED_BYTE, material_property_.texture.GetData());
-        gl_->GenerateMipmap(GL_TEXTURE_2D);
+        gl_->TexImage2D(gl::kTexture2D, 0, format, width, height, 0,
+                        format, gl::kUnsignedByte, material_property_.texture.GetData());
+        gl_->GenerateMipmap(gl::kTexture2D);
     }
 
 
@@ -338,14 +338,14 @@ class EntityGraphics : public IEntityGraphics {
     /// @return メインの色 (RGBA; [0, 1]の範囲)
     /// @note SetColorで色をオーバーライドした場合はその色を返す.
     ///       そうでない場合は、エンティティが保持する色を返す.
-    std::array<GLfloat, 4> GetColor() const override {
+    std::array<float, 4> GetColor() const override {
         if (!is_color_overridden_) {
             auto base = std::dynamic_pointer_cast<const entities::EntityBase>(entity_);
             if (base) {
                 auto [r, g, b] = base->GetColor().GetRGB();
-                return {static_cast<GLfloat>(r) / 100.0f,
-                        static_cast<GLfloat>(g) / 100.0f,
-                        static_cast<GLfloat>(b) / 100.0f,
+                return {static_cast<float>(r) / 100.0f,
+                        static_cast<float>(g) / 100.0f,
+                        static_cast<float>(b) / 100.0f,
                         material_property_.opacity};
             }
         }
@@ -355,7 +355,7 @@ class EntityGraphics : public IEntityGraphics {
     /// @brief メインの色を設定する
     /// @param color メインの色 (RGBA; [0, 1]の範囲)
     /// @note 子要素 (複合ノード) を持つ場合は子にも伝播する.
-    void SetColor(const std::array<GLfloat, 4>& color) override {
+    void SetColor(const std::array<float, 4>& color) override {
         IEntityGraphics::SetColor(color);
         for (auto& [st, list] : child_graphics_) {
             for (auto& child : list) {
@@ -370,9 +370,9 @@ class EntityGraphics : public IEntityGraphics {
         auto base = std::dynamic_pointer_cast<const entities::EntityBase>(entity_);
         if (base) {
             auto [r, g, b] = base->GetColor().GetRGB();
-            color_[0] = static_cast<GLfloat>(r) / 100.0f;
-            color_[1] = static_cast<GLfloat>(g) / 100.0f;
-            color_[2] = static_cast<GLfloat>(b) / 100.0f;
+            color_[0] = static_cast<float>(r) / 100.0f;
+            color_[1] = static_cast<float>(g) / 100.0f;
+            color_[2] = static_cast<float>(b) / 100.0f;
             color_[3] = 1.0f;  // 不透明度は1.0f (完全に不透明)
         }
         // 子要素 (複合ノード) の色もデフォルトに戻す
@@ -713,16 +713,16 @@ class EntityGraphics : public IEntityGraphics {
     /// @param ctx 表示コンテキスト
     /// @note model(変換)・mainColor(選択ハイライト or エンティティ色)・線幅を設定し、
     ///       has_surfaces時は材質/テクスチャを設定する. 論理状態は保持しない.
-    void ApplyRenderState(GLuint shader, const DrawContext& ctx) const {
+    void ApplyRenderState(gl::Uint shader, const DrawContext& ctx) const {
         gl_->LineWidth(GetLineWidth());
 
         // 全シェーダーで共通のuniform変数を設定
         igesio::Matrix4f model = GetWorldTransform();
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
-                              1, GL_FALSE, model.data());
+                              1, gl::kFalse, model.data());
         // 選択中はハイライト色をPULLし、そうでなければエンティティの色を使う
         // (選択色をオブジェクトへ焼き込まない)
-        const std::array<GLfloat, 4> color =
+        const std::array<float, 4> color =
                 ctx.IsHighlighted(GetEntityID()) ? ctx.highlight_color : GetColor();
         gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
                         1, color.data());
@@ -740,8 +740,8 @@ class EntityGraphics : public IEntityGraphics {
             gl_->Uniform1i(gl_->GetUniformLocation(shader, "useTexture"),
                            material_property_.IsTextureUsable() ? 1 : 0);
             if (material_property_.IsTextureUsable() && texture_id_ != 0) {
-                gl_->ActiveTexture(GL_TEXTURE0);
-                gl_->BindTexture(GL_TEXTURE_2D, texture_id_);
+                gl_->ActiveTexture(gl::kTexture0);
+                gl_->BindTexture(gl::kTexture2D, texture_id_);
                 gl_->Uniform1i(gl_->GetUniformLocation(shader, "textureSampler"), 0);
             }
         }
@@ -753,7 +753,7 @@ class EntityGraphics : public IEntityGraphics {
     /// @param viewport ビューポートのサイズ (width, height)
     /// @param ctx 表示コンテキスト
     /// @note 指定型の直接の子に加え、kCompositeの子へも再帰委譲する. 子が無ければ何もしない.
-    void DrawChildGraphics(GLuint shader, const ShaderType shader_type,
+    void DrawChildGraphics(gl::Uint shader, const ShaderType shader_type,
                            const std::pair<float, float>& viewport,
                            const DrawContext& ctx) const {
         if (child_graphics_.empty()) return;
@@ -783,7 +783,7 @@ class EntityGraphics : public IEntityGraphics {
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
     /// @note OpenGLの描画コマンドを実行する
-    virtual void DrawImpl(GLuint, const std::pair<float, float>&) const = 0;
+    virtual void DrawImpl(gl::Uint, const std::pair<float, float>&) const = 0;
 };
 
 }  // namespace igesio::graphics

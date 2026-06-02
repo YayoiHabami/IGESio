@@ -49,7 +49,7 @@ class EllipseGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, [[maybe_unused]] const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, [[maybe_unused]] const std::pair<float, float>&) const override;
 };
 
 }  // namespace igesio::graphics

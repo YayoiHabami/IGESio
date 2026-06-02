@@ -82,7 +82,7 @@ void IEntityGraphics::SetWorldTransform(const igesio::Matrix4f& matrix) {
     world_transform_ = matrix;
 }
 
-void IEntityGraphics::SetColor(const std::array<GLfloat, 4>&color) {
+void IEntityGraphics::SetColor(const std::array<float, 4>&color) {
     std::copy(color.begin(), color.end(), color_);
     is_color_overridden_ = true;
 }

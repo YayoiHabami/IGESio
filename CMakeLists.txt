@@ -200,8 +200,11 @@ if(IGESIO_ENABLE_GRAPHICS)
   set(GLAD_GENERATOR_DIR "${glad_BINARY_DIR}")
 
   # Add glad library
+  # MX (multi-context): 関数ポインタはグローバルでなくGladGLContext構造体に持つ.
+  # これによりグローバルなglad_glXxxシンボルが消え、利用側との衝突を避けつつ、
+  # コンテキスト固有のロード (gladLoadGLContext) をライブラリ内部に封じ込められる.
   add_subdirectory(${glad_SOURCE_DIR}/cmake ${glad_BINARY_DIR})
-  glad_add_library(glad_gl_core_33 REPRODUCIBLE API gl:core=3.3)
+  glad_add_library(glad_gl_core_33 REPRODUCIBLE MX API gl:core=3.3)
   # Overwrite the INTERFACE_INCLUDE_DIRECTORIES property for glad
   # to use generator expressions, making it relocatable for both build and install.
   set_target_properties(glad_gl_core_33 PROPERTIES
@@ -325,15 +328,14 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         )
-        # Install glad library and its headers
+        # gladアーカイブはエクスポートを維持する (PRIVATE依存として利用側へ自動で
+        # 伝播し、利用側は`IGESio::graphics`をリンクするだけでよい).
+        # gladヘッダはinstallしない (公開includeにgladを一切出さないため).
         install(TARGETS glad_gl_core_33
             EXPORT IGESioTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        )
-        install(DIRECTORY ${glad_BINARY_DIR}/include/
-            DESTINATION include
         )
     endif()
 

@@ -23,15 +23,15 @@ namespace igesio::graphics {
 class ISurfaceGraphics
     : public EntityGraphics<entities::ISurface, true> {
     /// @brief 面のVBO
-    GLuint vbo_ = 0;
+    gl::Uint vbo_ = 0;
     /// @brief 面のEBO
-    GLuint ebo_ = 0;
+    gl::Uint ebo_ = 0;
 
     /// @brief 面の頂点・法線データ
     /// @note 各列が {x, y, z, nx, ny, nz} の形式
     MatrixXf vertices_;
     /// @brief 面のインデックスデータ
-    std::vector<GLuint> indices_;
+    std::vector<gl::Uint> indices_;
 
  public:
     /// @brief コンストラクタ
@@ -68,7 +68,7 @@ class ISurfaceGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 
     /// @brief 描画用の頂点/法線データとインデックスデータを生成する
     void GenerateSurfaceData();

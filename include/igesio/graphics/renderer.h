@@ -74,7 +74,7 @@ class EntityRenderer {
     /// @note キーはShaderType、値はシェーダープログラムのID
     /// @note コンパイルとリンクが成功した、各ShaderTypeに対応する
     ///       シェーダープログラムを保持する
-    std::unordered_map<ShaderType, GLuint> shader_programs_;
+    std::unordered_map<ShaderType, gl::Uint> shader_programs_;
 
     /// @brief 描画オブジェクト
     /// @note 1階層目のキーはShaderType、2階層目のキーはエンティティのID
@@ -121,12 +121,14 @@ class EntityRenderer {
 
  public:
     /// @brief コンストラクタ
-    /// @param gl OpenGLラッパー
+    /// @param gl OpenGLラッパー (nullptr可; 後で`SetGLBackend`で設定できる)
     /// @param width ウィンドウの幅の初期値 [px]
     /// @param height ウィンドウの高さの初期値 [px]
     /// @note オブジェクトを作成した時点では描画可能な状態ではない.
-    ///       描画を行う前にInitialize()を呼び出す必要がある
-    explicit EntityRenderer(std::shared_ptr<IOpenGL>,
+    ///       描画を行う前にGLバックエンドを設定し、Initialize()を呼び出す必要がある.
+    /// @note glにnullptrを渡すと、GLコンテキストが無い段階でも値メンバとして構築できる.
+    ///       この場合、コンテキストをカレント化した後に`SetGLBackend`を呼ぶこと.
+    explicit EntityRenderer(std::shared_ptr<IOpenGL> = nullptr,
                             const int = kDefaultDisplayWidth,
                             const int = kDefaultDisplayHeight);
 
@@ -137,12 +139,20 @@ class EntityRenderer {
     EntityRenderer(const EntityRenderer&) = delete;
     EntityRenderer& operator=(const EntityRenderer&) = delete;
 
+    /// @brief GLバックエンド (OpenGLラッパー) を設定する
+    /// @param gl OpenGLラッパー
+    /// @note コンストラクタでglを渡さなかった場合に、GLコンテキストをカレント化した後で
+    ///       呼び出す. `Initialize()`より前に設定する必要がある.
+    void SetGLBackend(std::shared_ptr<IOpenGL> gl);
+
     /// @brief 初期化されているか
+    /// @return GLバックエンドが設定済みかつシェーダーがコンパイル済みの場合はtrue
     bool IsInitialized() const;
 
     /// @brief 初期化する
     /// @note シェーダープログラムのコンパイルとリンクなどを行う
-    /// @throw igesio::ImplementationError シェーダーの初期化に失敗した場合
+    /// @throw igesio::ImplementationError シェーダーの初期化に失敗した場合、
+    ///        またはGLバックエンドが未設定の場合
     void Initialize();
 
     /// @brief OpenGLリソースを解放する
@@ -168,6 +178,7 @@ class EntityRenderer {
                    global_param = nullptr,
                    const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;
+        if (!gl_) return false;
 
         if (HasEntity(entity->GetID())) return false;
 
@@ -382,14 +393,14 @@ class EntityRenderer {
     /// @return コンパイルされたシェーダーのID
     /// @throw igesio::ImplementationError コンパイルに失敗した場合、
     ///         vertex_sourceが空の場合
-    GLuint CompileVertexShader(const std::string&);
+    gl::Uint CompileVertexShader(const std::string&);
 
     /// @brief ジオメトリシェーダーをコンパイルする
     /// @param geometry_source ジオメトリシェーダーのソースコード
     /// @return コンパイルされたシェーダーのID、
     ///         geometry_sourceが空の場合は0を返す
     /// @throw igesio::ImplementationError コンパイルに失敗した場合
-    GLuint CompileGeometryShader(const std::string&);
+    gl::Uint CompileGeometryShader(const std::string&);
 
     /// @brief TCS & TESシェーダーをコンパイルする
     /// @param tcs_source TCSシェーダーのソースコード
@@ -405,7 +416,7 @@ class EntityRenderer {
     /// @return コンパイルされたシェーダーのID
     /// @throw igesio::ImplementationError コンパイルに失敗した場合、
     ///         fragment_sourceが空の場合
-    GLuint CompileFragmentShader(const std::string&);
+    gl::Uint CompileFragmentShader(const std::string&);
 
     /// @brief シェーダープログラム作成する
     /// @param vertex_shader 頂点シェーダーのID
@@ -417,8 +428,8 @@ class EntityRenderer {
     /// @throw igesio::ImplementationError リンクに失敗した場合、
     ///        頂点シェーダーまたはフラグメントシェーダーが提供されていない場合
     /// @note IDに0を指定した場合は、そのシェーダーはリンクされない
-    GLuint CreateShaderProgram(GLuint, GLuint,
-                               GLuint = 0, GLuint = 0, GLuint = 0);
+    gl::Uint CreateShaderProgram(gl::Uint, gl::Uint,
+                                 gl::Uint = 0, gl::Uint = 0, gl::Uint = 0);
 
     /// @brief エンティティが設定されているか
     bool IsEmpty() const;
