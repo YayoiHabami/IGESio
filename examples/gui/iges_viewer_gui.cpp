@@ -252,6 +252,11 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
         // シーンをモデルのrootへ束ねる (描画時にツリーを走査させる)
         BindSceneRoot(iges_data_.RootPtr());
         renderer_.Camera().Reset();
+        // 起動後の初回読み込み時のみ、モデル全体を自動でフィットする
+        if (!initial_fit_done_) {
+            renderer_.FitView();
+            initial_fit_done_ = true;
+        }
         needs_redraw_ = true;
     } catch (const std::exception& e) {
         std::cerr << "Error loading IGES file: " << e.what() << std::endl;
@@ -384,6 +389,21 @@ void IgesViewerGUI::RenderMenuBar() {
             renderer_.Camera().Reset();
             needs_redraw_ = true;
         }
+        if (ImGui::MenuItem("Fit View", "F")) {
+            renderer_.FitView();
+            needs_redraw_ = true;
+        }
+        if (ImGui::BeginMenu("Standard Views")) {
+            if (ImGui::MenuItem("Front"))  ApplyStandardView(StandardView::kFront);
+            if (ImGui::MenuItem("Back"))   ApplyStandardView(StandardView::kBack);
+            if (ImGui::MenuItem("Top"))    ApplyStandardView(StandardView::kTop);
+            if (ImGui::MenuItem("Bottom")) ApplyStandardView(StandardView::kBottom);
+            if (ImGui::MenuItem("Right"))  ApplyStandardView(StandardView::kRight);
+            if (ImGui::MenuItem("Left"))   ApplyStandardView(StandardView::kLeft);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Isometric")) ApplyStandardView(StandardView::kIso);
+            ImGui::EndMenu();
+        }
         if (ImGui::ColorEdit3("Background",
                               renderer_.GetBackgroundColorRef().data())) {
             needs_redraw_ = true;
@@ -455,7 +475,7 @@ void IgesViewerGUI::RenderMenuBar() {
         ImGui::Separator();
         ImGui::TextDisabled("Hotkeys");
         ImGui::TextDisabled("  Del: Delete   Ctrl+G: Group");
-        ImGui::TextDisabled("  Esc: Deselect   F: Reset camera");
+        ImGui::TextDisabled("  Esc: Deselect   F: Fit view");
         ImGui::EndMenu();
     }
 
@@ -1092,9 +1112,15 @@ void IgesViewerGUI::HandleHotkeys() {
         needs_redraw_ = true;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F)) {
-        renderer_.Camera().Reset();
+        renderer_.FitView();
         needs_redraw_ = true;
     }
+}
+
+void IgesViewerGUI::ApplyStandardView(const StandardView view) {
+    renderer_.Camera().SetStandardView(view);
+    renderer_.FitView();
+    needs_redraw_ = true;
 }
 
 void IgesViewerGUI::CursorPositionCallback(

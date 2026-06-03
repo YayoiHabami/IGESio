@@ -294,6 +294,13 @@ class EntityRenderer {
     /// @note カメラの各変数などはこの参照を通じて設定する
     graphics::Camera& Camera() { return camera_; }
 
+    /// @brief シーン全体が画面に収まるようにカメラを調整する (FitView)
+    /// @note scene->Root()のワールドバウンディングボックスと現在の表示サイズから
+    ///       アスペクト比を求め、Camera::FitToBoundingBoxを呼ぶ. シーン未設定・
+    ///       バウンディングボックスが空・表示サイズが無効な場合は何もしない.
+    /// @note 反映には別途Draw()の呼び出しが必要.
+    void FitView();
+
     /// @brief 光源リストの参照を取得する (const)
     /// @return 光源リストの参照
     const std::vector<Light>& Lights() const { return lights_; }

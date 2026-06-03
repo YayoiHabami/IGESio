@@ -9,6 +9,7 @@
 #include "igesio/graphics/core/camera.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -30,6 +31,10 @@ void Camera::SetPosition(const igesio::Vector3f& position) {
 
 void Camera::SetTarget(const igesio::Vector3f& target) {
     target_ = target;
+}
+
+void Camera::SetUp(const igesio::Vector3f& up) {
+    up_ = up.normalized();
 }
 
 void Camera::SetFov(const float fov) {
@@ -128,6 +133,91 @@ void Camera::Zoom(const float zoom_factor) {
         ortho_scale_ *= zoom_factor;
         ortho_scale_ = std::max(ortho_scale_, 0.1f);
     }
+}
+
+
+
+/**
+ * ビュー設定
+ */
+
+void Camera::SetStandardView(const StandardView view) {
+    // 現在のターゲットとターゲットまでの距離を維持したまま向きを再配置する
+    const float distance = std::max((position_ - target_).norm(), 0.1f);
+
+    // dir: ターゲットからカメラへ向かう方向. up: 画面上方向
+    igesio::Vector3f dir, up;
+    switch (view) {
+        case StandardView::kFront:
+            dir = {0.0f, 0.0f, 1.0f};
+            up = {0.0f, 1.0f, 0.0f};
+            break;
+        case StandardView::kBack:
+            dir = {0.0f, 0.0f, -1.0f};
+            up = {0.0f, 1.0f, 0.0f};
+            break;
+        case StandardView::kTop:
+            dir = {0.0f, 1.0f, 0.0f};
+            up = {0.0f, 0.0f, -1.0f};
+            break;
+        case StandardView::kBottom:
+            dir = {0.0f, -1.0f, 0.0f};
+            up = {0.0f, 0.0f, 1.0f};
+            break;
+        case StandardView::kRight:
+            dir = {1.0f, 0.0f, 0.0f};
+            up = {0.0f, 1.0f, 0.0f};
+            break;
+        case StandardView::kLeft:
+            dir = {-1.0f, 0.0f, 0.0f};
+            up = {0.0f, 1.0f, 0.0f};
+            break;
+        case StandardView::kIso:
+            dir = igesio::Vector3f(1.0f, 1.0f, 1.0f).normalized();
+            up = {0.0f, 1.0f, 0.0f};
+            break;
+    }
+
+    position_ = target_ + dir * distance;
+    up_ = up.normalized();
+}
+
+void Camera::FitToBoundingBox(const numerics::BoundingBox& bbox,
+                              const float aspect_ratio, const float margin) {
+    const auto vertices = bbox.GetFiniteVertices();
+    if (vertices.empty() || aspect_ratio <= 0.0f) return;
+
+    // 頂点群から中心と外接半径を求める
+    igesio::Vector3d center = igesio::Vector3d::Zero();
+    for (const auto& v : vertices) center += v;
+    center /= static_cast<double>(vertices.size());
+    double radius = 0.0;
+    for (const auto& v : vertices) radius = std::max(radius, (v - center).norm());
+
+    const igesio::Vector3f center_f = center.cast<float>();
+    // 退化(半径0)時も有効なクリップ範囲を確保するため下限を設ける
+    const float r = std::max(static_cast<float>(radius), 1e-3f) * margin;
+
+    // 現在の視線方向を維持する (退化時は既定の+Z向き)
+    igesio::Vector3f dir = position_ - target_;  // ターゲット→カメラ
+    dir = (dir.norm() < 1e-6f) ? igesio::Vector3f(0, 0, 1) : dir.normalized();
+    target_ = center_f;
+
+    float distance;
+    if (projection_mode_ == ProjectionMode::kPerspective) {
+        // 半径rの球がFOVに収まる距離 (縦横で狭い方の半画角を使用)
+        const float half_v = fov_ * 0.5f;
+        const float half_h = std::atan(std::tan(half_v) * aspect_ratio);
+        distance = r / std::sin(std::min(half_v, half_h));
+    } else {
+        // 平行投影・斜投影: ビューボリュームのスケールで球を収める
+        ortho_scale_ = (aspect_ratio >= 1.0f) ? r : r / aspect_ratio;
+        distance = r * 3.0f;  // クリップ範囲を確保するための任意距離
+    }
+    position_ = center_f + dir * distance;
+
+    // 外接球を挟むように前後クリッピング面を設定する (near>0, far>nearを保証)
+    SetClippingPlanes(std::max(distance - r, distance * 1e-3f), distance + r);
 }
 
 

@@ -76,6 +76,7 @@ static_assert(gl::kDepthStencilAttachment == GL_DEPTH_STENCIL_ATTACHMENT, "gl::k
 static_assert(gl::kDepth24Stencil8 == GL_DEPTH24_STENCIL8, "gl::kDepth24Stencil8 mismatch");
 static_assert(gl::kFramebufferComplete == GL_FRAMEBUFFER_COMPLETE, "gl::kFramebufferComplete mismatch");
 static_assert(gl::kViewport == GL_VIEWPORT, "gl::kViewport mismatch");
+static_assert(gl::kFramebufferBinding == GL_FRAMEBUFFER_BINDING, "gl::kFramebufferBinding mismatch");
 
 // 型のABI互換性 (gl::型とglad型のサイズ一致)
 static_assert(sizeof(gl::Uint) == sizeof(GLuint), "gl::Uint size mismatch");

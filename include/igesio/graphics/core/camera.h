@@ -11,6 +11,7 @@
 
 #include <utility>
 
+#include "igesio/numerics/bounding_box.h"
 #include "igesio/numerics/matrix.h"
 
 
@@ -34,6 +35,25 @@ enum class ProjectionMode {
     kOblique
 };
 
+/// @brief 標準軸ビューの種別
+/// @note カメラの視線方向と上方向を、各座標軸に沿った定型の向きへ設定する際に使用する.
+enum class StandardView {
+    /// @brief 正面 (+Z側から-Z方向を見る. 上方向は+Y)
+    kFront,
+    /// @brief 背面 (-Z側から+Z方向を見る. 上方向は+Y)
+    kBack,
+    /// @brief 上面 (+Y側から-Y方向を見下ろす. 上方向は-Z)
+    kTop,
+    /// @brief 底面 (-Y側から+Y方向を見上げる. 上方向は+Z)
+    kBottom,
+    /// @brief 右面 (+X側から-X方向を見る. 上方向は+Y)
+    kRight,
+    /// @brief 左面 (-X側から+X方向を見る. 上方向は+Y)
+    kLeft,
+    /// @brief 等角 (+X+Y+Z方向から見る. 上方向は+Y)
+    kIso
+};
+
 /// @brief 近接クリッピング面の距離
 /// @note デフォルト値は1 (1mm).
 ///       kDefaultFarPlaneとの比が1000程度となるように設定すること
@@ -54,6 +74,10 @@ constexpr float kDefaultOrthoScale = 5.0f;
 constexpr float kDefaultObliqueFactorX = -0.354f;
 /// @brief kObliqueの際のY軸方向のせん断係数 (cot(beta)) のデフォルト値
 constexpr float kDefaultObliqueFactorY = kDefaultObliqueFactorX;
+
+/// @brief FitToBoundingBox時の余白係数のデフォルト値
+/// @note 1.0で対象に密着、>1.0で周囲に余白を設ける
+constexpr float kDefaultFitMargin = 1.1f;
 
 /// @brief カメラクラス
 /// @note カメラの位置、ターゲット、上方向を定義し、ビュー行列と投影行列を生成する
@@ -104,6 +128,10 @@ class Camera {
     /// @return カメラのターゲット座標 (x, y, z)
     const igesio::Vector3f& GetTarget() const { return target_; }
 
+    /// @brief カメラの上方向を取得する
+    /// @return カメラの上方向ベクトル (x, y, z)
+    const igesio::Vector3f& GetUp() const { return up_; }
+
     /// @brief カメラの視野角を取得する
     /// @return カメラの視野角 [rad]
     float GetFov() const { return fov_; }
@@ -121,6 +149,11 @@ class Camera {
     /// @brief カメラのターゲット位置を設定する
     /// @param target カメラのターゲット座標 (x, y, z)
     void SetTarget(const igesio::Vector3f&);
+
+    /// @brief カメラの上方向を設定する
+    /// @param up カメラの上方向ベクトル (x, y, z)
+    /// @note 正規化して格納する
+    void SetUp(const igesio::Vector3f&);
 
     /// @brief カメラの視野角を設定する
     /// @param fov カメラの視野角 [rad]
@@ -177,6 +210,30 @@ class Camera {
     ///        (1.0fで変化なし, <1.0fでズームイン, >1.0fでズームアウト)
     /// @note ターゲットとの距離は0.1fを下限とする
     void Zoom(const float);
+
+
+
+    /**
+     * ビュー設定
+     */
+
+    /// @brief 標準軸ビューへカメラの向きを設定する
+    /// @param view 標準軸ビューの種別
+    /// @note 現在のターゲットおよびターゲットまでの距離を維持したまま、位置と上方向を
+    ///       標準軸方向へ再配置する. 物体全体を画面に収めるには別途FitToBoundingBoxを
+    ///       呼ぶこと.
+    void SetStandardView(const StandardView);
+
+    /// @brief バウンディングボックス全体が収まるようにカメラを設定する
+    /// @param bbox 対象のバウンディングボックス (ワールド座標系)
+    /// @param aspect_ratio アスペクト比 (width / height)
+    /// @param margin 余白係数 (1.0で密着, デフォルトはkDefaultFitMargin)
+    /// @note 現在の視線方向と上方向を維持したまま、ターゲットをbboxの中心へ移し、
+    ///       カメラ距離 (透視) またはビューボリュームのスケール (平行・斜) と
+    ///       前後クリッピング面を、bboxの外接球が収まるように調整する.
+    /// @note bboxが有限な頂点を持たない場合、またはaspect_ratioが非正の場合は何もしない.
+    void FitToBoundingBox(const numerics::BoundingBox&, const float,
+                          const float = kDefaultFitMargin);
 
 
 

@@ -108,7 +108,8 @@ constexpr Enum kDepthStencilAttachment = 0x821A;  // GL_DEPTH_STENCIL_ATTACHMENT
 constexpr Enum kDepth24Stencil8        = 0x88F0;  // GL_DEPTH24_STENCIL8
 constexpr Enum kFramebufferComplete    = 0x8CD5;  // GL_FRAMEBUFFER_COMPLETE
 // クエリ
-constexpr Enum kViewport = 0x0BA2;  // GL_VIEWPORT
+constexpr Enum kViewport           = 0x0BA2;  // GL_VIEWPORT
+constexpr Enum kFramebufferBinding = 0x8CA6;  // GL_FRAMEBUFFER_BINDING
 
 }  // namespace gl
 

@@ -72,6 +72,8 @@ class IgesViewerGUI {
     std::unordered_map<ObjectID, Vector3d> selected_hit_positions_;
     /// @brief 再描画が必要か
     bool needs_redraw_ = true;
+    /// @brief 起動後の初回ファイル読み込みでfit view済みか
+    bool initial_fit_done_ = false;
 
     /// @brief 削除系操作のポリシー (0:Reject, 1:Cascade, 2:Orphan; ImGui用)
     int removal_policy_ = 0;
@@ -222,6 +224,10 @@ class IgesViewerGUI {
     void HandleBoxSelection(const double, const double, const int);
     /// @brief キーボードショートカット (Del/Ctrl+G/Esc/F) を処理する
     void HandleHotkeys();
+    /// @brief 標準軸ビューへ切り替え、モデル全体を画面に収める
+    /// @param view 標準軸ビューの種別
+    /// @note Camera::SetStandardViewで向きを定型化した後、FitViewで枠に収める
+    void ApplyStandardView(const StandardView);
     /// @brief マウスカーソル位置のコールバック
     void CursorPositionCallback(const double, const double);
     /// @brief スクロールホイールのコールバック

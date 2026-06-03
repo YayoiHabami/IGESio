@@ -477,6 +477,18 @@ void EntityRenderer::MarkSceneDirty() {
     scene_dirty_ = true;
 }
 
+void EntityRenderer::FitView() {
+    if (scene_ == nullptr) return;
+    if (display_width_ <= 0 || display_height_ <= 0) return;
+
+    const auto bbox = scene_->Root().GetWorldBoundingBox();
+    if (!bbox.has_value()) return;
+
+    const float aspect =
+            static_cast<float>(display_width_) / display_height_;
+    camera_.FitToBoundingBox(*bbox, aspect);
+}
+
 void EntityRenderer::RebuildDrawList() const {
     draw_list_.clear();
     if (scene_ == nullptr) return;
@@ -593,6 +605,11 @@ i_graph::Texture EntityRenderer::CaptureScreenshot() const {
         return {};  // サイズが無効な場合は空のベクターを返す
     }
 
+    // 呼び出し前にバインドされていたFBOを退避する.
+    // QtのQOpenGLWidget等、既定のFBOが0でない環境でも末尾で正しく復元するため
+    gl::Int prev_fbo = 0;
+    gl_->GetIntegerv(gl::kFramebufferBinding, &prev_fbo);
+
     // フレームバッファオブジェクトの準備
     gl::Uint fbo;
     gl_->GenFramebuffers(1, &fbo);
@@ -627,7 +644,8 @@ i_graph::Texture EntityRenderer::CaptureScreenshot() const {
         gl_->ReadPixels(0, 0, width, height, gl::kRgb, gl::kUnsignedByte, pixels.data());
     }
 
-    gl_->BindFramebuffer(gl::kFramebuffer, 0);
+    // FBOを0固定ではなく、呼び出し前にバインドされていた状態へ復元する
+    gl_->BindFramebuffer(gl::kFramebuffer, static_cast<gl::Uint>(prev_fbo));
     gl_->DeleteFramebuffers(1, &fbo);
     gl_->DeleteTextures(1, &color_tex);
     gl_->DeleteRenderbuffers(1, &rbo);
