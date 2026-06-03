@@ -7,10 +7,18 @@
  */
 #include "igesio/graphics/surfaces/trimmed_surface_graphics.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdint>
+#include <map>
+#include <memory>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "igesio/entities/interfaces/i_curve.h"
 
 namespace {
 
@@ -19,35 +27,24 @@ namespace gl = igesio::graphics::gl;
 using TrimmedSurf = i_ent::TrimmedSurface;
 using igesio::Vector3d;
 
-/// @brief グリッド分割数 (u, v 各方向)
+/// @brief 基底グリッド分割数 (u, v 各方向)
+/// @note トリム境界が通らない領域はこの粗さで三角分割される
 constexpr int kDefaultDiv = 32;
+/// @brief 境界セルを細分する四分木の最大深さ
+/// @note 局所的に実効分割数が kDefaultDiv * 2^kMaxQuadtreeDepth まで上がる
+///       (既定では 32 * 4 = 128 相当)。細い形状・欠け角の脱落を救済する
+constexpr int kMaxQuadtreeDepth = 2;
 /// @brief エッジ交差点の2分探索の反復回数
 /// @note 14回で境界位置の誤差がエッジ長の 1/2^14 ≈ 6e-5 以下になる
 constexpr int kCrossingSearchIter = 14;
 
-/// @brief パラメータ値を計算する
-double ComputeParam(
-        const int i, const int div,
-        const std::array<double, 2>& range) {
-    return range[0] + (range[1] - range[0]) * i / static_cast<double>(div);
-}
-
-/// @brief グリッド頂点のフラット化インデックスを返す
-int GridIdx(const int v_div, const int i, const int j) {
-    return i * (v_div + 1) + j;
-}
-
-/// @brief 水平エッジ交差配列のフラット化インデックスを返す
-/// @note 水平エッジ (i,j)-(i+1,j) のインデックス; サイズは u_div*(v_div+1)
-int HCrossIdx(const int v_div, const int i, const int j) {
-    return i * (v_div + 1) + j;
-}
-
-/// @brief 垂直エッジ交差配列のフラット化インデックスを返す
-/// @note 垂直エッジ (i,j)-(i,j+1) のインデックス; サイズは (u_div+1)*v_div
-int VCrossIdx(const int v_div, const int i, const int j) {
-    return i * v_div + j;
-}
+/// @brief メモ化された格子点の評価結果
+struct VertexInfo {
+    /// @brief トリム領域内かどうか (評価に成功した場合のみ true)
+    bool valid = false;
+    /// @brief valid のときの頂点列インデックス (無効点は -1)
+    int col = -1;
+};
 
 /// @brief (u,v) の頂点データ {x,y,z,nx,ny,nz,tu,tv} を計算する
 /// @return トリム領域外または評価失敗の場合は std::nullopt
@@ -91,194 +88,339 @@ std::pair<double, double> FindEdgeCrossing(
         const double vm = (v0 + v1) * 0.5;
         // order=0 で評価コストを抑えつつ有効性のみ確認する
         if (entity.TryGetDerivatives(um, vm, 0).has_value()) {
-            u0 = um; v0 = vm;
+            u0 = um;
+            v0 = vm;
         } else {
-            u1 = um; v1 = vm;
+            u1 = um;
+            v1 = vm;
         }
     }
     return {u0, v0};  // 有効端側の収束点を返す
 }
 
-/// @brief 頂点データを MatrixXf の次の列に書き込む
-/// @return 書き込んだ列インデックス (= 書き込み前の n_verts)
-int AddVertex(
-        const std::array<float, 8>& vdata,
-        igesio::MatrixXf& vertices,
-        int& n_verts) {
-    const int col = n_verts;
-    for (int r = 0; r < 8; ++r) {
-        vertices(r, col) = vdata[r];
+/// @brief 境界駆動の制限付き四分木によるトリム面メッシュ生成器
+///
+/// 基底 kDefaultDiv x kDefaultDiv グリッドを四分木のルートとし、トリム境界曲線が
+/// 通過するルートのみを深さ kMaxQuadtreeDepth まで細分する。隣接ルートの深さ差を
+/// 1以下に均すこと(2:1バランス)で、各辺のハンギングノードを高々1個に抑え、
+/// ハンギングノードを周回に含めることでクラックフリーな三角分割を得る。
+///
+/// 全頂点・交差点を「仮想最細格子」(kDefaultDiv * 2^kMaxQuadtreeDepth 解像度)の
+/// 整数座標でキー化して重複排除するため、隣接する葉は境界カットを含め必ず同一の
+/// 頂点を共有する。各葉では Marching-Squares と同じく有効コーナー+辺交差点で
+/// CCW多角形を作りファン三角分割するので、穴の過剰被覆・3Dキャップ・格子退化と
+/// いった点群Delaunay方式の失敗モードを構造的に回避する。
+class QuadtreeMesher {
+ public:
+    /// @brief コンストラクタ
+    /// @param entity 対象のトリム面
+    /// @param base_div 基底グリッド分割数
+    /// @param max_depth 境界セル細分の最大深さ
+    QuadtreeMesher(const TrimmedSurf& entity, const int base_div,
+                   const int max_depth)
+            : entity_(entity), base_div_(base_div), max_depth_(max_depth),
+              sub_(1 << max_depth), nv_(base_div * (1 << max_depth)),
+              depth_(static_cast<size_t>(base_div) * base_div, 0) {
+        const auto range = entity.GetParameterRange();
+        u_range_ = {range[0], range[1]};
+        v_range_ = {range[2], range[3]};
     }
-    ++n_verts;
-    return col;
-}
 
-/// @brief グリッド頂点と有効フラグを構築する
-void BuildGridVertices(
-        const TrimmedSurf& entity,
-        const int u_div, const int v_div,
-        const std::array<double, 2>& u_range,
-        const std::array<double, 2>& v_range,
-        std::vector<bool>& is_valid,
-        igesio::MatrixXf& vertices,
-        int& n_verts) {
-    for (int i = 0; i <= u_div; ++i) {
-        const double u = ComputeParam(i, u_div, u_range);
-        for (int j = 0; j <= v_div; ++j) {
-            const double v = ComputeParam(j, v_div, v_range);
-            const auto vdata_opt =
-                    ComputeVertexData(entity, u, v, u_range, v_range);
-            is_valid[GridIdx(v_div, i, j)] = vdata_opt.has_value();
-            // 無効点もダミー頂点として追加し、インデックスの整合性を保つ
-            const std::array<float, 8> vdata = vdata_opt.value_or(
-                std::array<float, 8>{
-                    0.f, 0.f, 0.f, 0.f, 0.f, 1.f,
-                    static_cast<float>(i) / u_div,
-                    static_cast<float>(j) / v_div
-                });
-            AddVertex(vdata, vertices, n_verts);
+    /// @brief メッシュを構築する
+    void Build() {
+        MarkBoundaryRoots();
+        SmoothDepths();
+        AllocateVertices();
+        EmitAllLeaves();
+    }
+
+    /// @brief 構築した頂点行列を取り出す (使用列数に切り詰める)
+    igesio::MatrixXf TakeVertices() {
+        vertices_.conservativeResize(8, n_verts_);
+        return std::move(vertices_);
+    }
+
+    /// @brief 構築したインデックス列を取り出す
+    std::vector<gl::Uint> TakeIndices() {
+        return std::move(indices_);
+    }
+
+ private:
+    /// @brief 仮想最細格子点 (I,J) のキーを返す
+    int64_t VKey(const int i, const int j) const {
+        return static_cast<int64_t>(i) * (nv_ + 1) + j;
+    }
+
+    /// @brief 仮想最細格子座標 (I,J) を実パラメータ (u,v) に変換する
+    std::pair<double, double> VirtToUV(const int i, const int j) const {
+        const double u = u_range_[0]
+                + (u_range_[1] - u_range_[0]) * i / static_cast<double>(nv_);
+        const double v = v_range_[0]
+                + (v_range_[1] - v_range_[0]) * j / static_cast<double>(nv_);
+        return {u, v};
+    }
+
+    /// @brief ルートセル (ri,rj) の深さを返す (範囲外は -1)
+    int RootDepth(const int ri, const int rj) const {
+        if (ri < 0 || ri >= base_div_ || rj < 0 || rj >= base_div_) return -1;
+        return depth_[static_cast<size_t>(ri) * base_div_ + rj];
+    }
+
+    /// @brief 頂点データを次の列に書き込む
+    /// @return 書き込んだ列インデックス
+    int AddVertexData(const std::array<float, 8>& vdata) {
+        const int col = n_verts_;
+        for (int r = 0; r < 8; ++r) vertices_(r, col) = vdata[r];
+        ++n_verts_;
+        return col;
+    }
+
+    /// @brief 仮想格子点 (I,J) を評価し、結果をメモ化して返す
+    VertexInfo GetVertex(const int i, const int j) {
+        const int64_t key = VKey(i, j);
+        const auto it = vmemo_.find(key);
+        if (it != vmemo_.end()) return it->second;
+
+        const auto [u, v] = VirtToUV(i, j);
+        const auto vd = ComputeVertexData(entity_, u, v, u_range_, v_range_);
+        VertexInfo info;
+        if (vd) {
+            info.valid = true;
+            info.col = AddVertexData(*vd);
+        }
+        vmemo_.emplace(key, info);
+        return info;
+    }
+
+    /// @brief サブ辺上の境界交差点を評価し、メモ化して返す
+    /// @param iv,jv 有効端の仮想格子座標
+    /// @param ii,ji 無効端の仮想格子座標
+    /// @return 交差頂点の列インデックス (評価失敗は -1)
+    /// @note キーをサブ辺端点の (min,max) で正規化するため、辺を共有する隣接葉は
+    ///       走査方向によらず同一の交差頂点を共有する
+    int GetCrossing(const int iv, const int jv, const int ii, const int ji) {
+        const int64_t kv = VKey(iv, jv);
+        const int64_t ki = VKey(ii, ji);
+        const std::pair<int64_t, int64_t> key =
+                (kv < ki) ? std::pair<int64_t, int64_t>{kv, ki}
+                          : std::pair<int64_t, int64_t>{ki, kv};
+        const auto it = cmemo_.find(key);
+        if (it != cmemo_.end()) return it->second;
+
+        const auto [u0, v0] = VirtToUV(iv, jv);
+        const auto [u1, v1] = VirtToUV(ii, ji);
+        const auto [uc, vc] = FindEdgeCrossing(entity_, u0, v0, u1, v1);
+        const auto vd = ComputeVertexData(entity_, uc, vc, u_range_, v_range_);
+        const int col = vd ? AddVertexData(*vd) : -1;
+        cmemo_.emplace(key, col);
+        return col;
+    }
+
+    /// @brief トリム境界曲線が通過するルートを最大深さでマークする
+    void MarkBoundaryRoots() {
+        // 外側境界 (N1=1 のとき); パラメータ矩形と一致する場合 (N1=0) は通らない
+        if (!entity_.IsOuterBoundaryOfD()) {
+            MarkBoundary(entity_.GetOuterBoundary());
+        }
+        // 内側境界 (穴)
+        const size_t n_inner = entity_.GetInnerBoundaryCount();
+        for (size_t i = 0; i < n_inner; ++i) {
+            MarkBoundary(entity_.GetInnerBoundaryAt(i));
         }
     }
-}
 
-/// @brief 水平エッジ (i,j)-(i+1,j) の交差頂点を構築する
-void BuildHCrossings(
-        const TrimmedSurf& entity,
-        const int u_div, const int v_div,
-        const std::array<double, 2>& u_range,
-        const std::array<double, 2>& v_range,
-        const std::vector<bool>& is_valid,
-        std::vector<int>& h_cross,
-        igesio::MatrixXf& vertices,
-        int& n_verts) {
-    for (int i = 0; i < u_div; ++i) {
-        const double u0 = ComputeParam(i, u_div, u_range);
-        const double u1 = ComputeParam(i + 1, u_div, u_range);
-        for (int j = 0; j <= v_div; ++j) {
-            const double v = ComputeParam(j, v_div, v_range);
-            const bool v0 = is_valid[GridIdx(v_div, i, j)];
-            const bool v1 = is_valid[GridIdx(v_div, i + 1, j)];
-            if (v0 == v1) continue;
+    /// @brief 1本のトリム境界(142)の基底曲線 B(t)=(u,v) を標本化してルートを
+    ///        マークする
+    /// @note GetBaseCurve は未設定時に例外を投げ、退化曲線は評価に失敗しうるため、
+    ///       これらをまとめて捕捉し、失敗時は当該境界をスキップする
+    ///       (細分されず粗い MS にフォールバック)
+    void MarkBoundary(
+            const std::shared_ptr<const i_ent::CurveOnAParametricSurface>& bnd) {
+        if (!bnd) return;
+        const double du = u_range_[1] - u_range_[0];
+        const double dv = v_range_[1] - v_range_[0];
+        if (du == 0.0 || dv == 0.0) return;
+        try {
+            const auto base = bnd->GetBaseCurve();
+            if (!base) return;
+            const auto range = base->GetParameterRange();
+            const double t0 = range[0], t1 = range[1];
+            if (!std::isfinite(t0) || !std::isfinite(t1) || t1 <= t0) return;
 
-            // 有効端から無効端へ向けて2分探索
-            auto [uc, vc] = v0
-                ? FindEdgeCrossing(entity, u0, v, u1, v)
-                : FindEdgeCrossing(entity, u1, v, u0, v);
-            const auto vdata_opt =
-                    ComputeVertexData(entity, uc, vc, u_range, v_range);
-            if (!vdata_opt) continue;
-
-            h_cross[HCrossIdx(v_div, i, j)] =
-                    AddVertex(*vdata_opt, vertices, n_verts);
-        }
-    }
-}
-
-/// @brief 垂直エッジ (i,j)-(i,j+1) の交差頂点を構築する
-void BuildVCrossings(
-        const TrimmedSurf& entity,
-        const int u_div, const int v_div,
-        const std::array<double, 2>& u_range,
-        const std::array<double, 2>& v_range,
-        const std::vector<bool>& is_valid,
-        std::vector<int>& v_cross,
-        igesio::MatrixXf& vertices,
-        int& n_verts) {
-    for (int i = 0; i <= u_div; ++i) {
-        const double u = ComputeParam(i, u_div, u_range);
-        for (int j = 0; j < v_div; ++j) {
-            const double v0 = ComputeParam(j, v_div, v_range);
-            const double v1 = ComputeParam(j + 1, v_div, v_range);
-            const bool val0 = is_valid[GridIdx(v_div, i, j)];
-            const bool val1 = is_valid[GridIdx(v_div, i, j + 1)];
-            if (val0 == val1) continue;
-
-            auto [uc, vc] = val0
-                ? FindEdgeCrossing(entity, u, v0, u, v1)
-                : FindEdgeCrossing(entity, u, v1, u, v0);
-            const auto vdata_opt =
-                    ComputeVertexData(entity, uc, vc, u_range, v_range);
-            if (!vdata_opt) continue;
-
-            v_cross[VCrossIdx(v_div, i, j)] =
-                    AddVertex(*vdata_opt, vertices, n_verts);
-        }
-    }
-}
-
-/// @brief セルのトリム有効ポリゴンをCCW順の頂点インデックス列で返す
-/// @note CCW走査順: BL → bottom_cross → BR → right_cross →
-///                  TR → top_cross → TL → left_cross
-/// @param bl,br,tr,tl 各コーナーの有効フラグ
-/// @param idx_* 各コーナーの頂点インデックス
-/// @param h_bot,v_right,h_top,v_left エッジ交差頂点インデックス (-1 = なし)
-std::vector<int> BuildCellPolygon(
-        const bool bl, const bool br,
-        const bool tr, const bool tl,
-        const int idx_bl, const int idx_br,
-        const int idx_tr, const int idx_tl,
-        const int h_bot, const int v_right,
-        const int h_top, const int v_left) {
-    std::vector<int> poly;
-    poly.reserve(8);
-    if (bl)       poly.push_back(idx_bl);
-    if (h_bot >= 0) poly.push_back(h_bot);
-    if (br)       poly.push_back(idx_br);
-    if (v_right >= 0) poly.push_back(v_right);
-    if (tr)       poly.push_back(idx_tr);
-    if (h_top >= 0)  poly.push_back(h_top);
-    if (tl)       poly.push_back(idx_tl);
-    if (v_left >= 0) poly.push_back(v_left);
-    return poly;
-}
-
-/// @brief 各セルの三角形インデックスを構築する
-void BuildTriangleIndices(
-        const int u_div, const int v_div,
-        const std::vector<bool>& is_valid,
-        const std::vector<int>& h_cross,
-        const std::vector<int>& v_cross,
-        std::vector<gl::Uint>& indices) {
-    for (int i = 0; i < u_div; ++i) {
-        for (int j = 0; j < v_div; ++j) {
-            const int idx_bl = GridIdx(v_div, i, j);
-            const int idx_br = GridIdx(v_div, i + 1, j);
-            const int idx_tr = GridIdx(v_div, i + 1, j + 1);
-            const int idx_tl = GridIdx(v_div, i, j + 1);
-            const bool bl = is_valid[idx_bl];
-            const bool br = is_valid[idx_br];
-            const bool tr = is_valid[idx_tr];
-            const bool tl = is_valid[idx_tl];
-
-            if (!bl && !br && !tr && !tl) continue;
-
-            if (bl && br && tr && tl) {
-                // 全有効 → 標準2三角形
-                indices.push_back(static_cast<gl::Uint>(idx_bl));
-                indices.push_back(static_cast<gl::Uint>(idx_br));
-                indices.push_back(static_cast<gl::Uint>(idx_tr));
-                indices.push_back(static_cast<gl::Uint>(idx_bl));
-                indices.push_back(static_cast<gl::Uint>(idx_tr));
-                indices.push_back(static_cast<gl::Uint>(idx_tl));
-                continue;
+            // 仮想最細格子の2倍密度で標本化し、線分ごとに通過セルを埋める
+            const int n_samples = nv_ * 2;
+            bool has_prev = false;
+            double pu = 0.0, pv = 0.0;
+            for (int s = 0; s <= n_samples; ++s) {
+                const double t = t0 + (t1 - t0) * s / n_samples;
+                const auto p = base->TryGetPointAt(t);
+                if (!p) {
+                    has_prev = false;
+                    continue;
+                }
+                const double fu = ((*p)[0] - u_range_[0]) / du * base_div_;
+                const double fv = ((*p)[1] - v_range_[0]) / dv * base_div_;
+                if (has_prev) MarkSegment(pu, pv, fu, fv);
+                else          MarkSegment(fu, fv, fu, fv);
+                pu = fu;
+                pv = fv;
+                has_prev = true;
             }
+        } catch (const std::exception&) {
+            // 当該境界はスキップ
+        }
+    }
 
-            // 境界セル: 有効コーナー + 交差点でCCW多角形を構築してファン三角分割
-            const auto poly = BuildCellPolygon(
-                    bl, br, tr, tl, idx_bl, idx_br, idx_tr, idx_tl,
-                    h_cross[HCrossIdx(v_div, i, j)],
-                    v_cross[VCrossIdx(v_div, i + 1, j)],
-                    h_cross[HCrossIdx(v_div, i, j + 1)],
-                    v_cross[VCrossIdx(v_div, i, j)]);
+    /// @brief ルートセル座標 (浮動小数) の線分が通過するセルをマークする
+    void MarkSegment(const double fu0, const double fv0,
+                     const double fu1, const double fv1) {
+        const int steps = std::max(1, static_cast<int>(std::ceil(
+                std::max(std::abs(fu1 - fu0), std::abs(fv1 - fv0)) * 2.0)));
+        for (int s = 0; s <= steps; ++s) {
+            const double t = static_cast<double>(s) / steps;
+            const double fu = fu0 + (fu1 - fu0) * t;
+            const double fv = fv0 + (fv1 - fv0) * t;
+            const int ri = std::clamp(
+                    static_cast<int>(std::floor(fu)), 0, base_div_ - 1);
+            const int rj = std::clamp(
+                    static_cast<int>(std::floor(fv)), 0, base_div_ - 1);
+            depth_[static_cast<size_t>(ri) * base_div_ + rj] = max_depth_;
+        }
+    }
 
-            for (size_t k = 1; k + 1 < poly.size(); ++k) {
-                indices.push_back(static_cast<gl::Uint>(poly[0]));
-                indices.push_back(static_cast<gl::Uint>(poly[k]));
-                indices.push_back(static_cast<gl::Uint>(poly[k + 1]));
+    /// @brief 隣接ルートの深さ差が1以下になるよう深さ場を緩和する (2:1バランス)
+    void SmoothDepths() {
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (int ri = 0; ri < base_div_; ++ri) {
+                for (int rj = 0; rj < base_div_; ++rj) {
+                    const int max_n = std::max({
+                            RootDepth(ri - 1, rj), RootDepth(ri + 1, rj),
+                            RootDepth(ri, rj - 1), RootDepth(ri, rj + 1)});
+                    int& d = depth_[static_cast<size_t>(ri) * base_div_ + rj];
+                    if (d < max_n - 1) {
+                        d = max_n - 1;
+                        changed = true;
+                    }
+                }
             }
         }
     }
-}
+
+    /// @brief 全葉から見た頂点数の上界で頂点行列を事前確保する
+    void AllocateVertices() {
+        int64_t est = 0;
+        for (int d : depth_) {
+            const int n = 1 << d;
+            // コーナー (n+1)^2 + 辺交差点・ハンギングノードの上界 4n^2
+            est += static_cast<int64_t>(n + 1) * (n + 1)
+                 + static_cast<int64_t>(4) * n * n;
+        }
+        vertices_.resize(8, static_cast<int>(est));
+        indices_.reserve(static_cast<size_t>(est) * 2);
+    }
+
+    /// @brief 全ルートの葉を走査して三角形を生成する
+    void EmitAllLeaves() {
+        for (int ri = 0; ri < base_div_; ++ri) {
+            for (int rj = 0; rj < base_div_; ++rj) {
+                const int level = RootDepth(ri, rj);
+                const int n = 1 << level;
+                const int leaf_size = sub_ >> level;
+                for (int li = 0; li < n; ++li) {
+                    for (int lj = 0; lj < n; ++lj) {
+                        EmitLeaf(ri * sub_ + li * leaf_size,
+                                 rj * sub_ + lj * leaf_size, leaf_size,
+                                 level, ri, rj, li, lj, n);
+                    }
+                }
+            }
+        }
+    }
+
+    /// @brief 1つの葉セルを三角分割してインデックスに追加する
+    /// @param i0,j0 葉の左下コーナーの仮想格子座標
+    /// @param size 葉の一辺の仮想格子ステップ数
+    /// @param level 葉が属するルートの深さ
+    /// @param ri,rj ルートセル座標
+    /// @param li,lj ルート内の葉インデックス
+    /// @param n ルート内の一辺あたりの葉数 (= 2^level)
+    void EmitLeaf(const int i0, const int j0, const int size,
+                  const int level, const int ri, const int rj,
+                  const int li, const int lj, const int n) {
+        // 各辺のハンギングノード: 当該辺がルート境界上にあり、かつ隣接ルートが
+        // ちょうど1段細かい (level+1) ときのみ中点ノードを挿入する
+        const bool h_bot = (lj == 0)     && RootDepth(ri, rj - 1) == level + 1;
+        const bool h_rgt = (li == n - 1) && RootDepth(ri + 1, rj) == level + 1;
+        const bool h_top = (lj == n - 1) && RootDepth(ri, rj + 1) == level + 1;
+        const bool h_lft = (li == 0)     && RootDepth(ri - 1, rj) == level + 1;
+        const int hs = size / 2;
+
+        // 周回頂点を CCW 順に列挙 (BL→bottom→BR→right→TR→top→TL→left)
+        std::array<std::pair<int, int>, 8> perim;
+        int m = 0;
+        perim[m++] = {i0, j0};
+        if (h_bot) perim[m++] = {i0 + hs, j0};
+        perim[m++] = {i0 + size, j0};
+        if (h_rgt) perim[m++] = {i0 + size, j0 + hs};
+        perim[m++] = {i0 + size, j0 + size};
+        if (h_top) perim[m++] = {i0 + hs, j0 + size};
+        perim[m++] = {i0, j0 + size};
+        if (h_lft) perim[m++] = {i0, j0 + hs};
+
+        // 有効コーナーと境界交差点で CCW 多角形を構築する
+        // (最大: コーナー8 + サブ辺交差点8 = 16)
+        std::array<int, 18> poly;
+        int np = 0;
+        for (int k = 0; k < m; ++k) {
+            const auto [ia, ja] = perim[k];
+            const auto [ib, jb] = perim[(k + 1) % m];
+            const VertexInfo va = GetVertex(ia, ja);
+            const VertexInfo vb = GetVertex(ib, jb);
+            if (va.valid) poly[np++] = va.col;
+            if (va.valid != vb.valid) {
+                const int cross = va.valid ? GetCrossing(ia, ja, ib, jb)
+                                           : GetCrossing(ib, jb, ia, ja);
+                if (cross >= 0) poly[np++] = cross;
+            }
+        }
+
+        // poly[0] 基点でファン三角分割
+        for (int k = 1; k + 1 < np; ++k) {
+            indices_.push_back(static_cast<gl::Uint>(poly[0]));
+            indices_.push_back(static_cast<gl::Uint>(poly[k]));
+            indices_.push_back(static_cast<gl::Uint>(poly[k + 1]));
+        }
+    }
+
+    /// @brief 対象のトリム面
+    const TrimmedSurf& entity_;
+    /// @brief 基底グリッド分割数
+    const int base_div_;
+    /// @brief 境界セル細分の最大深さ
+    const int max_depth_;
+    /// @brief ルート1辺あたりの仮想格子ステップ数 (= 2^max_depth_)
+    const int sub_;
+    /// @brief 仮想最細格子の1軸あたり分割数 (= base_div_ * sub_)
+    const int nv_;
+    /// @brief パラメータ範囲 {u_min, u_max}
+    std::array<double, 2> u_range_;
+    /// @brief パラメータ範囲 {v_min, v_max}
+    std::array<double, 2> v_range_;
+    /// @brief 各ルートセルの四分木深さ
+    std::vector<int> depth_;
+    /// @brief 頂点データ {x,y,z,nx,ny,nz,tu,tv} (各列が1頂点)
+    igesio::MatrixXf vertices_;
+    /// @brief 確定済み頂点数
+    int n_verts_ = 0;
+    /// @brief 三角形インデックス
+    std::vector<gl::Uint> indices_;
+    /// @brief 仮想格子点キー → 評価結果 のメモ
+    std::unordered_map<int64_t, VertexInfo> vmemo_;
+    /// @brief サブ辺キー → 交差頂点列インデックス のメモ
+    std::map<std::pair<int64_t, int64_t>, int> cmemo_;
+};
 
 }  // namespace
 
@@ -417,38 +559,8 @@ igesio::graphics::TrimmedSurfaceGraphics::GetSelectionSamples(
  */
 
 void igesio::graphics::TrimmedSurfaceGraphics::GenerateSurfaceData() {
-    constexpr int u_div = kDefaultDiv;
-    constexpr int v_div = kDefaultDiv;
-
-    const auto range = entity_->GetParameterRange();
-    const std::array<double, 2> u_range = {range[0], range[1]};
-    const std::array<double, 2> v_range = {range[2], range[3]};
-
-    // 最大頂点数を事前確保: グリッド + 水平エッジ交差 + 垂直エッジ交差
-    const int max_verts = (u_div + 1) * (v_div + 1)
-                        + u_div * (v_div + 1)
-                        + (u_div + 1) * v_div;
-    vertices_.resize(8, max_verts);
-
-    // グリッド頂点の構築
-    std::vector<bool> is_valid((u_div + 1) * (v_div + 1), false);
-    int n_verts = 0;
-    BuildGridVertices(*entity_, u_div, v_div, u_range, v_range,
-                      is_valid, vertices_, n_verts);
-
-    // エッジ交差頂点の構築
-    std::vector<int> h_cross(u_div * (v_div + 1), -1);
-    std::vector<int> v_cross((u_div + 1) * v_div, -1);
-    BuildHCrossings(*entity_, u_div, v_div, u_range, v_range,
-                    is_valid, h_cross, vertices_, n_verts);
-    BuildVCrossings(*entity_, u_div, v_div, u_range, v_range,
-                    is_valid, v_cross, vertices_, n_verts);
-
-    // 三角形インデックスの構築
-    indices_.clear();
-    indices_.reserve(u_div * v_div * 6);
-    BuildTriangleIndices(u_div, v_div, is_valid, h_cross, v_cross, indices_);
-
-    // 未使用の事前確保分を切り捨てる
-    vertices_.conservativeResize(8, n_verts);
+    QuadtreeMesher mesher(*entity_, kDefaultDiv, kMaxQuadtreeDepth);
+    mesher.Build();
+    vertices_ = mesher.TakeVertices();
+    indices_ = mesher.TakeIndices();
 }
