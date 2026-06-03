@@ -7,6 +7,7 @@ add_library(igesio_entities STATIC
     interfaces/i_geometry.cpp
     interfaces/i_curve.cpp
     interfaces/i_surface.cpp
+    interfaces/i_restricted_surface.cpp
 
     # Views (in-memory transform decorators)
     views/curve_view.cpp
