@@ -21,10 +21,9 @@
 namespace igesio::graphics {
 
 /// @brief TrimmedSurfaceエンティティの描画情報の管理クラス
-/// @note 均一グリッドにエッジ交差点を加えたMarching Squares的な三角分割により、
-///       トリム境界近傍の段差を抑制する。
-///       各グリッドエッジでの有効/無効の遷移点を2分探索で求め、
-///       境界セルを凸多角形にクリッピングしてファン三角分割する。
+/// @note メッシュ生成は制限付き曲面(143/144)共通のテッセレーション
+///       (entities::TessellateRestrictedSurface) に委譲する。境界駆動の
+///       制限付き四分木により、トリム境界近傍を適応的に細分する。
 class TrimmedSurfaceGraphics
     : public EntityGraphics<entities::TrimmedSurface, true> {
     /// @brief 面のVBO
