@@ -62,6 +62,7 @@ add_library(igesio_entities STATIC
     surfaces/algorithms/surface_line_intersection.cpp
     surfaces/algorithms/curve_surface_inversion.cpp
     surfaces/algorithms/restricted_surface_mesh.cpp
+    surfaces/algorithms/surface_boundary_edges.cpp
 
     # Factory
     factory.cpp
