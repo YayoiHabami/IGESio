@@ -6,7 +6,6 @@
 #   - IGESIO_BUILD_GUI: Build GUI (with GLFW and ImGui) as examples (default: OFF)
 #     - if IGESIO_BUILD_GUI is ON, IGESIO_ENABLE_GRAPHICS is also set to ON
 #     - if IGESIO_BUILD_GUI is ON, IGESIO_ENABLE_TEXTURE_IO is also set to ON
-#     - this option requires python environment and jinja2 installed
 #   - IGESIO_BUILD_TESTING: Build the tests (default: OFF)
 #   - IGESIO_ENABLE_COVERAGE: Enable coverage reporting (default: OFF)
 #   - IGESIO_ENABLE_EIGEN: Enable Eigen support (default: ON)
@@ -192,35 +191,31 @@ if(IGESIO_BUILD_GUI)
   message(STATUS "GUI support enabled, enabling texture I/O support as well")
 endif()
 
-# Fetch glad if OpenGL support is enabled
+# Build the pre-generated glad loader if OpenGL support is enabled
 if(IGESIO_ENABLE_GRAPHICS)
-  include(FetchContent)
-
   # Find OpenGL
   find_package(OpenGL REQUIRED)
 
-  # Fetch glad
-  FetchContent_Declare(
-    glad
-    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-    GIT_TAG v2.0.4
-  )
-  FetchContent_MakeAvailable(glad)
-  set(GLAD_GENERATOR_DIR "${glad_BINARY_DIR}")
-
   # Add glad library
+  # 生成済みのgladローダ (third_party/glad_gl_core_43) を直接ビルドする. ビルド時生成を
+  # 行わないため、Python+jinja2の環境やgladリポジトリのフェッチは不要.
+  # 構成を変更する場合の再生成手順はthird_party/glad_gl_core_43/generation_args.txtを参照.
   # MX (multi-context): 関数ポインタはグローバルでなくGladGLContext構造体に持つ.
   # これによりグローバルなglad_glXxxシンボルが消え、利用側との衝突を避けつつ、
   # コンテキスト固有のロード (gladLoadGLContext) をライブラリ内部に封じ込められる.
   # gl:core=4.3: graphicsモジュールはテッセレーション (GL 4.0) とSSBO (GL 4.3)
-  # に依存するため、要求バージョンと同じ4.3 coreでローダを生成する.
-  add_subdirectory(${glad_SOURCE_DIR}/cmake ${glad_BINARY_DIR})
-  glad_add_library(glad_gl_core_43 REPRODUCIBLE MX API gl:core=4.3)
-  # Overwrite the INTERFACE_INCLUDE_DIRECTORIES property for glad
-  # to use generator expressions, making it relocatable for both build and install.
-  set_target_properties(glad_gl_core_43 PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/gladsources/glad_gl_core_43/include>;$<INSTALL_INTERFACE:include>"
+  # に依存するため、要求バージョンと同じ4.3 coreで生成したローダを使用する.
+  add_library(glad_gl_core_43 STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad_gl_core_43/src/gl.c"
   )
+  # Use generator expressions for the include directories,
+  # making the target relocatable for both build and install.
+  target_include_directories(glad_gl_core_43 PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad_gl_core_43/include>"
+    "$<INSTALL_INTERFACE:include>"
+  )
+  # glad付属CMakeのリンク指定と同等 (Linuxでのdlopen用; MSVC等では空)
+  target_link_libraries(glad_gl_core_43 PUBLIC ${CMAKE_DL_LIBS})
   message(STATUS "OpenGL (glad) support enabled")
 else()
   message(STATUS "OpenGL (glad) support is disabled")

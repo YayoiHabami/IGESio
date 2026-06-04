@@ -68,7 +68,7 @@ IGESioライブラリのビルドをカスタマイズするためのCMakeオプ
 |------------|------|------------|
 | `IGESIO_BUILD_DOCS` | ドキュメントをビルドする | OFF |
 | `IGESIO_BUILD_EXAMPLE` | examplesをビルドする | OFF |
-| `IGESIO_BUILD_GUI` | GUI（GLFWおよびImGuiを使用）を例としてビルドする<br>※ このオプションがONのとき、`IGESIO_ENABLE_GRAPHICS`、`IGESIO_ENABLE_TEXTURE_IO`も有効化される<br>※ Python環境とjinja2のインストールが必要 | OFF |
+| `IGESIO_BUILD_GUI` | GUI（GLFWおよびImGuiを使用）を例としてビルドする<br>※ このオプションがONのとき、`IGESIO_ENABLE_GRAPHICS`、`IGESIO_ENABLE_TEXTURE_IO`も有効化される | OFF |
 | `IGESIO_BUILD_TESTING` | テストをビルドする | OFF |
 | `IGESIO_ENABLE_COVERAGE` | カバレッジレポートを有効にする | OFF |
 | `IGESIO_ENABLE_EIGEN` | Eigenサポートを有効にする | OFF |
