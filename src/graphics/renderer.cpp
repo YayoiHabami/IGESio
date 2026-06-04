@@ -18,7 +18,31 @@
 namespace {
 
 namespace i_graph = igesio::graphics;
+namespace gl = igesio::graphics::gl;
 using EntityRenderer = igesio::graphics::EntityRenderer;
+
+/// @brief 面塗りへ適用する深度オフセット (glPolygonOffsetのfactor/units)
+/// @note 面上に重なるエッジ線・曲線が深度量子化で面に負けないよう、
+///       面塗りのみを僅かに奥へずらすための値
+constexpr float kSurfaceFillDepthOffset = 1.0f;
+
+/// @brief 表示モードに応じて当該シェーダー型を描画すべきか判定する
+/// @param st シェーダー型
+/// @param mode 表示モード
+/// @return 描画すべき場合はtrue
+/// @note 面塗り(kGeneralSurface/kRationalBSplineSurface)と面エッジ(kSurfaceEdge)を
+///       モードで切り替える. それ以外 (独立曲線・点) は常に描画する.
+bool ShouldDrawShaderType(const i_graph::ShaderType st,
+                          const i_graph::DisplayMode mode) {
+    const bool is_surface_fill = IsSurfaceFill(st);
+    const bool is_surface_edge = st == i_graph::ShaderType::kSurfaceEdge;
+    switch (mode) {
+        case i_graph::DisplayMode::kShaded:    return true;
+        case i_graph::DisplayMode::kNoEdge:    return !is_surface_edge;
+        case i_graph::DisplayMode::kWireFrame: return !is_surface_fill;
+    }
+    return true;
+}
 
 /// @brief 頂点群の重心（平均座標）を計算する
 /// @param vertices 頂点群（空でないこと）
@@ -256,15 +280,23 @@ EntityRenderer::EntityRenderer(std::shared_ptr<IOpenGL> gl,
 
 
 
+void EntityRenderer::SetGLBackend(std::shared_ptr<IOpenGL> gl) {
+    gl_ = std::move(gl);
+}
+
 bool EntityRenderer::IsInitialized() const {
-    return !shader_programs_.empty();
+    return gl_ != nullptr && !shader_programs_.empty();
 }
 
 void EntityRenderer::Initialize() {
+    if (gl_ == nullptr) {
+        throw igesio::ImplementationError(
+                "GL backend is not set; call SetGLBackend() before Initialize()");
+    }
     InitShaders();
 
     // 深度テストを有効化
-    gl_->Enable(GL_DEPTH_TEST);
+    gl_->Enable(gl::kDepthTest);
 
     // アンチエイリアシングの初期化
     EnableAntialiasing(settings_.enable_antialiasing);
@@ -292,7 +324,7 @@ void EntityRenderer::Cleanup() {
     shader_programs_.clear();
 
     // OpenGLリソースの解放
-    gl_->Disable(GL_DEPTH_TEST);
+    gl_->Disable(gl::kDepthTest);
 }
 
 
@@ -390,14 +422,17 @@ void EntityRenderer::SetSettings(const GraphicsSettings& settings) {
     if (settings.enable_transparency != settings_.enable_transparency) {
         EnableTransparency(settings.enable_transparency);
     }
+
+    // 表示モード (即時のGL状態変更は不要; 次回Draw時のシェーダー型フィルタで反映)
+    settings_.display_mode = settings.display_mode;
 }
 
 void EntityRenderer::EnableAntialiasing(const bool enable) {
     settings_.enable_antialiasing = enable;
     if (settings_.enable_antialiasing) {
-        gl_->Enable(GL_MULTISAMPLE);
+        gl_->Enable(gl::kMultisample);
     } else {
-        gl_->Disable(GL_MULTISAMPLE);
+        gl_->Disable(gl::kMultisample);
     }
 }
 
@@ -408,15 +443,23 @@ bool EntityRenderer::IsAntialiasingEnabled() const {
 void EntityRenderer::EnableTransparency(const bool enable) {
     settings_.enable_transparency = enable;
     if (settings_.enable_transparency) {
-        gl_->Enable(GL_BLEND);
-        gl_->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        gl_->Enable(gl::kBlend);
+        gl_->BlendFunc(gl::kSrcAlpha, gl::kOneMinusSrcAlpha);
     } else {
-        gl_->Disable(GL_BLEND);
+        gl_->Disable(gl::kBlend);
     }
 }
 
 bool EntityRenderer::IsTransparencyEnabled() const {
     return settings_.enable_transparency;
+}
+
+void EntityRenderer::SetDisplayMode(const DisplayMode mode) {
+    settings_.display_mode = mode;
+}
+
+i_graph::DisplayMode EntityRenderer::GetDisplayMode() const {
+    return settings_.display_mode;
 }
 
 
@@ -432,7 +475,7 @@ void EntityRenderer::Draw() const {
     // 背景色と深度バッファをクリア
     gl_->ClearColor(background_color_[0], background_color_[1],
                  background_color_[2], background_color_[3]);
-    gl_->Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    gl_->Clear(gl::kColorBufferBit | gl::kDepthBufferBit);
 
     // 描画するエンティティが1つもない場合は何もしない
     if (IsEmpty()) return;
@@ -462,10 +505,36 @@ void EntityRenderer::Draw() const {
 void EntityRenderer::SetScene(const models::Scene* scene) {
     scene_ = scene;
     scene_dirty_ = true;
+    UpdateAutoClipSphere();
 }
 
 void EntityRenderer::MarkSceneDirty() {
     scene_dirty_ = true;
+    UpdateAutoClipSphere();
+}
+
+void EntityRenderer::UpdateAutoClipSphere() {
+    if (scene_ != nullptr) {
+        if (const auto bbox = scene_->Root().GetWorldBoundingBox()) {
+            if (const auto sphere = ComputeBoundingSphere(*bbox)) {
+                camera_.SetAutoClipSphere(sphere->first, sphere->second);
+                return;
+            }
+        }
+    }
+    camera_.ClearAutoClipSphere();
+}
+
+void EntityRenderer::FitView() {
+    if (scene_ == nullptr) return;
+    if (display_width_ <= 0 || display_height_ <= 0) return;
+
+    const auto bbox = scene_->Root().GetWorldBoundingBox();
+    if (!bbox.has_value()) return;
+
+    const float aspect =
+            static_cast<float>(display_width_) / display_height_;
+    camera_.FitToBoundingBox(*bbox, aspect);
 }
 
 void EntityRenderer::RebuildDrawList() const {
@@ -534,24 +603,50 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
     const std::pair<float, float> viewport{
         static_cast<float>(display_width_), static_cast<float>(display_height_)};
 
+    // 光源パラメータを平坦バッファへ詰める (シェーダー間で共有のため一度だけ構築)
+    const int num_lights = std::min(static_cast<int>(lights_.size()), kMaxLights);
+    std::vector<float> light_pos(3 * num_lights);
+    std::vector<float> light_att(3 * num_lights);
+    std::vector<float> light_col(4 * num_lights);
+    for (int i = 0; i < num_lights; ++i) {
+        const auto& l = lights_[i];
+        std::copy_n(l.position.data(), 3, light_pos.begin() + 3 * i);
+        std::copy_n(l.attenuation.data(), 3, light_att.begin() + 3 * i);
+        std::copy_n(l.color.data(), 4, light_col.begin() + 4 * i);
+    }
+
     for (const auto& [shader_type, program_id] : shader_programs_) {
+        // 表示モードに応じて面塗り/面エッジのシェーダー型を取捨する
+        if (!ShouldDrawShaderType(shader_type, settings_.display_mode)) continue;
+
         auto it = draw_list_.find(shader_type);
         if (it == draw_list_.end() || it->second.empty()) continue;
 
         gl_->UseProgram(program_id);
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "view"),
-                              1, GL_FALSE, view_matrix.data());
+                              1, gl::kFalse, view_matrix.data());
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
-                              1, GL_FALSE, projection_matrix.data());
+                              1, gl::kFalse, projection_matrix.data());
 
-        // 光源のパラメータを設定
+        // 面上のエッジ線・曲線が確実に手前へ出るよう、面塗りのみ奥へオフセットする
+        const bool offset_fill = IsSurfaceFill(shader_type);
+        if (offset_fill) {
+            gl_->Enable(gl::kPolygonOffsetFill);
+            gl_->PolygonOffset(kSurfaceFillDepthOffset, kSurfaceFillDepthOffset);
+        }
+
+        // 光源のパラメータを設定 (配列uniformとして送信)
         if (UsesLighting(shader_type)) {
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPos_WorldSpace"),
-                            1, light_.position.data());
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuation"),
-                            1, light_.attenuation.data());
-            gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColor"),
-                            1, light_.color.data());
+            gl_->Uniform1i(gl_->GetUniformLocation(program_id, "numLights"),
+                           num_lights);
+            if (num_lights > 0) {
+                gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPositions"),
+                                num_lights, light_pos.data());
+                gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuations"),
+                                num_lights, light_att.data());
+                gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColors"),
+                                num_lights, light_col.data());
+            }
         }
 
         for (auto* graphics : it->second) {
@@ -559,6 +654,8 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
                 graphics->Draw(program_id, shader_type, viewport, ctx);
             }
         }
+
+        if (offset_fill) gl_->Disable(gl::kPolygonOffsetFill);
     }
 }
 
@@ -568,41 +665,47 @@ i_graph::Texture EntityRenderer::CaptureScreenshot() const {
         return {};  // サイズが無効な場合は空のベクターを返す
     }
 
+    // 呼び出し前にバインドされていたFBOを退避する.
+    // QtのQOpenGLWidget等、既定のFBOが0でない環境でも末尾で正しく復元するため
+    gl::Int prev_fbo = 0;
+    gl_->GetIntegerv(gl::kFramebufferBinding, &prev_fbo);
+
     // フレームバッファオブジェクトの準備
-    GLuint fbo;
+    gl::Uint fbo;
     gl_->GenFramebuffers(1, &fbo);
-    gl_->BindFramebuffer(GL_FRAMEBUFFER, fbo);
+    gl_->BindFramebuffer(gl::kFramebuffer, fbo);
 
     // テクスチャを作成 (カラーバッファ用)
-    GLuint color_tex;
+    gl::Uint color_tex;
     gl_->GenTextures(1, &color_tex);
-    gl_->BindTexture(GL_TEXTURE_2D, color_tex);
-    gl_->TexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
-                    0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-    gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    gl_->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl_->BindTexture(gl::kTexture2D, color_tex);
+    gl_->TexImage2D(gl::kTexture2D, 0, gl::kRgb, width, height,
+                    0, gl::kRgb, gl::kUnsignedByte, nullptr);
+    gl_->TexParameteri(gl::kTexture2D, gl::kTextureMinFilter, gl::kLinear);
+    gl_->TexParameteri(gl::kTexture2D, gl::kTextureMagFilter, gl::kLinear);
 
     // レンダーバッファオブジェクトの準備 (深度バッファ用)
-    GLuint rbo;
+    gl::Uint rbo;
     gl_->GenRenderbuffers(1, &rbo);
-    gl_->BindRenderbuffer(GL_RENDERBUFFER, rbo);
-    gl_->RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    gl_->BindRenderbuffer(gl::kRenderbuffer, rbo);
+    gl_->RenderbufferStorage(gl::kRenderbuffer, gl::kDepth24Stencil8, width, height);
 
     // テクスチャ/RBOをFBOにアタッチ
-    gl_->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                              GL_TEXTURE_2D, color_tex, 0);
-    gl_->FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
-                                  GL_RENDERBUFFER, rbo);
+    gl_->FramebufferTexture2D(gl::kFramebuffer, gl::kColorAttachment0,
+                              gl::kTexture2D, color_tex, 0);
+    gl_->FramebufferRenderbuffer(gl::kFramebuffer, gl::kDepthStencilAttachment,
+                                  gl::kRenderbuffer, rbo);
 
     // FBOの準備に成功した場合のみ描画と読み取りを行う
     std::vector<unsigned char> pixels;
-    if (gl_->CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+    if (gl_->CheckFramebufferStatus(gl::kFramebuffer) == gl::kFramebufferComplete) {
         Draw();
         pixels.resize(width * height * 3);  // RGB形式
-        gl_->ReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+        gl_->ReadPixels(0, 0, width, height, gl::kRgb, gl::kUnsignedByte, pixels.data());
     }
 
-    gl_->BindFramebuffer(GL_FRAMEBUFFER, 0);
+    // FBOを0固定ではなく、呼び出し前にバインドされていた状態へ復元する
+    gl_->BindFramebuffer(gl::kFramebuffer, static_cast<gl::Uint>(prev_fbo));
     gl_->DeleteFramebuffers(1, &fbo);
     gl_->DeleteTextures(1, &color_tex);
     gl_->DeleteRenderbuffers(1, &rbo);
@@ -747,8 +850,8 @@ i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) const
  */
 
 std::array<int, 4> EntityRenderer::GetCurrentViewport() const {
-    GLint viewport[4];
-    gl_->GetIntegerv(GL_VIEWPORT, viewport);
+    gl::Int viewport[4];
+    gl_->GetIntegerv(gl::kViewport, viewport);
     return {viewport[0], viewport[1], viewport[2], viewport[3]};
 }
 
@@ -758,12 +861,12 @@ std::array<int, 4> EntityRenderer::GetCurrentViewport() const {
  * private member functions
  */
 
-GLuint EntityRenderer::CompileVertexShader(const std::string& vertex_source) {
+gl::Uint EntityRenderer::CompileVertexShader(const std::string& vertex_source) {
     if (vertex_source.empty()) {
         throw igesio::ImplementationError("Vertex shader source is empty");
     }
 
-    GLuint vertex_shader = gl_->CreateShader(GL_VERTEX_SHADER);
+    gl::Uint vertex_shader = gl_->CreateShader(gl::kVertexShader);
     const char* source_cstr = vertex_source.c_str();
     gl_->ShaderSource(vertex_shader, 1, &source_cstr, nullptr);
     gl_->CompileShader(vertex_shader);
@@ -771,7 +874,7 @@ GLuint EntityRenderer::CompileVertexShader(const std::string& vertex_source) {
     // エラーチェック
     int success;
     char info_log[512];
-    gl_->GetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
+    gl_->GetShaderiv(vertex_shader, gl::kCompileStatus, &success);
     if (!success) {
         gl_->GetShaderInfoLog(vertex_shader, 512, nullptr, info_log);
         gl_->DeleteShader(vertex_shader);
@@ -781,12 +884,12 @@ GLuint EntityRenderer::CompileVertexShader(const std::string& vertex_source) {
     return vertex_shader;
 }
 
-GLuint EntityRenderer::CompileGeometryShader(const std::string& geometry_source) {
+gl::Uint EntityRenderer::CompileGeometryShader(const std::string& geometry_source) {
     if (geometry_source.empty()) {
         return 0;  // ジオメトリシェーダーが空の場合は0を返す
     }
 
-    GLuint geometry_shader = gl_->CreateShader(GL_GEOMETRY_SHADER);
+    gl::Uint geometry_shader = gl_->CreateShader(gl::kGeometryShader);
     const char* source_cstr = geometry_source.c_str();
     gl_->ShaderSource(geometry_shader, 1, &source_cstr, nullptr);
     gl_->CompileShader(geometry_shader);
@@ -794,7 +897,7 @@ GLuint EntityRenderer::CompileGeometryShader(const std::string& geometry_source)
     // エラーチェック
     int success;
     char info_log[512];
-    gl_->GetShaderiv(geometry_shader, GL_COMPILE_STATUS, &success);
+    gl_->GetShaderiv(geometry_shader, gl::kCompileStatus, &success);
     if (!success) {
         gl_->GetShaderInfoLog(geometry_shader, 512, nullptr, info_log);
         gl_->DeleteShader(geometry_shader);
@@ -810,7 +913,7 @@ std::pair<float, float> EntityRenderer::CompileTCSAndTES(
         return {0, 0};  // TCSまたはTESが空の場合は0を返す
     }
 
-    GLuint tcs_shader = gl_->CreateShader(GL_TESS_CONTROL_SHADER);
+    gl::Uint tcs_shader = gl_->CreateShader(gl::kTessControlShader);
     const char* tcs_cstr = tcs_source.c_str();
     gl_->ShaderSource(tcs_shader, 1, &tcs_cstr, nullptr);
     gl_->CompileShader(tcs_shader);
@@ -818,7 +921,7 @@ std::pair<float, float> EntityRenderer::CompileTCSAndTES(
     // エラーチェック
     int success;
     char info_log[512];
-    gl_->GetShaderiv(tcs_shader, GL_COMPILE_STATUS, &success);
+    gl_->GetShaderiv(tcs_shader, gl::kCompileStatus, &success);
     if (!success) {
         gl_->GetShaderInfoLog(tcs_shader, 512, nullptr, info_log);
         gl_->DeleteShader(tcs_shader);
@@ -826,13 +929,13 @@ std::pair<float, float> EntityRenderer::CompileTCSAndTES(
             "Failed to compile tessellation control shader: " + std::string(info_log));
     }
 
-    GLuint tes_shader = gl_->CreateShader(GL_TESS_EVALUATION_SHADER);
+    gl::Uint tes_shader = gl_->CreateShader(gl::kTessEvaluationShader);
     const char* tes_cstr = tes_source.c_str();
     gl_->ShaderSource(tes_shader, 1, &tes_cstr, nullptr);
     gl_->CompileShader(tes_shader);
 
     // エラーチェック
-    gl_->GetShaderiv(tes_shader, GL_COMPILE_STATUS, &success);
+    gl_->GetShaderiv(tes_shader, gl::kCompileStatus, &success);
     if (!success) {
         gl_->GetShaderInfoLog(tes_shader, 512, nullptr, info_log);
         gl_->DeleteShader(tes_shader);
@@ -843,12 +946,12 @@ std::pair<float, float> EntityRenderer::CompileTCSAndTES(
     return {tcs_shader, tes_shader};
 }
 
-GLuint EntityRenderer::CompileFragmentShader(const std::string& fragment_source) {
+gl::Uint EntityRenderer::CompileFragmentShader(const std::string& fragment_source) {
     if (fragment_source.empty()) {
         throw igesio::ImplementationError("Fragment shader source is empty");
     }
 
-    GLuint fragment_shader = gl_->CreateShader(GL_FRAGMENT_SHADER);
+    gl::Uint fragment_shader = gl_->CreateShader(gl::kFragmentShader);
     const char* source_cstr = fragment_source.c_str();
     gl_->ShaderSource(fragment_shader, 1, &source_cstr, nullptr);
     gl_->CompileShader(fragment_shader);
@@ -856,7 +959,7 @@ GLuint EntityRenderer::CompileFragmentShader(const std::string& fragment_source)
     // エラーチェック
     int success;
     char info_log[512];
-    gl_->GetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
+    gl_->GetShaderiv(fragment_shader, gl::kCompileStatus, &success);
     if (!success) {
         gl_->GetShaderInfoLog(fragment_shader, 512, nullptr, info_log);
         gl_->DeleteShader(fragment_shader);
@@ -866,10 +969,10 @@ GLuint EntityRenderer::CompileFragmentShader(const std::string& fragment_source)
     return fragment_shader;
 }
 
-GLuint EntityRenderer::CreateShaderProgram(
-        GLuint vertex_shader, GLuint fragment_shader,
-        GLuint geometry_shader, GLuint tcs_shader, GLuint tes_shader) {
-    GLuint program_id = gl_->CreateProgram();
+gl::Uint EntityRenderer::CreateShaderProgram(
+        gl::Uint vertex_shader, gl::Uint fragment_shader,
+        gl::Uint geometry_shader, gl::Uint tcs_shader, gl::Uint tes_shader) {
+    gl::Uint program_id = gl_->CreateProgram();
 
     if (vertex_shader == 0 || fragment_shader == 0) {
         throw igesio::ImplementationError("Vertex or Fragment shader is not provided.");
@@ -888,7 +991,7 @@ GLuint EntityRenderer::CreateShaderProgram(
     // リンクのエラーチェック
     int success;
     char info_log[512];
-    gl_->GetProgramiv(program_id, GL_LINK_STATUS, &success);
+    gl_->GetProgramiv(program_id, gl::kLinkStatus, &success);
     if (!success) {
         gl_->GetProgramInfoLog(program_id, 512, nullptr, info_log);
         throw igesio::ImplementationError(
@@ -913,7 +1016,7 @@ void EntityRenderer::InitShaders() {
         }
         auto code = *shader_opt;
 
-        GLuint vertex_shader = 0, geometry_shader = 0,
+        gl::Uint vertex_shader = 0, geometry_shader = 0,
                tcs_shader = 0, tes_shader = 0, fragment_shader = 0,
                program_id = 0;
 

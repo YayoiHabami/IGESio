@@ -14,6 +14,10 @@
 
 namespace igesio::graphics {
 
+/// @brief シェーダーが受け付ける光源の最大数
+/// @note シェーダー側のMAX_LIGHTSと一致させること
+constexpr int kMaxLights = 8;
+
 /// @brief 光源の種類
 enum class LightType {
     /// @brief 面光源 (方向のみ指定)

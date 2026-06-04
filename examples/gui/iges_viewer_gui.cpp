@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <igesio/reader.h>
@@ -103,16 +104,20 @@ std::string GetEntityTypeString(const igesio::ObjectID& id) {
 IgesViewerGUI::IgesViewerGUI(
         const int width, const int height,
         const int msaa_samples, const std::string& initial_iges_file)
-        : renderer_(std::make_shared<OpenGL>(), width, height),
+        : renderer_(nullptr, width, height),
           initial_iges_file_(initial_iges_file) {
     glfwSetErrorCallback(ErrorCallback);
     if (!glfwInit()) {
         throw std::runtime_error("Failed to initialize GLFW");
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    // graphicsモジュールはテッセレーション (GL 4.0) とSSBO (GL 4.3) を
+    // 使用するため、4.3 coreプロファイルのコンテキストを要求する
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // coreプロファイル要求時のmacOSで必須のヒント (他環境では実質無影響)
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
     if (msaa_samples > 0) {
         glfwWindowHint(GLFW_SAMPLES, msaa_samples);
         msaa_samples_ = msaa_samples;
@@ -128,10 +133,16 @@ IgesViewerGUI::IgesViewerGUI(
     glfwSetWindowUserPointer(window_, this);
     glfwSwapInterval(1);
 
-    if (!gladLoadGL(glfwGetProcAddress)) {
+    // コンテキストをカレント化した後にGLバックエンドをロードしてレンダラへ設定する
+    // (CreateGLBackendはロード失敗時およびGL 4.3未満のコンテキストで
+    //  ImplementationErrorを投げる)
+    try {
+        renderer_.SetGLBackend(CreateGLBackend(
+                reinterpret_cast<GLProcLoader>(glfwGetProcAddress)));
+    } catch (const std::exception&) {
         glfwDestroyWindow(window_);
         glfwTerminate();
-        throw std::runtime_error("Failed to initialize GLAD");
+        throw;
     }
 
     SetupCallbacks();
@@ -140,7 +151,7 @@ IgesViewerGUI::IgesViewerGUI(
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
-    ImGui_ImplOpenGL3_Init("#version 400 core");
+    ImGui_ImplOpenGL3_Init("#version 430 core");
 
     // 透過描画を有効化 (色/不透明度オーバーライドの表現用)
     renderer_.EnableTransparency(true);
@@ -247,6 +258,11 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
         // シーンをモデルのrootへ束ねる (描画時にツリーを走査させる)
         BindSceneRoot(iges_data_.RootPtr());
         renderer_.Camera().Reset();
+        // 起動後の初回読み込み時のみ、モデル全体を自動でフィットする
+        if (!initial_fit_done_) {
+            renderer_.FitView();
+            initial_fit_done_ = true;
+        }
         needs_redraw_ = true;
     } catch (const std::exception& e) {
         std::cerr << "Error loading IGES file: " << e.what() << std::endl;
@@ -379,6 +395,39 @@ void IgesViewerGUI::RenderMenuBar() {
             renderer_.Camera().Reset();
             needs_redraw_ = true;
         }
+        if (ImGui::MenuItem("Fit View", "F")) {
+            renderer_.FitView();
+            needs_redraw_ = true;
+        }
+        if (ImGui::BeginMenu("Standard Views")) {
+            if (ImGui::MenuItem("Front"))  ApplyStandardView(StandardView::kFront);
+            if (ImGui::MenuItem("Back"))   ApplyStandardView(StandardView::kBack);
+            if (ImGui::MenuItem("Top"))    ApplyStandardView(StandardView::kTop);
+            if (ImGui::MenuItem("Bottom")) ApplyStandardView(StandardView::kBottom);
+            if (ImGui::MenuItem("Right"))  ApplyStandardView(StandardView::kRight);
+            if (ImGui::MenuItem("Left"))   ApplyStandardView(StandardView::kLeft);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Isometric")) ApplyStandardView(StandardView::kIso);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Display Mode")) {
+            // 面と面エッジの描画組み合わせを切り替える (従属しない曲線は常時表示)
+            const DisplayMode mode = renderer_.GetDisplayMode();
+            if (ImGui::MenuItem("Shaded", nullptr, mode == DisplayMode::kShaded)) {
+                renderer_.SetDisplayMode(DisplayMode::kShaded);
+                needs_redraw_ = true;
+            }
+            if (ImGui::MenuItem("Wireframe", nullptr,
+                                mode == DisplayMode::kWireFrame)) {
+                renderer_.SetDisplayMode(DisplayMode::kWireFrame);
+                needs_redraw_ = true;
+            }
+            if (ImGui::MenuItem("No Edge", nullptr, mode == DisplayMode::kNoEdge)) {
+                renderer_.SetDisplayMode(DisplayMode::kNoEdge);
+                needs_redraw_ = true;
+            }
+            ImGui::EndMenu();
+        }
         if (ImGui::ColorEdit3("Background",
                               renderer_.GetBackgroundColorRef().data())) {
             needs_redraw_ = true;
@@ -450,7 +499,7 @@ void IgesViewerGUI::RenderMenuBar() {
         ImGui::Separator();
         ImGui::TextDisabled("Hotkeys");
         ImGui::TextDisabled("  Del: Delete   Ctrl+G: Group");
-        ImGui::TextDisabled("  Esc: Deselect   F: Reset camera");
+        ImGui::TextDisabled("  Esc: Deselect   F: Fit view");
         ImGui::EndMenu();
     }
 
@@ -579,37 +628,100 @@ void IgesViewerGUI::RenderAssemblyNode(models::Assembly& node) {
         for (const auto& child : node.GetChildAssemblies()) {
             if (child) RenderAssemblyNode(*child);
         }
-        for (const auto& id : node.GetEntityIDs(/*recursive=*/false)) {
-            RenderEntityRow(id);
+        // 同ノード内の他エンティティから参照されているIDの集合
+        // (参照先は参照元エンティティの子階層として表示するため、直下には並べない)
+        std::unordered_set<ObjectID> referenced;
+        for (const auto& pair : node.GetEntities()) {
+            if (!pair.second) continue;
+            for (const auto& ref : pair.second->GetReferencedEntityIDs()) {
+                referenced.insert(ref);
+            }
+        }
+        // 表示順をID昇順で安定させる (GetEntityIDsはunordered_map順のため)
+        auto ids = node.GetEntityIDs(/*recursive=*/false);
+        std::sort(ids.begin(), ids.end(),
+                  [](const ObjectID& a, const ObjectID& b) {
+                      return a.ToInt() < b.ToInt();
+                  });
+        for (const auto& id : ids) {
+            if (referenced.count(id) > 0) continue;
+            std::unordered_set<ObjectID> path;
+            RenderEntityNode(id, path);
         }
         ImGui::TreePop();
     }
     ImGui::PopID();
 }
 
-void IgesViewerGUI::RenderEntityRow(const ObjectID& id) {
-    auto& sel = scene_->ActiveSelection();
+void IgesViewerGUI::RenderEntityNode(const ObjectID& id,
+                                     std::unordered_set<ObjectID>& path) {
+    const auto children = ResolvedReferences(id);
     const std::string label = "[" + std::to_string(id.ToInt()) + "] "
             + GetEntityTypeString(id);
 
+    // DefaultOpenを付けないため、子階層はデフォルトで折りたたまれる
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow
+            | ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (scene_->ActiveSelection().Contains(id)) {
+        flags |= ImGuiTreeNodeFlags_Selected;
+    }
+    if (children.empty()) {
+        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+
     ImGui::PushID(id.ToInt());
-    if (ImGui::Selectable(label.c_str(), sel.Contains(id))) {
-        if (ImGui::GetIO().KeyCtrl) {
-            // Ctrl: トグル (解除は常に可)
-            if (sel.Contains(id)) {
-                sel.Deselect(id);
-                selected_hit_positions_.erase(id);
-            } else {
-                scene_->TrySelectWithLock(sel, id);
-            }
-        } else {
-            sel.Clear();
-            selected_hit_positions_.clear();
-            scene_->TrySelectWithLock(sel, id);
+    const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
+    // 矢印での開閉ではなく、行本体のクリックのみを選択として扱う
+    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+        HandleEntityRowClick(id);
+    }
+    if (open && !children.empty()) {
+        // 現在の再帰経路上のIDを除外し、循環参照による無限再帰を防ぐ
+        path.insert(id);
+        for (const auto& child : children) {
+            if (path.count(child) == 0) RenderEntityNode(child, path);
         }
-        needs_redraw_ = true;
+        path.erase(id);
+        ImGui::TreePop();
     }
     ImGui::PopID();
+}
+
+void IgesViewerGUI::HandleEntityRowClick(const ObjectID& id) {
+    auto& sel = scene_->ActiveSelection();
+    if (ImGui::GetIO().KeyCtrl) {
+        // Ctrl: トグル (解除は常に可)
+        if (sel.Contains(id)) {
+            sel.Deselect(id);
+            selected_hit_positions_.erase(id);
+        } else {
+            scene_->TrySelectWithLock(sel, id);
+        }
+    } else {
+        sel.Clear();
+        selected_hit_positions_.clear();
+        scene_->TrySelectWithLock(sel, id);
+    }
+    needs_redraw_ = true;
+}
+
+std::vector<igesio::ObjectID>
+IgesViewerGUI::ResolvedReferences(const ObjectID& id) const {
+    const auto* owner = scene_->Root().FindOwner(id);
+    if (owner == nullptr) return {};
+    const auto entity = owner->GetEntity(id);
+    if (!entity) return {};
+
+    // 未解決参照やツリー外のIDは子として表示しない. 同一エンティティを
+    // 複数パラメータで参照する場合があるため重複は除去する
+    std::vector<ObjectID> children;
+    std::unordered_set<ObjectID> seen;
+    for (const auto& ref : entity->GetReferencedEntityIDs()) {
+        if (!seen.insert(ref).second) continue;
+        if (scene_->Root().FindOwner(ref) == nullptr) continue;
+        children.push_back(ref);
+    }
+    return children;
 }
 
 void IgesViewerGUI::RenderNodeContextMenu(models::Assembly& node) {
@@ -1087,9 +1199,15 @@ void IgesViewerGUI::HandleHotkeys() {
         needs_redraw_ = true;
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F)) {
-        renderer_.Camera().Reset();
+        renderer_.FitView();
         needs_redraw_ = true;
     }
+}
+
+void IgesViewerGUI::ApplyStandardView(const StandardView view) {
+    renderer_.Camera().SetStandardView(view);
+    renderer_.FitView();
+    needs_redraw_ = true;
 }
 
 void IgesViewerGUI::CursorPositionCallback(

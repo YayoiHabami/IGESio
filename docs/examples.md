@@ -32,8 +32,8 @@ This is a sample code for the graphics module provided by this library. It loads
 
 The window consists of a menu bar at the top, an Outliner (assembly tree) on the left, an Inspector (selection summary and properties) on the right, a status bar at the bottom, and a viewport in the center. Each panel is anchored to an edge of the viewport.
 
-- Menu bar: File (load, screenshot, exit), View (projection mode, reset camera, antialiasing, transparency, per-type filters), Select (selection granularity, removal policy, deselect all), and Help.
-- Outliner: displays the model's assembly tree and entities hierarchically. Click a row to select it, and right-click a node to open a context menu.
+- Menu bar: File (load, screenshot, exit), View (projection mode, reset camera, fit view, standard views, display mode, background color, antialiasing, transparency, per-type filters), Select (selection granularity, removal policy, deselect all), and Help.
+- Outliner: displays the model's assembly tree and entities hierarchically. Entities are nested according to their reference structure. Click a row to select it, and right-click a node to open a context menu.
 - Inspector: shows a summary of the current selection and lets you view and edit the properties (name, visibility, lock, and so on) of the focused assembly node.
 - Status bar: shows the result of the most recent edit and the current selection granularity, among others.
 
@@ -55,7 +55,9 @@ If the file loads successfully, the corresponding entities are displayed in the 
     - Middle drag: Rotate the view.
     - Ctrl + Middle drag: Pan (move the view).
     - Mouse wheel (or Shift + Middle drag): Zoom in/out.
-    - "Reset Camera" in the View menu, or the F key, resets the camera to its initial position.
+    - "Fit View" in the View menu, or the F key, adjusts the camera so the whole model fits in the view.
+    - "Reset Camera" in the View menu resets the camera to its initial position.
+    - "Standard Views" in the View menu switches to a preset view: front, back, top, bottom, right, left, or isometric.
 - Entity selection:
     - Left click: Select the entity under the cursor (highlighted).
     - Ctrl + Left click: Toggle selection (multi-select).
@@ -67,12 +69,24 @@ If the file loads successfully, the corresponding entities are displayed in the 
 - Projection mode: Choose between two modes in the View menu:
     - Perspective: Shows objects with depth (default).
     - Orthographic: Parallel projection, commonly used in CAD.
-- Screenshot: Use "Screenshot" in the File menu to save the current view as a PNG image. The file is named in the format "screenshot YYYY-MM-DD HH-MM-SS.png" and saved to the execution directory.
+- Display mode: Use "Display Mode" in the View menu to switch the combination of surface and surface-edge rendering. Non-subordinate curve entities are always drawn in every mode.
+    - Shaded: Draws both surfaces and surface edges.
+    - Wireframe: Draws surface edges only (no surface fill).
+    - No Edge: Draws surfaces only (no surface edges).
+- Background color: Use "Background" in the View menu to change the viewport background color.
+- Screenshot: Use "Screenshot" in the File menu to save the current view as a PNG image. The file is named in the format "screenshot YYYY-MM-DD HHMMSS.png" and saved to the execution directory.
 - Entity type visibility: Use "Filters" in the View menu to toggle visibility by entity type.
 
 #### Assembly Operations and Structural Editing
 
-The Outliner on the left displays a tree rooted at the model's root assembly. Expanding an assembly node lets you follow its child assemblies and owned entities. Clicking a node or entity row selects it and highlights it in the viewport.
+The Outliner on the left displays a tree rooted at the model's root assembly. Expanding an assembly node lets you follow its child assemblies and owned entities. Clicking a node or entity row selects it and highlights it in the viewport. The checkbox at the head of an assembly node row toggles the visibility of its subtree.
+
+Entities are displayed hierarchically according to their reference structure.
+
+- Directly under an assembly, only the entities that are not referenced by any other entity in the same assembly are listed (in ascending ID order).
+- Expanding an entity row shows the entities it references as child levels. References include those in the PD section (such as the constituent curves of a composite curve) as well as those in DE fields, such as transformation matrices and color definitions. Child levels are collapsed by default.
+- An entity referenced by multiple entities, such as a transformation matrix, appears under each of its referrers.
+- Clicking the arrow only expands or collapses the child level; clicking the row body selects the entity (Ctrl toggles).
 
 Structural editing is available from the context menu opened by right-clicking a node in the Outliner, from the buttons in the Inspector, or from keyboard shortcuts.
 
@@ -90,9 +104,9 @@ Structural editing is available from the context menu opened by right-clicking a
     - Del: Delete the selected entities.
     - Ctrl + G: Group the selected entities into a new assembly.
     - Esc: Clear all selections.
-    - F: Reset the camera to its initial position.
+    - F: Adjust the camera so the whole model fits in the view.
 
-> Currently, the initial tree at load time is flat (all entities are directly under the root). As a result, the "Assembly" selection granularity effectively selects everything. This is a forward-compatible implementation that becomes meaningful once child assemblies are generated automatically (with typed support for grouping entities).
+> Currently, all entities are owned directly by the root assembly at load time (no child assemblies are generated automatically). As a result, the "Assembly" selection granularity effectively selects everything. This is a forward-compatible implementation that becomes meaningful once child assemblies are generated automatically (with typed support for grouping entities).
 
 ## CUI Applications
 

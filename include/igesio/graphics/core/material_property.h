@@ -18,17 +18,17 @@ namespace igesio::graphics {
 /// @brief サーフェスプロパティクラス
 /// @note IGESで保持されない、エンティティの描画プロパティを管理する
 struct MaterialProperty {
-    /// @brief 環境光の強さ (for Surface)
-    /// @note 0.0fから1.0fの範囲. デフォルトは0.1f
-    float ambient_strength = 0.1f;
+    /// @brief 表面粗さ (roughness; for Surface)
+    /// @note 0.0f(鏡面)から1.0f(完全拡散)の範囲. デフォルトは0.5f
+    float roughness = 0.5f;
 
-    /// @brief 鏡面反射光の強さ (for Surface)
-    /// @note 0.0fから1.0fの範囲. デフォルトは0.5f
-    float specular_strength = 0.5f;
+    /// @brief 金属度 (metallic; for Surface)
+    /// @note 0.0f(非金属/誘電体)から1.0f(金属)の範囲. デフォルトは0.0f
+    float metallic = 0.0f;
 
-    /// @brief 輝き (shininess; for Surface)
-    /// @note デフォルトは32
-    int shininess = 32;
+    /// @brief アンビエントオクルージョン (ao; for Surface)
+    /// @note 0.0f(完全遮蔽)から1.0f(遮蔽なし)の範囲. デフォルトは1.0f
+    float ao = 1.0f;
 
     /// @brief 透明度
     /// @note 0.0f (完全に透明) から 1.0f (完全に不透明)
@@ -52,9 +52,9 @@ struct MaterialProperty {
 
     /// @brief すべてのメンバ変数をリセットする
     void Reset() {
-        ambient_strength = 0.1f;
-        specular_strength = 0.5f;
-        shininess = 32;
+        roughness = 0.5f;
+        metallic = 0.0f;
+        ao = 1.0f;
         opacity = 1.0f;
         texture.Clear();
         use_texture = false;

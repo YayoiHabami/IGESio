@@ -41,7 +41,7 @@ class CompositeCurveGraphics
  protected:
     /// @brief 描画の実装
     /// @note 複合ノードは子要素経由で描画するため、自前の描画は行わない (空実装).
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override {}
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override {}
 };
 
 }  // namespace igesio::graphics

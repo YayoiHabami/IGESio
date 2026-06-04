@@ -55,6 +55,17 @@ enum class BoxSelectionMode {
     kCrossing,
 };
 
+/// @brief 表示モード (面と面エッジの描画組み合わせ)
+/// @note 従属しない曲線エンティティはいずれのモードでも常に描画される.
+enum class DisplayMode {
+    /// @brief 面と面エッジの両方を描画する
+    kShaded,
+    /// @brief 面エッジのみを描画する (面の塗りつぶしを描画しない)
+    kWireFrame,
+    /// @brief 面のみを描画する (面エッジを描画しない)
+    kNoEdge
+};
+
 /// @brief 描画全般に関する (細かい) 設定
 struct GraphicsSettings {
     /// @brief アンチエイリアシングを有効にするか
@@ -62,6 +73,8 @@ struct GraphicsSettings {
     /// @brief 半透明のオブジェクトの描画を有効にするか
     /// @note 有効にした場合、ブレンドを行う
     bool enable_transparency = false;
+    /// @brief 表示モード (面/面エッジの描画組み合わせ)
+    DisplayMode display_mode = DisplayMode::kShaded;
 };
 
 /// @brief エンティティの描画を担当するクラス
@@ -74,7 +87,7 @@ class EntityRenderer {
     /// @note キーはShaderType、値はシェーダープログラムのID
     /// @note コンパイルとリンクが成功した、各ShaderTypeに対応する
     ///       シェーダープログラムを保持する
-    std::unordered_map<ShaderType, GLuint> shader_programs_;
+    std::unordered_map<ShaderType, gl::Uint> shader_programs_;
 
     /// @brief 描画オブジェクト
     /// @note 1階層目のキーはShaderType、2階層目のキーはエンティティのID
@@ -95,8 +108,9 @@ class EntityRenderer {
     /// @brief カメラクラス
     graphics::Camera camera_;
 
-    /// @brief 光源クラス
-    graphics::Light light_;
+    /// @brief 光源リスト
+    /// @note 既定では方向光を1個保持する. 描画時はkMaxLightsまで送信される.
+    std::vector<graphics::Light> lights_ = { graphics::Light{} };
 
     /// @brief 描画に関するグローバルパラメータ (デフォルト)
     std::shared_ptr<const models::GraphicsGlobalParam> default_global_param_;
@@ -121,12 +135,14 @@ class EntityRenderer {
 
  public:
     /// @brief コンストラクタ
-    /// @param gl OpenGLラッパー
+    /// @param gl OpenGLラッパー (nullptr可; 後で`SetGLBackend`で設定できる)
     /// @param width ウィンドウの幅の初期値 [px]
     /// @param height ウィンドウの高さの初期値 [px]
     /// @note オブジェクトを作成した時点では描画可能な状態ではない.
-    ///       描画を行う前にInitialize()を呼び出す必要がある
-    explicit EntityRenderer(std::shared_ptr<IOpenGL>,
+    ///       描画を行う前にGLバックエンドを設定し、Initialize()を呼び出す必要がある.
+    /// @note glにnullptrを渡すと、GLコンテキストが無い段階でも値メンバとして構築できる.
+    ///       この場合、コンテキストをカレント化した後に`SetGLBackend`を呼ぶこと.
+    explicit EntityRenderer(std::shared_ptr<IOpenGL> = nullptr,
                             const int = kDefaultDisplayWidth,
                             const int = kDefaultDisplayHeight);
 
@@ -137,12 +153,20 @@ class EntityRenderer {
     EntityRenderer(const EntityRenderer&) = delete;
     EntityRenderer& operator=(const EntityRenderer&) = delete;
 
+    /// @brief GLバックエンド (OpenGLラッパー) を設定する
+    /// @param gl OpenGLラッパー
+    /// @note コンストラクタでglを渡さなかった場合に、GLコンテキストをカレント化した後で
+    ///       呼び出す. `Initialize()`より前に設定する必要がある.
+    void SetGLBackend(std::shared_ptr<IOpenGL> gl);
+
     /// @brief 初期化されているか
+    /// @return GLバックエンドが設定済みかつシェーダーがコンパイル済みの場合はtrue
     bool IsInitialized() const;
 
     /// @brief 初期化する
     /// @note シェーダープログラムのコンパイルとリンクなどを行う
-    /// @throw igesio::ImplementationError シェーダーの初期化に失敗した場合
+    /// @throw igesio::ImplementationError シェーダーの初期化に失敗した場合、
+    ///        またはGLバックエンドが未設定の場合
     void Initialize();
 
     /// @brief OpenGLリソースを解放する
@@ -168,6 +192,7 @@ class EntityRenderer {
                    global_param = nullptr,
                    const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;
+        if (!gl_) return false;
 
         if (HasEntity(entity->GetID())) return false;
 
@@ -282,13 +307,21 @@ class EntityRenderer {
     /// @note カメラの各変数などはこの参照を通じて設定する
     graphics::Camera& Camera() { return camera_; }
 
-    /// @brief 光源の参照を取得する (const)
-    /// @return 光源の参照
-    const Light& Light() const { return light_; }
-    /// @brief 光源の参照を取得する (非const)
-    /// @return 光源の参照
-    /// @note 光源の各変数などはこの参照を通じて設定する
-    graphics::Light& Light() { return light_; }
+    /// @brief シーン全体が画面に収まるようにカメラを調整する (FitView)
+    /// @note scene->Root()のワールドバウンディングボックスと現在の表示サイズから
+    ///       アスペクト比を求め、Camera::FitToBoundingBoxを呼ぶ. シーン未設定・
+    ///       バウンディングボックスが空・表示サイズが無効な場合は何もしない.
+    /// @note 反映には別途Draw()の呼び出しが必要.
+    void FitView();
+
+    /// @brief 光源リストの参照を取得する (const)
+    /// @return 光源リストの参照
+    const std::vector<Light>& Lights() const { return lights_; }
+    /// @brief 光源リストの参照を取得する (非const)
+    /// @return 光源リストの参照
+    /// @note 光源の追加・削除や各光源の設定はこの参照を通じて行う.
+    ///       要素数がkMaxLightsを超えた分は描画時に無視される.
+    std::vector<Light>& Lights() { return lights_; }
 
     /// @brief 描画全般に関する設定を取得する (const)
     const GraphicsSettings& Settings() const { return settings_; }
@@ -312,6 +345,14 @@ class EntityRenderer {
     /// @brief 半透明のオブジェクトの描画が有効か
     /// @return 有効な場合はtrue、無効な場合はfalse
     bool IsTransparencyEnabled() const;
+
+    /// @brief 表示モードを設定する
+    /// @param mode 表示モード (shaded / wireframe / no-edge)
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
+    void SetDisplayMode(const DisplayMode);
+    /// @brief 表示モードを取得する
+    /// @return 現在の表示モード
+    DisplayMode GetDisplayMode() const;
 
 
 
@@ -382,14 +423,14 @@ class EntityRenderer {
     /// @return コンパイルされたシェーダーのID
     /// @throw igesio::ImplementationError コンパイルに失敗した場合、
     ///         vertex_sourceが空の場合
-    GLuint CompileVertexShader(const std::string&);
+    gl::Uint CompileVertexShader(const std::string&);
 
     /// @brief ジオメトリシェーダーをコンパイルする
     /// @param geometry_source ジオメトリシェーダーのソースコード
     /// @return コンパイルされたシェーダーのID、
     ///         geometry_sourceが空の場合は0を返す
     /// @throw igesio::ImplementationError コンパイルに失敗した場合
-    GLuint CompileGeometryShader(const std::string&);
+    gl::Uint CompileGeometryShader(const std::string&);
 
     /// @brief TCS & TESシェーダーをコンパイルする
     /// @param tcs_source TCSシェーダーのソースコード
@@ -405,7 +446,7 @@ class EntityRenderer {
     /// @return コンパイルされたシェーダーのID
     /// @throw igesio::ImplementationError コンパイルに失敗した場合、
     ///         fragment_sourceが空の場合
-    GLuint CompileFragmentShader(const std::string&);
+    gl::Uint CompileFragmentShader(const std::string&);
 
     /// @brief シェーダープログラム作成する
     /// @param vertex_shader 頂点シェーダーのID
@@ -417,8 +458,8 @@ class EntityRenderer {
     /// @throw igesio::ImplementationError リンクに失敗した場合、
     ///        頂点シェーダーまたはフラグメントシェーダーが提供されていない場合
     /// @note IDに0を指定した場合は、そのシェーダーはリンクされない
-    GLuint CreateShaderProgram(GLuint, GLuint,
-                               GLuint = 0, GLuint = 0, GLuint = 0);
+    gl::Uint CreateShaderProgram(gl::Uint, gl::Uint,
+                                 gl::Uint = 0, gl::Uint = 0, gl::Uint = 0);
 
     /// @brief エンティティが設定されているか
     bool IsEmpty() const;
@@ -433,6 +474,11 @@ class EntityRenderer {
     /// @return 描画オブジェクトのポインタ. 存在しない場合はnullptr
     /// @note 所有権は移譲しない (draw_objects_が保持し続ける)
     IEntityGraphics* FindGraphics(const ObjectID&) const;
+
+    /// @brief シーンのワールドBBoxから外接球を計算し、カメラの自動クリップ球を更新する
+    /// @note カメラ操作でシーンがクリップされないよう、SetScene/MarkSceneDirty時に呼ぶ.
+    ///       シーン未設定またはBBoxが空の場合は自動クリッピングを解除する
+    void UpdateAutoClipSphere();
 
     /// @brief scene_を走査して描画リストを再構築し、ワールド変換と色をリフレッシュする
     /// @note dirty時のみ呼ぶ. ShouldRenderEntityは呼ばず、キャッシュ在席を描画対象条件

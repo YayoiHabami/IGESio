@@ -69,7 +69,7 @@ TEST(GraphicsObjectSmokeTest, Draw_EmitsModelColorAndDrawCall) {
     ASSERT_NE(graphics, nullptr);
 
     // ハイライト前 (非選択) の色 = エンティティ色
-    const std::array<GLfloat, 4> expected = graphics->GetColor();
+    const std::array<float, 4> expected = graphics->GetColor();
 
     // 任意のプログラムID (モックはlocationを名前で採番するため実プログラム不要)
     // 非選択の表示コンテキスト (ハイライトしない)

@@ -10,6 +10,8 @@
 #include <memory>
 #include <utility>
 
+#include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
+
 #include "./../core/type_conversion_utils.h"
 
 namespace {
@@ -23,7 +25,8 @@ using igesio::graphics::RationalBSplineSurfaceGraphics;
 RationalBSplineSurfaceGraphics::RationalBSplineSurfaceGraphics(
         const std::shared_ptr<const entities::RationalBSplineSurface> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineSurface, true) {
+        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineSurface, true),
+          edge_buffer_(gl) {
     Synchronize();
 }
 
@@ -38,7 +41,7 @@ RationalBSplineSurfaceGraphics::~RationalBSplineSurfaceGraphics() {
  */
 
 void RationalBSplineSurfaceGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     // テッセレーションのため、参照点をシェーダーに渡す
     gl_->Uniform1i(gl_->GetUniformLocation(shader, "numRefPointsU"), 4);
     gl_->Uniform1i(gl_->GetUniformLocation(shader, "numRefPointsV"), 4);
@@ -52,10 +55,10 @@ void RationalBSplineSurfaceGraphics::DrawImpl(
     gl_->Uniform1i(gl_->GetUniformLocation(shader, "numCtrlPointsV"), num_ctrl_v);
 
     // SSBOをバインドする
-    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, knots_u_ssbo_);
-    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, knots_v_ssbo_);
-    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, control_with_weights_ssbo_);
-    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, reference_points_ssbo_);
+    gl_->BindBufferBase(gl::kShaderStorageBuffer, 0, knots_u_ssbo_);
+    gl_->BindBufferBase(gl::kShaderStorageBuffer, 1, knots_v_ssbo_);
+    gl_->BindBufferBase(gl::kShaderStorageBuffer, 2, control_with_weights_ssbo_);
+    gl_->BindBufferBase(gl::kShaderStorageBuffer, 3, reference_points_ssbo_);
 
     gl_->Uniform2f(gl_->GetUniformLocation(shader, "paramRangeU"),
                    entity_->GetURange()[0], entity_->GetURange()[1]);
@@ -66,13 +69,18 @@ void RationalBSplineSurfaceGraphics::DrawImpl(
                    viewport.first, viewport.second);
 
     gl_->BindVertexArray(vao_);
-    gl_->DrawArrays(GL_PATCHES, 0, 1);
+    gl_->DrawArrays(gl::kPatches, 0, 1);
     gl_->BindVertexArray(0);
 }
 
 void RationalBSplineSurfaceGraphics::Synchronize() {
     Cleanup();
     SyncTexture();
+
+    // 境界エッジ (パラメータ矩形の4アイソ辺) を構築する.
+    // テッセレーション用の参照点生成の成否に依らず構築する (ワイヤフレーム表示のため)
+    const auto edges = entities::ComputeParametricSurfaceEdges(*entity_);
+    edge_buffer_.Build(edges.loops);
 
     // TCSのため、グリッド状の参照点を用意する
     // TODO: 曲面の種類によって参照点の数を変更する
@@ -107,23 +115,23 @@ void RationalBSplineSurfaceGraphics::Synchronize() {
     }
     // 参照点のSSBOの生成とデータ転送
     gl_->GenBuffers(1, &reference_points_ssbo_);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, reference_points_ssbo_);
-    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+    gl_->BindBuffer(gl::kShaderStorageBuffer, reference_points_ssbo_);
+    gl_->BufferData(gl::kShaderStorageBuffer,
                     reference_points_.size() * sizeof(float),
-                    reference_points_.data(), GL_STATIC_DRAW);
+                    reference_points_.data(), gl::kStaticDraw);
 
     // ノットベクトルのSSBOの生成とデータ転送
     auto u_knots_float = ConvertToFloatVector(entity_->UKnots());
     gl_->GenBuffers(1, &knots_u_ssbo_);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, knots_u_ssbo_);
-    gl_->BufferData(GL_SHADER_STORAGE_BUFFER, u_knots_float.size() * sizeof(float),
-                    u_knots_float.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kShaderStorageBuffer, knots_u_ssbo_);
+    gl_->BufferData(gl::kShaderStorageBuffer, u_knots_float.size() * sizeof(float),
+                    u_knots_float.data(), gl::kStaticDraw);
 
     auto v_knots_float = ConvertToFloatVector(entity_->VKnots());
     gl_->GenBuffers(1, &knots_v_ssbo_);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, knots_v_ssbo_);
-    gl_->BufferData(GL_SHADER_STORAGE_BUFFER, v_knots_float.size() * sizeof(float),
-                    v_knots_float.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kShaderStorageBuffer, knots_v_ssbo_);
+    gl_->BufferData(gl::kShaderStorageBuffer, v_knots_float.size() * sizeof(float),
+                    v_knots_float.data(), gl::kStaticDraw);
 
     // 制御点と重みの転送
     // std430のvec4配列として転送するため (vec3配列も4byteアライメントが必要なため)、
@@ -144,19 +152,19 @@ void RationalBSplineSurfaceGraphics::Synchronize() {
 
     // SSBOを生成してデータを転送
     gl_->GenBuffers(1, &control_with_weights_ssbo_);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, control_with_weights_ssbo_);
-    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+    gl_->BindBuffer(gl::kShaderStorageBuffer, control_with_weights_ssbo_);
+    gl_->BufferData(gl::kShaderStorageBuffer,
                     control_with_weights.size() * sizeof(float),
-                    control_with_weights.data(), GL_STATIC_DRAW);
+                    control_with_weights.data(), gl::kStaticDraw);
 
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    gl_->BindBuffer(gl::kShaderStorageBuffer, 0);
 
     // テッセレーションシェーダーを使用するため、空のVAOを生成する
     gl_->GenVertexArrays(1, &vao_);
 
     // パッチの頂点数を1に設定
     // この設定はVAOに保存されるため、描画のたびに設定する必要はない
-    gl_->PatchParameteri(GL_PATCH_VERTICES, 1);
+    gl_->PatchParameteri(gl::kPatchVertices, 1);
 }
 
 void RationalBSplineSurfaceGraphics::Cleanup() {
@@ -183,4 +191,7 @@ void RationalBSplineSurfaceGraphics::Cleanup() {
         gl_->DeleteBuffers(1, &reference_points_ssbo_);
         reference_points_ssbo_ = 0;
     }
+
+    // 境界エッジのバッファを解放
+    edge_buffer_.Cleanup();
 }

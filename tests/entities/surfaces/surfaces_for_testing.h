@@ -21,6 +21,7 @@
 #include "igesio/entities/surfaces/surface_of_revolution.h"
 #include "igesio/entities/surfaces/tabulated_cylinder.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
+#include "igesio/entities/surfaces/trimmed_surface.h"
 
 namespace igesio::tests {
 
@@ -48,7 +49,7 @@ using surface_vec = std::vector<TestSurface>;
 
 
 /// @brief Ruled Surfaceエンティティの作成
-surface_vec CreateRuledSurfaces() {
+inline surface_vec CreateRuledSurfaces() {
     // curve1: Line
     auto curve1 = std::make_shared<entities::Line>(
             Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
@@ -81,7 +82,7 @@ surface_vec CreateRuledSurfaces() {
 }
 
 /// @brief Surface of Revolutionエンティティの作成
-surface_vec CreateSurfaceOfRevolutions() {
+inline surface_vec CreateSurfaceOfRevolutions() {
     // Axis of revolution:
     auto axis_line = std::make_shared<entities::Line>(
             Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
@@ -115,7 +116,7 @@ surface_vec CreateSurfaceOfRevolutions() {
 }
 
 /// @brief Tabulated Cylinderエンティティの作成
-surface_vec CreateTabulatedCylinders() {
+inline surface_vec CreateTabulatedCylinders() {
     // Directrix curve
     auto param = igesio::IGESParameterVector{
         3,  // number of control points - 1
@@ -145,7 +146,7 @@ surface_vec CreateTabulatedCylinders() {
 }
 
 /// @brief Rational B-Spline Surfaceエンティティの作成
-surface_vec CreateRationalBSplineSurfaces() {
+inline surface_vec CreateRationalBSplineSurfaces() {
     // Plane (Y = 5)
     TestSurface nurbs_plane("Rational B-Spline Surface: Plane");
     auto param = igesio::IGESParameterVector{
@@ -219,9 +220,22 @@ surface_vec CreateRationalBSplineSurfaces() {
     return {nurbs_plane, nurbs_freeform};
 }
 
+/// @brief Trimmed Surfaceエンティティの作成 (未トリム; N1=0)
+/// @note 未トリムのトリム面は基底曲面へ全委譲し、IsInDomainは常にtrueとなるため、
+///       汎用ISurfaceテストで委譲経路 (パラメータ範囲・偏導関数・面積・BBox) を
+///       検証できる。基底には非自明な偏導関数を持つフリーフォームNURBSを用いる。
+inline surface_vec CreateTrimmedSurfaces() {
+    auto base = CreateRationalBSplineSurfaces();
+
+    TestSurface untrimmed("Trimmed Surface (untrimmed over freeform NURBS)");
+    untrimmed.surface = std::make_shared<entities::TrimmedSurface>(base[1].surface);
+
+    return {untrimmed};
+}
 
 
-surface_vec CreateAllTestSurfaces() {
+
+inline surface_vec CreateAllTestSurfaces() {
     surface_vec all_surfaces;
 
     // Ruled Surfaces
@@ -243,6 +257,11 @@ surface_vec CreateAllTestSurfaces() {
     auto nurbs_surfaces = CreateRationalBSplineSurfaces();
     all_surfaces.insert(all_surfaces.end(),
                         nurbs_surfaces.begin(), nurbs_surfaces.end());
+
+    // Trimmed Surfaces (untrimmed; delegates to base)
+    auto trimmed_surfaces = CreateTrimmedSurfaces();
+    all_surfaces.insert(all_surfaces.end(),
+                        trimmed_surfaces.begin(), trimmed_surfaces.end());
 
     return all_surfaces;
 }

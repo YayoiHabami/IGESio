@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
+
 namespace {
 
 using igesio::graphics::ISurfaceGraphics;
@@ -37,7 +39,8 @@ constexpr int kDefaultDiv = 20;
 ISurfaceGraphics::ISurfaceGraphics(
         const std::shared_ptr<const entities::ISurface> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true) {
+        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
+          edge_buffer_(gl) {
     Synchronize();
 }
 
@@ -52,11 +55,11 @@ ISurfaceGraphics::~ISurfaceGraphics() {
  */
 
 void ISurfaceGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     // VAOをバインドして描画
     gl_->BindVertexArray(vao_);
     // glDrawElementsでインデックスバッファを用いた描画を行う
-    gl_->DrawElements(GL_TRIANGLES, indices_.size(), GL_UNSIGNED_INT, 0);
+    gl_->DrawElements(gl::kTriangles, indices_.size(), gl::kUnsignedInt, 0);
     gl_->BindVertexArray(0);
 }
 
@@ -69,6 +72,10 @@ void ISurfaceGraphics::Synchronize() {
     // 頂点・法線データとインデックスデータを生成
     GenerateSurfaceData();
 
+    // 境界エッジ (パラメータ矩形の4アイソ辺) を構築する
+    const auto edges = entities::ComputeParametricSurfaceEdges(*entity_);
+    edge_buffer_.Build(edges.loops);
+
     // VAO, VBO, EBOを生成
     gl_->GenVertexArrays(1, &vao_);
     gl_->GenBuffers(1, &vbo_);
@@ -78,23 +85,23 @@ void ISurfaceGraphics::Synchronize() {
     gl_->BindVertexArray(vao_);
 
     // VBOに頂点・法線データを転送
-    gl_->BindBuffer(GL_ARRAY_BUFFER, vbo_);
-    gl_->BufferData(GL_ARRAY_BUFFER, vertices_.size() * sizeof(float),
-                    vertices_.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kArrayBuffer, vbo_);
+    gl_->BufferData(gl::kArrayBuffer, vertices_.size() * sizeof(float),
+                    vertices_.data(), gl::kStaticDraw);
     // 頂点属性を設定
-    gl_->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse, 8 * sizeof(float), (void*)0);
     gl_->EnableVertexAttribArray(0);  // 位置
-    gl_->VertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
+    gl_->VertexAttribPointer(1, 3, gl::kFloat, gl::kFalse, 8 * sizeof(float),
                              (void*)(3 * sizeof(float)));
     gl_->EnableVertexAttribArray(1);  // 法線
-    gl_->VertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float),
+    gl_->VertexAttribPointer(2, 2, gl::kFloat, gl::kFalse, 8 * sizeof(float),
                              (void*)(6 * sizeof(float)));
     gl_->EnableVertexAttribArray(2);  // テクスチャ座標
 
     // EBOにインデックスデータを転送
-    gl_->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
-    gl_->BufferData(GL_ELEMENT_ARRAY_BUFFER, indices_.size() * sizeof(GLuint),
-                    indices_.data(), GL_STATIC_DRAW);
+    gl_->BindBuffer(gl::kElementArrayBuffer, ebo_);
+    gl_->BufferData(gl::kElementArrayBuffer, indices_.size() * sizeof(gl::Uint),
+                    indices_.data(), gl::kStaticDraw);
 
     // VAOのバインドを解除
     gl_->BindVertexArray(0);
@@ -112,6 +119,9 @@ void ISurfaceGraphics::Cleanup() {
         gl_->DeleteBuffers(1, &ebo_);
         ebo_ = 0;
     }
+
+    // 境界エッジのバッファを解放
+    edge_buffer_.Cleanup();
 
     // 頂点・法線データとインデックスデータをクリア
     vertices_.resize(0, 0);

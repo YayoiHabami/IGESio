@@ -192,6 +192,12 @@ IGESが保持しない、描画専用のマテリアルプロパティ。
 | `Orthographic` | 正投影 |
 | `Oblique` | 斜投影 |
 
+### クリッピング面
+
+- 近接/遠方クリッピング面(near/far)は、通常は自動クリッピングにより決定される。`SetAutoClipSphere`で登録されたシーンの外接球と現在のカメラ位置からnear/farが毎回導出されるため、ズームやパンでカメラが移動してもシーンがクリップされない。
+- 外接球はレンダラがシーンの設定・変更時(`SetScene`/`MarkSceneDirty`)に自動で更新するほか、`Camera::FitToBoundingBox`(FitView)でも登録される。
+- `SetClippingPlanes`を呼ぶと自動クリッピングは解除され、設定した手動値に固定される。シーン未設定時のフォールバック値は`kDefaultNearPlane`/`kDefaultFarPlane`である。
+
 ## Light (`include/igesio/graphics/core/light.h`)
 
 | 光源タイプ | 説明 |
