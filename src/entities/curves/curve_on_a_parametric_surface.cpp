@@ -48,7 +48,7 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     for (const auto& uv : vertices) {
         auto pt_opt = surface->TryGetPointAt(uv.x(), uv.y());
         if (!pt_opt) {
-            throw std::runtime_error("CurveOnAParametricSurface: Failed to project "
+            throw igesio::ComputationError("CurveOnAParametricSurface: Failed to project "
                     "base curve point onto surface.");
         }
         projected_vertices.push_back(pt_opt.value());

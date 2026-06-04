@@ -11,6 +11,7 @@
 #include <functional>
 #include <stdexcept>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/optimization.h"
 
 namespace {
@@ -201,13 +202,13 @@ TEST(FindRootScalarTest, SameSigns) {
         std::invalid_argument);
 }
 
-// maxiter=1: 収束不可能なため std::runtime_error
+// maxiter=1: 収束不可能なため igesio::ComputationError
 // 合わせて iters >= maxiter の判定も検証する (オフバイワン候補)
 TEST(FindRootScalarTest, MaxiterExceeded) {
     auto f = [](double x) { return x * x - 2.0; };
     EXPECT_THROW(
         i_num::FindRootScalar(f, 1.0, 2.0, 1e-9, 1),
-        std::runtime_error);
+        igesio::ComputationError);
 }
 
 // f(t_lower)=0 のとき: 0*f_upper=0 → 例外なし、t_lower付近の根を返す
@@ -238,7 +239,7 @@ TEST(FindRootScalarTest, TolZeroConvergence) {
         double root = i_num::FindRootScalar(f, 0.0, 2.0, 0.0);
         // 収束した場合は機械イプシロン相当の精度を期待
         EXPECT_NEAR(root, 1.0, 1e-14);
-    } catch (const std::runtime_error&) {
+    } catch (const igesio::ComputationError&) {
         // maxiter超過は許容動作
     }
 }

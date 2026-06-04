@@ -20,6 +20,7 @@
 #include <boost/math/tools/minima.hpp>
 #include <boost/math/tools/roots.hpp>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/optimization.h"
 
 namespace igesio::numerics {
@@ -80,7 +81,7 @@ MinimizeScalarResult MinimizeScalarT(F func, double t_lower, double t_upper,
 /// @param maxiter 最大反復回数
 /// @return 求根結果tの値 (区間中点)
 /// @throws std::invalid_argument 区間端で符号が同じ場合
-/// @throws std::runtime_error 最大反復回数内に収束しなかった場合
+/// @throws igesio::ComputationError 最大反復回数内に収束しなかった場合
 template <typename F>
 double FindRootScalarT(F func, double t_lower, double t_upper,
                        double x_tol, std::uintmax_t maxiter = 200) {
@@ -103,7 +104,7 @@ double FindRootScalarT(F func, double t_lower, double t_upper,
         f_lower, f_upper, tol_func, iters);
 
     if (iters >= maxiter) {
-        throw std::runtime_error(
+        throw igesio::ComputationError(
             "FindRootScalar: failed to converge within maxiter iterations");
     }
 

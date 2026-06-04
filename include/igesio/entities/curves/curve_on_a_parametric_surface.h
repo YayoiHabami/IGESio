@@ -214,7 +214,7 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @return 自動生成された曲線 C(t) のポインタ、curveが指定された場合はnullptrを返す
     /// @throw std::invalid_argument base_curveがnullptrの場合、
     ///        curveがnullptrかつsurfaceがnullptrの場合
-    /// @throw std::runtime_error curveがnullptrかつ自動生成に失敗した場合
+    /// @throw igesio::ComputationError curveがnullptrかつ自動生成に失敗した場合
     std::shared_ptr<ICurve> SetCurves(const std::shared_ptr<ICurve>&,
                                       const std::shared_ptr<ICurve>& = nullptr);
 
@@ -275,7 +275,7 @@ using CurveOnSurface = CurveOnAParametricSurface;
 /// @return 作成されたCurveOnAParametricSurfaceのshared_ptrと
 ///         曲線 C(t) のshared_ptrのペア
 /// @throw std::invalid_argument surface, base_curveのいずれかがnullptrの場合
-/// @throw std::runtime_error 曲線 C(t) の自動生成に失敗した場合
+/// @throw igesio::ComputationError 曲線 C(t) の自動生成に失敗した場合
 std::pair<std::shared_ptr<CurveOnAParametricSurface>, std::shared_ptr<ICurve>>
 MakeCurveOnAParametricSurface(const std::shared_ptr<ISurface>&,
                               const std::shared_ptr<ICurve>&);
