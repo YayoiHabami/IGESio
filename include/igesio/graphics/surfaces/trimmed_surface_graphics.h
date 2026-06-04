@@ -71,10 +71,11 @@ class TrimmedSurfaceGraphics
               const DrawContext& ctx) const override {
         if (shader_type == ShaderType::kSurfaceEdge) {
             if (edge_buffer_.IsEmpty()) return;
-            const auto color = ctx.IsHighlighted(GetEntityID())
+            const bool highlighted = ctx.IsHighlighted(GetEntityID());
+            const auto& color = highlighted
                     ? ctx.highlight_color : kSurfaceEdgeColor;
             edge_buffer_.DrawWithState(shader, GetWorldTransform(),
-                                       color, GetLineWidth());
+                                       color, GetLineWidth(), highlighted);
             return;
         }
         EntityGraphics::Draw(shader, shader_type, viewport, ctx);

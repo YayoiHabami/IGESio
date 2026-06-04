@@ -55,7 +55,8 @@ void SurfaceEdgeBuffer::Build(
 
 void SurfaceEdgeBuffer::DrawWithState(
         gl::Uint shader, const igesio::Matrix4f& model,
-        const std::array<float, 4>& color, double line_width) const {
+        const std::array<float, 4>& color, double line_width,
+        const bool highlighted) const {
     if (vertex_count_ == 0 || !gl_) return;
 
     gl_->LineWidth(static_cast<gl::Float>(line_width));
@@ -64,9 +65,15 @@ void SurfaceEdgeBuffer::DrawWithState(
     gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
                     1, color.data());
 
+    // ハイライト中は深度を僅かに手前へ圧縮し、隣接面側の同一エッジとの
+    // Zファイト (選択色と通常色の縞) を描画順に依らず選択色側で確定させる
+    if (highlighted) gl_->DepthRange(0.0, 1.0 - kHighlightDepthShrink);
+
     gl_->BindVertexArray(vao_);
     gl_->DrawArrays(gl::kLines, 0, vertex_count_);
     gl_->BindVertexArray(0);
+
+    if (highlighted) gl_->DepthRange(0.0, 1.0);
 }
 
 void SurfaceEdgeBuffer::Cleanup() {

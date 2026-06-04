@@ -206,6 +206,8 @@ class IOpenGL {
     virtual void LineWidth(gl::Float width) = 0;
     virtual void PointSize(gl::Float size) = 0;
     virtual void PolygonOffset(gl::Float factor, gl::Float units) = 0;
+    // near/farはWindowsヘッダーのマクロと衝突するため_valを付す
+    virtual void DepthRange(gl::Double near_val, gl::Double far_val) = 0;
     virtual void ReadPixels(gl::Int x, gl::Int y, gl::Sizei width, gl::Sizei height,
                             gl::Enum format, gl::Enum type, void *data) = 0;
     virtual gl::Enum GetError() = 0;

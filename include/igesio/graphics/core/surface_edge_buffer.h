@@ -28,6 +28,14 @@ namespace igesio::graphics {
 /// @note shadedモードで面と区別できるよう、やや暗い灰色とする
 constexpr std::array<float, 4> kSurfaceEdgeColor = {0.1f, 0.1f, 0.1f, 1.0f};
 
+/// @brief ハイライト中のエッジへ適用するウィンドウ深度の圧縮率
+/// @note 隣接面が共有する辺は両面から1本ずつ (別テッセレーションで) 描かれ、
+///       ほぼ同一深度でZファイトして選択色と通常色の縞になる. ハイライト側を
+///       glDepthRange(0, 1-この値)で僅かに手前へ寄せ、描画順に依存せず
+///       選択色を勝たせる. 大きくしすぎると選択エッジが手前の面を透過するため、
+///       テッセレーション差 (窓深度で~1e-5) に勝つ最小限の桁とする
+constexpr double kHighlightDepthShrink = 1e-4;
+
 /// @brief サーフェス境界エッジを線分(kLines)として保持・描画するGPUバッファ
 /// @note 折れ線ループ群を線分ペアに平坦化して保持する. 描画時のシェーダープログラムの
 ///       bindとview/projection uniformの設定は呼び出し側 (レンダラ) の責務とする.
@@ -65,9 +73,13 @@ class SurfaceEdgeBuffer {
     /// @param model モデル変換行列
     /// @param color 線の色 (RGBA)
     /// @param line_width 線幅
+    /// @param highlighted ハイライト中か. trueの場合は深度を僅かに手前へ寄せ、
+    ///        隣接面の同一位置のエッジに対して決定的に勝たせる
+    ///        (kHighlightDepthShrink参照)
     /// @note view/projection uniformは呼び出し側で設定済みであること
     void DrawWithState(gl::Uint, const igesio::Matrix4f&,
-                       const std::array<float, 4>&, double) const;
+                       const std::array<float, 4>&, double,
+                       bool highlighted = false) const;
 
     /// @brief GPUリソースを解放する
     void Cleanup();

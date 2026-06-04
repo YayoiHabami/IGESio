@@ -430,6 +430,9 @@ class OpenGL : public IOpenGL {
     void PolygonOffset(gl::Float factor, gl::Float units) override {
         ctx_.PolygonOffset(factor, units);
     }
+    void DepthRange(gl::Double near_val, gl::Double far_val) override {
+        ctx_.DepthRange(near_val, far_val);
+    }
     void ReadPixels(gl::Int x, gl::Int y, gl::Sizei width, gl::Sizei height,
                     gl::Enum format, gl::Enum type, void *data) override {
         ctx_.ReadPixels(x, y, width, height, format, type, data);

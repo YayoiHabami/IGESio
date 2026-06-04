@@ -38,6 +38,8 @@ using Enum = std::uint32_t;
 using Sizei = std::int32_t;
 /// @brief OpenGLのGLfloat相当の型エイリアス
 using Float = float;
+/// @brief OpenGLのGLdouble相当の型エイリアス
+using Double = double;
 /// @brief OpenGLのGLboolean相当の型エイリアス
 using Boolean = std::uint8_t;
 /// @brief OpenGLのGLbitfield相当の型エイリアス
