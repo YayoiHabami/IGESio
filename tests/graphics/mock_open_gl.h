@@ -206,6 +206,7 @@ class MockOpenGL : public IOpenGL {
     }
     void LineWidth(gl::Float width) override { line_widths.push_back(width); }
     void PointSize(gl::Float) override {}
+    void PolygonOffset(gl::Float, gl::Float) override {}
     void ReadPixels(gl::Int, gl::Int, gl::Sizei, gl::Sizei, gl::Enum, gl::Enum,
                     void*) override {}
     gl::Enum GetError() override { return gl::kNoError; }

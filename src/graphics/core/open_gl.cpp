@@ -59,6 +59,7 @@ static_assert(gl::kDepthTest == GL_DEPTH_TEST, "gl::kDepthTest mismatch");
 static_assert(gl::kBlend == GL_BLEND, "gl::kBlend mismatch");
 static_assert(gl::kMultisample == GL_MULTISAMPLE, "gl::kMultisample mismatch");
 static_assert(gl::kProgramPointSize == GL_PROGRAM_POINT_SIZE, "gl::kProgramPointSize mismatch");
+static_assert(gl::kPolygonOffsetFill == GL_POLYGON_OFFSET_FILL, "gl::kPolygonOffsetFill mismatch");
 static_assert(gl::kSrcAlpha == GL_SRC_ALPHA, "gl::kSrcAlpha mismatch");
 static_assert(gl::kOneMinusSrcAlpha == GL_ONE_MINUS_SRC_ALPHA, "gl::kOneMinusSrcAlpha mismatch");
 static_assert(gl::kColorBufferBit == GL_COLOR_BUFFER_BIT, "gl::kColorBufferBit mismatch");
@@ -425,6 +426,9 @@ class OpenGL : public IOpenGL {
     }
     void PointSize(gl::Float size) override {
         ctx_.PointSize(size);
+    }
+    void PolygonOffset(gl::Float factor, gl::Float units) override {
+        ctx_.PolygonOffset(factor, units);
     }
     void ReadPixels(gl::Int x, gl::Int y, gl::Sizei width, gl::Sizei height,
                     gl::Enum format, gl::Enum type, void *data) override {

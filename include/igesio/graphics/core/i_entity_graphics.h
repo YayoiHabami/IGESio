@@ -97,6 +97,14 @@ inline bool HasSpecificShaderCode(const ShaderType shader_type) {
            shader_type != ShaderType::kComposite;
 }
 
+/// @brief 面塗り (三角形描画) のシェーダー型か
+/// @param st シェーダー型
+/// @return 面塗りの場合はtrue
+inline bool IsSurfaceFill(const ShaderType st) {
+    return st == ShaderType::kGeneralSurface ||
+           st == ShaderType::kRationalBSplineSurface;
+}
+
 /// @brief ShaderTypeの値を文字列に変換する
 /// @param shader_type ShaderTypeの値
 /// @return ShaderTypeの値に対応する文字列

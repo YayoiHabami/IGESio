@@ -85,8 +85,9 @@ constexpr float kDefaultFitMargin = 1.1f;
 constexpr float kAutoClipRadiusMargin = 1.05f;
 /// @brief 自動クリッピング時のnear/far比の下限 (near >= far * この値)
 /// @note カメラが外接球内へ入った際の、手前の見切れと深度精度の
-///       トレードオフを決める
-constexpr float kAutoClipMinNearRatio = 1e-4f;
+///       トレードオフを決める. 透視投影の深度分解能はnearにほぼ反比例して
+///       劣化するため、小さくしすぎると奥のエッジ線が面を透過して見える
+constexpr float kAutoClipMinNearRatio = 1e-3f;
 
 /// @brief バウンディングボックスの外接球(中心と半径)を計算する
 /// @param bbox 対象のバウンディングボックス

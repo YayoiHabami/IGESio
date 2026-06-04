@@ -21,6 +21,11 @@ namespace i_graph = igesio::graphics;
 namespace gl = igesio::graphics::gl;
 using EntityRenderer = igesio::graphics::EntityRenderer;
 
+/// @brief 面塗りへ適用する深度オフセット (glPolygonOffsetのfactor/units)
+/// @note 面上に重なるエッジ線・曲線が深度量子化で面に負けないよう、
+///       面塗りのみを僅かに奥へずらすための値
+constexpr float kSurfaceFillDepthOffset = 1.0f;
+
 /// @brief 表示モードに応じて当該シェーダー型を描画すべきか判定する
 /// @param st シェーダー型
 /// @param mode 表示モード
@@ -29,9 +34,7 @@ using EntityRenderer = igesio::graphics::EntityRenderer;
 ///       モードで切り替える. それ以外 (独立曲線・点) は常に描画する.
 bool ShouldDrawShaderType(const i_graph::ShaderType st,
                           const i_graph::DisplayMode mode) {
-    const bool is_surface_fill =
-            st == i_graph::ShaderType::kGeneralSurface ||
-            st == i_graph::ShaderType::kRationalBSplineSurface;
+    const bool is_surface_fill = IsSurfaceFill(st);
     const bool is_surface_edge = st == i_graph::ShaderType::kSurfaceEdge;
     switch (mode) {
         case i_graph::DisplayMode::kShaded:    return true;
@@ -625,6 +628,13 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
                               1, gl::kFalse, projection_matrix.data());
 
+        // 面上のエッジ線・曲線が確実に手前へ出るよう、面塗りのみ奥へオフセットする
+        const bool offset_fill = IsSurfaceFill(shader_type);
+        if (offset_fill) {
+            gl_->Enable(gl::kPolygonOffsetFill);
+            gl_->PolygonOffset(kSurfaceFillDepthOffset, kSurfaceFillDepthOffset);
+        }
+
         // 光源のパラメータを設定 (配列uniformとして送信)
         if (UsesLighting(shader_type)) {
             gl_->Uniform1i(gl_->GetUniformLocation(program_id, "numLights"),
@@ -644,6 +654,8 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
                 graphics->Draw(program_id, shader_type, viewport, ctx);
             }
         }
+
+        if (offset_fill) gl_->Disable(gl::kPolygonOffsetFill);
     }
 }
 

@@ -84,6 +84,7 @@ constexpr Enum kDepthTest        = 0x0B71;  // GL_DEPTH_TEST
 constexpr Enum kBlend            = 0x0BE2;  // GL_BLEND
 constexpr Enum kMultisample      = 0x809D;  // GL_MULTISAMPLE
 constexpr Enum kProgramPointSize = 0x8642;  // GL_PROGRAM_POINT_SIZE
+constexpr Enum kPolygonOffsetFill = 0x8037;  // GL_POLYGON_OFFSET_FILL
 // ブレンドファクタ
 constexpr Enum kSrcAlpha         = 0x0302;  // GL_SRC_ALPHA
 constexpr Enum kOneMinusSrcAlpha = 0x0303;  // GL_ONE_MINUS_SRC_ALPHA
