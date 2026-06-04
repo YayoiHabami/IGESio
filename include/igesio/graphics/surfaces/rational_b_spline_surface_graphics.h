@@ -9,11 +9,13 @@
 #define IGESIO_GRAPHICS_SURFACES_RATIONAL_B_SPLINE_SURFACE_GRAPHICS_H_
 
 #include <memory>
+#include <unordered_set>
 #include <utility>
 
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
+#include "igesio/graphics/core/surface_edge_buffer.h"
 
 
 
@@ -23,14 +25,16 @@ namespace igesio::graphics {
 class RationalBSplineSurfaceGraphics
     : public EntityGraphics<entities::RationalBSplineSurface, true> {
     /// @brief u方向のノットベクトルのSSBO
-    GLuint knots_u_ssbo_ = 0;
+    gl::Uint knots_u_ssbo_ = 0;
     /// @brief v方向のノットベクトルのSSBO
-    GLuint knots_v_ssbo_ = 0;
+    gl::Uint knots_v_ssbo_ = 0;
     /// @brief 制御点と重みのSSBO
     /// @note vec4のx~zが制御点、wが重み
-    GLuint control_with_weights_ssbo_ = 0;
+    gl::Uint control_with_weights_ssbo_ = 0;
     /// @brief 参照点のSSBO
-    GLuint reference_points_ssbo_ = 0;
+    gl::Uint reference_points_ssbo_ = 0;
+    /// @brief 境界エッジ (パラメータ矩形の4アイソ辺) の線分バッファ
+    SurfaceEdgeBuffer edge_buffer_;
 
  public:
     /// @brief コンストラクタ
@@ -56,6 +60,34 @@ class RationalBSplineSurfaceGraphics
                (reference_points_.cols() > 0);
     }
 
+    // 基底のDrawオーバーロード (3引数版) を可視に保つ
+    using EntityGraphics::Draw;
+
+    /// @brief エンティティの描画を行う (シェーダー型で分岐)
+    /// @note kSurfaceEdgeでは境界エッジを線描画し、それ以外は基底に委譲する
+    void Draw(gl::Uint shader, const ShaderType shader_type,
+              const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
+        if (shader_type == ShaderType::kSurfaceEdge) {
+            if (edge_buffer_.IsEmpty()) return;
+            const bool highlighted = ctx.IsHighlighted(GetEntityID());
+            const auto& color = highlighted
+                    ? ctx.highlight_color : kSurfaceEdgeColor;
+            edge_buffer_.DrawWithState(shader, GetWorldTransform(),
+                                       color, GetLineWidth(), highlighted);
+            return;
+        }
+        EntityGraphics::Draw(shader, shader_type, viewport, ctx);
+    }
+
+    /// @brief 全ての可能なシェーダータイプを取得する
+    /// @note 面シェーダーに加え、エッジがあればkSurfaceEdgeを含める
+    std::unordered_set<ShaderType> GetShaderTypes() const override {
+        auto types = EntityGraphics::GetShaderTypes();
+        if (!edge_buffer_.IsEmpty()) types.insert(ShaderType::kSurfaceEdge);
+        return types;
+    }
+
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
@@ -69,7 +101,7 @@ class RationalBSplineSurfaceGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 
     /// @brief 参照点
     /// @note テッセレーション数決定のために使用する、曲面上のいくつかの点

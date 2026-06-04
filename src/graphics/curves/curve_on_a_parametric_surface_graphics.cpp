@@ -93,7 +93,7 @@ std::unordered_set<i_graph::ShaderType> CurveOnSurfaceGraphics::GetShaderTypes()
 }
 
 void CurveOnSurfaceGraphics::Draw(
-        GLuint shader, const ShaderType shader_type,
+        gl::Uint shader, const ShaderType shader_type,
         const std::pair<float, float>& viewport,
         const DrawContext& ctx) const {
     if (curve_graphics_ == nullptr) return;
@@ -118,7 +118,7 @@ std::vector<i_graph::RayHit> CurveOnSurfaceGraphics::Intersect(
     return curve_graphics_->Intersect(ray, params);
 }
 
-void CurveOnSurfaceGraphics::SetColor(const std::array<GLfloat, 4>& color) {
+void CurveOnSurfaceGraphics::SetColor(const std::array<float, 4>& color) {
     EntityGraphics::SetColor(color);
     // 描画は子要素C(t)に委譲されるため、色も子要素へ伝播させる
     if (curve_graphics_ != nullptr) curve_graphics_->SetColor(color);

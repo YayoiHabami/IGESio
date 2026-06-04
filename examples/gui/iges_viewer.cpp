@@ -9,8 +9,8 @@
 #include <stdexcept>
 #include <string>
 
-// Include this file before other OpenGL/GLFW headers
-// (This file includes 'glad/gl.h' and 'GLFW/glfw3.h')
+// Include this file before other GLFW headers
+// (This file includes 'GLFW/glfw3.h')
 #include "./iges_viewer_gui.h"
 
 

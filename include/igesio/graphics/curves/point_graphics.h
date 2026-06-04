@@ -32,7 +32,7 @@ class PointGraphics
     : public EntityGraphics<entities::Point> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
-    GLuint vbo_ = 0;
+    gl::Uint vbo_ = 0;
 
  public:
     /// @brief コンストラクタ
@@ -93,7 +93,7 @@ class PointGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 };
 
 }  // namespace igesio::graphics

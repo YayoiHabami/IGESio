@@ -35,8 +35,11 @@ set(TEST_SOURCES
     # Surfaces
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
+    surfaces/test_trimmed_surface.cpp
     surfaces/test_surface_line_intersection.cpp
     surfaces/test_curve_surface_inversion.cpp
+    surfaces/test_restricted_surface_mesh.cpp
+    surfaces/test_surface_boundary_edges.cpp
 
     # Views
     views/test_curve_view.cpp

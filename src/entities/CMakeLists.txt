@@ -7,6 +7,7 @@ add_library(igesio_entities STATIC
     interfaces/i_geometry.cpp
     interfaces/i_curve.cpp
     interfaces/i_surface.cpp
+    interfaces/i_restricted_surface.cpp
 
     # Views (in-memory transform decorators)
     views/curve_view.cpp
@@ -60,6 +61,8 @@ add_library(igesio_entities STATIC
     curves/nurbs_algorithms.cpp
     surfaces/algorithms/surface_line_intersection.cpp
     surfaces/algorithms/curve_surface_inversion.cpp
+    surfaces/algorithms/restricted_surface_mesh.cpp
+    surfaces/algorithms/surface_boundary_edges.cpp
 
     # Factory
     factory.cpp

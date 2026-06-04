@@ -24,9 +24,9 @@ class CopiousDataGraphics
     : public EntityGraphics<entities::CopiousDataBase> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
-    GLuint vbo_ = 0;
+    gl::Uint vbo_ = 0;
     /// @brief エンティティの頂点数
-    GLsizei vertex_count_ = 0;
+    gl::Sizei vertex_count_ = 0;
 
  public:
     /// @brief コンストラクタ
@@ -83,7 +83,7 @@ class CopiousDataGraphics
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
     void DrawImpl(
-            GLuint, [[maybe_unused]] const std::pair<float, float>&) const override;
+            gl::Uint, [[maybe_unused]] const std::pair<float, float>&) const override;
 };
 
 }  // namespace igesio::graphics

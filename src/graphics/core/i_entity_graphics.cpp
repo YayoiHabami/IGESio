@@ -82,7 +82,7 @@ void IEntityGraphics::SetWorldTransform(const igesio::Matrix4f& matrix) {
     world_transform_ = matrix;
 }
 
-void IEntityGraphics::SetColor(const std::array<GLfloat, 4>&color) {
+void IEntityGraphics::SetColor(const std::array<float, 4>&color) {
     std::copy(color.begin(), color.end(), color_);
     is_color_overridden_ = true;
 }
@@ -111,6 +111,8 @@ std::string i_graph::ToString(const ShaderType shader_type) {
             return "Line";
         case ShaderType::kRationalBSplineCurve:
             return "RationalBSplineCurve";
+        case ShaderType::kSurfaceEdge:
+            return "SurfaceEdge";
         case ShaderType::kGeneralSurface:
             return "GeneralSurface";
         case ShaderType::kRationalBSplineSurface:

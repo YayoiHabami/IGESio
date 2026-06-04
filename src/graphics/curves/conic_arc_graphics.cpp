@@ -43,7 +43,7 @@ EllipseGraphics::~EllipseGraphics() {
  */
 
 void EllipseGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     // シェーダーのuniform変数を設定
     auto center = entity_->EllipseCenter();
     gl_->Uniform3f(gl_->GetUniformLocation(shader, "center"),
@@ -79,8 +79,8 @@ void EllipseGraphics::Synchronize() {
     gl_->GenVertexArrays(1, &vao_);
 
     if (entity_->IsClosed()) {
-        draw_mode_ = GL_LINE_LOOP;
+        draw_mode_ = gl::kLineLoop;
     } else {
-        draw_mode_ = GL_LINE_STRIP;
+        draw_mode_ = gl::kLineStrip;
     }
 }

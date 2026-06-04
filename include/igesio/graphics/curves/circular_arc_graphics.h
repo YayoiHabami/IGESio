@@ -47,7 +47,7 @@ class CircularArcGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 };
 
 }  // namespace igesio::graphics

@@ -70,7 +70,7 @@ class CurveOnAParametricSurfaceGraphics
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
     /// @note shader_typeの子要素のみを描画する. 子要素の描画は
     ///       子要素に移譲する.
-    void Draw(GLuint, const ShaderType, const std::pair<float, float>&,
+    void Draw(gl::Uint, const ShaderType, const std::pair<float, float>&,
               const DrawContext&) const override;
 
     /// @brief レイとの交差判定が可能か
@@ -89,7 +89,7 @@ class CurveOnAParametricSurfaceGraphics
     /// @brief メインの色を設定する
     /// @param color メインの色 (RGBA; [0, 1]の範囲)
     /// @note 描画は子要素C(t)に委譲されるため、色も子要素へ伝播させる
-    void SetColor(const std::array<GLfloat, 4>&) override;
+    void SetColor(const std::array<float, 4>&) override;
 
     /// @brief 色をデフォルトのエンティティの色に戻す
     /// @note 描画は子要素C(t)に委譲されるため、子要素の色もリセットする
@@ -101,7 +101,7 @@ class CurveOnAParametricSurfaceGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override {};
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override {};
 };
 
 }  // namespace igesio::graphics

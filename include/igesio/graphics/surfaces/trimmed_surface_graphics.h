@@ -9,34 +9,37 @@
 #define IGESIO_GRAPHICS_SURFACES_TRIMMED_SURFACE_GRAPHICS_H_
 
 #include <memory>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/surfaces/trimmed_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
+#include "igesio/graphics/core/surface_edge_buffer.h"
 
 
 
 namespace igesio::graphics {
 
 /// @brief TrimmedSurfaceエンティティの描画情報の管理クラス
-/// @note 均一グリッドにエッジ交差点を加えたMarching Squares的な三角分割により、
-///       トリム境界近傍の段差を抑制する。
-///       各グリッドエッジでの有効/無効の遷移点を2分探索で求め、
-///       境界セルを凸多角形にクリッピングしてファン三角分割する。
+/// @note メッシュ生成は制限付き曲面(143/144)共通のテッセレーション
+///       (entities::TessellateRestrictedSurface) に委譲する。境界駆動の
+///       制限付き四分木により、トリム境界近傍を適応的に細分する。
 class TrimmedSurfaceGraphics
     : public EntityGraphics<entities::TrimmedSurface, true> {
     /// @brief 面のVBO
-    GLuint vbo_ = 0;
+    gl::Uint vbo_ = 0;
     /// @brief 面のEBO
-    GLuint ebo_ = 0;
+    gl::Uint ebo_ = 0;
 
     /// @brief 面の頂点・法線・テクスチャ座標データ
     /// @note 各列が {x, y, z, nx, ny, nz, tu, tv} の形式
     MatrixXf vertices_;
     /// @brief 面のインデックスデータ
-    std::vector<GLuint> indices_;
+    std::vector<gl::Uint> indices_;
+    /// @brief 境界エッジ (外周/内周トリム境界) の線分バッファ
+    SurfaceEdgeBuffer edge_buffer_;
 
  public:
     /// @brief コンストラクタ
@@ -56,6 +59,34 @@ class TrimmedSurfaceGraphics
     /// @brief 描画可能な状態かどうかを確認する
     bool IsDrawable() const override {
         return EntityGraphics::IsDrawable() && vbo_ != 0 && ebo_ != 0;
+    }
+
+    // 基底のDrawオーバーロード (3引数版) を可視に保つ
+    using EntityGraphics::Draw;
+
+    /// @brief エンティティの描画を行う (シェーダー型で分岐)
+    /// @note kSurfaceEdgeでは境界エッジを線描画し、それ以外は基底に委譲する
+    void Draw(gl::Uint shader, const ShaderType shader_type,
+              const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
+        if (shader_type == ShaderType::kSurfaceEdge) {
+            if (edge_buffer_.IsEmpty()) return;
+            const bool highlighted = ctx.IsHighlighted(GetEntityID());
+            const auto& color = highlighted
+                    ? ctx.highlight_color : kSurfaceEdgeColor;
+            edge_buffer_.DrawWithState(shader, GetWorldTransform(),
+                                       color, GetLineWidth(), highlighted);
+            return;
+        }
+        EntityGraphics::Draw(shader, shader_type, viewport, ctx);
+    }
+
+    /// @brief 全ての可能なシェーダータイプを取得する
+    /// @note 面シェーダーに加え、エッジがあればkSurfaceEdgeを含める
+    std::unordered_set<ShaderType> GetShaderTypes() const override {
+        auto types = EntityGraphics::GetShaderTypes();
+        if (!edge_buffer_.IsEmpty()) types.insert(ShaderType::kSurfaceEdge);
+        return types;
     }
 
     /// @brief エンティティをセットアップする
@@ -78,7 +109,7 @@ class TrimmedSurfaceGraphics
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
-    void DrawImpl(GLuint, const std::pair<float, float>&) const override;
+    void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 
  private:
     /// @brief 描画用の頂点/法線データとインデックスデータを生成する

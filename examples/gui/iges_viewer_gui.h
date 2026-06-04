@@ -4,10 +4,7 @@
  * @author Yayoi Habami
  * @date 2025-08-05
  * @copyright 2025 Yayoi Habami
- * @note このファイルは'glad/gl.h'をインクルードしているため、
- *       このファイルをインクルードする際は、他のOpenGL/GLFWヘッダを
- *       インクルードする前にこのファイルをインクルードすること.
- *       GUIは「メニューバー + 左Outliner + 右Inspector + 下StatusBar + 中央Viewport」
+ * @note GUIは「メニューバー + 左Outliner + 右Inspector + 下StatusBar + 中央Viewport」
  *       の固定レイアウト(ビューポート端にアンカー)で構成する.
  */
 #ifndef EXAMPLES_GUI_IGES_VIEWER_GUI_H_
@@ -20,9 +17,10 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
-#include "igesio/graphics/core/open_gl.h"
+#include "igesio/graphics/core/gl_backend.h"
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -75,6 +73,8 @@ class IgesViewerGUI {
     std::unordered_map<ObjectID, Vector3d> selected_hit_positions_;
     /// @brief 再描画が必要か
     bool needs_redraw_ = true;
+    /// @brief 起動後の初回ファイル読み込みでfit view済みか
+    bool initial_fit_done_ = false;
 
     /// @brief 削除系操作のポリシー (0:Reject, 1:Cascade, 2:Orphan; ImGui用)
     int removal_policy_ = 0;
@@ -175,8 +175,17 @@ class IgesViewerGUI {
 
     /// @brief Assemblyノードを再帰的にツリー表示する
     void RenderAssemblyNode(models::Assembly& node);
-    /// @brief エンティティ行を表示し、クリックで選択する (Ctrlでトグル)
-    void RenderEntityRow(const ObjectID& id);
+    /// @brief エンティティとその参照先を再帰的にツリー表示する
+    /// @param id 表示するエンティティのID
+    /// @param path 現在の再帰経路上のID集合 (循環参照による無限再帰のガード用)
+    void RenderEntityNode(const ObjectID& id,
+                          std::unordered_set<ObjectID>& path);
+    /// @brief エンティティ行のクリックによる選択を処理する (Ctrlでトグル)
+    void HandleEntityRowClick(const ObjectID& id);
+    /// @brief ツリー内で解決できる参照先のIDを取得する (重複除去済み)
+    /// @param id 参照元エンティティのID
+    /// @return Outlinerで子階層として表示する参照先IDのリスト
+    std::vector<ObjectID> ResolvedReferences(const ObjectID& id) const;
     /// @brief Assemblyノードの右クリックコンテキストメニューを描画する
     void RenderNodeContextMenu(models::Assembly& node);
     /// @brief Inspectorの選択サマリ部を描画する
@@ -225,6 +234,10 @@ class IgesViewerGUI {
     void HandleBoxSelection(const double, const double, const int);
     /// @brief キーボードショートカット (Del/Ctrl+G/Esc/F) を処理する
     void HandleHotkeys();
+    /// @brief 標準軸ビューへ切り替え、モデル全体を画面に収める
+    /// @param view 標準軸ビューの種別
+    /// @note Camera::SetStandardViewで向きを定型化した後、FitViewで枠に収める
+    void ApplyStandardView(const StandardView);
     /// @brief マウスカーソル位置のコールバック
     void CursorPositionCallback(const double, const double);
     /// @brief スクロールホイールのコールバック

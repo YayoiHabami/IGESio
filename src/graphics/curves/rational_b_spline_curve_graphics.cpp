@@ -42,7 +42,7 @@ RationalBSplineCurveGraphics::~RationalBSplineCurveGraphics() {
  */
 
 void RationalBSplineCurveGraphics::DrawImpl(
-        GLuint shader, const std::pair<float, float>& viewport) const {
+        gl::Uint shader, const std::pair<float, float>& viewport) const {
     // シェーダーのuniform変数を設定
     gl_->Uniform1i(gl_->GetUniformLocation(shader, "numRefPoints"),
                    reference_points_.cols());
@@ -52,9 +52,9 @@ void RationalBSplineCurveGraphics::DrawImpl(
                    entity_->ControlPoints().cols());
 
     // SSBOをバインド
-    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, knots_ssbo_);
-    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, control_with_weights_ssbo_);
-    gl_->BindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, reference_points_ssbo_);
+    gl_->BindBufferBase(gl::kShaderStorageBuffer, 0, knots_ssbo_);
+    gl_->BindBufferBase(gl::kShaderStorageBuffer, 1, control_with_weights_ssbo_);
+    gl_->BindBufferBase(gl::kShaderStorageBuffer, 2, reference_points_ssbo_);
 
     gl_->Uniform2f(gl_->GetUniformLocation(shader, "paramRangeT"),
                    entity_->GetParameterRange()[0], entity_->GetParameterRange()[1]);
@@ -65,7 +65,7 @@ void RationalBSplineCurveGraphics::DrawImpl(
     // 描画
     gl_->BindVertexArray(vao_);
     // 1つの頂点からなるパッチを1つ描画する
-    gl_->DrawArrays(GL_PATCHES, 0, 1);
+    gl_->DrawArrays(gl::kPatches, 0, 1);
     gl_->BindVertexArray(0);
 }
 
@@ -93,18 +93,18 @@ void RationalBSplineCurveGraphics::Synchronize() {
 
     // 参照点のSSBOを作成
     gl_->GenBuffers(1, &reference_points_ssbo_);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, reference_points_ssbo_);
-    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+    gl_->BindBuffer(gl::kShaderStorageBuffer, reference_points_ssbo_);
+    gl_->BufferData(gl::kShaderStorageBuffer,
                     sizeof(float) * reference_points_.size(),
-                    reference_points_.data(), GL_STATIC_DRAW);
+                    reference_points_.data(), gl::kStaticDraw);
 
     // ノットのSSBOを作成
     gl_->GenBuffers(1, &knots_ssbo_);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, knots_ssbo_);
-    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+    gl_->BindBuffer(gl::kShaderStorageBuffer, knots_ssbo_);
+    gl_->BufferData(gl::kShaderStorageBuffer,
                     sizeof(float) * entity_->Knots().size(),
                     ConvertToFloatVector(entity_->Knots()).data(),
-                    GL_STATIC_DRAW);
+                    gl::kStaticDraw);
 
     // 制御点と重みの転送
     MatrixXf control_with_weights(4, entity_->ControlPoints().cols());
@@ -115,23 +115,23 @@ void RationalBSplineCurveGraphics::Synchronize() {
     }
     // SSBOを作成してデータを転送
     gl_->GenBuffers(1, &control_with_weights_ssbo_);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, control_with_weights_ssbo_);
-    gl_->BufferData(GL_SHADER_STORAGE_BUFFER,
+    gl_->BindBuffer(gl::kShaderStorageBuffer, control_with_weights_ssbo_);
+    gl_->BufferData(gl::kShaderStorageBuffer,
                     sizeof(float) * control_with_weights.size(),
-                    control_with_weights.data(), GL_STATIC_DRAW);
-    gl_->BindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+                    control_with_weights.data(), gl::kStaticDraw);
+    gl_->BindBuffer(gl::kShaderStorageBuffer, 0);
 
     // テッセレーションシェーダーを使用するため、空のVAOを生成する
     gl_->GenVertexArrays(1, &vao_);
 
     // パッチの頂点数を1に設定
     // この設定はVAOに保存されるため、描画のたびに呼び出す必要はない
-    gl_->PatchParameteri(GL_PATCH_VERTICES, 1);
+    gl_->PatchParameteri(gl::kPatchVertices, 1);
 
     if (entity_->IsClosed()) {
-        draw_mode_ = GL_LINE_LOOP;
+        draw_mode_ = gl::kLineLoop;
     } else {
-        draw_mode_ = GL_LINE_STRIP;
+        draw_mode_ = gl::kLineStrip;
     }
 }
 

@@ -14,14 +14,11 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
-#include "igesio/entities/curves/algorithms.h"
 
 namespace {
 
-namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::TrimmedSurface;
-using igesio::Vector3d;
 
 /// @brief surfaceがnullptrでないことを確認し、そのIDを返す
 /// @throw std::invalid_argument surfaceがnullptrの場合
@@ -314,70 +311,43 @@ igesio::ValidationResult TrimmedSurface::ValidatePD() const {
 
 
 /**
- * ISurface implementation
+ * IRestrictedSurface implementation
  */
 
-bool TrimmedSurface::IsUClosed() const {
-    // TODO: N1=1のとき、外側境界曲線がU方向の継ぎ目(seam)をまたぐかを
-    //       判定することで閉性を正確に推定できる。現時点では保守的にfalseを返す。
-    if (!outer_is_boundary_of_d_) return false;
+std::shared_ptr<const i_ent::ISurface> TrimmedSurface::GetBaseSurface() const {
     auto surf_opt = surface_.TryGetEntity<ISurface>();
-    if (!surf_opt) return false;
-    return surf_opt.value()->IsUClosed();
+    if (!surf_opt) return nullptr;
+    return surf_opt.value();
 }
 
-bool TrimmedSurface::IsVClosed() const {
-    // TODO: N1=1のとき、外側境界曲線がV方向の継ぎ目(seam)をまたぐかを
-    //       判定することで閉性を正確に推定できる。現時点では保守的にfalseを返す。
-    if (!outer_is_boundary_of_d_) return false;
-    auto surf_opt = surface_.TryGetEntity<ISurface>();
-    if (!surf_opt) return false;
-    return surf_opt.value()->IsVClosed();
-}
-
-std::array<double, 4> TrimmedSurface::GetParameterRange() const {
-    auto surf_opt = surface_.TryGetEntity<ISurface>();
-    if (!surf_opt) return {0.0, 1.0, 0.0, 1.0};
-    return surf_opt.value()->GetParameterRange();
-}
-
-std::optional<i_ent::SurfaceDerivatives>
-TrimmedSurface::TryGetDefinedDerivatives(
-        const double u, const double v, const unsigned int order) const {
-    // ドメイン外は nullopt
-    if (!IsInDomain(u, v)) return std::nullopt;
-
-    auto surf_opt = surface_.TryGetEntity<ISurface>();
-    if (!surf_opt) return std::nullopt;
-    // トリム面の定義空間は基底曲面のモデル空間(M_base適用済み)とする
-    return surf_opt.value()->TryGetDerivatives(u, v, order);
-}
-
-i_num::BoundingBox TrimmedSurface::GetDefinedBoundingBox() const {
-    auto surf_opt = surface_.TryGetEntity<ISurface>();
-    if (!surf_opt) return i_num::BoundingBox();
-    return surf_opt.value()->GetDefinedBoundingBox();
-}
-
-bool TrimmedSurface::IsInDomain(const double u, const double v) const {
-    // 最速パス: 境界なし
-    if (outer_is_boundary_of_d_ && inner_boundaries_.empty()) return true;
-
-    BuildDomainCache();
-
-    const Vector3d pt(u, v, 0);
-
-    // 外側境界チェック (N1=1 かつキャッシュが有効なとき)
-    if (!outer_is_boundary_of_d_ && domain_cache_->outer) {
-        if (!i_num::IsPointInPolygon(pt, *domain_cache_->outer)) return false;
+std::shared_ptr<const i_ent::ICurve> TrimmedSurface::GetOuterUVBoundary() const {
+    if (outer_is_boundary_of_d_) return nullptr;
+    auto ob_opt = outer_boundary_.TryGetEntity<CurveOnAParametricSurface>();
+    if (!ob_opt) return nullptr;
+    // ベース曲線B(t)が未解決の場合、GetBaseCurveはruntime_errorを投げる → nullptr化
+    try {
+        return ob_opt.value()->GetBaseCurve();
+    } catch (const std::exception&) {
+        return nullptr;
     }
+}
 
-    // 内側境界チェック (穴の内部なら false)
-    for (const auto& inner_poly : domain_cache_->inner) {
-        if (i_num::IsPointInPolygon(pt, inner_poly)) return false;
+std::shared_ptr<const i_ent::ICurve>
+TrimmedSurface::GetInnerUVBoundaryAt(const std::size_t index) const {
+    if (index >= inner_boundaries_.size()) {
+        throw std::out_of_range(
+                "TrimmedSurface: Inner boundary index " + std::to_string(index)
+                + " is out of range (size=" + std::to_string(inner_boundaries_.size())
+                + ").");
     }
-
-    return true;
+    auto ib_opt = inner_boundaries_[index]
+            .TryGetEntity<CurveOnAParametricSurface>();
+    if (!ib_opt) return nullptr;
+    try {
+        return ib_opt.value()->GetBaseCurve();
+    } catch (const std::exception&) {
+        return nullptr;
+    }
 }
 
 
@@ -409,7 +379,7 @@ void TrimmedSurface::SetSurface(const std::shared_ptr<ISurface>& surface) {
         eb->SetSubordinateEntitySwitch(
                 SubordinateEntitySwitch::kPhysicallyDependent);
     }
-    domain_cache_ = std::nullopt;
+    InvalidateDomainCache();
 }
 
 std::shared_ptr<const i_ent::CurveOnAParametricSurface>
@@ -427,7 +397,7 @@ void TrimmedSurface::SetOuterBoundary(
         outer_is_boundary_of_d_ = true;
         outer_boundary_ = PointerContainer<false, CurveOnAParametricSurface>(
                 IDGenerator::UnsetID());
-        domain_cache_ = std::nullopt;
+        InvalidateDomainCache();
         return;
     }
     outer_is_boundary_of_d_ = false;
@@ -440,7 +410,7 @@ void TrimmedSurface::SetOuterBoundary(
         eb->SetSubordinateEntitySwitch(
                 SubordinateEntitySwitch::kPhysicallyDependent);
     }
-    domain_cache_ = std::nullopt;
+    InvalidateDomainCache();
 }
 
 std::shared_ptr<const i_ent::CurveOnAParametricSurface>
@@ -469,7 +439,7 @@ void TrimmedSurface::AddInnerBoundary(
         eb->SetSubordinateEntitySwitch(
                 SubordinateEntitySwitch::kPhysicallyDependent);
     }
-    domain_cache_ = std::nullopt;
+    InvalidateDomainCache();
 }
 
 void TrimmedSurface::RemoveInnerBoundaryAt(size_t index) {
@@ -481,7 +451,7 @@ void TrimmedSurface::RemoveInnerBoundaryAt(size_t index) {
     }
     inner_boundaries_.erase(inner_boundaries_.begin()
                             + static_cast<std::ptrdiff_t>(index));
-    domain_cache_ = std::nullopt;
+    InvalidateDomainCache();
 }
 
 
@@ -492,46 +462,4 @@ void TrimmedSurface::RemoveInnerBoundaryAt(size_t index) {
 
 void TrimmedSurface::PrepareGeometryCache() const {
     BuildDomainCache();
-}
-
-void TrimmedSurface::BuildDomainCache() const {
-    if (domain_cache_) return;
-
-    DomainCache cache;
-
-    // 外側境界 (N1=1 のとき)。ベース曲線が未設定/退化/非閉でテッセレーションが
-    // 例外を投げても読み込み全体を止めない (C層: グレースフル劣化。当該境界の領域
-    // キャッシュは空のまま)。GetBaseCurveは未設定時にruntime_errorを投げる。
-    if (!outer_is_boundary_of_d_) {
-        try {
-            auto ob_opt = outer_boundary_.TryGetEntity<CurveOnAParametricSurface>();
-            if (ob_opt) {
-                auto base = ob_opt.value()->GetBaseCurve();
-                if (base) {
-                    cache.outer = i_ent::ComputeContainmentPolygons(
-                            *base, kContainmentPolygonDivisions, Vector3d(0, 0, 1));
-                }
-            }
-        } catch (const std::exception&) {
-            // 当該境界はスキップ (cache.outerは空のまま)
-        }
-    }
-
-    // 内側境界 (同上)
-    for (const auto& inner : inner_boundaries_) {
-        try {
-            auto ib_opt = inner.TryGetEntity<CurveOnAParametricSurface>();
-            if (ib_opt) {
-                auto base = ib_opt.value()->GetBaseCurve();
-                if (base) {
-                    cache.inner.push_back(i_ent::ComputeContainmentPolygons(
-                            *base, kContainmentPolygonDivisions, Vector3d(0, 0, 1)));
-                }
-            }
-        } catch (const std::exception&) {
-            // 当該境界はスキップ
-        }
-    }
-
-    domain_cache_ = std::move(cache);
 }

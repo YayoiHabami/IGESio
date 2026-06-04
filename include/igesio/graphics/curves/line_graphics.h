@@ -23,9 +23,9 @@ class SegmentGraphics
     : public EntityGraphics<entities::Line> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
-    GLuint vbo_ = 0;
+    gl::Uint vbo_ = 0;
     /// @brief エンティティの頂点数
-    GLsizei vertex_count_ = 0;
+    gl::Sizei vertex_count_ = 0;
     /// @brief 無限長の端点の描画時の長さ
     double far_length_ = 1e10f;
 
@@ -76,7 +76,7 @@ class SegmentGraphics
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
     void DrawImpl(
-            GLuint, [[maybe_unused]] const std::pair<float, float>&) const override;
+            gl::Uint, [[maybe_unused]] const std::pair<float, float>&) const override;
 };
 
 
@@ -86,9 +86,9 @@ class LineGraphics
     : public EntityGraphics<entities::Line> {
  private:
     /// @brief エンティティの描画用の頂点バッファオブジェクト (VBO) のID
-    GLuint vbo_ = 0;
+    gl::Uint vbo_ = 0;
     /// @brief エンティティの頂点数
-    GLsizei vertex_count_ = 0;
+    gl::Sizei vertex_count_ = 0;
     /// @brief 無限長の端点の描画時の長さ
     double far_length_ = 1e10f;
 
@@ -139,7 +139,7 @@ class LineGraphics
     /// @param shader プログラムシェーダーのID
     /// @param viewport ビューポートのサイズ (width, height)
     void DrawImpl(
-            GLuint, [[maybe_unused]] const std::pair<float, float>&) const override;
+            gl::Uint, [[maybe_unused]] const std::pair<float, float>&) const override;
 };
 
 }  // namespace igesio::graphics
