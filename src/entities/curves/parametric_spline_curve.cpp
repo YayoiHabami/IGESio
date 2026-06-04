@@ -144,7 +144,7 @@ size_t ParametricSplineCurve::SetMainPDParameters(
 
     // パラメータ数の最小値チェック
     if (pd.size() < 17) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "Insufficient number of parameters for ParametricSplineCurve."
             " Minimum is 17, but got " + std::to_string(pd.size()) + ".");
     }
@@ -164,10 +164,10 @@ size_t ParametricSplineCurve::SetMainPDParameters(
     // セグメント数 N
     const int n_segments = pd.access_as<int>(3);
     if (n_segments < 1) {
-        throw igesio::DataFormatError("Number of segments N must be at least 1,"
+        throw igesio::EntityValueError("Number of segments N must be at least 1,"
             " but got " + std::to_string(n_segments) + ".");
     } else if (pd.size() < 17 + 13 * n_segments) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "Insufficient number of parameters for the specified number of segments N="
             + std::to_string(n_segments) + ". Required at least "
             + std::to_string(17 + 13 * n_segments) + ", but got "
@@ -236,7 +236,7 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
     // ブレークポイントの単調増加性チェック
     for (unsigned int i = 1; i < breakpoints_.size(); ++i) {
         if (breakpoints_[i] <= breakpoints_[i - 1]) {
-            throw igesio::DataFormatError("Breakpoints must be in strictly"
+            throw igesio::EntityValueError("Breakpoints must be in strictly"
                 " increasing order, but T(" + std::to_string(i) + ") = "
                 + std::to_string(breakpoints_[i]) + " is not greater than T("
                 + std::to_string(i - 1) + ") = "

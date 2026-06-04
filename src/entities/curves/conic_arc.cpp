@@ -108,7 +108,7 @@ ConicArc::ConicArc(const std::array<double, 6>& coeffs,
 
     auto calculated_type = ::CalculateConicType(coeffs);
     if (!calculated_type.has_value() || GetConicType() != *calculated_type) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityValueError(
             "The provided coefficients do not match the conic type.");
     }
 }
@@ -122,7 +122,7 @@ ConicArc::ConicArc(const std::pair<double, double>& radius,
                 IGESParameterVector{}) {
     auto rx = radius.first, ry = radius.second;
     if (i_num::IsApproxZero(rx) || i_num::IsApproxZero(ry)) {
-        throw igesio::DataFormatError("Invalid radius for ConicArc");
+        throw igesio::EntityValueError("Invalid radius for ConicArc");
     }
     auto rx2 = rx * rx, ry2 = ry * ry;
 
@@ -169,7 +169,7 @@ igesio::IGESParameterVector ConicArc::GetMainPDParameters() const {
 size_t ConicArc::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
     if (pd.size() < 11) {
-        throw DataFormatError("ConicArc requires at least 11 parameters");
+        throw EntityParameterError("ConicArc requires at least 11 parameters");
     }
 
     for (size_t i = 0; i < 6; ++i) {

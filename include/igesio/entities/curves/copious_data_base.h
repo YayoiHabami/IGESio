@@ -89,7 +89,7 @@ enum class CopiousDataType {
 /// @note IP=1 の場合、2つの値を一組とする形式の、
 ///       IP=2 の場合、3つの値を一組とする形式の、
 ///       IP=3 の場合、6つの値を一組とする形式の座標値を持つ
-/// @throw igesio::DataFormatError typeが無効な場合
+/// @throw igesio::EntityValueError typeが無効な場合
 int GetIP(const CopiousDataType);
 
 
@@ -109,7 +109,8 @@ class CopiousDataBase : public EntityBase {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が7でない場合
+    /// @throw igesio::EntityParameterError parametersの数が不正な場合
+    /// @throw igesio::EntityValueError 座標値の組数Nが2未満の場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters([[maybe_unused]] const pointer2ID&) override;
 
@@ -121,7 +122,7 @@ class CopiousDataBase : public EntityBase {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -134,7 +135,7 @@ class CopiousDataBase : public EntityBase {
     /// @param type CopiousDataTypeの値
     /// @param coordinates 座標値データ (IP=3の場合の、後半の3つ組を除く)
     /// @param addition 座標値データ (IP=3の場合のみ指定する)
-    /// @throw igesio::DataFormatError typeが無効な場合、
+    /// @throw igesio::EntityValueError typeが無効な場合、
     ///        与えられた座標値が2組未満の場合、
     ///        IPが1または2のときに、additionが指定された場合、
     ///        IPが3のときに、coordinatesとadditionの列数が異なる場合
@@ -150,7 +151,7 @@ class CopiousDataBase : public EntityBase {
 
     /// @brief IP (データの種類: 1=座標2つ組, 2=座標3つ組, 3=座標6つ組)
     /// @return IPの値
-    /// @throw igesio::DataFormatError 無効なタイプが指定されている場合
+    /// @throw igesio::EntityValueError 無効なタイプが指定されている場合
     int GetIP() const;
 
 

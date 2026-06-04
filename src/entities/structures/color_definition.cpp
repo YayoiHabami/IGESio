@@ -50,7 +50,7 @@ ColorDef::ColorDefinition(const std::array<double, 3>& rgb,
     // 値の検証
     auto errors = ValidatePD();
     if (!errors.is_valid) {
-        throw igesio::DataFormatError("Invalid parameters for ColorDefinition: " +
+        throw igesio::EntityValueError("Invalid parameters for ColorDefinition: " +
                                         errors.Message());
     }
 }
@@ -72,7 +72,7 @@ igesio::IGESParameterVector ColorDef::GetMainPDParameters() const {
 size_t ColorDef::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
     if (pd.size() < 3) {
-        throw igesio::DataFormatError("ColorDefinition requires 3 or 4 parameters.");
+        throw igesio::EntityParameterError("ColorDefinition requires 3 or 4 parameters.");
     }
 
     rgb_[0] = pd.access_as<double>(0);

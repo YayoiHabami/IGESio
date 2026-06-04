@@ -111,7 +111,7 @@ size_t CompositeCurve::SetMainPDParameters(const pointer2ID& de2id) {
     if (num_curves <= 0) return 1;  // 曲線がない場合は1を返す
     if (pd_parameters_.size() <= num_curves) {
         // 参照するといわれた曲線の数がパラメータの数より多い場合はエラー
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "CompositeCurve requires " + std::to_string(num_curves) +
             " curves, but only " + std::to_string(pd_parameters_.size() - 1) +
             " parameters provided.");

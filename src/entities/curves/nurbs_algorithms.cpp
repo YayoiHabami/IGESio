@@ -16,6 +16,7 @@
 
 #include <Eigen/Dense>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/matrix.h"
 
 namespace {
@@ -131,7 +132,7 @@ std::vector<Vector3d> SampleCurve(
 /// @brief コード長パラメータ化：各サンプル点にt̄_lを割り当てる
 /// @param samples サンプル点列 Q_0, ..., Q_L
 /// @return コード長パラメータt̄_l (サイズ L+1, t̄_0=0, t̄_L=1)
-/// @throw std::invalid_argument 総弦長がゼロの場合
+/// @throw igesio::ComputationError 総弦長がゼロの場合
 std::vector<double> ChordLengthParams(
         const std::vector<Vector3d>& samples) {
     const auto L = static_cast<unsigned int>(samples.size() - 1);
@@ -143,7 +144,7 @@ std::vector<double> ChordLengthParams(
         t_bar[l] = total;
     }
     if (total < 1e-15) {
-        throw std::invalid_argument(
+        throw igesio::ComputationError(
             "ChordLengthParams: 総弦長がゼロです（点が重複しています）。");
     }
     for (unsigned int l = 1; l <= L; ++l) {

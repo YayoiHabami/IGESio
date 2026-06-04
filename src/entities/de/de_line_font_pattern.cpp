@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include "igesio/common/errors.h"
+
 namespace {
 
 namespace i_ent = igesio::entities;
@@ -26,7 +28,7 @@ DELineFontPattern::GetPointer() const {
 DELineFontPattern::DELineFontPattern(const int value)
         : DELineFontPattern::DEFieldWrapper() {
     if ((value < 0) || (value > 5)) {
-        throw std::invalid_argument("Invalid Line Font Pattern value: "
+        throw igesio::DataFormatError("Invalid Line Font Pattern value: "
                 + std::to_string(value) + ". Valid values are 1 to 5.");
     }
     SetPattern(static_cast<LineFontPattern>(value));

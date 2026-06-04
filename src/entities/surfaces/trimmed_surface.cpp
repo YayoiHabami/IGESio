@@ -92,7 +92,7 @@ size_t TrimmedSurface::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 4) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
                 "TrimmedSurface: Insufficient number of parameters.");
     }
 
@@ -101,7 +101,7 @@ size_t TrimmedSurface::SetMainPDParameters(const pointer2ID& de2id) {
         surface_ = PointerContainer<false, ISurface>(
                 GetObjectIDFromParameters(pd, 0, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "TrimmedSurface: Invalid surface reference. "
                 + std::string(e.what()));
     }
@@ -117,14 +117,14 @@ size_t TrimmedSurface::SetMainPDParameters(const pointer2ID& de2id) {
         outer_boundary_ = PointerContainer<false, CurveOnAParametricSurface>(
                 GetObjectIDFromParameters(pd, 3, de2id, true));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "TrimmedSurface: Invalid outer boundary reference. "
                 + std::string(e.what()));
     }
 
     // PTI(i): 内側境界曲線
     if (pd.size() < 4 + n2) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
                 "TrimmedSurface: Insufficient parameters for inner boundaries.");
     }
     inner_boundaries_.clear();
@@ -135,7 +135,7 @@ size_t TrimmedSurface::SetMainPDParameters(const pointer2ID& de2id) {
                 PointerContainer<false, CurveOnAParametricSurface>(
                     GetObjectIDFromParameters(pd, 4 + i, de2id)));
         } catch (const std::exception& e) {
-            throw igesio::DataFormatError(
+            throw igesio::ReferenceError(
                     "TrimmedSurface: Invalid inner boundary[" + std::to_string(i)
                     + "] reference. " + std::string(e.what()));
         }
@@ -359,7 +359,7 @@ TrimmedSurface::GetInnerUVBoundaryAt(const std::size_t index) const {
 std::shared_ptr<const i_ent::ISurface> TrimmedSurface::GetSurface() const {
     auto surf_opt = surface_.TryGetEntity<ISurface>();
     if (!surf_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "TrimmedSurface: Surface pointer is not set or invalid.");
     }
     return surf_opt.value();

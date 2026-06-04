@@ -1836,7 +1836,7 @@ TEST(MatrixLinearAlgebraTest, Inverse2x2) {
 #ifndef IGESIO_ENABLE_EIGEN
     // ゼロ行列（逆行列が存在しない）
     mat2x2 = Matrix2d::Zero();
-    EXPECT_THROW(mat2x2.inverse(), std::invalid_argument);
+    EXPECT_THROW(mat2x2.inverse(), igesio::ComputationError);
 
     // 非正方行列 -> std::invalid_argument
     Matrix23d mat2x3{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
@@ -1884,7 +1884,7 @@ TEST(MatrixLinearAlgebraTest, Inverse3x3) {
 #ifndef IGESIO_ENABLE_EIGEN
     // ゼロ行列（逆行列が存在しない）
     mat3x3 = Matrix3d::Zero();
-    EXPECT_THROW(mat3x3.inverse(), std::invalid_argument);
+    EXPECT_THROW(mat3x3.inverse(), igesio::ComputationError);
 
     // 非正方行列 -> std::invalid_argument
     igesio::Matrix34d mat3x4{{1.0,  2.0,  3.0,  4.0},
@@ -1945,6 +1945,6 @@ TEST(MatrixLinearAlgebraTest, Inverse4x4) {
 #ifndef IGESIO_ENABLE_EIGEN
     // ゼロ行列（逆行列が存在しない）
     mat4x4 = igesio::Matrix4d::Zero();
-    EXPECT_THROW(mat4x4.inverse(), std::invalid_argument);
+    EXPECT_THROW(mat4x4.inverse(), igesio::ComputationError);
 #endif  // IGESIO_ENABLE_EIGEN
 }

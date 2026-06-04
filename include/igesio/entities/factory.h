@@ -52,7 +52,8 @@ class EntityFactory {
     /// @return 作成されたエンティティのポインタ.
     ///         本ライブラリで未対応のエンティティの場合は、UnsupportedEntityの
     ///         ポインタを返す
-    /// @throw igesio::DataFormatError parametersの数が正しくない場合
+    /// @throw igesio::EntityDataError parametersの数や値が正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -71,7 +72,8 @@ class EntityFactory {
     /// @return 作成されたエンティティのポインタ.
     ///         本ライブラリで未対応のエンティティの場合は、UnsupportedEntityの
     ///         ポインタを返す
-    /// @throw igesio::DataFormatError parametersの数が正しくない場合
+    /// @throw igesio::EntityDataError parametersの数や値が正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合

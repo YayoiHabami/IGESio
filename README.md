@@ -80,14 +80,15 @@ for (const auto& [id, entity] : data.GetEntities()) {
 }
 
 // Write IGES file
-// Throws DataFormatError if unsupported entities are present
+// Throws an IGESioError-derived exception if writing fails
+// (e.g. unsupported entities are present)
 try {
   auto success = igesio::WriteIges(data, "path/to/output.igs");
   if (!success) {
     std::cerr << "Failed to write IGES file." << std::endl;
   }
-} catch (const igesio::DataFormatError& e) {
-  std::cerr << "Data format error: " << e.what() << std::endl;
+} catch (const igesio::IGESioError& e) {
+  std::cerr << "IGES error: " << e.what() << std::endl;
 }
 ```
 

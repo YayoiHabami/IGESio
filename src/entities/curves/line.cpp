@@ -48,7 +48,7 @@ Line::Line(const Vector3d& start_point,
     if (start_point[0] == terminate_point[0] &&
         start_point[1] == terminate_point[1] &&
         start_point[2] == terminate_point[2]) {
-        throw igesio::DataFormatError("Start point and terminate point cannot be the same.");
+        throw igesio::EntityValueError("Start point and terminate point cannot be the same.");
     }
 }
 
@@ -84,7 +84,7 @@ size_t Line::SetMainPDParameters(const pointer2ID& de2id) {
     // Lineの6つのパラメータ + 追加のポインタ
     auto& pd = pd_parameters_;
     if (pd.size() < 6) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "Line entity requires at least 6 parameters in PD section.");
     }
 

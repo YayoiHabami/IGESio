@@ -622,7 +622,7 @@ int igesio::IDGenerator::GenerateNewIntID() {
     }
 
     // エラーを投げる
-    throw std::runtime_error("Too many IDs in use; cannot generate new int_id");
+    throw igesio::ImplementationError("Too many IDs in use; cannot generate new int_id");
 }
 
 void igesio::IDGenerator::Register(const std::shared_ptr<Identifier>& identifier) {

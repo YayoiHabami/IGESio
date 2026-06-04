@@ -34,7 +34,7 @@ class CircularArc : public EntityBase, public virtual ICurve2D {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が7でない場合
+    /// @throw igesio::EntityParameterError parametersの数が7でない場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters([[maybe_unused]] const pointer2ID&) override;
 
@@ -45,7 +45,7 @@ class CircularArc : public EntityBase, public virtual ICurve2D {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -59,7 +59,7 @@ class CircularArc : public EntityBase, public virtual ICurve2D {
     /// @param start_point 始点の座標 (x_s, y_s)
     /// @param terminate_point 終点の座標 (x_t, y_t)
     /// @param z_t 定義座標系におけるz座標
-    /// @throw igesio::DataFormatError 始点と終点が等距離でない場合、
+    /// @throw igesio::EntityValueError 始点と終点が等距離でない場合、
     ///        または半径が0に近い場合
     CircularArc(const Vector2d&, const Vector2d&, const Vector2d&,
                 const double = 0.0);
@@ -70,7 +70,7 @@ class CircularArc : public EntityBase, public virtual ICurve2D {
     /// @param start_angle 始点の角度 [rad]
     /// @param end_angle 終点の角度 [rad]
     /// @param z_t 定義座標系におけるz座標
-    /// @throw igesio::DataFormatError 半径が0に近い場合、
+    /// @throw igesio::EntityValueError 半径が0に近い場合、
     ///        または始点と終点の角度が不正な場合
     CircularArc(const Vector2d&, const double,
                 const double, const double, const double = 0.0);

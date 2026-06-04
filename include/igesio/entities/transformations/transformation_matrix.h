@@ -50,7 +50,8 @@ class TransformationMatrix : public EntityBase, public virtual ITransformation {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が12でない場合
+    /// @throw igesio::EntityParameterError parametersの数が12でない場合
+    /// @throw igesio::EntityValueError フォーム番号が不正な場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters([[maybe_unused]] const pointer2ID&) override;
 
@@ -61,7 +62,7 @@ class TransformationMatrix : public EntityBase, public virtual ITransformation {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -74,7 +75,7 @@ class TransformationMatrix : public EntityBase, public virtual ITransformation {
     /// @param rotation 回転行列 (3x3)
     /// @param translation 平行移動ベクトル (x, y, z)
     /// @param form_number 行列の種類を示すフォーム番号
-    /// @throw igesio::DataFormatError form_numberと指定された行列/ベクトルが合致しない場合
+    /// @throw igesio::EntityValueError form_numberと指定された行列/ベクトルが合致しない場合
     TransformationMatrix(const Matrix3d&, const Vector3d& = Vector3d::Zero(),
                          const int = 0);
 

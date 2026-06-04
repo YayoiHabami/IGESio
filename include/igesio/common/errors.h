@@ -7,22 +7,28 @@
  * @details 各エラーは、`IGESioError`を継承し、以下のように階層化されている.
  * IGESioError (基底; std::runtime_errorを継承)
  * ├── NotImplementedError      (未実装)
- * ├── ImplementationError      (実装エラー)
+ * ├── ImplementationError      (実装エラー; 内部不変条件違反)
  * │
- * ├── ParseError               (解析・変換エラー)
- * |   └── TypeConversionError      (型変換エラー)
+ * ├── ParseError               (生レコードの解析エラー)
+ * |   └── TypeConversionError      (文字列⇔C++型の変換エラー)
  * │
  * ├── FileError                (ファイル操作関連)
  * │   └── FileOpenError            (ファイルオープン失敗)
  * │
- * ├── FileFormatError          (フォーマット関連)
+ * ├── FileFormatError          (ファイル構文・構造エラー)
  * │   ├── LineFormatError          (行の形式エラー)
- * │   └── SectionFormatError       (セクション形式エラー)
+ * │   ├── SectionFormatError       (セクション形式エラー)
+ * │   └── DataFormatError          (DE/PDレコードの構造不整合、DEフィールドの値域違反など)
  * │
- * └── IgesFormatError          (IGESフォーマットエラー)
- *      ├── SectionFormatError      (セクション形式エラー)
- *      ├── LineFormatError         (行の形式エラー)
- *      └── DataFormatError         (データ形式エラー)
+ * ├── EntityDataError          (エンティティ構築データの不正)
+ * │   ├── EntityParameterError     (パラメータ数不足・構造不正)
+ * │   └── EntityValueError         (値の意味的制約違反)
+ * │
+ * ├── ReferenceError           (DE参照/ポインタの解決失敗)
+ * └── ComputationError         (数値・幾何計算の失敗)
+ *
+ * なお、呼び出し側のバグ（契約違反）に対しては独自エラーではなく
+ * std::logic_error系 (std::invalid_argument, std::out_of_range) を使用する.
  */
 #ifndef IGESIO_COMMON_ERRORS_H_
 #define IGESIO_COMMON_ERRORS_H_
@@ -286,7 +292,9 @@ class SectionFormatError : public FileFormatError {
 };
 
 /// @brief データ形式エラー
-/// @note データの不正な形式や値など
+/// @note DE/PDレコードの構造不整合（重複DEポインタ・レコード欠落・
+///       レコード数不正等）、DEフィールドの値域違反などに限定して使用する.
+///       エンティティ構築時のデータ不正にはEntityDataError系を使用すること.
 class DataFormatError : public FileFormatError {
  public:
     /// @brief データ形式エラーを初期化する
@@ -308,6 +316,113 @@ class DataFormatError : public FileFormatError {
  protected:
     /// @brief このクラスのエラー名
     static std::string ErrorName() { return "DataFormatError"; }
+};
+
+
+
+/******************************************************************************
+ * エンティティデータ関連
+ *****************************************************************************/
+
+/// @brief エンティティ構築データの不正のカテゴリ
+/// @note ファイルから読み取った（または変換中の）データがエンティティの
+///       要件を満たさない場合のエラー. パラメータ数の不足・構造不正には
+///       EntityParameterError、値の意味的制約違反にはEntityValueErrorを
+///       使用すること.
+class EntityDataError : public IGESioError {
+ public:
+    // 全てのコンストラクタを継承
+    using IGESioError::IGESioError;
+
+    /// @brief エンティティデータエラーを初期化する
+    /// @param message エラーの詳細メッセージ
+    explicit EntityDataError(const std::string& message)
+        : IGESioError(ErrorName(), message) {}
+
+    /// @brief デストラクタ
+    virtual ~EntityDataError() noexcept = default;
+
+ protected:
+    /// @brief このクラスのエラー名
+    static std::string ErrorName() { return "EntityDataError"; }
+};
+
+/// @brief エンティティのパラメータ数不足・構造不正エラー
+/// @note PDレコードのパラメータ数がエンティティの要求数に満たない場合や、
+///       パラメータの構造（個数の整合性等）が不正な場合に使用する.
+class EntityParameterError : public EntityDataError {
+ public:
+    /// @brief エンティティパラメータエラーを初期化する
+    /// @param message エラーの詳細メッセージ
+    explicit EntityParameterError(const std::string& message)
+        : EntityDataError(ErrorName(), message) {}
+
+    /// @brief デストラクタ
+    virtual ~EntityParameterError() noexcept = default;
+
+ protected:
+    /// @brief このクラスのエラー名
+    static std::string ErrorName() { return "EntityParameterError"; }
+};
+
+/// @brief エンティティの値が意味的制約に違反した場合のエラー
+/// @note 開始角と終了角の大小関係の不正、半径の過小、
+///       ブレークポイントの非単調増加などに使用する.
+class EntityValueError : public EntityDataError {
+ public:
+    /// @brief エンティティ値エラーを初期化する
+    /// @param message エラーの詳細メッセージ
+    explicit EntityValueError(const std::string& message)
+        : EntityDataError(ErrorName(), message) {}
+
+    /// @brief デストラクタ
+    virtual ~EntityValueError() noexcept = default;
+
+ protected:
+    /// @brief このクラスのエラー名
+    static std::string ErrorName() { return "EntityValueError"; }
+};
+
+
+
+/******************************************************************************
+ * 参照解決・計算エラー
+ *****************************************************************************/
+
+/// @brief DE参照/ポインタの解決失敗エラー
+/// @note 参照先エンティティの未設定・失効・型不一致など、
+///       構築時およびアクセス時の参照解決の失敗に使用する.
+class ReferenceError : public IGESioError {
+ public:
+    /// @brief 参照解決エラーを初期化する
+    /// @param message エラーの詳細メッセージ
+    explicit ReferenceError(const std::string& message)
+        : IGESioError(ErrorName(), message) {}
+
+    /// @brief デストラクタ
+    virtual ~ReferenceError() noexcept = default;
+
+ protected:
+    /// @brief このクラスのエラー名
+    static std::string ErrorName() { return "ReferenceError"; }
+};
+
+/// @brief 数値・幾何計算が結果を出せない場合のエラー
+/// @note 特異行列・反復計算の不収束・投影失敗・ゼロベクトルの正規化・
+///       ゼロ除算などに使用する.
+class ComputationError : public IGESioError {
+ public:
+    /// @brief 計算エラーを初期化する
+    /// @param message エラーの詳細メッセージ
+    explicit ComputationError(const std::string& message)
+        : IGESioError(ErrorName(), message) {}
+
+    /// @brief デストラクタ
+    virtual ~ComputationError() noexcept = default;
+
+ protected:
+    /// @brief このクラスのエラー名
+    static std::string ErrorName() { return "ComputationError"; }
 };
 
 }  // namespace igesio

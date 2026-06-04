@@ -73,7 +73,8 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が不整合な場合
+    /// @throw igesio::EntityParameterError parametersの数が不整合な場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters(const pointer2ID&) override;
 
@@ -98,7 +99,8 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -193,13 +195,13 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
      */
 
     /// @brief 曲面 S(u,v) を取得する
-    /// @throw std::runtime_error 曲面が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 曲面が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ISurface> GetSurface() const;
     /// @brief ベース曲線 B(t) を取得する
-    /// @throw std::runtime_error 曲線が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 曲線が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ICurve> GetBaseCurve() const;
     /// @brief 曲線 C(t) を取得する
-    /// @throw std::runtime_error 曲線が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 曲線が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ICurve> GetCurve() const;
 
     /// @brief 曲面 S(u,v) を設定する
@@ -212,7 +214,7 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @return 自動生成された曲線 C(t) のポインタ、curveが指定された場合はnullptrを返す
     /// @throw std::invalid_argument base_curveがnullptrの場合、
     ///        curveがnullptrかつsurfaceがnullptrの場合
-    /// @throw std::runtime_error curveがnullptrかつ自動生成に失敗した場合
+    /// @throw igesio::ComputationError curveがnullptrかつ自動生成に失敗した場合
     std::shared_ptr<ICurve> SetCurves(const std::shared_ptr<ICurve>&,
                                       const std::shared_ptr<ICurve>& = nullptr);
 
@@ -273,7 +275,7 @@ using CurveOnSurface = CurveOnAParametricSurface;
 /// @return 作成されたCurveOnAParametricSurfaceのshared_ptrと
 ///         曲線 C(t) のshared_ptrのペア
 /// @throw std::invalid_argument surface, base_curveのいずれかがnullptrの場合
-/// @throw std::runtime_error 曲線 C(t) の自動生成に失敗した場合
+/// @throw igesio::ComputationError 曲線 C(t) の自動生成に失敗した場合
 std::pair<std::shared_ptr<CurveOnAParametricSurface>, std::shared_ptr<ICurve>>
 MakeCurveOnAParametricSurface(const std::shared_ptr<ISurface>&,
                               const std::shared_ptr<ICurve>&);

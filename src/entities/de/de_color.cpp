@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include "igesio/common/errors.h"
+
 namespace {
 
 namespace i_ent = igesio::entities;
@@ -24,7 +26,7 @@ std::shared_ptr<const i_ent::IColorDefinition> DEColor::GetPointer() const {
 
 DEColor::DEColor(const int value) : DEColor::DEFieldWrapper() {
     if ((value < 0) || (value > 8)) {
-        throw std::invalid_argument("Invalid Color Number value: "
+        throw igesio::DataFormatError("Invalid Color Number value: "
                 + std::to_string(value) + ". Valid values are 0 to 8.");
     }
     SetColor(static_cast<ColorNumber>(value));
