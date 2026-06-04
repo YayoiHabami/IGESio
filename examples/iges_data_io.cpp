@@ -12,10 +12,7 @@
 #include <string>
 #include <unordered_map>
 
-#include <igesio/reader.h>
-#include <igesio/writer.h>
-
-#include <igesio/entities/factory.h>
+#include <igesio/igesio.h>
 
 namespace i_ent = igesio::entities;
 
@@ -40,8 +37,7 @@ bool ParseArgs(int argc, char* argv[]) {
 /// @brief Read IGES file into intermediate data structure
 /// @param path Path to the IGES file. If nullptr, defaults to "examples/data/input.igs".
 /// @return Intermediate IGES data structure
-igesio::models::IgesData
-ReadIgesDef(const char* path = nullptr) {
+igesio::IgesData ReadIgesDef(const char* path = nullptr) {
     // Get the path to the IGES file from the current source file
     // The IGES file "input.igs" located in the "examples/data" directory.
     // If a path is provided via command line argument, use it instead.
@@ -66,7 +62,7 @@ ReadIgesDef(const char* path = nullptr) {
 
 
 
-void ShowEntityCounts(const igesio::models::IgesData& data) {
+void ShowEntityCounts(const igesio::IgesData& data) {
     // Count entity types (and whether they are supported)
     std::unordered_map<i_ent::EntityType, int> type_counts;
     std::unordered_map<i_ent::EntityType, bool> is_supported;

@@ -15,23 +15,14 @@
 #include <utility>
 #include <vector>
 
-#include <igesio/entities/surfaces/ruled_surface.h>
-#include <igesio/entities/surfaces/surface_of_revolution.h>
-#include <igesio/entities/surfaces/tabulated_cylinder.h>
-#include <igesio/entities/surfaces/rational_b_spline_surface.h>
-#include <igesio/entities/surfaces/trimmed_surface.h>
-
-#include <igesio/entities/curves/rational_b_spline_curve.h>
-#include <igesio/entities/curves/curve_on_a_parametric_surface.h>
-#include <igesio/entities/transformations/transformation_matrix.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 namespace i_ent = igesio::entities;
-namespace i_mod = igesio::models;
+
 using igesio::kPi;
 using igesio::Vector2d;
 using igesio::Vector3d;
-using ent_vec = std::vector<std::shared_ptr<igesio::entities::EntityBase>>;
+using ent_vec = std::vector<std::shared_ptr<igesio::EntityBase>>;
 
 
 
@@ -285,7 +276,7 @@ ent_vec CreateTrimmedSurface() {
 
 /// @brief Main function (creates IGES data and writes to file)
 int main() {
-    i_mod::IgesData iges_data;
+    igesio::IgesData iges_data;
 
     for (const auto& entity : CreateRuledSurface()) {
         iges_data.Root().AddEntity(entity);

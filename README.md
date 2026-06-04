@@ -58,15 +58,14 @@ A simple GUI application example, [IGES viewer](docs/examples.md#gui), demonstra
 
 ### Reading and Writing IGES Files
 
-IGESio provides `igesio::ReadIges` and `igesio::WriteIges` functions for reading and writing IGES files. Both functions use the `igesio::models::IgesData` type to represent all IGES file data.
+IGESio provides `igesio::ReadIges` and `igesio::WriteIges` functions for reading and writing IGES files. Both functions use the `igesio::IgesData` type to represent all IGES file data.
 
 Entities not yet supported by IGESio are loaded as `igesio::entities::UnsupportedEntity`. These entities have their parameters parsed, but do not provide entity-specific functionality. For details, see [entities/UnsupportedEntity](docs/entities/entities.md#UnsupportedEntity).
 
 ```cpp
 #include <iostream>
 #include <unordered_map>
-#include <igesio/reader.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 // Read IGES file
 auto data = igesio::ReadIges("path/to/file.igs");
@@ -74,7 +73,7 @@ auto data = igesio::ReadIges("path/to/file.igs");
 // Count entities by type and check support
 std::unordered_map<igesio::entities::EntityType, int> type_counts;
 std::unordered_map<igesio::entities::EntityType, bool> is_supported;
-for (const auto& [id, entity] : data.GetEntities()) {
+for (const auto& [id, entity] : data.Root().GetEntities()) {
   type_counts[entity->GetType()]++;
   is_supported[entity->GetType()] = entity->IsSupported();
 }
@@ -102,9 +101,7 @@ You can also create entities programmatically. The following example creates a c
 #include <memory>
 #include <array>
 #include <iostream>
-#include <igesio/entities/curves/circular_arc.h>
-#include <igesio/entities/structures/color_definition.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 // Create a Circular Arc entity (center: (3.0, 0.0), radius: 1.0)
 auto circle = std::make_shared<igesio::entities::CircularArc>(

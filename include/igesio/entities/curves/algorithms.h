@@ -16,6 +16,9 @@
 #include "igesio/numerics/geometric/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 
+// curves/algorithms下の関数を取得
+#include "igesio/entities/curves/algorithms/curve_line_intersection.h"
+
 
 
 namespace igesio::entities {
