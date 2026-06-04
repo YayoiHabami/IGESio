@@ -53,7 +53,7 @@ int i_ent::GetIP(const CopiousDataType type) {
         return 1;
     }
     if (ip < 1 || ip > 3) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityValueError(
             "Invalid CopiousDataType: " + std::to_string(static_cast<int>(type)));
     }
     return ip;
@@ -73,7 +73,7 @@ CopiousDataBase::CopiousDataBase(const RawEntityDE& de_record,
     InitializePD(de2id);
 
     if (auto result = ValidatePD(); !result.is_valid) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityValueError(
             "Invalid parameters for CopiousDataBase: " + result.Message());
     }
 }
@@ -91,7 +91,7 @@ CopiousDataBase::CopiousDataBase(const CopiousDataType type,
     addition_ = addition;
 
     if (auto result = ValidatePD(); !result.is_valid) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityValueError(
             "Invalid parameters for CopiousDataBase: " + result.Message());
     }
 }
@@ -104,7 +104,7 @@ CopiousDataBase::ValidatePD() const {
     int ip;
     try {
         ip = i_ent::GetIP(GetDataType());
-    } catch (const igesio::DataFormatError& e) {
+    } catch (const igesio::EntityValueError& e) {
         errors.emplace_back(e.what());
     }
 
@@ -215,7 +215,7 @@ size_t CopiousDataBase::SetMainPDParameters(const pointer2ID& de2id) {
     auto count = pd.access_as<int>(1);
     if (count < 2) {
         // 最低でも2組以上の座標値の組が必要
-        throw igesio::DataFormatError(
+        throw igesio::EntityValueError(
             "Invalid number of parameters N for IP=" + std::to_string(ip) +
             ". Copious Data requires at least two tuples.");
     }
@@ -225,7 +225,7 @@ size_t CopiousDataBase::SetMainPDParameters(const pointer2ID& de2id) {
     if (pd.size() < required_size) {
         // IP=1の場合は座標値のペア、IP=2の場合は座標値の3つ組、
         // IP=3の場合は座標値の6つ組が必要
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "Invalid number of parameters for Copious Data with IP=" +
             std::to_string(ip) + ". Expected at least " +
             std::to_string(required_size) + " parameters.");

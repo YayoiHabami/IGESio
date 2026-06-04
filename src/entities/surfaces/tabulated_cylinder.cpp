@@ -108,7 +108,7 @@ size_t TabulatedCylinder::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 4) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "TabulatedCylinder must have at least 4 parameters");
     }
 
@@ -117,7 +117,7 @@ size_t TabulatedCylinder::SetMainPDParameters(const pointer2ID& de2id) {
         directrix_ = PointerContainer<false, ICurve>(
                 GetObjectIDFromParameters(pd, 0, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError("Failed to set Directrix (Curve) reference"
+        throw igesio::ReferenceError("Failed to set Directrix (Curve) reference"
             " in TabulatedCylinder: " + std::string(e.what()));
     }
 

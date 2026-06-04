@@ -73,7 +73,8 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が不整合な場合
+    /// @throw igesio::EntityParameterError parametersの数が不整合な場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters(const pointer2ID&) override;
 
@@ -98,7 +99,8 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合

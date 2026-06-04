@@ -107,7 +107,7 @@ TEST(CircularArcTest, ConstructorFromCenterStartTerminate) {
     ASSERT_THROW({
         CircularArc arc(center_invalid, start_point_invalid,
                         terminate_point_invalid, z_t_invalid);
-    }, igesio::DataFormatError);
+    }, igesio::EntityValueError);
 
     // 例外テスト: 半径が0に近い場合
     Vector2d center_zero_radius(0.0, 0.0);
@@ -120,7 +120,7 @@ TEST(CircularArcTest, ConstructorFromCenterStartTerminate) {
                         start_point_zero_radius,
                         terminate_point_zero_radius,
                         z_t_zero_radius);
-    }, igesio::DataFormatError);
+    }, igesio::EntityValueError);
 }
 
 // 中心点と半径、始点角度と終点角度から円弧を生成するコンストラクタ
@@ -155,7 +155,7 @@ TEST(CircularArcTest, ConstructorFromCenterRadiusStartEndAngle) {
     ASSERT_THROW({
         CircularArc arc(center_zero_radius, radius_zero,
                         start_angle_zero, end_angle_zero, z_t_zero);
-    }, igesio::DataFormatError);
+    }, igesio::EntityValueError);
 
     // 例外テスト: 始点角度が終点角度より大きい場合
     Vector2d center_invalid_angle(0.0, 0.0);
@@ -168,7 +168,7 @@ TEST(CircularArcTest, ConstructorFromCenterRadiusStartEndAngle) {
         CircularArc arc(center_invalid_angle, radius_invalid,
                         start_angle_invalid, end_angle_invalid,
                         z_t_invalid_angle);
-    }, igesio::DataFormatError);
+    }, igesio::EntityValueError);
 }
 
 // 中心点と半径から円（閉じた円弧）を生成するコンストラクタ

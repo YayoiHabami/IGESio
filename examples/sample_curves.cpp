@@ -354,8 +354,8 @@ int main() {
     bool success = false;
     try {
         success = igesio::WriteIges(iges_data, "sample_curves.igs");
-    } catch (const igesio::DataFormatError& e) {
-        std::cerr << "Data format error: " << e.what() << std::endl;
+    } catch (const igesio::IGESioError& e) {
+        std::cerr << "IGES error: " << e.what() << std::endl;
         return 1;
     } catch (const std::exception& e) {
         std::cerr << "An error occurred: " << e.what() << std::endl;

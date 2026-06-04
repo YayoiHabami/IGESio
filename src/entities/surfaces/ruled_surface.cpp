@@ -78,7 +78,7 @@ size_t RuledSurface::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 4) {
-        throw std::runtime_error(
+        throw igesio::EntityParameterError(
             "Insufficient parameters for RuledSurface entity.");
     }
 
@@ -89,7 +89,7 @@ size_t RuledSurface::SetMainPDParameters(const pointer2ID& de2id) {
         curve2_ = PointerContainer<false, ICurve>(
                 GetObjectIDFromParameters(pd, 1, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError("Failed to set curve pointers "
+        throw igesio::ReferenceError("Failed to set curve pointers "
             "in RuledSurface entity: " + std::string(e.what()));
     }
 

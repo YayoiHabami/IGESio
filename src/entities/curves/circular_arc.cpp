@@ -47,12 +47,12 @@ CircularArc::CircularArc(const Vector2d& center, const Vector2d& start_point,
     double r1 = (start_point - center).norm();
     double r2 = (terminate_point - center).norm();
     if (!i_num::IsApproxEqual(r1, r2, i_num::kGeometryTolerance)) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityValueError(
             "Start and terminate points must be equidistant from the center.");
     }
     // 半径が0に近い場合はエラー
     if (i_num::IsApproxZero(r1, i_num::kGeometryTolerance)) {
-        throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
+        throw igesio::EntityValueError("Degenerate circular arc: radius is too small.");
     }
 }
 
@@ -68,11 +68,11 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
                             center[1] + radius * std::sin(end_angle)}) {
     // 半径が0に近い場合はエラー
     if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
-        throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
+        throw igesio::EntityValueError("Degenerate circular arc: radius is too small.");
     }
     // 始点と終点の角度が不正な場合はエラー
     if (start_angle > end_angle) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityValueError(
             "Start angle must be less than end angle for a circular arc.");
     }
 }
@@ -86,7 +86,7 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
                                 center[0] + radius, center[1]}) {
     // 半径が0に近い場合はエラー
     if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
-        throw igesio::DataFormatError("Degenerate circular arc: radius is too small.");
+        throw igesio::EntityValueError("Degenerate circular arc: radius is too small.");
     }
 }
 
@@ -119,7 +119,7 @@ size_t CircularArc::SetMainPDParameters(const pointer2ID& de2id) {
     // CircularArcの7つのパラメータ + 追加のポインタ
     auto& pd = pd_parameters_;
     if (pd.size() < 7) {
-        throw igesio::DataFormatError("CircularArc requires at least 7 parameters");
+        throw igesio::EntityParameterError("CircularArc requires at least 7 parameters");
     }
 
     // パラメータを設定

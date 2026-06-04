@@ -145,7 +145,7 @@ size_t RationalBSplineSurface::SetMainPDParameters(const pointer2ID& de2id) {
     // パラメータの数を確認
     // 制御点数によらず、K1～2, M1～2, PROP1～5, U(0), U(1), V(0), V(1) の13個は存在
     if (pd.size() < 13) {
-        throw igesio::DataFormatError("Insufficient number of parameters "
+        throw igesio::EntityParameterError("Insufficient number of parameters "
                 "for Rational B-Spline Surface entity (Type 128). "
                 "(expected at least 13, got " + std::to_string(pd.size()) + ")");
     }
@@ -154,7 +154,7 @@ size_t RationalBSplineSurface::SetMainPDParameters(const pointer2ID& de2id) {
     const int k1 = pd.access_as<int>(0);
     const int k2 = pd.access_as<int>(1);
     if (k1 < 0 || k2 < 0) {
-        throw igesio::DataFormatError("Invalid number of control points "
+        throw igesio::EntityValueError("Invalid number of control points "
                 "for Rational B-Spline Surface entity. (K1 and K2 must be "
                 "non-negative, but got K1 = " + std::to_string(k1) +
                 ", K2 = " + std::to_string(k2) + ")");
@@ -164,7 +164,7 @@ size_t RationalBSplineSurface::SetMainPDParameters(const pointer2ID& de2id) {
     const int m1 = static_cast<unsigned int>(pd.access_as<int>(2));
     const int m2 = static_cast<unsigned int>(pd.access_as<int>(3));
     if (m1 == 0 || m2 == 0) {
-        throw igesio::DataFormatError("Invalid degree for Rational B-Spline "
+        throw igesio::EntityValueError("Invalid degree for Rational B-Spline "
                 "Surface entity. (M1 and M2 must be positive, but got M1 = " +
                 std::to_string(m1) + ", M2 = " + std::to_string(m2) + ")");
     }
@@ -186,7 +186,7 @@ size_t RationalBSplineSurface::SetMainPDParameters(const pointer2ID& de2id) {
     const size_t expected_size =
         9 + num_knots_u + num_knots_v + num_weights + num_control_points + 4;
     if (pd.size() < expected_size) {
-        throw igesio::DataFormatError("Insufficient number of parameters "
+        throw igesio::EntityParameterError("Insufficient number of parameters "
                 "for Rational B-Spline Surface entity (Type 128). "
                 "(expected at least " + std::to_string(expected_size) +
                 ", got " + std::to_string(pd.size()) + ")");

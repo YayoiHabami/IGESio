@@ -393,7 +393,7 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
             intermediate.parameter_data_section.push_back(pd);
         } catch (std::out_of_range& e) {
             // dataが持たないエンティティへの参照を含む場合
-            throw igesio::DataFormatError(
+            throw igesio::ReferenceError(
                 "Entity with ID " + ToString(id) +
                 " contains reference to unknown entity. " + e.what());
         }

@@ -53,7 +53,7 @@ class ColorDefinition : public EntityBase, public virtual IColorDefinition {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が3未満の場合
+    /// @throw igesio::EntityParameterError parametersの数が3未満の場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters([[maybe_unused]] const pointer2ID&) override;
 
@@ -64,7 +64,7 @@ class ColorDefinition : public EntityBase, public virtual IColorDefinition {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -76,7 +76,7 @@ class ColorDefinition : public EntityBase, public virtual IColorDefinition {
     /// @brief RGB値とオプションの色名を指定するコンストラクタ
     /// @param rgb RGB値 (0.0-100.0)
     /// @param color_name 色名 (オプション)
-    /// @throw igesio::DataFormatError パラメータのいずれかが正しくない場合
+    /// @throw igesio::EntityValueError パラメータのいずれかが正しくない場合
     /// @throw igesio::TypeConversionError パラメータの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつパラメータ側で指定されている
     ///        ポインターの値がde2idに存在しない場合

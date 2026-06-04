@@ -207,21 +207,21 @@ size_t RationalBSplineCurve::SetMainPDParameters(const pointer2ID& de2id) {
     // パラメータの数を確認
     // 制御点数によらず、K, M, PROP1~4, V(0), V(1), n_x, n_y, n_z の11個は存在
     if (pd.size() < 11) {
-        throw igesio::DataFormatError("Insufficient parameters for RationalBSplineCurve."
+        throw igesio::EntityParameterError("Insufficient parameters for RationalBSplineCurve."
                 "Expected 11 parameters at minimum, but got " + std::to_string(pd.size()) + ".");
     }
 
     // 制御点の数 (K + 1)
     const int k = pd.access_as<int>(0);
     if (k < 0) {
-        throw igesio::DataFormatError("Invalid number of control points K."
+        throw igesio::EntityValueError("Invalid number of control points K."
                 " Expected non-negative integer, but got " + std::to_string(k) + ".");
     }
 
     // 次数 M
     degree_ = static_cast<unsigned int>(pd.access_as<int>(1));
     if (degree_ == 0) {
-        throw igesio::DataFormatError("Degree M cannot be zero, but got "
+        throw igesio::EntityValueError("Degree M cannot be zero, but got "
                 + std::to_string(degree_) + ".");
     }
 
@@ -237,7 +237,7 @@ size_t RationalBSplineCurve::SetMainPDParameters(const pointer2ID& de2id) {
     const size_t num_control_points = 3 * (k + 1);
     const size_t expected_size = 6 + num_knots + num_weights + num_control_points + 2 + 3;
     if (pd.size() < expected_size) {
-        throw igesio::DataFormatError("Insufficient parameters for RationalBSplineCurve."
+        throw igesio::EntityParameterError("Insufficient parameters for RationalBSplineCurve."
                 " Expected at least " + std::to_string(expected_size) + " parameters"
                 " (for M = " + std::to_string(degree_) + " and K = " + std::to_string(k) +
                 "), but got " + std::to_string(pd.size()) + ".");

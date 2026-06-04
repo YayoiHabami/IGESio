@@ -16,7 +16,7 @@
  *   - GetLinearSegments() は degree_ == 1 のときのみ非空を返す
  *   - GetCornerParams() は内部ノットの重複度 >= degree_ のものを角点とする
  *     (端点判定の eps = 1e-12 は GetCornerParams の内部固定値)
- *   - degree_ == 0 はコンストラクタが DataFormatError をスローするため
+ *   - degree_ == 0 はコンストラクタが EntityValueError をスローするため
  *     Degree0_NoCorners テストは構成不可
  *
  * TODO:

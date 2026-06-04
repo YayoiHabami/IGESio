@@ -53,7 +53,7 @@ class ConicArc : public EntityBase, public virtual ICurve2D {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が11でない場合
+    /// @throw igesio::EntityParameterError parametersの数が11でない場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters(const pointer2ID& de2id) override;
 
@@ -64,7 +64,7 @@ class ConicArc : public EntityBase, public virtual ICurve2D {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合

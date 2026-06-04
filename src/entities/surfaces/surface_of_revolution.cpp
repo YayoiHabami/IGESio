@@ -83,7 +83,7 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 4) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "SurfaceOfRevolution must have at least 4 parameters");
     }
 
@@ -92,7 +92,7 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
         axis_ = PointerContainer<false, Line>(
             GetObjectIDFromParameters(pd, 0, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError("Failed to get Axis (Line) ID "
+        throw igesio::ReferenceError("Failed to get Axis (Line) ID "
             "from parameters: " + std::string(e.what()));
     }
 
@@ -101,7 +101,7 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
         generatrix_ = PointerContainer<false, ICurve>(
             GetObjectIDFromParameters(pd, 1, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError("Failed to get Generatrix (ICurve) ID "
+        throw igesio::ReferenceError("Failed to get Generatrix (ICurve) ID "
             "from parameters: " + std::string(e.what()));
     }
 

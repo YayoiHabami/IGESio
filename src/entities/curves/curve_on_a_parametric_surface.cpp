@@ -203,7 +203,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 5) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
                 "CurveOnAParametricSurface: Insufficient number of parameters.");
     }
 
@@ -215,7 +215,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
         surface_ = PointerContainer<false, ISurface>(
                 GetObjectIDFromParameters(pd, 1, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Invalid surface reference."
                 + std::string(e.what()));
     }
@@ -229,7 +229,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
         base_curve_ = PointerContainer<false, ICurve>(
                 GetObjectIDFromParameters(pd, 2, de2id, /*allow_unset_id=*/true));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Invalid base curve reference."
                 + std::string(e.what()));
     }
@@ -239,7 +239,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
         curve_ = PointerContainer<false, ICurve>(
                 GetObjectIDFromParameters(pd, 3, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Invalid curve reference."
                 + std::string(e.what()));
     }
