@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 

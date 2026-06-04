@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 
 namespace {

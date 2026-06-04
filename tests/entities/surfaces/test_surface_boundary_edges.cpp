@@ -24,7 +24,7 @@
 #include <memory>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"

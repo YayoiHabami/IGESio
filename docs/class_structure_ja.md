@@ -99,7 +99,7 @@ style y fill:#fff0, stroke:#fff0
 
 | パス | クラス名 | 説明 |
 | --- | --- | --- |
-| `igesio/numerics/matrix.h` | `Matrix2d`, `Matrix23d`, `Matrix32d`, `Matrix3d`, `Matrix2Xd`, `Matrix3Xd`, `Vector2d`, `Vector3d` | 固定サイズおよび動的サイズの行列クラス<br>詳細は[こちら](./numerics/matrix_ja.md) |
+| `igesio/numerics/core/matrix.h` | `Matrix2d`, `Matrix23d`, `Matrix32d`, `Matrix3d`, `Matrix2Xd`, `Matrix3Xd`, `Vector2d`, `Vector3d` | 固定サイズおよび動的サイズの行列クラス<br>詳細は[こちら](./numerics/matrix_ja.md) |
 
 ## 中間データ構造
 

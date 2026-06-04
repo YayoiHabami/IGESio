@@ -31,7 +31,7 @@
 #include <optional>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/linear_path.h"
 
 namespace {

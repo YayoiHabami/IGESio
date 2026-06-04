@@ -13,7 +13,7 @@
 
 #include <utility>
 
-#include "igesio/numerics/polygon.h"
+#include "igesio/numerics/geometric/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 
 

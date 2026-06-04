@@ -24,7 +24,7 @@
 #include <memory>
 
 #include "igesio/common/id_generator.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/models/assembly.h"
 #include "igesio/models/scene.h"

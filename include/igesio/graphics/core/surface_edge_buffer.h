@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/graphics/core/gl_types.h"
 #include "igesio/graphics/core/i_open_gl.h"
 

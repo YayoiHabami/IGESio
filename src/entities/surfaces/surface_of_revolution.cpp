@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/algorithms.h"
 
 namespace {

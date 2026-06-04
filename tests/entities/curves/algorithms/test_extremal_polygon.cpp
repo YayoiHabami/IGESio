@@ -37,8 +37,8 @@
 #include <string>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/polygon.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/curves/composite_curve.h"
 #include "igesio/entities/curves/line.h"

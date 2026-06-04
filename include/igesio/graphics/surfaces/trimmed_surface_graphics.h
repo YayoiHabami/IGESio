@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/surfaces/trimmed_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"

@@ -20,8 +20,8 @@
 #include <memory>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 #include "igesio/entities/surfaces/surface_of_revolution.h"

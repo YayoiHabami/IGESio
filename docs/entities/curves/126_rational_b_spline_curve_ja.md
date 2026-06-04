@@ -135,7 +135,7 @@ $$A^{(n)}(t) = \sum_{l=j-m}^{j} b_{l, m}^{(n)}(t) w_{l} P_{l}, \quad w^{(n)}(t) 
 
 $$C^{(n)}(t) = \frac{1}{w(t)} \left( A^{(n)}(t) - \sum_{k=0}^{n-1} \binom{n}{k} w^{(n-k)}(t) C^{(k)}(t) \right)$$
 
-ここで、$\binom{n}{k}$ は二項係数を表し、`igesio/numerics/combinatorics.h`内の`BinomialCoefficient`関数で計算されます。
+ここで、$\binom{n}{k}$ は二項係数を表し、`igesio/numerics/core/combinatorics.h`内の`BinomialCoefficient`関数で計算されます。
 
 **計算例**
 

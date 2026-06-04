@@ -25,8 +25,8 @@
 #include <utility>
 
 #include "igesio/common/id_generator.h"
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/views/surface_view.h"
 #include "./views_for_testing.h"
 

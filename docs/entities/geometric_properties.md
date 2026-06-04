@@ -565,7 +565,7 @@ $$\begin{aligned}
         &= \int_{v_{\text{min}}}^{v_{\text{max}}} \int_{u_{\text{min}}}^{u_{\text{max}}} \sqrt{E(u,v)G(u,v) - F(u,v)^2} \, du \, dv
 \end{aligned}$$
 
-Here, $\sqrt{EG - F^2}$ represents the area element and means the area of a minute region on the surface. This equation is based on the idea of ​​considering the surface as a collection of minute parallelograms and finding the total area by adding up those areas. In this library, this double integral is approximately calculated using a function that performs numerical integration, such as the `Integrate` function in `igesio/numerics/integration.h`.
+Here, $\sqrt{EG - F^2}$ represents the area element and means the area of a minute region on the surface. This equation is based on the idea of ​​considering the surface as a collection of minute parallelograms and finding the total area by adding up those areas. In this library, this double integral is approximately calculated using a function that performs numerical integration, such as the `Integrate` function in `igesio/numerics/analysis/integration.h`.
 
 **Code Example**
 

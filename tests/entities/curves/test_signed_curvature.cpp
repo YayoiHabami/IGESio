@@ -16,7 +16,7 @@
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/parametric_spline_curve.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 namespace {
 

@@ -32,7 +32,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_restricted_surface.h"
 
 

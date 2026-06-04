@@ -1,13 +1,13 @@
 /**
  * @file numerics/test_tolerance.cpp
- * @brief numerics/tolerance.hのテスト
+ * @brief numerics/core/tolerance.hのテスト
  * @author Yayoi Habami
  * @date 2025-08-11
  * @copyright 2025 Yayoi Habami
  */
 #include <gtest/gtest.h>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 

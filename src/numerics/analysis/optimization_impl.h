@@ -1,5 +1,5 @@
 /**
- * @file numerics/optimization_impl.h
+ * @file numerics/analysis/optimization_impl.h
  * @brief 最適化・求根関数の実装 (内部実装用)
  *
  * 以下を実装済み (いずれもテンプレート版)
@@ -9,8 +9,8 @@
  * @date 2026-04-09
  * @copyright 2026 Yayoi Habami
  */
-#ifndef SRC_NUMERICS_OPTIMIZATION_IMPL_H_
-#define SRC_NUMERICS_OPTIMIZATION_IMPL_H_
+#ifndef SRC_NUMERICS_ANALYSIS_OPTIMIZATION_IMPL_H_
+#define SRC_NUMERICS_ANALYSIS_OPTIMIZATION_IMPL_H_
 
 #include <cmath>
 #include <limits>
@@ -21,7 +21,7 @@
 #include <boost/math/tools/roots.hpp>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/optimization.h"
+#include "igesio/numerics/analysis/optimization.h"
 
 namespace igesio::numerics {
 
@@ -114,4 +114,4 @@ double FindRootScalarT(F func, double t_lower, double t_upper,
 
 }  // namespace igesio::numerics
 
-#endif  // SRC_NUMERICS_OPTIMIZATION_IMPL_H_
+#endif  // SRC_NUMERICS_ANALYSIS_OPTIMIZATION_IMPL_H_

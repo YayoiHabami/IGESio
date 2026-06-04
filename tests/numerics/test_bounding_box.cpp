@@ -13,8 +13,8 @@
 #include <tuple>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 
 namespace igesio::numerics {
 

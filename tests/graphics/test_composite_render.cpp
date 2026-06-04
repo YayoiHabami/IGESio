@@ -19,7 +19,7 @@
 
 #include "mock_open_gl.h"
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/composite_curve.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/graphics/core/draw_context.h"

@@ -1,11 +1,11 @@
 /**
- * @file numerics/integration.cpp
+ * @file numerics/analysis/integration.cpp
  * @brief 数値積分に関するユーティリティ関数群
  * @author Yayoi Habami
  * @date 2025-10-20
  * @copyright 2025 Yayoi Habami
  */
-#include "igesio/numerics/integration.h"
+#include "igesio/numerics/analysis/integration.h"
 
 #include <algorithm>
 #include <array>
@@ -13,7 +13,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "igesio/numerics/constexpr_math.h"
+#include "igesio/numerics/core/constexpr_math.h"
 
 namespace {
 

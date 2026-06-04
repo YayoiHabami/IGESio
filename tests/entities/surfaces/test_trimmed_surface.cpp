@@ -27,7 +27,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/entity_type.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/linear_path.h"

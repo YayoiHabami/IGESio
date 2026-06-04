@@ -1,6 +1,6 @@
 # Bounding Box
 
-Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bounding_box.h)
+Defined in [`igesio/numerics/geometric/bounding_box.h`](./../../include/igesio/numerics/geometric/bounding_box.h)
 
 ## 目次
 
@@ -24,7 +24,7 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 
 　本ドキュメントでは、数値計算におけるバウンディングボックス（Bounding Box）について説明します。バウンディングボックスは、オブジェクトやデータセットの最小限の境界を定義するために使用されます。これにより、空間的な関係や衝突検出、レンダリングの最適化など、多くの応用が可能となります。
 
-　本ライブラリでは、[`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bounding_box.h)にバウンディングボックスクラス`BoundingBox`および関連する関数が実装されています。`BoundingBox`クラスは、2Dおよび3D空間でのバウンディングボックスの作成、操作、およびクエリをサポートしています。
+　本ライブラリでは、[`igesio/numerics/geometric/bounding_box.h`](./../../include/igesio/numerics/geometric/bounding_box.h)にバウンディングボックスクラス`BoundingBox`および関連する関数が実装されています。`BoundingBox`クラスは、2Dおよび3D空間でのバウンディングボックスの作成、操作、およびクエリをサポートしています。
 
 　本クラスでは、バウンディングボックスを以下の4種類のパラメータで定義します。
 

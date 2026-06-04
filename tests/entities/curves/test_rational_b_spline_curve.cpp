@@ -33,7 +33,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 
 namespace {

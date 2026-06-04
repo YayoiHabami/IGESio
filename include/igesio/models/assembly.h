@@ -23,8 +23,8 @@
 #include <vector>
 
 #include "igesio/common/id_generator.h"
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/entity_base.h"
 
 

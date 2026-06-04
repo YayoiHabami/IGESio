@@ -1,11 +1,11 @@
 /**
- * @file numerics/bounding_box.cpp
+ * @file numerics/geometric/bounding_box.cpp
  * @brief ジオメトリエンティティ用のバウンディングボックス計算
  * @author Yayoi Habami
  * @date 2025-10-29
  * @copyright 2025 Yayoi Habami
  */
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 
 #include <algorithm>
 #include <limits>
@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 

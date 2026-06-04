@@ -98,7 +98,7 @@ Since these graphics classes are generated and managed by the `igesio::graphics:
 
 | Path | Class Name | Description |
 | --- | --- | --- |
-| `igesio/numerics/matrix.h` | `Matrix2d`, `Matrix23d`, `Matrix32d`, `Matrix3d`, `Matrix2Xd`, `Matrix3Xd`, `Vector2d`, `Vector3d` | Fixed-size and dynamically-sized matrix classes.<br>See [here](./numerics/matrix.md) for details. |
+| `igesio/numerics/core/matrix.h` | `Matrix2d`, `Matrix23d`, `Matrix32d`, `Matrix3d`, `Matrix2Xd`, `Matrix3Xd`, `Vector2d`, `Vector3d` | Fixed-size and dynamically-sized matrix classes.<br>See [here](./numerics/matrix.md) for details. |
 
 ## Intermediate Data Structures
 

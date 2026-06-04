@@ -9,8 +9,8 @@
 
 #include <limits>
 
-#include "igesio/numerics/integration.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/analysis/integration.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 

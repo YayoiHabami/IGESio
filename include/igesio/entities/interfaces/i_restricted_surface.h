@@ -14,7 +14,7 @@
 #include <optional>
 #include <vector>
 
-#include "igesio/numerics/polygon.h"
+#include "igesio/numerics/geometric/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/interfaces/i_surface.h"
 

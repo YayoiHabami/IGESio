@@ -1,6 +1,6 @@
 /**
  * @file numerics/test_optimization.cpp
- * @brief numerics/optimization.hのテスト
+ * @brief numerics/analysis/optimization.hのテスト
  * @author Yayoi Habami
  * @date 2026-04-10
  * @copyright 2026 Yayoi Habami
@@ -12,7 +12,7 @@
 #include <stdexcept>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/optimization.h"
+#include "igesio/numerics/analysis/optimization.h"
 
 namespace {
 

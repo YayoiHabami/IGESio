@@ -19,7 +19,7 @@
 #include "mock_open_gl.h"
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/models/assembly.h"
 #include "igesio/models/scene.h"

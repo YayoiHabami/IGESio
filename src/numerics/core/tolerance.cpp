@@ -1,11 +1,11 @@
 /**
- * @file numerics/tolerance.h
+ * @file numerics/core/tolerance.cpp
  * @brief 許容誤差に関する定数と、近似比較のための関数を定義する
  * @author Yayoi Habami
  * @date 2025-07-05
  * @copyright 2025 Yayoi Habami
  */
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 

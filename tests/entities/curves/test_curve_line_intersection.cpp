@@ -20,7 +20,7 @@
 #include <memory>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/transformations/transformation_matrix.h"

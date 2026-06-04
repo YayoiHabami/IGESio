@@ -77,7 +77,7 @@ TryGetDerivatives(u, v, n)
 
 ### Implementation of Containment Testing
 
-The `IsInDomain(u, v)` function, called internally by `TryGetDerivatives`, determines if a point in the $(u, v)$ parameter space lies within the effective domain $\Omega$. This test utilizes `ComputeContainmentPolygons` (`entities/curves/algorithms.h`) and `IsPointInPolygon` (`numerics/polygon.h`).
+The `IsInDomain(u, v)` function, called internally by `TryGetDerivatives`, determines if a point in the $(u, v)$ parameter space lies within the effective domain $\Omega$. This test utilizes `ComputeContainmentPolygons` (`entities/curves/algorithms.h`) and `IsPointInPolygon` (`numerics/geometric/polygon.h`).
 
 The logic flow is as follows:
 

@@ -9,7 +9,7 @@
 
 #include <utility>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "entities/curves/algorithms/extremal_polygon.h"
 #include "entities/curves/algorithms/polygonal_approximation.h"
 

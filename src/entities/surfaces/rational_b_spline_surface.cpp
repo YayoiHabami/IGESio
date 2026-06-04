@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
-#include "igesio/numerics/combinatorics.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/numerics/core/combinatorics.h"
 #include "./../curves/nurbs_basis_function.h"
 
 namespace {

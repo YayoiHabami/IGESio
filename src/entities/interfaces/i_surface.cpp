@@ -10,7 +10,7 @@
 #include <limits>
 #include <utility>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 

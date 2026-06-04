@@ -1,5 +1,5 @@
 /**
- * @file numerics/optimization.h
+ * @file numerics/analysis/optimization.h
  * @brief 最適化・求根関数 (公開API)
  *
  * Boostを公開せず、std::functionを引数に取るラッパー関数を提供する。
@@ -10,8 +10,8 @@
  * @date 2026-04-10
  * @copyright 2026 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_OPTIMIZATION_H_
-#define IGESIO_NUMERICS_OPTIMIZATION_H_
+#ifndef IGESIO_NUMERICS_ANALYSIS_OPTIMIZATION_H_
+#define IGESIO_NUMERICS_ANALYSIS_OPTIMIZATION_H_
 
 #include <cstdint>
 #include <functional>
@@ -59,4 +59,4 @@ double FindRootScalar(
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_OPTIMIZATION_H_
+#endif  // IGESIO_NUMERICS_ANALYSIS_OPTIMIZATION_H_

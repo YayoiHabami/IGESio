@@ -33,7 +33,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/composite_curve.h"
 #include "igesio/entities/curves/line.h"

@@ -17,7 +17,7 @@
 #include <Eigen/Dense>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 namespace {
 

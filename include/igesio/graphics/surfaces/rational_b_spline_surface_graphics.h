@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"

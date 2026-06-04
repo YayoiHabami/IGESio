@@ -1,6 +1,6 @@
 /**
  * @file numerics/test_combinatorics.cpp
- * @brief numerics/combinatorics.hのテスト
+ * @brief numerics/core/combinatorics.hのテスト
  * @author Yayoi Habami
  * @date 2025-10-23
  * @copyright 2025 Yayoi Habami
@@ -10,7 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "igesio/numerics/combinatorics.h"
+#include "igesio/numerics/core/combinatorics.h"
 
 namespace {
 

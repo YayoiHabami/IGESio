@@ -8,7 +8,7 @@
  */
 #include "igesio/entities/curves/copious_data.h"
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 

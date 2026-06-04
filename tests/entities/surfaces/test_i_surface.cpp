@@ -14,7 +14,7 @@
 #include <string>
 #include <tuple>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/line.h"

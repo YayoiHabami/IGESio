@@ -14,8 +14,8 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/numerics/core/matrix.h"
 
 
 

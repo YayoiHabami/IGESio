@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/circular_arc.h"
 
 namespace {

@@ -77,7 +77,7 @@ TryGetDerivatives(u, v, n)
 
 ### 内外判定の実装
 
-　`TryGetDerivatives`が内部で呼び出す`IsInDomain(u, v)`は、パラメータ空間 $(u, v)$ 上の点が有効定義域 $\Omega$ 内にあるかを判定する。判定には`ComputeContainmentPolygons`（`entities/curves/algorithms.h`）および`IsPointInPolygon`（`numerics/polygon.h`）を使用する。
+　`TryGetDerivatives`が内部で呼び出す`IsInDomain(u, v)`は、パラメータ空間 $(u, v)$ 上の点が有効定義域 $\Omega$ 内にあるかを判定する。判定には`ComputeContainmentPolygons`（`entities/curves/algorithms.h`）および`IsPointInPolygon`（`numerics/geometric/polygon.h`）を使用する。
 
 判定の流れは次の通りである。
 

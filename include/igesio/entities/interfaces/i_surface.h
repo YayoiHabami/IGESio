@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/integration.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/analysis/integration.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/interfaces/i_curve.h"

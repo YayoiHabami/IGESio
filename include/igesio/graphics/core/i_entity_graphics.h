@@ -15,8 +15,8 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/entity_type.h"
 #include "igesio/models/global_param.h"
 #include "igesio/graphics/core/i_open_gl.h"

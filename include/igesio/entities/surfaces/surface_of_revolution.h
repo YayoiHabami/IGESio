@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/interfaces/i_surface.h"

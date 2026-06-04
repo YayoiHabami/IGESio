@@ -1,16 +1,16 @@
 /**
- * @file numerics/tolerance.h
+ * @file numerics/core/tolerance.h
  * @brief 許容誤差に関する定数と、近似比較のための関数を定義する
  * @author Yayoi Habami
  * @date 2025-07-05
  * @copyright 2025 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_TOLERANCE_H_
-#define IGESIO_NUMERICS_TOLERANCE_H_
+#ifndef IGESIO_NUMERICS_CORE_TOLERANCE_H_
+#define IGESIO_NUMERICS_CORE_TOLERANCE_H_
 
 #include <limits>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 
 
@@ -175,4 +175,4 @@ bool IsApproxGEQ(const double, const double, const double = kParameterTolerance)
 
 }  // namespace igesio
 
-#endif  // IGESIO_NUMERICS_TOLERANCE_H_
+#endif  // IGESIO_NUMERICS_CORE_TOLERANCE_H_

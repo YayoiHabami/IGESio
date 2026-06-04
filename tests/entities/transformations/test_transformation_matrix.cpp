@@ -28,7 +28,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/common/validation_result.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/transformations/transformation_matrix.h"
 
 namespace {
