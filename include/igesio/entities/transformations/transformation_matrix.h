@@ -9,6 +9,7 @@
 #define IGESIO_ENTITIES_TRANSFORMATIONS_TRANSFORMATION_MATRIX_H_
 
 #include <memory>
+#include <optional>
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/de_related.h"
@@ -128,6 +129,56 @@ class TransformationMatrix : public EntityBase, public virtual ITransformation {
     /// @return 参照先の変換行列. 参照が設定されていない場合は`nullptr`を返す.
     std::shared_ptr<const ITransformation> GetRefTransformation() const override;
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief TransformationMatrixを作成する
+/// @param rotation 回転行列 (3x3)
+/// @param translation 平行移動ベクトル (x, y, z)
+/// @param type 行列の種類. 省略時は回転行列の行列式の符号から
+///        kDefault (det≧0) / kLeftHanded (det<0) を自動判定する
+/// @return 作成されたTransformationMatrixのshared_ptr
+std::shared_ptr<TransformationMatrix> MakeTransformationMatrix(
+        const Matrix3d& rotation,
+        const Vector3d& translation = Vector3d::Zero(),
+        std::optional<MatrixType> type = std::nullopt);
+
+/// @brief 同次変換行列からTransformationMatrixを作成する
+/// @param transformation 同次変換行列 (4x4). 最下行は[0, 0, 0, 1]であること
+/// @param type 行列の種類. 省略時は回転部分の行列式の符号から
+///        kDefault (det≧0) / kLeftHanded (det<0) を自動判定する
+/// @return 作成されたTransformationMatrixのshared_ptr
+/// @throw igesio::EntityValueError 最下行が[0, 0, 0, 1]でない場合
+///        (透視成分はType 124では表現できない)
+std::shared_ptr<TransformationMatrix> MakeTransformationMatrix(
+        const Matrix4d& transformation,
+        std::optional<MatrixType> type = std::nullopt);
+
+/// @brief 平行移動のみを表すTransformationMatrixを作成する
+/// @param offset 平行移動ベクトル (x, y, z)
+/// @return 作成されたTransformationMatrixのshared_ptr
+std::shared_ptr<TransformationMatrix> MakeTranslation(const Vector3d& offset);
+
+/// @brief 原点を通る軸周りの回転を表すTransformationMatrixを作成する
+/// @param angle 回転角 [rad]
+/// @param axis 回転軸 (内部で正規化される)
+/// @return 作成されたTransformationMatrixのshared_ptr
+/// @throw std::invalid_argument axisがゼロベクトルの場合
+std::shared_ptr<TransformationMatrix> MakeRotation(
+        double angle, const Vector3d& axis);
+
+/// @brief 任意点を通る軸周りの回転を表すTransformationMatrixを作成する
+/// @param angle 回転角 [rad]
+/// @param axis 回転軸 (内部で正規化される)
+/// @param center 回転軸が通る点 (回転の不動点)
+/// @return 作成されたTransformationMatrixのshared_ptr
+/// @throw std::invalid_argument axisがゼロベクトルの場合
+std::shared_ptr<TransformationMatrix> MakeRotation(
+        double angle, const Vector3d& axis, const Vector3d& center);
 
 }  // namespace igesio::entities
 

@@ -259,8 +259,9 @@ using igesio::Vector3d;
 
 // 1. arc: center (0.5, -1), radius 1.5, start (-1, -1), end (2, -1) (CCW)
 // -> CircularArc is defined clockwise, so use transformation matrix to flip and translate
-auto comp_1_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::AngleAxisd(igesio::kPi, Vector3d::UnitY()), Vector3d{0.5, -1.0, 0.0});
+auto comp_1_trans = igesio::entities::MakeTransformationMatrix(
+        igesio::AngleAxisd(igesio::kPi, Vector3d::UnitY()).toRotationMatrix(),
+        Vector3d{0.5, -1.0, 0.0});
 auto comp_1 = std::make_shared<igesio::entities::CircularArc>(
         Vector2d{0.0, 0.0}, Vector2d{-1.5, 0.0}, Vector2d{1.5, 0.0});
 comp_1->OverwriteTransformationMatrix(comp_1_trans);
@@ -309,8 +310,8 @@ auto ellipse_arc = std::make_shared<igesio::entities::ConicArc>(
 
 // Note: Since elliptical arc entities are defined with the origin
 // as their center, use a transformation matrix entity to move the origin.
-auto ellipse_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::Matrix3d::Identity(), igesio::Vector3d{0.0, 3.0, 0.0});
+auto ellipse_trans =
+        igesio::entities::MakeTranslation(igesio::Vector3d{0.0, 3.0, 0.0});
 ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 ```
 
@@ -371,8 +372,8 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 　`LinearPath`は、フォーム11～13 (座標2つ組、座標3つ組、座標6つ組) の折れ線データを表現するためのクラスです。以下のコード例は、5つの3次元座標点からなる折れ線を生成します（[CopiousDataBaseの図参照](#copiousdatabase-type-106)）。与える点群は[CopiousData](#copiousdata-type-106-forms-1-3)と同じですが、右方向に $5$ だけシフトしています。
 
 ```cpp
-auto copious_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::Matrix3d::Identity(), igesio::Vector3d{5.0, 0.0, 0.0});
+auto copious_trans =
+        igesio::entities::MakeTranslation(igesio::Vector3d{5.0, 0.0, 0.0});
 auto linear_path = std::make_shared<igesio::entities::LinearPath>(
         igesio::entities::CopiousDataType::kPolyline3D, copious_coords);
 linear_path->OverwriteTransformationMatrix(copious_trans);
@@ -879,8 +880,8 @@ auto segment = std::make_shared<igesio::entities::Line>(
         igesio::entities::LineType::kSegment);
 
 // 変換行列を定義: 回転なし、平行移動ベクトル = (1,2,3)
-auto transform = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::Matrix3d::Identity(), igesio::Vector3d{1.0, 2.0, 3.0});
+auto transform =
+        igesio::entities::MakeTranslation(igesio::Vector3d{1.0, 2.0, 3.0});
 
 // 変換行列を線分に適用: segmentは (1,2,3) から (2,3,4) を結ぶ線分となる
 segment->OverwriteTransformationMatrix(transform);

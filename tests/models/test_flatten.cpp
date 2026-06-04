@@ -50,7 +50,6 @@ using igesio::Vector3d;
 using i_mdl::Assembly;
 using i_mdl::CoordFrame;
 using i_ent::Line;
-using i_ent::TransformationMatrix;
 
 /// @brief 浮動小数点比較の許容誤差
 constexpr double kTol = 1e-9;
@@ -149,7 +148,7 @@ TEST(MaterializeTest, ComposesWithExistingMEntity) {
         igesio::AngleAxisd(kPiHalf, Vector3d(0, 0, 1).normalized()).toRotationMatrix();
     const Vector3d t_ent(5, 0, 0);
     ASSERT_TRUE(line->OverwriteTransformationMatrix(
-            std::make_shared<TransformationMatrix>(r, t_ent)));
+            i_ent::MakeTransformationMatrix(r, t_ent)));
     const Matrix4d m_entity = line->GetTransformationMatrix().GetTransformation();
 
     const Matrix4d p = MakeTranslation({0, 10, 0});

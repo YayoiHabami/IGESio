@@ -259,8 +259,9 @@ using igesio::Vector3d;
 
 // 1. arc: center (0.5, -1), radius 1.5, start (-1, -1), end (2, -1) (CCW)
 // -> CircularArc is defined clockwise, so use transformation matrix to flip and translate
-auto comp_1_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-  igesio::AngleAxisd(igesio::kPi, Vector3d::UnitY()), Vector3d{0.5, -1.0, 0.0});
+auto comp_1_trans = igesio::entities::MakeTransformationMatrix(
+  igesio::AngleAxisd(igesio::kPi, Vector3d::UnitY()).toRotationMatrix(),
+  Vector3d{0.5, -1.0, 0.0});
 auto comp_1 = std::make_shared<igesio::entities::CircularArc>(
   Vector2d{0.0, 0.0}, Vector2d{-1.5, 0.0}, Vector2d{1.5, 0.0});
 comp_1->OverwriteTransformationMatrix(comp_1_trans);
@@ -309,8 +310,8 @@ auto ellipse_arc = std::make_shared<igesio::entities::ConicArc>(
 
 // Note: Since elliptical arc entities are defined with the origin
 // as their center, use a transformation matrix entity to move the origin.
-auto ellipse_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-  igesio::Matrix3d::Identity(), igesio::Vector3d{0.0, 3.0, 0.0});
+auto ellipse_trans =
+  igesio::entities::MakeTranslation(igesio::Vector3d{0.0, 3.0, 0.0});
 ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 ```
 
@@ -371,8 +372,8 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 `LinearPath` is a class for representing polyline data of forms 11–13 (2D coordinates, 3D coordinates, 6D coordinates). The following code example creates a polyline consisting of five 3D coordinate points (see [CopiousDataBase figure](#copiousdatabase-type-106)). The points used are the same as [CopiousData](#copiousdata-type-106-forms-1-3), but shifted $5$ units to the right.
 
 ```cpp
-auto copious_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-    igesio::Matrix3d::Identity(), igesio::Vector3d{5.0, 0.0, 0.0});
+auto copious_trans =
+    igesio::entities::MakeTranslation(igesio::Vector3d{5.0, 0.0, 0.0});
 auto linear_path = std::make_shared<igesio::entities::LinearPath>(
     igesio::entities::CopiousDataType::kPolyline3D, copious_coords);
 linear_path->OverwriteTransformationMatrix(copious_trans);
@@ -881,8 +882,8 @@ auto segment = std::make_shared<igesio::entities::Line>(
   igesio::entities::LineType::kSegment);
 
 // Define a transformation matrix: no rotation, translation vector = (1,2,3)
-auto transform = std::make_shared<igesio::entities::TransformationMatrix>(
-  igesio::Matrix3d::Identity(), igesio::Vector3d{1.0, 2.0, 3.0});
+auto transform =
+  igesio::entities::MakeTranslation(igesio::Vector3d{1.0, 2.0, 3.0});
 
 // Apply the transformation matrix to the line segment:
 // now the line segment is from (1,2,3) to (2,3,4)

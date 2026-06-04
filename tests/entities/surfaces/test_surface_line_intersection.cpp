@@ -249,8 +249,7 @@ TEST(IntersectSurfaceWithLineTest, WithTransform_Translation) {
     auto plane = MakeYZeroPlane();
 
     // 並進 T=(0,5,0): 定義空間の y=0 がワールド空間の y=5 になる
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(
-        Matrix3d::Identity(), Vector3d{0., 5., 0.});
+    auto trans = i_ent::MakeTranslation(Vector3d{0., 5., 0.});
     plane->OverwriteTransformationMatrix(trans);
 
     // +y方向のレイ: ワールド空間 y=5 で交差するはず
@@ -272,7 +271,7 @@ TEST(IntersectSurfaceWithLineTest, WithTransform_Rotation) {
     rz90 <<  0., -1., 0.,
              1.,  0., 0.,
              0.,  0., 1.;
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(rz90);
+    auto trans = i_ent::MakeTransformationMatrix(rz90);
     plane->OverwriteTransformationMatrix(trans);
 
     // +x → -x方向のレイ: ワールド空間 x=0 で交差するはず

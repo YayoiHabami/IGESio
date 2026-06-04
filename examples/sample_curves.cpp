@@ -38,8 +38,7 @@ ent_vec CreateCircularArc() {
     auto arc_end = Vector2d{cos(5.0 * kPi / 2.0), sin(5.0 * kPi / 2.0)};
     auto arc = std::make_shared<i_ent::CircularArc>(
             Vector2d{0.0, 0.0}, arc_start, arc_end);
-    auto arc_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::Matrix3d::Identity(), Vector3d{x_diff, 0.0, 0.0});
+    auto arc_trans = i_ent::MakeTranslation(Vector3d{x_diff, 0.0, 0.0});
     arc->OverwriteTransformationMatrix(arc_trans);
 
     return {circle, arc_trans, arc};
@@ -53,7 +52,7 @@ ent_vec CreateCircularArc() {
 ent_vec CreateCompositeCurve() {
     // 1. circular arc with transformation
     auto rotation = igesio::AngleAxisd(kPi, Vector3d::UnitY());
-    auto comp_1_trans = std::make_shared<i_ent::TransformationMatrix>(
+    auto comp_1_trans = i_ent::MakeTransformationMatrix(
             rotation.toRotationMatrix(), Vector3d{0.5, -1.0, 0.0});
     auto comp_1 = std::make_shared<i_ent::CircularArc>(
             Vector2d{0.0, 0.0}, Vector2d{-1.5, 0.0}, Vector2d{1.5, 0.0});
@@ -86,8 +85,7 @@ ent_vec CreateConicArc() {
 
     // Note: Since elliptical arc entities are defined with the origin
     // as their center, use a transformation matrix entity to move the origin.
-    auto ellipse_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::Matrix3d::Identity(), Vector3d{0.0, 3.0, 0.0});
+    auto ellipse_trans = i_ent::MakeTranslation(Vector3d{0.0, 3.0, 0.0});
     ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 
     return {ellipse_trans, ellipse_arc};
@@ -106,8 +104,7 @@ ent_vec CreateCopiousData() {
             i_ent::CopiousDataType::kPoints3D, copious_coords);
 
     // 2. Polyline with transformation
-    auto copious_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::Matrix3d::Identity(), Vector3d{5.0, 0.0, 0.0});
+    auto copious_trans = i_ent::MakeTranslation(Vector3d{5.0, 0.0, 0.0});
     auto linear_path = std::make_shared<i_ent::LinearPath>(
             i_ent::CopiousDataType::kPolyline3D, copious_coords);
     linear_path->OverwriteTransformationMatrix(copious_trans);
@@ -127,15 +124,13 @@ ent_vec CreateLine() {
             start, end, i_ent::LineType::kSegment);
 
     // 2. semi-infinite line
-    auto ray_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::Matrix3d::Identity(), Vector3d{2.0, 0, 0.0});
+    auto ray_trans = i_ent::MakeTranslation(Vector3d{2.0, 0, 0.0});
     auto ray = std::make_shared<i_ent::Line>(
             start, end, i_ent::LineType::kRay);
     ray->OverwriteTransformationMatrix(ray_trans);
 
     // 3. infinite line
-    auto line_trans = std::make_shared<i_ent::TransformationMatrix>(
-            igesio::Matrix3d::Identity(), Vector3d{4.0, 0, 0.0});
+    auto line_trans = i_ent::MakeTranslation(Vector3d{4.0, 0, 0.0});
     auto line = std::make_shared<i_ent::Line>(
             start, end, i_ent::LineType::kLine);
     line->OverwriteTransformationMatrix(line_trans);

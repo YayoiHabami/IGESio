@@ -36,7 +36,6 @@ using i_ent::IntersectCurveWithLine;
 using i_ent::IntersectPointWithLine;
 using igesio::Vector2d;
 using igesio::Vector3d;
-using igesio::Matrix3d;
 using LineType = i_num::BoundingBox::DirectionType;
 
 /// @brief 位置比較の許容誤差
@@ -202,8 +201,7 @@ TEST(IntersectCurveWithLineTest, Circle_LineDetectsBothSides) {
 /// @brief z=0の円に並進T=(0,0,5)を適用すると z=5 でレイが交差する
 TEST(IntersectCurveWithLineTest, WithTransform_HitsInWorldSpace) {
     auto circle = MakeCircleR2();
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(
-        Matrix3d::Identity(), Vector3d{0., 0., 5.});
+    auto trans = i_ent::MakeTranslation(Vector3d{0., 0., 5.});
     circle->OverwriteTransformationMatrix(trans);
 
     // z=5 を通る x方向レイ → ワールド空間 z=5 の円と交差
@@ -219,8 +217,7 @@ TEST(IntersectCurveWithLineTest, WithTransform_HitsInWorldSpace) {
 /// @brief 並進後はz=0平面のレイは円に届かず空リスト
 TEST(IntersectCurveWithLineTest, WithTransform_MissesAtDefinedSpace) {
     auto circle = MakeCircleR2();
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(
-        Matrix3d::Identity(), Vector3d{0., 0., 5.});
+    auto trans = i_ent::MakeTranslation(Vector3d{0., 0., 5.});
     circle->OverwriteTransformationMatrix(trans);
 
     // z=0 のレイ: ワールド円は z=5 にあるため最近接距離5で空

@@ -16,6 +16,9 @@
  *   (FEM 用の特殊行列構造)
  * - 参照: SetReference / OverwriteTransformationMatrix / GetRefTransformation の
  *   基本動作と循環参照の棄却 (両APIが同一の循環判定を共有すること)
+ * - ファクトリ関数: MakeTransformationMatrix (回転+平行移動版/同次変換行列版) /
+ *   MakeTranslation / MakeRotation (原点軸版/任意点軸版)。フォーム0/1の自動判定、
+ *   同次変換行列の最下行検証、軸の正規化とゼロ軸の棄却
  *
  * TODO: 以下は本テストで未検証。
  *   - 未知のフォーム番号 (ValidatePD の default 節, kError) は SetMainPDParameters
@@ -25,6 +28,7 @@
 
 #include <cmath>
 #include <memory>
+#include <stdexcept>
 
 #include "igesio/common/errors.h"
 #include "igesio/common/validation_result.h"
@@ -38,6 +42,9 @@ using igesio::Matrix3d;
 using igesio::Matrix4d;
 using igesio::Vector3d;
 using igesio::ValidationSeverity;
+using i_ent::MakeRotation;
+using i_ent::MakeTransformationMatrix;
+using i_ent::MakeTranslation;
 using i_ent::MatrixType;
 using i_ent::TransformationMatrix;
 
@@ -536,4 +543,222 @@ TEST(TransformationMatrixErrorTest,
         i_ent::RawEntityDE::ByDefault(
             i_ent::EntityType::kTransformationMatrix),
         param), igesio::EntityParameterError);
+}
+
+
+
+/**
+ * ファクトリ関数: MakeTransformationMatrix (回転+平行移動版)
+ */
+
+// 代表値: 回転行列と平行移動ベクトルが格納され、種類はkDefault
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrix_StoresRotationAndTranslation) {
+    const Matrix3d rot = RotationZ(kPi / 6.0);  // 30度
+    const Vector3d trans(1.0, 2.0, 3.0);
+    const auto tm = MakeTransformationMatrix(rot, trans);
+
+    ASSERT_NE(tm, nullptr);
+    EXPECT_TRUE(tm->GetRotation().isApprox(rot, kTol));
+    EXPECT_TRUE(tm->GetTranslation().isApprox(trans, kTol));
+    EXPECT_EQ(tm->GetMatrixType(), MatrixType::kDefault);
+}
+
+// translation省略時はゼロベクトル
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrix_DefaultsTranslationToZero) {
+    const auto tm = MakeTransformationMatrix(RotationZ(kPi / 4.0));
+    EXPECT_NEAR(tm->GetTranslation().norm(), 0.0, kTol);
+}
+
+// det=-1の直交正規行列 (反射) → kLeftHandedを自動判定し、
+// フォームと行列が整合するため警告なし
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrix_AutoDetectsLeftHandedForNegativeDeterminant) {
+    const auto tm = MakeTransformationMatrix(ReflectionZ());
+    EXPECT_EQ(tm->GetMatrixType(), MatrixType::kLeftHanded);
+
+    const auto result = tm->Validate();
+    EXPECT_TRUE(result.is_valid);
+    EXPECT_TRUE(result.errors.empty());
+}
+
+// 種類を明示した場合は自動判定より優先される
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrix_ExplicitTypeOverridesAutoDetection) {
+    // det=-1でも明示のkDefaultが採用される (det違反はkWarning止まりでthrowしない)
+    const auto tm0 = MakeTransformationMatrix(
+        ReflectionZ(), Vector3d::Zero(), MatrixType::kDefault);
+    EXPECT_EQ(tm0->GetMatrixType(), MatrixType::kDefault);
+
+    // FEM用フォーム (円筒座標系) も明示で指定できる
+    const auto tm11 = MakeTransformationMatrix(
+        RotationZ(kPi / 4.0), Vector3d::Zero(),
+        MatrixType::kCylindricalCoordinates);
+    EXPECT_EQ(tm11->GetMatrixType(), MatrixType::kCylindricalCoordinates);
+}
+
+// 境界: det=0 (ランク落ち) は負でないためkDefaultに判定される
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrix_ZeroDeterminantFallsBackToDefault) {
+    Matrix3d rank_deficient = Matrix3d::Identity();
+    rank_deficient(2, 2) = 0.0;  // 第3列 = (0,0,0): det=0
+    const auto tm = MakeTransformationMatrix(rank_deficient);
+    EXPECT_EQ(tm->GetMatrixType(), MatrixType::kDefault);
+}
+
+// 非正規直交な行列でもコンストラクタ準拠で生成成功 (kWarningのみ・is_valid=true)
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrix_DoesNotThrowOnNonOrthonormalMatrix) {
+    Matrix3d rot;
+    rot << 2.0, 0.0, 0.0,   // 第1列 = (2,0,0): ノルム2 (非単位)
+           0.0, 1.0, 0.0,
+           0.0, 0.0, 1.0;
+    std::shared_ptr<TransformationMatrix> tm;
+    EXPECT_NO_THROW({ tm = MakeTransformationMatrix(rot); });
+
+    const auto result = tm->Validate();
+    EXPECT_TRUE(result.is_valid);
+    EXPECT_GE(CountSeverity(result, ValidationSeverity::kWarning), 1);
+}
+
+
+
+/**
+ * ファクトリ関数: MakeTransformationMatrix (同次変換行列版)
+ */
+
+// GetTransformation()の戻り値から再構築すると回転・平行移動が一致する (往復)
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrixFromHomogeneous_RoundTripsWithGetTransformation) {
+    const Matrix3d rot = RotationZ(kPi / 3.0);
+    const Vector3d trans(4.0, -5.0, 6.0);
+    const auto source = MakeTransformationMatrix(rot, trans);
+
+    const auto rebuilt = MakeTransformationMatrix(source->GetTransformation());
+    EXPECT_TRUE(rebuilt->GetRotation().isApprox(rot, kTol));
+    EXPECT_TRUE(rebuilt->GetTranslation().isApprox(trans, kTol));
+    EXPECT_EQ(rebuilt->GetMatrixType(), MatrixType::kDefault);
+}
+
+// 左上3x3が反射 (det=-1) の同次変換行列 → kLeftHandedを自動判定
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrixFromHomogeneous_AutoDetectsLeftHanded) {
+    Matrix4d hom = Matrix4d::Identity();
+    hom.block<3, 3>(0, 0) = ReflectionZ();
+    const auto tm = MakeTransformationMatrix(hom);
+    EXPECT_EQ(tm->GetMatrixType(), MatrixType::kLeftHanded);
+}
+
+// 最下行が[0,0,0,1]でない (許容誤差のすぐ外) → EntityValueError
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrixFromHomogeneous_ThrowsEntityValueErrorWhenBottomRowInvalid) {
+    // m(3,0)が許容誤差 (kParameterTolerance≈2.22e-14) のすぐ外
+    Matrix4d perturbed = Matrix4d::Identity();
+    perturbed(3, 0) = 1e-12;
+    EXPECT_THROW(MakeTransformationMatrix(perturbed), igesio::EntityValueError);
+
+    // m(3,3)が1でない (透視成分・一様スケールはType 124で表現不能)
+    Matrix4d scaled = Matrix4d::Identity();
+    scaled(3, 3) = 0.5;
+    EXPECT_THROW(MakeTransformationMatrix(scaled), igesio::EntityValueError);
+}
+
+// 境界精度: 最下行の摂動が許容誤差内であればthrowしない
+TEST(TransformationMatrixFactoryTest,
+     MakeTransformationMatrixFromHomogeneous_DoesNotThrowWhenBottomRowWithinTolerance) {
+    Matrix4d hom = Matrix4d::Identity();
+    hom(3, 0) = 1e-15;  // 許容誤差 (kParameterTolerance≈2.22e-14) の内側
+    EXPECT_NO_THROW(MakeTransformationMatrix(hom));
+}
+
+
+
+/**
+ * ファクトリ関数: MakeTranslation
+ */
+
+// 平行移動のみ: R=単位行列・t=offset・種類はkDefault
+TEST(TransformationMatrixFactoryTest,
+     MakeTranslation_StoresOffsetWithIdentityRotation) {
+    const Vector3d offset(7.0, -8.0, 9.0);
+    const auto tm = MakeTranslation(offset);
+
+    EXPECT_TRUE(tm->GetRotation().isApprox(Matrix3d::Identity(), kTol));
+    EXPECT_TRUE(tm->GetTranslation().isApprox(offset, kTol));
+    EXPECT_EQ(tm->GetMatrixType(), MatrixType::kDefault);
+}
+
+// 縮退: ゼロオフセット → 同次変換行列が単位行列
+TEST(TransformationMatrixFactoryTest,
+     MakeTranslation_ZeroOffsetYieldsIdentityTransformation) {
+    const auto tm = MakeTranslation(Vector3d::Zero());
+    EXPECT_TRUE(tm->GetTransformation().isApprox(Matrix4d::Identity(), kTol));
+}
+
+
+
+/**
+ * ファクトリ関数: MakeRotation (原点軸版/任意点軸版)
+ */
+
+// 代表値: z軸まわりπ/2の回転はRotationZ(π/2)と一致し、平行移動はゼロ
+TEST(TransformationMatrixFactoryTest, MakeRotation_MatchesRotationZ) {
+    const auto tm = MakeRotation(kPi / 2.0, Vector3d(0.0, 0.0, 1.0));
+    EXPECT_TRUE(tm->GetRotation().isApprox(RotationZ(kPi / 2.0), kTol));
+    EXPECT_NEAR(tm->GetTranslation().norm(), 0.0, kTol);
+    EXPECT_EQ(tm->GetMatrixType(), MatrixType::kDefault);
+}
+
+// 軸は内部で正規化される: (0,0,5)と(0,0,1)で同一の回転行列
+TEST(TransformationMatrixFactoryTest, MakeRotation_NormalizesAxis) {
+    const auto scaled = MakeRotation(kPi / 3.0, Vector3d(0.0, 0.0, 5.0));
+    const auto unit = MakeRotation(kPi / 3.0, Vector3d(0.0, 0.0, 1.0));
+    EXPECT_TRUE(scaled->GetRotation().isApprox(unit->GetRotation(), kTol));
+}
+
+// 境界: 回転角0 → 単位行列
+TEST(TransformationMatrixFactoryTest, MakeRotation_ZeroAngleYieldsIdentity) {
+    const auto tm = MakeRotation(0.0, Vector3d(1.0, 1.0, 1.0));
+    EXPECT_TRUE(tm->GetRotation().isApprox(Matrix3d::Identity(), kTol));
+}
+
+// ゼロ軸 (ノルムが許容誤差内を含む) はstd::invalid_argument。
+// 許容誤差のすぐ外のノルムは正規化により受理される (境界精度)
+TEST(TransformationMatrixFactoryTest,
+     MakeRotation_ThrowsInvalidArgumentWhenAxisIsZero) {
+    EXPECT_THROW(MakeRotation(kPi, Vector3d::Zero()), std::invalid_argument);
+    // ノルム1e-15: 許容誤差 (kParameterTolerance≈2.22e-14) の内側 → 棄却
+    EXPECT_THROW(MakeRotation(kPi, Vector3d(1e-15, 0.0, 0.0)),
+                 std::invalid_argument);
+    // ノルム1e-12: 許容誤差のすぐ外 → 正規化されて受理
+    EXPECT_NO_THROW(MakeRotation(kPi, Vector3d(1e-12, 0.0, 0.0)));
+}
+
+// 任意点まわりの回転: centerは変換の不動点であり、代表点が期待位置へ移る
+TEST(TransformationMatrixFactoryTest, MakeRotationAboutCenter_KeepsCenterFixed) {
+    const Vector3d center(1.0, 0.0, 0.0);
+    const auto tm = MakeRotation(kPi, Vector3d(0.0, 0.0, 1.0), center);
+
+    // centerは不動点: R*center + t = center
+    const Vector3d moved_center =
+        tm->GetRotation() * center + tm->GetTranslation();
+    EXPECT_TRUE(moved_center.isApprox(center, kTol));
+
+    // 点(2,0,0)は(1,0,0)を通るz軸平行軸まわりのπ回転で原点へ移る
+    const Vector3d moved =
+        tm->GetRotation() * Vector3d(2.0, 0.0, 0.0) + tm->GetTranslation();
+    EXPECT_NEAR(moved.norm(), 0.0, kTol);
+}
+
+// center=原点の3引数版は2引数版と同一の変換を生成する
+TEST(TransformationMatrixFactoryTest,
+     MakeRotationAboutCenter_OriginEqualsTwoArgOverload) {
+    const Vector3d axis(1.0, 2.0, 2.0);  // 非正規化の軸 (ノルム3)
+    const auto about_origin = MakeRotation(kPi / 5.0, axis, Vector3d::Zero());
+    const auto two_arg = MakeRotation(kPi / 5.0, axis);
+
+    EXPECT_TRUE(about_origin->GetRotation().isApprox(
+        two_arg->GetRotation(), kTol));
+    EXPECT_NEAR(about_origin->GetTranslation().norm(), 0.0, kTol);
 }
