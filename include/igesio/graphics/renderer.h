@@ -475,6 +475,11 @@ class EntityRenderer {
     /// @note 所有権は移譲しない (draw_objects_が保持し続ける)
     IEntityGraphics* FindGraphics(const ObjectID&) const;
 
+    /// @brief シーンのワールドBBoxから外接球を計算し、カメラの自動クリップ球を更新する
+    /// @note カメラ操作でシーンがクリップされないよう、SetScene/MarkSceneDirty時に呼ぶ.
+    ///       シーン未設定またはBBoxが空の場合は自動クリッピングを解除する
+    void UpdateAutoClipSphere();
+
     /// @brief scene_を走査して描画リストを再構築し、ワールド変換と色をリフレッシュする
     /// @note dirty時のみ呼ぶ. ShouldRenderEntityは呼ばず、キャッシュ在席を描画対象条件
     ///       とする (フィルタは投入時に適用済み).

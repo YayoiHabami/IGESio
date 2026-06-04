@@ -502,10 +502,24 @@ void EntityRenderer::Draw() const {
 void EntityRenderer::SetScene(const models::Scene* scene) {
     scene_ = scene;
     scene_dirty_ = true;
+    UpdateAutoClipSphere();
 }
 
 void EntityRenderer::MarkSceneDirty() {
     scene_dirty_ = true;
+    UpdateAutoClipSphere();
+}
+
+void EntityRenderer::UpdateAutoClipSphere() {
+    if (scene_ != nullptr) {
+        if (const auto bbox = scene_->Root().GetWorldBoundingBox()) {
+            if (const auto sphere = ComputeBoundingSphere(*bbox)) {
+                camera_.SetAutoClipSphere(sphere->first, sphere->second);
+                return;
+            }
+        }
+    }
+    camera_.ClearAutoClipSphere();
 }
 
 void EntityRenderer::FitView() {

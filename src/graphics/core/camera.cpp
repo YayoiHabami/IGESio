@@ -20,6 +20,23 @@ using Camera = i_graphic::Camera;
 
 
 
+std::optional<std::pair<igesio::Vector3f, float>>
+i_graphic::ComputeBoundingSphere(const numerics::BoundingBox& bbox) {
+    const auto vertices = bbox.GetFiniteVertices();
+    if (vertices.empty()) return std::nullopt;
+
+    // 有限頂点の平均を中心とし、最遠頂点までの距離を半径とする
+    igesio::Vector3d center = igesio::Vector3d::Zero();
+    for (const auto& v : vertices) center += v;
+    center /= static_cast<double>(vertices.size());
+    double radius = 0.0;
+    for (const auto& v : vertices) radius = std::max(radius, (v - center).norm());
+
+    return std::make_pair(center.cast<float>(), static_cast<float>(radius));
+}
+
+
+
 Camera::Camera(const igesio::Vector3f& position,
                const igesio::Vector3f& target,
                const igesio::Vector3f& up)
@@ -53,6 +70,31 @@ void Camera::SetClippingPlanes(const float near_plane, const float far_plane) {
     }
     near_plane_ = near_plane;
     far_plane_ = far_plane;
+    // 手動設定を優先するため、自動クリッピングは解除する
+    auto_clip_enabled_ = false;
+}
+
+std::pair<float, float> Camera::GetClippingPlanes() const {
+    if (!auto_clip_enabled_) return {near_plane_, far_plane_};
+
+    // 外接球を僅かに膨らませ、面がクリップ面上へ正確に乗るのを防ぐ
+    const float r = std::max(auto_clip_radius_, 1e-3f) * kAutoClipRadiusMargin;
+    const float distance = (position_ - auto_clip_center_).norm();
+    const float far_p = distance + r;
+    // カメラが球内へ入っても正のnearを維持しつつ、far/near比を抑える
+    const float near_p = std::max(distance - r, far_p * kAutoClipMinNearRatio);
+    return {near_p, far_p};
+}
+
+void Camera::SetAutoClipSphere(const igesio::Vector3f& center,
+                               const float radius) {
+    auto_clip_center_ = center;
+    auto_clip_radius_ = std::max(radius, 0.0f);
+    auto_clip_enabled_ = true;
+}
+
+void Camera::ClearAutoClipSphere() {
+    auto_clip_enabled_ = false;
 }
 
 /// @brief 投影モードを設定する
@@ -77,6 +119,9 @@ void Camera::Reset() {
 
     near_plane_ = kDefaultNearPlane;
     far_plane_ = kDefaultFarPlane;
+    auto_clip_enabled_ = false;
+    auto_clip_center_ = {0.0f, 0.0f, 0.0f};
+    auto_clip_radius_ = 0.0f;
 
     projection_mode_ = kDefaultProjectionMode;
     fov_ = kDefaultFov;
@@ -184,19 +229,12 @@ void Camera::SetStandardView(const StandardView view) {
 
 void Camera::FitToBoundingBox(const numerics::BoundingBox& bbox,
                               const float aspect_ratio, const float margin) {
-    const auto vertices = bbox.GetFiniteVertices();
-    if (vertices.empty() || aspect_ratio <= 0.0f) return;
+    const auto sphere = ComputeBoundingSphere(bbox);
+    if (!sphere.has_value() || aspect_ratio <= 0.0f) return;
+    const auto& [center_f, radius] = *sphere;
 
-    // 頂点群から中心と外接半径を求める
-    igesio::Vector3d center = igesio::Vector3d::Zero();
-    for (const auto& v : vertices) center += v;
-    center /= static_cast<double>(vertices.size());
-    double radius = 0.0;
-    for (const auto& v : vertices) radius = std::max(radius, (v - center).norm());
-
-    const igesio::Vector3f center_f = center.cast<float>();
-    // 退化(半径0)時も有効なクリップ範囲を確保するため下限を設ける
-    const float r = std::max(static_cast<float>(radius), 1e-3f) * margin;
+    // 退化(半径0)時も有効なカメラ距離を確保するため下限を設ける
+    const float r = std::max(radius, 1e-3f) * margin;
 
     // 現在の視線方向を維持する (退化時は既定の+Z向き)
     igesio::Vector3f dir = position_ - target_;  // ターゲット→カメラ
@@ -216,8 +254,8 @@ void Camera::FitToBoundingBox(const numerics::BoundingBox& bbox,
     }
     position_ = center_f + dir * distance;
 
-    // 外接球を挟むように前後クリッピング面を設定する (near>0, far>nearを保証)
-    SetClippingPlanes(std::max(distance - r, distance * 1e-3f), distance + r);
+    // 以降のカメラ操作でもシーンがクリップされないよう、外接球を登録する
+    SetAutoClipSphere(center_f, radius);
 }
 
 
@@ -257,33 +295,35 @@ Camera::GetProjectionMatrix(const float aspect_ratio) const {
 
 igesio::Matrix4f
 Camera::GetPerspectiveProjectionMatrix(const float aspect_ratio) const {
-    // 透視投影行列を計算
+    // 透視投影行列を計算 (自動クリッピング有効時は導出値を使用)
     float tan_half_fov_y = std::tan(fov_ * 0.5f);
+    const auto [near_p, far_p] = GetClippingPlanes();
 
     igesio::Matrix4f res = igesio::Matrix4f::Zero();
     res(0, 0) = 1.0f / (aspect_ratio * tan_half_fov_y);
     res(1, 1) = 1.0f / (tan_half_fov_y);
-    res(2, 2) = -(far_plane_ + near_plane_) / (far_plane_ - near_plane_);
-    res(2, 3) = -(2.0f * far_plane_ * near_plane_) / (far_plane_ - near_plane_);
+    res(2, 2) = -(far_p + near_p) / (far_p - near_p);
+    res(2, 3) = -(2.0f * far_p * near_p) / (far_p - near_p);
     res(3, 2) = -1.0f;
     return res;
 }
 
 igesio::Matrix4f
 Camera::GetOrthographicProjectionMatrix(const float aspect_ratio) const {
-    // 平行投影行列を計算
+    // 平行投影行列を計算 (自動クリッピング有効時は導出値を使用)
     const float right = ortho_scale_ * aspect_ratio;
     const float left = -right;
     const float top = ortho_scale_;
     const float bottom = -top;
+    const auto [near_p, far_p] = GetClippingPlanes();
 
     igesio::Matrix4f res = igesio::Matrix4f::Identity();
     res(0, 0) = 2.0f / (right - left);
     res(1, 1) = 2.0f / (top - bottom);
-    res(2, 2) = -2.0f / (far_plane_ - near_plane_);
+    res(2, 2) = -2.0f / (far_p - near_p);
     res(0, 3) = -(right + left) / (right - left);
     res(1, 3) = -(top + bottom) / (top - bottom);
-    res(2, 3) = -(far_plane_ + near_plane_) / (far_plane_ - near_plane_);
+    res(2, 3) = -(far_p + near_p) / (far_p - near_p);
     return res;
 }
 
