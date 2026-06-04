@@ -53,7 +53,7 @@ class DELineFontPattern : public DEFieldWrapper<ILineFontDefinition> {
 
     /// @brief パターン値を指定するコンストラクタ
     /// @param value 線種パターンの値
-    /// @throw igesio::DataFormatError valueが無効な場合 (0以下または6以上)
+    /// @throw igesio::DataFormatError valueが無効な場合 (0未満または6以上)
     explicit DELineFontPattern(const int);
 
     /// @brief パターン値を指定するコンストラクタ

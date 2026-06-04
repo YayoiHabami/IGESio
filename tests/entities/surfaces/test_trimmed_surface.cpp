@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/entity_type.h"
@@ -390,6 +391,40 @@ TEST(TrimmedSurfaceErrors, AddInnerBoundaryThrowsWhenNull) {
     std::shared_ptr<CurveOnAParametricSurface> null_boundary;
 
     EXPECT_THROW(ts->AddInnerBoundary(null_boundary), std::invalid_argument);
+}
+
+// 境界: パラメータ数が最小値4のすぐ外 (3個) はEntityParameterError
+TEST(TrimmedSurfaceErrors, ConstructorThrowsEntityParameterErrorWhenTooFewParams) {
+    auto plane = MakePlane();
+
+    EXPECT_THROW((void)std::make_shared<TrimmedSurface>(
+            i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kTrimmedSurface),
+            igesio::IGESParameterVector{plane->GetID(), 0, 0}),
+        igesio::EntityParameterError);
+}
+
+// 内側境界数N2に対してポインタ数が不足する場合もEntityParameterError
+TEST(TrimmedSurfaceErrors,
+     ConstructorThrowsEntityParameterErrorWhenInnerCountExceedsParams) {
+    auto plane = MakePlane();
+
+    // N2=2と宣言するが内側境界ポインタが0個 (必要数4+2=6 > 4)
+    EXPECT_THROW((void)std::make_shared<TrimmedSurface>(
+            i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kTrimmedSurface),
+            igesio::IGESParameterVector{plane->GetID(), 0, 2, 0}),
+        igesio::EntityParameterError);
+}
+
+// 参照未解決のままGetSurfaceを呼ぶとReferenceErrorを投げる
+TEST(TrimmedSurfaceErrors, GetSurfaceThrowsReferenceErrorWhenUnresolved) {
+    auto plane = MakePlane();
+
+    // from-IGES構築: 曲面のIDのみ保持し、参照解決は行わない
+    auto ts = std::make_shared<TrimmedSurface>(
+        i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kTrimmedSurface),
+        igesio::IGESParameterVector{plane->GetID(), 1, 0, 0});
+
+    EXPECT_THROW(ts->GetSurface(), igesio::ReferenceError);
 }
 
 

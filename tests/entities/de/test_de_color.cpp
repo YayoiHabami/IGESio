@@ -140,6 +140,9 @@ TEST_F(DEColorTest, ConstructorWithInvalidIntThrows) {
 
     // 範囲外の値 (9以上) は無効
     EXPECT_THROW(i_ent::DEColor color(9), igesio::DataFormatError);
+
+    // 境界: 有効範囲の内側 (8 = White) は例外を投げない
+    EXPECT_NO_THROW(i_ent::DEColor color(8));
 }
 
 

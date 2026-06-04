@@ -31,6 +31,7 @@
 #include <optional>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/numerics/tolerance.h"
 #include "igesio/entities/curves/rational_b_spline_curve.h"
@@ -714,4 +715,57 @@ TEST(RationalBSplineCurveNurbsCtorTest, IsPeriodic_True) {
         /*is_periodic=*/true);
 
     EXPECT_TRUE(nurbs.IsPeriodic());
+}
+
+
+
+/**
+ * エラーケース: コンストラクタの例外型
+ */
+
+// 境界: パラメータ数が最小値11のすぐ外 (10個) はEntityParameterError
+TEST(RationalBSplineCurveErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenTooFewParams) {
+    const auto param = igesio::IGESParameterVector{
+        2, 1,                       // K=2, M=1
+        false, false, true, false,  // PROP1-4
+        0.0, 0.0, 1.0, 2.0          // 10個で打ち切り
+    };
+    EXPECT_THROW(RationalBSplineCurve curve(param),
+                 igesio::EntityParameterError);
+}
+
+// KとMから計算した必要数に満たない場合もEntityParameterError
+TEST(RationalBSplineCurveErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenInsufficientForDegree) {
+    // K=0, M=1の必要数18に対して11個のみ (最小数ちょうど)
+    const auto param = igesio::IGESParameterVector{
+        0, 1,                       // K=0, M=1
+        false, false, true, false,  // PROP1-4
+        0.0, 0.0, 1.0, 1.0, 1.0     // 計11個
+    };
+    EXPECT_THROW(RationalBSplineCurve curve(param),
+                 igesio::EntityParameterError);
+}
+
+// 制御点数Kが負の場合はEntityValueError (パラメータ数ではなく値の制約違反)
+TEST(RationalBSplineCurveErrorTest,
+     Constructor_ThrowsEntityValueErrorWhenControlPointCountIsNegative) {
+    const auto param = igesio::IGESParameterVector{
+        -1, 1,                      // K=-1 (負値)
+        false, false, true, false,  // PROP1-4
+        0.0, 0.0, 1.0, 2.0, 2.0     // 計11個
+    };
+    EXPECT_THROW(RationalBSplineCurve curve(param), igesio::EntityValueError);
+}
+
+// 次数Mが0の場合はEntityValueError
+TEST(RationalBSplineCurveErrorTest,
+     Constructor_ThrowsEntityValueErrorWhenDegreeIsZero) {
+    const auto param = igesio::IGESParameterVector{
+        2, 0,                       // M=0
+        false, false, true, false,  // PROP1-4
+        0.0, 0.0, 1.0, 2.0, 2.0     // 計11個
+    };
+    EXPECT_THROW(RationalBSplineCurve curve(param), igesio::EntityValueError);
 }

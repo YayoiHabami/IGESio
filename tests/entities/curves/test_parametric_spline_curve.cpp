@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/entities/curves/parametric_spline_curve.h"
 
 namespace {
@@ -200,4 +201,67 @@ TEST(ParametricSplineCurveValidateTest, Discontinuity_IsValidWithWarning) {
         if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
     }
     EXPECT_TRUE(has_warning);
+}
+
+
+
+/**
+ * エラーケース: コンストラクタ・ValidatePDの例外型
+ */
+
+// 境界: パラメータ数が最小値17のすぐ外 (16個) はEntityParameterError
+TEST(ParametricSplineCurveErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenTooFewParams) {
+    const auto param = igesio::IGESParameterVector{
+        1, 1, 3, 1,                                      // CTYPE, H, NDIM, N=1
+        0.0, 1.0,                                        // T(1), T(2)
+        0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  // 計16個で打ち切り
+    };
+    EXPECT_THROW(ParametricSplineCurve spline(param),
+                 igesio::EntityParameterError);
+}
+
+// セグメント数Nに対してパラメータ数が不足する場合もEntityParameterError
+TEST(ParametricSplineCurveErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenInsufficientForSegments) {
+    // N=2の必要数 17+13*2=43 に対して17個のみ
+    const auto param = igesio::IGESParameterVector{
+        1, 1, 3, 2,          // CTYPE, H, NDIM, N=2
+        0.0, 1.0, 2.0,       // T(1)-T(3)
+        0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  // 計17個
+    };
+    EXPECT_THROW(ParametricSplineCurve spline(param),
+                 igesio::EntityParameterError);
+}
+
+// セグメント数Nが1未満の場合はEntityValueError (数の不足ではなく値の制約違反)
+TEST(ParametricSplineCurveErrorTest,
+     Constructor_ThrowsEntityValueErrorWhenSegmentCountIsZero) {
+    const auto param = igesio::IGESParameterVector{
+        1, 1, 3, 0,          // N=0 (1未満)
+        0.0, 1.0, 2.0,
+        0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0  // 計17個
+    };
+    EXPECT_THROW(ParametricSplineCurve spline(param), igesio::EntityValueError);
+}
+
+// ブレークポイントが狭義単調増加でない場合、ValidatePDはEntityValueErrorを投げる
+TEST(ParametricSplineCurveErrorTest,
+     ValidatePD_ThrowsEntityValueErrorWhenBreakpointsNotIncreasing) {
+    // MakeLinearSplineと同構成だが T = [0, 1, 0.5] (T(3) < T(2))
+    const auto param = igesio::IGESParameterVector{
+        1, 1, 3, 2,
+        0.0, 1.0, 0.5,       // T(3)=0.5 < T(2)=1.0 (非単調)
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        1.0, 0.0, 0.0, 0.0,
+        1.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0
+    };
+    const ParametricSplineCurve spline(param);
+    EXPECT_THROW(spline.ValidatePD(), igesio::EntityValueError);
 }
