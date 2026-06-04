@@ -12,6 +12,8 @@
 #include "igesio/graphics/core/gl_backend.h"
 
 #include <memory>
+#include <string>
+#include <utility>
 
 #include <glad/gl.h>
 
@@ -90,6 +92,16 @@ static_assert(sizeof(gl::Sizeiptr) == sizeof(GLsizeiptr), "gl::Sizeiptr size mis
 
 
 
+/// @brief graphicsモジュールが要求する最低GLメジャーバージョン
+/// @note 曲線描画のテッセレーション (GL 4.0) と、NURBS曲線・曲面の
+///       パラメータ転送に用いるSSBO (GL 4.3) に依存するため、
+///       4.3 core以上のコンテキストを必須とする.
+constexpr gl::Int kMinGLMajorVersion = 4;
+/// @brief graphicsモジュールが要求する最低GLマイナーバージョン
+constexpr gl::Int kMinGLMinorVersion = 3;
+
+
+
 /// @brief OpenGLの関数をラップする具象クラス
 /// @note MX生成された`GladGLContext`をメンバに持ち、各メソッドは`ctx_.Xxx(...)`を呼ぶ.
 ///       グローバルな`glXxx`は使用しない (コンテキスト固有の関数ポインタを用いる).
@@ -105,6 +117,17 @@ class OpenGL : public IOpenGL {
     bool Load(GLProcLoader loader) {
         return gladLoadGLContext(
                 &ctx_, reinterpret_cast<GLADloadfunc>(loader)) != 0;
+    }
+
+    /// @brief カレントコンテキストのGLバージョンを取得する
+    /// @return {メジャーバージョン, マイナーバージョン}
+    /// @note `Load`の成功後に呼ぶこと
+    std::pair<gl::Int, gl::Int> GetContextVersion() {
+        gl::Int major = 0;
+        gl::Int minor = 0;
+        ctx_.GetIntegerv(GL_MAJOR_VERSION, &major);
+        ctx_.GetIntegerv(GL_MINOR_VERSION, &minor);
+        return {major, minor};
     }
 
 
@@ -423,6 +446,18 @@ std::shared_ptr<IOpenGL> CreateGLBackend(GLProcLoader loader) {
     if (!impl->Load(loader)) {
         throw igesio::ImplementationError(
                 "Failed to load OpenGL functions via the provided loader");
+    }
+    // 4.3未満のコンテキストではテッセレーション (GL 4.0) やSSBO (GL 4.3) の
+    // 関数ポインタがnullのままロードに成功してしまい、描画時のクラッシュに
+    // つながる. ここで検出し、明確なエラーとして報告する.
+    const auto [major, minor] = impl->GetContextVersion();
+    if (major * 10 + minor < kMinGLMajorVersion * 10 + kMinGLMinorVersion) {
+        throw igesio::ImplementationError(
+                "OpenGL " + std::to_string(kMinGLMajorVersion) + "." +
+                std::to_string(kMinGLMinorVersion) +
+                " (core profile) or later is required for the graphics"
+                " module, but the current context is OpenGL " +
+                std::to_string(major) + "." + std::to_string(minor));
     }
     return impl;
 }

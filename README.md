@@ -148,7 +148,7 @@ This library has been built and tested on the following environments:
 > - **Other Linux environments**: Should work on similar environments (Linux distributions with GCC and CMake available), though not explicitly tested
 > - **Compilers**: Verified to work with GCC, Clang, and MSVC (Windows)
 
-> *1: This library requires OpenGL 4.3 or later, but macOS only supports up to OpenGL 4.1, so most graphics functions are not available.
+> *1: The graphics module requires an OpenGL 4.3 (core profile) context or later, but macOS only supports up to OpenGL 4.1, so the graphics functions are not available there (initialization fails with an error). All non-graphics features work without limitation.
 
 ### Environment Setup
 

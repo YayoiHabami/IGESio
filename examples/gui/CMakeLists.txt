@@ -80,7 +80,7 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
     target_link_libraries(${EXAMPLE_NAME} PRIVATE
         igesio
         glfw
-        glad_gl_core_33
+        glad_gl_core_43
         OpenGL::GL
         imgui_lib
     )

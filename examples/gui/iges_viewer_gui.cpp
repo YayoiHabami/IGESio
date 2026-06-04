@@ -110,9 +110,13 @@ IgesViewerGUI::IgesViewerGUI(
         throw std::runtime_error("Failed to initialize GLFW");
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    // graphicsモジュールはテッセレーション (GL 4.0) とSSBO (GL 4.3) を
+    // 使用するため、4.3 coreプロファイルのコンテキストを要求する
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // coreプロファイル要求時のmacOSで必須のヒント (他環境では実質無影響)
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
     if (msaa_samples > 0) {
         glfwWindowHint(GLFW_SAMPLES, msaa_samples);
         msaa_samples_ = msaa_samples;
@@ -129,7 +133,8 @@ IgesViewerGUI::IgesViewerGUI(
     glfwSwapInterval(1);
 
     // コンテキストをカレント化した後にGLバックエンドをロードしてレンダラへ設定する
-    // (CreateGLBackendはロード失敗時にImplementationErrorを投げる)
+    // (CreateGLBackendはロード失敗時およびGL 4.3未満のコンテキストで
+    //  ImplementationErrorを投げる)
     try {
         renderer_.SetGLBackend(CreateGLBackend(
                 reinterpret_cast<GLProcLoader>(glfwGetProcAddress)));
@@ -145,7 +150,7 @@ IgesViewerGUI::IgesViewerGUI(
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
-    ImGui_ImplOpenGL3_Init("#version 400 core");
+    ImGui_ImplOpenGL3_Init("#version 430 core");
 
     // 透過描画を有効化 (色/不透明度オーバーライドの表現用)
     renderer_.EnableTransparency(true);

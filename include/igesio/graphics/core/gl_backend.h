@@ -23,9 +23,12 @@ namespace igesio::graphics {
 /// @param loader getProcAddress互換のローダ関数ポインタ
 ///        (例: `reinterpret_cast<GLProcLoader>(glfwGetProcAddress)`)
 /// @return IOpenGL実装の共有ポインタ
-/// @throw igesio::ImplementationError OpenGL関数のロードに失敗した場合
+/// @throw igesio::ImplementationError OpenGL関数のロードに失敗した場合、
+///        またはカレントコンテキストのGLバージョンが4.3未満の場合
 /// @note 呼び出し時にOpenGLコンテキストをカレントにしておくこと.
 ///       内部で`gladLoadGLContext`を呼び、コンテキスト固有の関数ポインタを取得する.
+/// @note graphicsモジュールはテッセレーション (GL 4.0) とSSBO (GL 4.3) に
+///       依存するため、OpenGL 4.3 core以上のコンテキストを要求する.
 std::shared_ptr<IOpenGL> CreateGLBackend(GLProcLoader loader);
 
 }  // namespace igesio::graphics
