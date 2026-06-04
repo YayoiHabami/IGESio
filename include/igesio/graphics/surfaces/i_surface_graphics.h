@@ -9,12 +9,14 @@
 #define IGESIO_GRAPHICS_SURFACES_I_SURFACE_GRAPHICS_H_
 
 #include <memory>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
+#include "igesio/graphics/core/surface_edge_buffer.h"
 
 
 namespace igesio::graphics {
@@ -32,6 +34,8 @@ class ISurfaceGraphics
     MatrixXf vertices_;
     /// @brief 面のインデックスデータ
     std::vector<gl::Uint> indices_;
+    /// @brief 境界エッジ (パラメータ矩形の4アイソ辺) の線分バッファ
+    SurfaceEdgeBuffer edge_buffer_;
 
  public:
     /// @brief コンストラクタ
@@ -53,6 +57,33 @@ class ISurfaceGraphics
     bool IsDrawable() const override {
         return EntityGraphics::IsDrawable() &&
                vbo_ != 0 && ebo_ != 0;
+    }
+
+    // 基底のDrawオーバーロード (3引数版) を可視に保つ
+    using EntityGraphics::Draw;
+
+    /// @brief エンティティの描画を行う (シェーダー型で分岐)
+    /// @note kSurfaceEdgeでは境界エッジを線描画し、それ以外は基底に委譲する
+    void Draw(gl::Uint shader, const ShaderType shader_type,
+              const std::pair<float, float>& viewport,
+              const DrawContext& ctx) const override {
+        if (shader_type == ShaderType::kSurfaceEdge) {
+            if (edge_buffer_.IsEmpty()) return;
+            const auto color = ctx.IsHighlighted(GetEntityID())
+                    ? ctx.highlight_color : kSurfaceEdgeColor;
+            edge_buffer_.DrawWithState(shader, GetWorldTransform(),
+                                       color, GetLineWidth());
+            return;
+        }
+        EntityGraphics::Draw(shader, shader_type, viewport, ctx);
+    }
+
+    /// @brief 全ての可能なシェーダータイプを取得する
+    /// @note 面シェーダーに加え、エッジがあればkSurfaceEdgeを含める
+    std::unordered_set<ShaderType> GetShaderTypes() const override {
+        auto types = EntityGraphics::GetShaderTypes();
+        if (!edge_buffer_.IsEmpty()) types.insert(ShaderType::kSurfaceEdge);
+        return types;
     }
 
     /// @brief エンティティをセットアップする

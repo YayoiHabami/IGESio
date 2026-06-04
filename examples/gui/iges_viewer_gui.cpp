@@ -404,6 +404,24 @@ void IgesViewerGUI::RenderMenuBar() {
             if (ImGui::MenuItem("Isometric")) ApplyStandardView(StandardView::kIso);
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Display Mode")) {
+            // 面と面エッジの描画組み合わせを切り替える (従属しない曲線は常時表示)
+            const DisplayMode mode = renderer_.GetDisplayMode();
+            if (ImGui::MenuItem("Shaded", nullptr, mode == DisplayMode::kShaded)) {
+                renderer_.SetDisplayMode(DisplayMode::kShaded);
+                needs_redraw_ = true;
+            }
+            if (ImGui::MenuItem("Wireframe", nullptr,
+                                mode == DisplayMode::kWireFrame)) {
+                renderer_.SetDisplayMode(DisplayMode::kWireFrame);
+                needs_redraw_ = true;
+            }
+            if (ImGui::MenuItem("No Edge", nullptr, mode == DisplayMode::kNoEdge)) {
+                renderer_.SetDisplayMode(DisplayMode::kNoEdge);
+                needs_redraw_ = true;
+            }
+            ImGui::EndMenu();
+        }
         if (ImGui::ColorEdit3("Background",
                               renderer_.GetBackgroundColorRef().data())) {
             needs_redraw_ = true;

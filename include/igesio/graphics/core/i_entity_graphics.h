@@ -65,6 +65,12 @@ enum class ShaderType {
     /// @brief NURBS曲線シェーダー (Type: 126; Rational B-Spline Curve)
     kRationalBSplineCurve,
 
+    /// @brief サーフェス境界エッジシェーダー
+    /// @note 面の境界を線として描画する (汎用曲線シェーダーを再利用する).
+    ///       光源を使わない線描画のため、必ずkGeneralSurfaceより前に配置すること
+    ///       (UsesLightingがkGeneralSurface以降をtrueと判定するため)
+    kSurfaceEdge,
+
     /// @brief 汎用曲面シェーダー
     /// @note これ以降のすべてのシェーダーは、Lightを使用する
     kGeneralSurface,

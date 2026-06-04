@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
+
 namespace {
 
 using igesio::graphics::ISurfaceGraphics;
@@ -37,7 +39,8 @@ constexpr int kDefaultDiv = 20;
 ISurfaceGraphics::ISurfaceGraphics(
         const std::shared_ptr<const entities::ISurface> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true) {
+        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
+          edge_buffer_(gl) {
     Synchronize();
 }
 
@@ -68,6 +71,10 @@ void ISurfaceGraphics::Synchronize() {
 
     // 頂点・法線データとインデックスデータを生成
     GenerateSurfaceData();
+
+    // 境界エッジ (パラメータ矩形の4アイソ辺) を構築する
+    const auto edges = entities::ComputeParametricSurfaceEdges(*entity_);
+    edge_buffer_.Build(edges.loops);
 
     // VAO, VBO, EBOを生成
     gl_->GenVertexArrays(1, &vao_);
@@ -112,6 +119,9 @@ void ISurfaceGraphics::Cleanup() {
         gl_->DeleteBuffers(1, &ebo_);
         ebo_ = 0;
     }
+
+    // 境界エッジのバッファを解放
+    edge_buffer_.Cleanup();
 
     // 頂点・法線データとインデックスデータをクリア
     vertices_.resize(0, 0);

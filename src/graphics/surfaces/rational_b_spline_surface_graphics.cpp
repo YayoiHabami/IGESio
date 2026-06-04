@@ -10,6 +10,8 @@
 #include <memory>
 #include <utility>
 
+#include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
+
 #include "./../core/type_conversion_utils.h"
 
 namespace {
@@ -23,7 +25,8 @@ using igesio::graphics::RationalBSplineSurfaceGraphics;
 RationalBSplineSurfaceGraphics::RationalBSplineSurfaceGraphics(
         const std::shared_ptr<const entities::RationalBSplineSurface> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineSurface, true) {
+        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineSurface, true),
+          edge_buffer_(gl) {
     Synchronize();
 }
 
@@ -73,6 +76,11 @@ void RationalBSplineSurfaceGraphics::DrawImpl(
 void RationalBSplineSurfaceGraphics::Synchronize() {
     Cleanup();
     SyncTexture();
+
+    // 境界エッジ (パラメータ矩形の4アイソ辺) を構築する.
+    // テッセレーション用の参照点生成の成否に依らず構築する (ワイヤフレーム表示のため)
+    const auto edges = entities::ComputeParametricSurfaceEdges(*entity_);
+    edge_buffer_.Build(edges.loops);
 
     // TCSのため、グリッド状の参照点を用意する
     // TODO: 曲面の種類によって参照点の数を変更する
@@ -183,4 +191,7 @@ void RationalBSplineSurfaceGraphics::Cleanup() {
         gl_->DeleteBuffers(1, &reference_points_ssbo_);
         reference_points_ssbo_ = 0;
     }
+
+    // 境界エッジのバッファを解放
+    edge_buffer_.Cleanup();
 }

@@ -176,6 +176,8 @@ GetCurveShaderCode(const ShaderType shader_type) {
             return ShaderCode(kPointShader);
         case ShaderType::kRationalBSplineCurve:  // Type 126
             return ShaderCode(kRationalBSplineCurveShader);
+        case ShaderType::kSurfaceEdge:  // サーフェス境界エッジ (汎用曲線シェーダーを再利用)
+            return ShaderCode(kGeneralCurveShader);
         default:
             return std::nullopt;  // 他のシェーダータイプは未実装
     }

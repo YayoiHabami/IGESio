@@ -55,6 +55,17 @@ enum class BoxSelectionMode {
     kCrossing,
 };
 
+/// @brief 表示モード (面と面エッジの描画組み合わせ)
+/// @note 従属しない曲線エンティティはいずれのモードでも常に描画される.
+enum class DisplayMode {
+    /// @brief 面と面エッジの両方を描画する
+    kShaded,
+    /// @brief 面エッジのみを描画する (面の塗りつぶしを描画しない)
+    kWireFrame,
+    /// @brief 面のみを描画する (面エッジを描画しない)
+    kNoEdge
+};
+
 /// @brief 描画全般に関する (細かい) 設定
 struct GraphicsSettings {
     /// @brief アンチエイリアシングを有効にするか
@@ -62,6 +73,8 @@ struct GraphicsSettings {
     /// @brief 半透明のオブジェクトの描画を有効にするか
     /// @note 有効にした場合、ブレンドを行う
     bool enable_transparency = false;
+    /// @brief 表示モード (面/面エッジの描画組み合わせ)
+    DisplayMode display_mode = DisplayMode::kShaded;
 };
 
 /// @brief エンティティの描画を担当するクラス
@@ -332,6 +345,14 @@ class EntityRenderer {
     /// @brief 半透明のオブジェクトの描画が有効か
     /// @return 有効な場合はtrue、無効な場合はfalse
     bool IsTransparencyEnabled() const;
+
+    /// @brief 表示モードを設定する
+    /// @param mode 表示モード (shaded / wireframe / no-edge)
+    /// @note 設定を変更するだけであり、反映にはDraw()の呼び出しが必要
+    void SetDisplayMode(const DisplayMode);
+    /// @brief 表示モードを取得する
+    /// @return 現在の表示モード
+    DisplayMode GetDisplayMode() const;
 
 
 

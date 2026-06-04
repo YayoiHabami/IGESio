@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "igesio/entities/surfaces/algorithms/restricted_surface_mesh.h"
+#include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
 
 
 
@@ -21,7 +22,8 @@
 igesio::graphics::TrimmedSurfaceGraphics::TrimmedSurfaceGraphics(
         const std::shared_ptr<const entities::TrimmedSurface> entity,
         const std::shared_ptr<IOpenGL> gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true) {
+        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
+          edge_buffer_(gl) {
     Synchronize();
 }
 
@@ -53,6 +55,10 @@ void igesio::graphics::TrimmedSurfaceGraphics::Synchronize() {
     Cleanup();
     SyncTexture();
     GenerateSurfaceData();
+
+    // 境界エッジ (外周/内周トリム境界) を構築する
+    const auto edges = entities::ComputeRestrictedSurfaceEdges(*entity_);
+    edge_buffer_.Build(edges.loops);
 
     gl_->GenVertexArrays(1, &vao_);
     gl_->GenBuffers(1, &vbo_);
@@ -94,6 +100,9 @@ void igesio::graphics::TrimmedSurfaceGraphics::Cleanup() {
         gl_->DeleteBuffers(1, &ebo_);
         ebo_ = 0;
     }
+
+    // 境界エッジのバッファを解放
+    edge_buffer_.Cleanup();
 
     vertices_.resize(0, 0);
     indices_.clear();

@@ -111,6 +111,8 @@ std::string i_graph::ToString(const ShaderType shader_type) {
             return "Line";
         case ShaderType::kRationalBSplineCurve:
             return "RationalBSplineCurve";
+        case ShaderType::kSurfaceEdge:
+            return "SurfaceEdge";
         case ShaderType::kGeneralSurface:
             return "GeneralSurface";
         case ShaderType::kRationalBSplineSurface:

@@ -5,6 +5,7 @@ add_library(igesio_graphics STATIC
     core/i_entity_graphics.cpp
     core/open_gl.cpp
     core/ray.cpp
+    core/surface_edge_buffer.cpp
 
     curves/i_curve_graphics.cpp          # general curves
     curves/circular_arc_graphics.cpp     # 100

@@ -21,6 +21,26 @@ namespace i_graph = igesio::graphics;
 namespace gl = igesio::graphics::gl;
 using EntityRenderer = igesio::graphics::EntityRenderer;
 
+/// @brief 表示モードに応じて当該シェーダー型を描画すべきか判定する
+/// @param st シェーダー型
+/// @param mode 表示モード
+/// @return 描画すべき場合はtrue
+/// @note 面塗り(kGeneralSurface/kRationalBSplineSurface)と面エッジ(kSurfaceEdge)を
+///       モードで切り替える. それ以外 (独立曲線・点) は常に描画する.
+bool ShouldDrawShaderType(const i_graph::ShaderType st,
+                          const i_graph::DisplayMode mode) {
+    const bool is_surface_fill =
+            st == i_graph::ShaderType::kGeneralSurface ||
+            st == i_graph::ShaderType::kRationalBSplineSurface;
+    const bool is_surface_edge = st == i_graph::ShaderType::kSurfaceEdge;
+    switch (mode) {
+        case i_graph::DisplayMode::kShaded:    return true;
+        case i_graph::DisplayMode::kNoEdge:    return !is_surface_edge;
+        case i_graph::DisplayMode::kWireFrame: return !is_surface_fill;
+    }
+    return true;
+}
+
 /// @brief 頂点群の重心（平均座標）を計算する
 /// @param vertices 頂点群（空でないこと）
 /// @return 重心座標
@@ -399,6 +419,9 @@ void EntityRenderer::SetSettings(const GraphicsSettings& settings) {
     if (settings.enable_transparency != settings_.enable_transparency) {
         EnableTransparency(settings.enable_transparency);
     }
+
+    // 表示モード (即時のGL状態変更は不要; 次回Draw時のシェーダー型フィルタで反映)
+    settings_.display_mode = settings.display_mode;
 }
 
 void EntityRenderer::EnableAntialiasing(const bool enable) {
@@ -426,6 +449,14 @@ void EntityRenderer::EnableTransparency(const bool enable) {
 
 bool EntityRenderer::IsTransparencyEnabled() const {
     return settings_.enable_transparency;
+}
+
+void EntityRenderer::SetDisplayMode(const DisplayMode mode) {
+    settings_.display_mode = mode;
+}
+
+i_graph::DisplayMode EntityRenderer::GetDisplayMode() const {
+    return settings_.display_mode;
 }
 
 
@@ -568,6 +599,9 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
     }
 
     for (const auto& [shader_type, program_id] : shader_programs_) {
+        // 表示モードに応じて面塗り/面エッジのシェーダー型を取捨する
+        if (!ShouldDrawShaderType(shader_type, settings_.display_mode)) continue;
+
         auto it = draw_list_.find(shader_type);
         if (it == draw_list_.end() || it->second.empty()) continue;
 
