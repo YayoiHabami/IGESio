@@ -498,7 +498,7 @@ i_num::BoundingBox CurveOnSurface::GetDefinedBoundingBox() const {
 std::shared_ptr<const i_ent::ISurface> CurveOnSurface::GetSurface() const {
     auto surf_opt = surface_.TryGetEntity<ISurface>();
     if (!surf_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Surface pointer is not set or invalid.");
     }
     return surf_opt.value();
@@ -507,7 +507,7 @@ std::shared_ptr<const i_ent::ISurface> CurveOnSurface::GetSurface() const {
 std::shared_ptr<const i_ent::ICurve> CurveOnSurface::GetBaseCurve() const {
     auto curve_opt = base_curve_.TryGetEntity<ICurve>();
     if (!curve_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Base curve pointer is not set or invalid.");
     }
     return curve_opt.value();
@@ -516,7 +516,7 @@ std::shared_ptr<const i_ent::ICurve> CurveOnSurface::GetBaseCurve() const {
 std::shared_ptr<const i_ent::ICurve> CurveOnSurface::GetCurve() const {
     auto curve_opt = curve_.TryGetEntity<ICurve>();
     if (!curve_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Curve pointer is not set or invalid.");
     }
     return curve_opt.value();

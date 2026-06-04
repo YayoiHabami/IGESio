@@ -195,13 +195,13 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
      */
 
     /// @brief 曲面 S(u,v) を取得する
-    /// @throw std::runtime_error 曲面が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 曲面が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ISurface> GetSurface() const;
     /// @brief ベース曲線 B(t) を取得する
-    /// @throw std::runtime_error 曲線が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 曲線が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ICurve> GetBaseCurve() const;
     /// @brief 曲線 C(t) を取得する
-    /// @throw std::runtime_error 曲線が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 曲線が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ICurve> GetCurve() const;
 
     /// @brief 曲面 S(u,v) を設定する

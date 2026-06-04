@@ -312,7 +312,7 @@ SurfaceOfRevolution::TryGetDefinedDerivatives(
 i_num::BoundingBox SurfaceOfRevolution::GetDefinedBoundingBox() const {
     // ポインタの確認
     if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
             "Cannot compute bounding box: Axis or Generatrix pointer is not set.");
     }
 
@@ -443,7 +443,7 @@ void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double e
 std::shared_ptr<const i_ent::Line> SurfaceOfRevolution::GetAxis() const {
     auto ptr = axis_.TryGetEntity<Line>();
     if (!ptr) {
-        throw std::runtime_error("Axis (Line) pointer is not set or invalid.");
+        throw igesio::ReferenceError("Axis (Line) pointer is not set or invalid.");
     }
     return ptr.value();
 }
@@ -451,7 +451,7 @@ std::shared_ptr<const i_ent::Line> SurfaceOfRevolution::GetAxis() const {
 std::shared_ptr<const i_ent::ICurve> SurfaceOfRevolution::GetGeneratrix() const {
     auto ptr = generatrix_.TryGetEntity<ICurve>();
     if (!ptr) {
-        throw std::runtime_error("Generatrix (ICurve) pointer is not set or invalid.");
+        throw igesio::ReferenceError("Generatrix (ICurve) pointer is not set or invalid.");
     }
     return ptr.value();
 }

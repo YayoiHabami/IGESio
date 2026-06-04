@@ -127,7 +127,7 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     void SetDirectrix(const std::shared_ptr<ICurve>&);
     /// @brief 準線 C(t) を取得する
     /// @return 準線 C(t) (ICurveを継承したエンティティへのポインタ)
-    /// @throw std::runtime_error 準線が設定されていない場合
+    /// @throw igesio::ReferenceError 準線が設定されていない場合
     std::shared_ptr<const ICurve> GetDirectrix() const;
 
     /// @brief 母線の位置ベクトルを設定する

@@ -132,11 +132,11 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
 
     /// @brief 回転軸を取得する
     /// @return 回転軸 (Lineエンティティへのポインタ)
-    /// @throw std::runtime_error 回転軸が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 回転軸が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const Line> GetAxis() const;
     /// @brief 回転させる曲線 (母線) を取得する
     /// @return 回転させる曲線 (ICurveを継承したエンティティへのポインタ)
-    /// @throw std::runtime_error 回転させる曲線が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 回転させる曲線が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ICurve> GetGeneratrix() const;
     /// @brief 回転の開始/終了角度を取得する
     /// @return `{start_angle, end_angle}`の形式で回転の開始/終了角度 [rad] を返す

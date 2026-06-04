@@ -191,8 +191,8 @@ void Point::SetSubfigure(const std::shared_ptr<ISubfigureDefinition>& subfigure)
 std::shared_ptr<const i_ent::ISubfigureDefinition> Point::GetSubfigure() const {
     auto ptr = subfigure_.TryGetEntity<i_ent::ISubfigureDefinition>();
     if (!ptr) {
-        throw std::runtime_error("Pointer of Subfigure Definition entity "
-                                 "is not set or invalid.");
+        throw igesio::ReferenceError("Pointer of Subfigure Definition entity "
+                                     "is not set or invalid.");
     }
     return ptr.value();
 }

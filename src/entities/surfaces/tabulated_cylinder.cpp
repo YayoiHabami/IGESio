@@ -336,7 +336,7 @@ void TabulatedCylinder::SetDirectrix(const std::shared_ptr<ICurve>& directrix) {
 std::shared_ptr<const i_ent::ICurve> TabulatedCylinder::GetDirectrix() const {
     auto ptr = directrix_.TryGetEntity<ICurve>();
     if (!ptr) {
-        throw std::runtime_error("Directrix (Curve) reference is not set.");
+        throw igesio::ReferenceError("Directrix (Curve) reference is not set.");
     }
     return ptr.value();
 }
@@ -374,7 +374,8 @@ void TabulatedCylinder::SetDirection(const Vector3d& direction, const double len
         location_vector_ = new_location_vector;
     } else {
         // 曲線の始点が不明な場合は、位置ベクトルを更新しない
-        throw std::runtime_error("Cannot set direction because directrix start point is invalid.");
+        throw igesio::ReferenceError(
+            "Cannot set direction because directrix start point is invalid.");
     }
 }
 
@@ -383,7 +384,8 @@ Vector3d TabulatedCylinder::GetDirection() const {
     if (start_pt_opt.has_value()) {
         return location_vector_ - start_pt_opt.value();
     } else {
-        throw std::runtime_error("Cannot get direction because directrix start point is invalid.");
+        throw igesio::ReferenceError(
+            "Cannot get direction because directrix start point is invalid.");
     }
 }
 

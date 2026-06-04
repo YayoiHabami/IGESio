@@ -359,7 +359,7 @@ TrimmedSurface::GetInnerUVBoundaryAt(const std::size_t index) const {
 std::shared_ptr<const i_ent::ISurface> TrimmedSurface::GetSurface() const {
     auto surf_opt = surface_.TryGetEntity<ISurface>();
     if (!surf_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "TrimmedSurface: Surface pointer is not set or invalid.");
     }
     return surf_opt.value();
