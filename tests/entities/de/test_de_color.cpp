@@ -136,10 +136,10 @@ TEST_F(DEColorTest, ConstructorWithIntZeroIsDefault) {
 // int値を指定するコンストラクタのテスト（異常値）
 TEST_F(DEColorTest, ConstructorWithInvalidIntThrows) {
     // 負の値 (ポインタ) はint型としては与えられない
-    EXPECT_THROW(i_ent::DEColor color(-1), std::invalid_argument);
+    EXPECT_THROW(i_ent::DEColor color(-1), igesio::DataFormatError);
 
     // 範囲外の値 (9以上) は無効
-    EXPECT_THROW(i_ent::DEColor color(9), std::invalid_argument);
+    EXPECT_THROW(i_ent::DEColor color(9), igesio::DataFormatError);
 }
 
 

@@ -669,7 +669,7 @@ bool CurveOnSurface::SetBaseCurve(const std::shared_ptr<const ICurve>& base_curv
                 // B(t)がD (surf_bbox) 内にあるか確認
                 Vector3d uv = {(*pt_opt).x(), (*pt_opt).y(), 0.0};
                 if (!surf_bbox.Contains(uv)) {
-                    throw std::invalid_argument(
+                    throw igesio::EntityValueError(
                             "CurveOnAParametricSurface: Base curve is not defined "
                             "within the parameter domain D: {(u,v) | u in ["
                             + std::to_string(umin) + ", " + std::to_string(umax)

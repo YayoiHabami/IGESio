@@ -9,6 +9,8 @@
 
 #include <memory>
 
+#include "igesio/common/errors.h"
+
 namespace {
 
 namespace i_ent = igesio::entities;
@@ -30,8 +32,8 @@ DELevel::DELevel(const int value)
 
 void DELevel::SetLevelNumber(const int value) {
     if (value < 0) {
-        throw std::invalid_argument("Level number must be non-negative: "
-                                    + std::to_string(value));
+        throw igesio::DataFormatError("Level number must be non-negative: "
+                                      + std::to_string(value));
     }
     level_number_ = value;
     if (level_number_ == 0) {

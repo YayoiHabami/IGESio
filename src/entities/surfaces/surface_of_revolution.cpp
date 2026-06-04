@@ -434,7 +434,7 @@ void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatri
 
 void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double end_angle) {
     if (!(0.0 <= start_angle && start_angle < end_angle && end_angle <= 2.0 * kPi)) {
-        throw std::invalid_argument("Invalid angles: Require 0 <= θstart < θend <= 2*pi");
+        throw igesio::EntityValueError("Invalid angles: Require 0 <= θstart < θend <= 2*pi");
     }
     start_angle_ = start_angle;
     end_angle_ = end_angle;

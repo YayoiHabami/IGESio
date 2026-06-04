@@ -58,7 +58,7 @@ TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
     auto start_pt_opt = directrix->TryGetDefinedStartPoint();
     if (start_pt_opt.has_value()) {
         if (i_num::IsApproxEqual(start_pt_opt.value(), location_vector)) {
-            throw std::invalid_argument("Directrix curve's start point and "
+            throw igesio::EntityValueError("Directrix curve's start point and "
                 "location vector of TabulatedCylinder cannot be the same.");
         }
     }
@@ -81,7 +81,7 @@ TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
             "Directrix curve of TabulatedCylinder must have a valid start point.");
     }
     if (i_num::IsApproxZero((length * direction).norm())) {
-        throw std::invalid_argument(
+        throw igesio::EntityValueError(
             "Direction vector of TabulatedCylinder cannot be zero vector.");
     }
 
@@ -346,7 +346,7 @@ void TabulatedCylinder::SetLocationVector(const Vector3d& location_vector) {
     auto start_pt_opt = GetDirectrix()->TryGetDefinedStartPoint();
     if (start_pt_opt.has_value()) {
         if (i_num::IsApproxEqual(start_pt_opt.value(), location_vector)) {
-            throw std::invalid_argument("Directrix curve's start point and "
+            throw igesio::EntityValueError("Directrix curve's start point and "
                 "location vector of TabulatedCylinder cannot be the same.");
         }
     }
@@ -360,7 +360,8 @@ Vector3d TabulatedCylinder::GetLocationVector() const {
 
 void TabulatedCylinder::SetDirection(const Vector3d& direction, const double length) {
     if (i_num::IsApproxZero((length * direction).norm())) {
-        throw std::invalid_argument("Direction vector of TabulatedCylinder cannot be zero vector.");
+        throw igesio::EntityValueError(
+            "Direction vector of TabulatedCylinder cannot be zero vector.");
     }
 
     // 曲線の始点とlocation_vectorが一致する場合はエラー
@@ -368,7 +369,7 @@ void TabulatedCylinder::SetDirection(const Vector3d& direction, const double len
     if (start_pt_opt.has_value()) {
         Vector3d new_location_vector = start_pt_opt.value() + direction * length;
         if (i_num::IsApproxEqual(start_pt_opt.value(), new_location_vector)) {
-            throw std::invalid_argument("Directrix curve's start point and "
+            throw igesio::EntityValueError("Directrix curve's start point and "
                 "location vector of TabulatedCylinder cannot be the same.");
         }
         location_vector_ = new_location_vector;

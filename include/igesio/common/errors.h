@@ -18,7 +18,7 @@
  * ├── FileFormatError          (ファイル構文・構造エラー)
  * │   ├── LineFormatError          (行の形式エラー)
  * │   ├── SectionFormatError       (セクション形式エラー)
- * │   └── DataFormatError          (DE/PDレコードの構造不整合)
+ * │   └── DataFormatError          (DE/PDレコードの構造不整合、DEフィールドの値域違反など)
  * │
  * ├── EntityDataError          (エンティティ構築データの不正)
  * │   ├── EntityParameterError     (パラメータ数不足・構造不正)
@@ -293,8 +293,8 @@ class SectionFormatError : public FileFormatError {
 
 /// @brief データ形式エラー
 /// @note DE/PDレコードの構造不整合（重複DEポインタ・レコード欠落・
-///       レコード数不正等）に限定して使用する. エンティティ構築時の
-///       データ不正にはEntityDataError系を使用すること.
+///       レコード数不正等）、DEフィールドの値域違反などに限定して使用する.
+///       エンティティ構築時のデータ不正にはEntityDataError系を使用すること.
 class DataFormatError : public FileFormatError {
  public:
     /// @brief データ形式エラーを初期化する

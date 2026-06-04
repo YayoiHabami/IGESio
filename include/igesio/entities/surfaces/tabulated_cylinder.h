@@ -111,7 +111,7 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @param direction 母線の方向ベクトル (単位ベクトル)
     /// @param length 母線の長さ (directionの大きさ)
     /// @throw std::invalid_argument directrixがnullptrの場合
-    /// @throw std::invalid_argument length*directionがゼロベクトルの場合
+    /// @throw igesio::EntityValueError length*directionがゼロベクトルの場合
     TabulatedCylinder(const std::shared_ptr<ICurve>&,
                       const Vector3d&, const double);
 
@@ -139,7 +139,7 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @brief 母線の方向ベクトルを設定する
     /// @param direction 母線の方向ベクトル
     /// @param length 母線の長さ (directionの大きさ)
-    /// @throw std::invalid_argument length*directionがゼロベクトルの場合
+    /// @throw igesio::EntityValueError length*directionがゼロベクトルの場合
     /// @note lengthのデフォルト値は1.0であるため、directionに単位ベクトル以外を
     ///       指定した場合は、lengthを省略できる
     void SetDirection(const Vector3d&, const double = 1.0);

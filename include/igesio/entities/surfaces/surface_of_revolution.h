@@ -128,6 +128,8 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     /// @brief 回転範囲を変更する
     /// @param start_angle 回転の開始角度 [rad]
     /// @param end_angle 回転の終了角度 [rad]
+    /// @throw igesio::EntityValueError 0 <= start_angle < end_angle <= 2*pi
+    ///        を満たさない場合
     void SetAngleRange(const double = 0.0, const double = 2.0 * kPi);
 
     /// @brief 回転軸を取得する

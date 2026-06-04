@@ -14,6 +14,7 @@
 #include <optional>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/entities/curves/nurbs_algorithms.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/line.h"
@@ -95,7 +96,7 @@ TEST(ApproximateWithNurbsFromPointsTest, InvalidInput_TooFewPoints) {
         std::invalid_argument);
 }
 
-/// @brief 全点が同一座標（弦長ゼロ）の場合は invalid_argument
+/// @brief 全点が同一座標（弦長ゼロ）の場合は ComputationError
 /// @note degree=3 のデフォルトでは k_min+1=4 点が必要なため、4点以上で試験する
 TEST(ApproximateWithNurbsFromPointsTest, InvalidInput_AllSamePoint) {
     const std::vector<Vector3d> same = {
@@ -103,7 +104,7 @@ TEST(ApproximateWithNurbsFromPointsTest, InvalidInput_AllSamePoint) {
         {1.0, 2.0, 3.0}, {1.0, 2.0, 3.0}};
     EXPECT_THROW(
         i_ent::ApproximateWithNurbs(same),
-        std::invalid_argument);
+        igesio::ComputationError);
 }
 
 /// @brief degree に対して点数が不足している場合は invalid_argument
