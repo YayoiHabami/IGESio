@@ -115,7 +115,7 @@ class TrimmedSurface : public EntityBase, public virtual IRestrictedSurface {
      */
 
     /// @brief トリミング対象の曲面を取得する
-    /// @throw std::runtime_error 曲面が未設定の場合
+    /// @throw igesio::ReferenceError 曲面が未設定の場合
     std::shared_ptr<const ISurface> GetSurface() const;
 
     /// @brief トリミング対象の曲面を設定する

@@ -160,3 +160,54 @@ TEST(RationalBSplineSurface, KnotRangeOutside_IsValidWithWarning) {
     }
     EXPECT_TRUE(has_warning);
 }
+
+
+
+/**
+ * エラーケース: コンストラクタの例外型
+ */
+
+// 境界: パラメータ数が最小値13のすぐ外 (12個) はEntityParameterError
+TEST(RationalBSplineSurfaceErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenTooFewParams) {
+    auto param = igesio::IGESParameterVector{
+        1, 1, 1, 1,                     // K1, K2, M1, M2
+        true, true, false, true, true,  // PROP1-5
+        0., 0., 1.                      // 12個目で打ち切り
+    };
+    EXPECT_THROW(NSurface surf(param), igesio::EntityParameterError);
+}
+
+// K1/M1から計算した必要数に満たない場合もEntityParameterError
+TEST(RationalBSplineSurfaceErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenInsufficientForDegrees) {
+    // 先頭13個のみ (K1=K2=M1=M2=1の必要数37に対して不足)
+    auto param = igesio::IGESParameterVector{
+        1, 1, 1, 1,                     // K1, K2, M1, M2
+        true, true, false, true, true,  // PROP1-5
+        0., 0., 1., 1.                  // 13個 (最小数ちょうど)
+    };
+    EXPECT_THROW(NSurface surf(param), igesio::EntityParameterError);
+}
+
+// 制御点数K1/K2が負の場合はEntityValueError (パラメータ数ではなく値の制約違反)
+TEST(RationalBSplineSurfaceErrorTest,
+     Constructor_ThrowsEntityValueErrorWhenControlPointCountIsNegative) {
+    auto param = igesio::IGESParameterVector{
+        -1, 1, 1, 1,                    // K1=-1 (負値)
+        true, true, false, true, true,  // PROP1-5
+        0., 0., 1., 1.                  // 計13個
+    };
+    EXPECT_THROW(NSurface surf(param), igesio::EntityValueError);
+}
+
+// 次数M1/M2が0の場合はEntityValueError
+TEST(RationalBSplineSurfaceErrorTest,
+     Constructor_ThrowsEntityValueErrorWhenDegreeIsZero) {
+    auto param = igesio::IGESParameterVector{
+        1, 1, 0, 1,                     // M1=0
+        true, true, false, true, true,  // PROP1-5
+        0., 0., 1., 1.                  // 計13個
+    };
+    EXPECT_THROW(NSurface surf(param), igesio::EntityValueError);
+}

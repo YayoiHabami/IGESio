@@ -26,6 +26,7 @@
 #include <cmath>
 #include <memory>
 
+#include "igesio/common/errors.h"
 #include "igesio/common/validation_result.h"
 #include "igesio/numerics/matrix.h"
 #include "igesio/entities/transformations/transformation_matrix.h"
@@ -515,4 +516,24 @@ TEST(TransformationMatrixReferenceTest,
     // b -> a をOverwriteTransformationMatrixで設定 → 循環のため棄却
     EXPECT_FALSE(tm_b->OverwriteTransformationMatrix(tm_a));
     EXPECT_EQ(tm_b->GetTransformationMatrix().GetPointer(), nullptr);
+}
+
+
+
+/**
+ * エラーケース: コンストラクタの例外型
+ */
+
+// 境界: パラメータ数が最小値12のすぐ外 (11個) はEntityParameterError
+TEST(TransformationMatrixErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenTooFewParams) {
+    const auto param = igesio::IGESParameterVector{
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0  // 11個 (T3が欠落)
+    };
+    EXPECT_THROW(TransformationMatrix tm(
+        i_ent::RawEntityDE::ByDefault(
+            i_ent::EntityType::kTransformationMatrix),
+        param), igesio::EntityParameterError);
 }

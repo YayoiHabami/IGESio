@@ -78,7 +78,7 @@ size_t RuledSurface::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 4) {
-        throw std::runtime_error(
+        throw igesio::EntityParameterError(
             "Insufficient parameters for RuledSurface entity.");
     }
 
@@ -89,7 +89,7 @@ size_t RuledSurface::SetMainPDParameters(const pointer2ID& de2id) {
         curve2_ = PointerContainer<false, ICurve>(
                 GetObjectIDFromParameters(pd, 1, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError("Failed to set curve pointers "
+        throw igesio::ReferenceError("Failed to set curve pointers "
             "in RuledSurface entity: " + std::string(e.what()));
     }
 
@@ -285,7 +285,7 @@ i_num::BoundingBox RuledSurface::GetDefinedBoundingBox() const {
 std::shared_ptr<const i_ent::ICurve> RuledSurface::GetCurve1() const {
     auto ptr = curve1_.TryGetEntity<ICurve>();
     if (!ptr) {
-        throw std::runtime_error("Curve1 pointer is not set or not an ICurve.");
+        throw igesio::ReferenceError("Curve1 pointer is not set or not an ICurve.");
     }
     return ptr.value();
 }
@@ -310,7 +310,7 @@ void RuledSurface::SetCurve1(const std::shared_ptr<ICurve>& curve) {
 std::shared_ptr<const i_ent::ICurve> RuledSurface::GetCurve2() const {
     auto ptr = curve2_.TryGetEntity<ICurve>();
     if (!ptr) {
-        throw std::runtime_error("Curve2 pointer is not set or not an ICurve.");
+        throw igesio::ReferenceError("Curve2 pointer is not set or not an ICurve.");
     }
     return ptr.value();
 }

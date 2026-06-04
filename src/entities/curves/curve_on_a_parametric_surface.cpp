@@ -48,7 +48,7 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     for (const auto& uv : vertices) {
         auto pt_opt = surface->TryGetPointAt(uv.x(), uv.y());
         if (!pt_opt) {
-            throw std::runtime_error("CurveOnAParametricSurface: Failed to project "
+            throw igesio::ComputationError("CurveOnAParametricSurface: Failed to project "
                     "base curve point onto surface.");
         }
         projected_vertices.push_back(pt_opt.value());
@@ -203,7 +203,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 5) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
                 "CurveOnAParametricSurface: Insufficient number of parameters.");
     }
 
@@ -215,7 +215,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
         surface_ = PointerContainer<false, ISurface>(
                 GetObjectIDFromParameters(pd, 1, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Invalid surface reference."
                 + std::string(e.what()));
     }
@@ -229,7 +229,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
         base_curve_ = PointerContainer<false, ICurve>(
                 GetObjectIDFromParameters(pd, 2, de2id, /*allow_unset_id=*/true));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Invalid base curve reference."
                 + std::string(e.what()));
     }
@@ -239,7 +239,7 @@ size_t CurveOnSurface::SetMainPDParameters(const pointer2ID& de2id) {
         curve_ = PointerContainer<false, ICurve>(
                 GetObjectIDFromParameters(pd, 3, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Invalid curve reference."
                 + std::string(e.what()));
     }
@@ -498,7 +498,7 @@ i_num::BoundingBox CurveOnSurface::GetDefinedBoundingBox() const {
 std::shared_ptr<const i_ent::ISurface> CurveOnSurface::GetSurface() const {
     auto surf_opt = surface_.TryGetEntity<ISurface>();
     if (!surf_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Surface pointer is not set or invalid.");
     }
     return surf_opt.value();
@@ -507,7 +507,7 @@ std::shared_ptr<const i_ent::ISurface> CurveOnSurface::GetSurface() const {
 std::shared_ptr<const i_ent::ICurve> CurveOnSurface::GetBaseCurve() const {
     auto curve_opt = base_curve_.TryGetEntity<ICurve>();
     if (!curve_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Base curve pointer is not set or invalid.");
     }
     return curve_opt.value();
@@ -516,7 +516,7 @@ std::shared_ptr<const i_ent::ICurve> CurveOnSurface::GetBaseCurve() const {
 std::shared_ptr<const i_ent::ICurve> CurveOnSurface::GetCurve() const {
     auto curve_opt = curve_.TryGetEntity<ICurve>();
     if (!curve_opt) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
                 "CurveOnAParametricSurface: Curve pointer is not set or invalid.");
     }
     return curve_opt.value();
@@ -669,7 +669,7 @@ bool CurveOnSurface::SetBaseCurve(const std::shared_ptr<const ICurve>& base_curv
                 // B(t)がD (surf_bbox) 内にあるか確認
                 Vector3d uv = {(*pt_opt).x(), (*pt_opt).y(), 0.0};
                 if (!surf_bbox.Contains(uv)) {
-                    throw std::invalid_argument(
+                    throw igesio::EntityValueError(
                             "CurveOnAParametricSurface: Base curve is not defined "
                             "within the parameter domain D: {(u,v) | u in ["
                             + std::to_string(umin) + ", " + std::to_string(umax)

@@ -81,14 +81,15 @@ for (const auto& [id, entity] : data.GetEntities()) {
 }
 
 // IGESファイルの書き出し
-// 未対応のエンティティが含まれている場合DataFormatError例外が投げられる
+// 書き出しに失敗した場合 (未対応のエンティティが含まれている場合等)、
+// IGESioError派生の例外が投げられる
 try {
     auto success = igesio::WriteIges(data, "path/to/output.igs");
     if (!success) {
         std::cerr << "Failed to write IGES file." << std::endl;
     }
-} catch (const igesio::DataFormatError& e) {
-    std::cerr << "Data format error: " << e.what() << std::endl;
+} catch (const igesio::IGESioError& e) {
+    std::cerr << "IGES error: " << e.what() << std::endl;
 }
 ```
 

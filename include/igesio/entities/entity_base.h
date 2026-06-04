@@ -105,7 +105,8 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw std::bat_variant_access parametersの型が不正な場合
     /// @note 例えばCircular Arc Entity (Type 100) では、計7つのパラメータ
     ///       (インデックス0から6) がエンティティを定義するためのパラメータとして
@@ -129,7 +130,8 @@ class EntityBase : public virtual IEntityIdentifier {
 
     /// @brief PDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -152,7 +154,7 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @param entity_type エンティティのタイプ
     /// @param parameters PDレコードのパラメータ
     /// @param de2id DEポインターとIDのマッピング
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
     /// @note de2idを空のままにした場合、parameters側で指定されている
@@ -185,7 +187,7 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
     /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ

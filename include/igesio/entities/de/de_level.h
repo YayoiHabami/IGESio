@@ -45,7 +45,7 @@ class DELevel : public DEFieldWrapper<IDefinitionLevelsProperty> {
 
     /// @brief レベル番号を設定する
     /// @param value レベル番号
-    /// @throw std::invalid_argument valueが0未満の場合
+    /// @throw igesio::DataFormatError valueが0未満の場合
     void SetLevelNumber(const int);
 
     /// @brief 値を取得する

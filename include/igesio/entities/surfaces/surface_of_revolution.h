@@ -54,7 +54,8 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が不正な場合
+    /// @throw igesio::EntityParameterError parametersの数が不正な場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters(const pointer2ID& de2id) override;
 
@@ -79,7 +80,8 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -90,7 +92,8 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
 
     /// @brief コンストラクタ
     /// @param parameters PDレコードのパラメータ
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -125,15 +128,17 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     /// @brief 回転範囲を変更する
     /// @param start_angle 回転の開始角度 [rad]
     /// @param end_angle 回転の終了角度 [rad]
+    /// @throw igesio::EntityValueError 0 <= start_angle < end_angle <= 2*pi
+    ///        を満たさない場合
     void SetAngleRange(const double = 0.0, const double = 2.0 * kPi);
 
     /// @brief 回転軸を取得する
     /// @return 回転軸 (Lineエンティティへのポインタ)
-    /// @throw std::runtime_error 回転軸が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 回転軸が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const Line> GetAxis() const;
     /// @brief 回転させる曲線 (母線) を取得する
     /// @return 回転させる曲線 (ICurveを継承したエンティティへのポインタ)
-    /// @throw std::runtime_error 回転させる曲線が未設定の場合、ポインタが未設定の場合
+    /// @throw igesio::ReferenceError 回転させる曲線が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ICurve> GetGeneratrix() const;
     /// @brief 回転の開始/終了角度を取得する
     /// @return `{start_angle, end_angle}`の形式で回転の開始/終了角度 [rad] を返す

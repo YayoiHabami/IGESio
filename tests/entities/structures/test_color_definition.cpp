@@ -10,7 +10,7 @@
  *   （読み込み用コンストラクタ）における Color Number の正規化挙動
  *
  * TODO: Color Number が 8 を超える値（範囲外）のケースは、DEColor の構築時点で
- *       std::invalid_argument を送出する既存挙動のため、本エンティティの正規化対象外。
+ *       igesio::DataFormatError を送出する既存挙動のため、本エンティティの正規化対象外。
  *       >8 の正規化を行う場合は別途 DEColor/EntityBase 側の対応が必要。
  * TODO: Color Number が負値（Color Definition への参照ポインタ）のケースは
  *       Type 314 では非現実的なため未カバー。

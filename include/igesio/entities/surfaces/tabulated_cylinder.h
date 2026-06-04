@@ -53,7 +53,8 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @brief エンティティのPDレコードのパラメータを設定する
     /// @param de2id DEポインターとIDのマッピング
     /// @return 設定したパラメータの終了インデックス
-    /// @throw igesio::DataFormatError parametersの数が不正な場合
+    /// @throw igesio::EntityParameterError parametersの数が不正な場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw std::bad_variant_access parametersの型が不正な場合
     size_t SetMainPDParameters(const pointer2ID& de2id) override;
 
@@ -78,7 +79,8 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -89,7 +91,8 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
 
     /// @brief コンストラクタ
     /// @param parameters PDレコードのパラメータ
-    /// @throw igesio::DataFormatError parametersのいずれかが正しくない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw igesio::ReferenceError 参照先エンティティの解決に失敗した場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合
@@ -108,7 +111,7 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @param direction 母線の方向ベクトル (単位ベクトル)
     /// @param length 母線の長さ (directionの大きさ)
     /// @throw std::invalid_argument directrixがnullptrの場合
-    /// @throw std::invalid_argument length*directionがゼロベクトルの場合
+    /// @throw igesio::EntityValueError length*directionがゼロベクトルの場合
     TabulatedCylinder(const std::shared_ptr<ICurve>&,
                       const Vector3d&, const double);
 
@@ -124,7 +127,7 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     void SetDirectrix(const std::shared_ptr<ICurve>&);
     /// @brief 準線 C(t) を取得する
     /// @return 準線 C(t) (ICurveを継承したエンティティへのポインタ)
-    /// @throw std::runtime_error 準線が設定されていない場合
+    /// @throw igesio::ReferenceError 準線が設定されていない場合
     std::shared_ptr<const ICurve> GetDirectrix() const;
 
     /// @brief 母線の位置ベクトルを設定する
@@ -136,7 +139,7 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @brief 母線の方向ベクトルを設定する
     /// @param direction 母線の方向ベクトル
     /// @param length 母線の長さ (directionの大きさ)
-    /// @throw std::invalid_argument length*directionがゼロベクトルの場合
+    /// @throw igesio::EntityValueError length*directionがゼロベクトルの場合
     /// @note lengthのデフォルト値は1.0であるため、directionに単位ベクトル以外を
     ///       指定した場合は、lengthを省略できる
     void SetDirection(const Vector3d&, const double = 1.0);

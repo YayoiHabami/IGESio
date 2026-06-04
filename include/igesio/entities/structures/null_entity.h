@@ -39,7 +39,7 @@ class NullEntity : public EntityBase {
     /// @param de2id DEポインターとIDのマッピング
     /// @param iges_id 親のIGESDataのID. 指定した場合、エンティティのIDは
     ///        ReservedされたIDを使用する.
-    /// @throw igesio::DataFormatError parametersの数が0でない場合
+    /// @throw igesio::EntityParameterError parametersの数が0でない場合
     /// @throw igesio::TypeConversionError parametersの型が不正な場合
     /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
     ///        ポインターの値がde2idに存在しない場合

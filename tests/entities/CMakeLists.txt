@@ -5,12 +5,15 @@ set(TEST_SOURCES
     de/test_raw_entity_de.cpp
     de/test_raw_entity_de_is_valid.cpp
     de/test_de_color.cpp
+    de/test_de_level.cpp
+    de/test_de_line_font_pattern.cpp
 
     # Parameter Data Section
     test_entity_parameter_data.cpp
 
     # Entity Base
     test_entity_base.cpp
+    test_pointer_container.cpp
 
     # Curves
     curves/test_i_curve.cpp

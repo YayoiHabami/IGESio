@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "igesio/common/errors.h"
 #include "igesio/common/id_generator.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 
@@ -217,7 +218,7 @@ class DEFieldWrapper {
                 }
                 return id_.ToInt();
             default:
-                throw std::logic_error("Unknown DEFieldValueType");
+                throw igesio::ImplementationError("Unknown DEFieldValueType");
         }
     }
 

@@ -61,7 +61,7 @@ class DEColor : public DEFieldWrapper<IColorDefinition> {
 
     /// @brief 色を指定するコンストラクタ
     /// @param value 色の値
-    /// @throw std::invalid_argument valueが無効な場合 (0未満または8より大きい)
+    /// @throw igesio::DataFormatError valueが無効な場合 (0未満または8より大きい)
     explicit DEColor(const int);
 
     /// @brief 色を指定するコンストラクタ

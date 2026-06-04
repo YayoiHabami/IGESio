@@ -11,6 +11,7 @@
 
 #include <memory>
 
+#include "igesio/common/errors.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 
 
@@ -84,11 +85,11 @@ class PointerContainer {
 
     /// @brief IEntityIdentifierからDerivedTypesへの変換コンストラクタ
     /// @param entity 変換元のIEntityIdentifierオブジェクト
-    /// @throws std::runtime_error dynamic_castに失敗した場合
+    /// @throws igesio::ReferenceError dynamic_castに失敗した場合
     /// @note dynamic_castを使用してIEntityIdentifierからDerivedTypesのいずれかに変換する
     explicit PointerContainer(const std::shared_ptr<const IEntityIdentifier>& entity) {
         if (!entity) {
-            throw std::runtime_error(
+            throw igesio::ReferenceError(
                     "Cannot convert null IEntityIdentifier to DerivedTypes");
         }
         bool success = false;
@@ -102,7 +103,7 @@ class PointerContainer {
         }(), ...);
 
         if (!success) {
-            throw std::runtime_error(
+            throw igesio::ReferenceError(
                     "Cannot convert IEntityIdentifier to any of the specified DerivedTypes");
         }
         id_ = entity->GetID();
@@ -111,7 +112,7 @@ class PointerContainer {
 
     /// @brief IEntityIdentifierからDerivedTypesへの変換コンストラクタ（非const版）
     /// @param entity 変換元のIEntityIdentifierオブジェクト
-    /// @throws std::runtime_error dynamic_castに失敗した場合
+    /// @throws igesio::ReferenceError dynamic_castに失敗した場合
     explicit PointerContainer(const std::shared_ptr<IEntityIdentifier>& entity)
         : PointerContainer(std::const_pointer_cast<const IEntityIdentifier>(entity)) {}
 
@@ -162,10 +163,10 @@ class PointerContainer {
 
     /// @brief 参照先エンティティのポインタをvariantとして取得する
     /// @return 参照先エンティティのポインタを保持するvariant
-    /// @throws std::runtime_error ポインタが設定されていない、または参照先が破棄されている場合
+    /// @throws igesio::ReferenceError ポインタが設定されていない、または参照先が破棄されている場合
     std::variant<std::shared_ptr<const DerivedTypes>...> GetEntityVariant() const {
         if (!IsPointerSet()) {
-            throw std::runtime_error("Pointer is not set or has expired.");
+            throw igesio::ReferenceError("Pointer is not set or has expired.");
         }
         return std::visit(
             [](const auto& ptr) -> std::variant<std::shared_ptr<const DerivedTypes>...> {
@@ -181,21 +182,21 @@ class PointerContainer {
     /// @brief 参照先エンティティを特定の型として取得する
     /// @tparam T 取得したい型
     /// @return 参照先エンティティのポインタ
-    /// @throws std::runtime_error ポインタが設定されていない、
+    /// @throws igesio::ReferenceError ポインタが設定されていない、
     ///         参照先が破棄されている、または型が一致しない場合
     template<typename T>
     std::shared_ptr<const T> GetEntity() const {
         if (!IsPointerSet()) {
-            throw std::runtime_error("Pointer is not set or has expired.");
+            throw igesio::ReferenceError("Pointer is not set or has expired.");
         }
         auto* ptr_ptr = std::get_if<PtrType<const T>>(&entity_);
         if (!ptr_ptr) {
-            throw std::runtime_error("Stored pointer is not of the requested type.");
+            throw igesio::ReferenceError("Stored pointer is not of the requested type.");
         }
         if constexpr (UseWeakPtr) {
             auto locked = ptr_ptr->lock();
             if (!locked) {
-                throw std::runtime_error("Referenced entity has been destroyed.");
+                throw igesio::ReferenceError("Referenced entity has been destroyed.");
             }
             return locked;
         } else {
@@ -205,7 +206,7 @@ class PointerContainer {
 
     /// @brief 参照先エンティティをIEntityIdentifierとして取得する
     /// @return 参照先エンティティのIEntityIdentifierポインタ
-    /// @throws std::runtime_error ポインタが設定されていない、または参照先が破棄されている場合
+    /// @throws igesio::ReferenceError ポインタが設定されていない、または参照先が破棄されている場合
     std::shared_ptr<const IEntityIdentifier> GetEntityAsIEntityIdentifier() const {
         return std::visit(
             [](const auto& ptr) -> std::shared_ptr<const IEntityIdentifier> {

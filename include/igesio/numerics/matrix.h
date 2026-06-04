@@ -35,6 +35,8 @@ constexpr double kPi = 3.14159265358979323846;
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
+#include "igesio/common/errors.h"
+
 namespace igesio {
 
 using Eigen::Dynamic;
@@ -111,7 +113,8 @@ using AngleAxisd = Eigen::AngleAxisd;
 /// @param b ベクトル2
 /// @param in_degrees 角度を度で取得する場合は`true`、ラジアンで取得する場合は`false`(デフォルト)
 /// @return ベクトルaとbのなす角
-/// @throw std::invalid_argument ベクトルのサイズが異なる場合、またはゼロベクトルが含まれる場合
+/// @throw std::invalid_argument ベクトルのサイズが異なる場合
+/// @throw igesio::ComputationError ゼロベクトルが含まれる場合
 template<typename DerivedA, typename DerivedB>
 double AngleBetween(const Eigen::MatrixBase<DerivedA>& a,
                     const Eigen::MatrixBase<DerivedB>& b,
@@ -120,7 +123,7 @@ double AngleBetween(const Eigen::MatrixBase<DerivedA>& a,
     double na = a.norm();
     double nb = b.norm();
     if (na == 0.0 || nb == 0.0) {
-        throw std::invalid_argument("Cannot compute angle with zero-length vector.");
+        throw igesio::ComputationError("Cannot compute angle with zero-length vector.");
     }
     // サイズが異なる場合は例外を投げる
     if (a.size() != b.size()) {
@@ -1044,10 +1047,10 @@ class Matrix {
     /// @brief スカラー除算
     /// @param scalar 除算するスカラー値
     /// @return 除算結果の行列
-    /// @throw std::invalid_argument ゼロ除算の場合
+    /// @throw igesio::ComputationError ゼロ除算の場合
     Matrix<T, N, M> operator/(T scalar) const {
         if (scalar == 0) {
-            throw std::invalid_argument("Division by zero");
+            throw igesio::ComputationError("Division by zero");
         }
 
         Matrix<T, N, M> result;
@@ -1064,10 +1067,10 @@ class Matrix {
     /// @brief スカラー除算代入
     /// @param scalar 除算するスカラー値
     /// @return 自身への参照
-    /// @throw std::invalid_argument ゼロ除算の場合
+    /// @throw igesio::ComputationError ゼロ除算の場合
     Matrix<T, N, M>& operator/=(T scalar) {
         if (scalar == 0) {
-            throw std::invalid_argument("Division by zero");
+            throw igesio::ComputationError("Division by zero");
         }
 
         for (size_t j = 0; j < cols(); ++j) {
@@ -1340,8 +1343,8 @@ class Matrix {
 
     /// @brief 正規化されたベクトルを返す
     /// @return 大きさが1のベクトル
-    /// @throw std::invalid_argument ゼロベクトルの正規化を試みた場合、
-    ///        または行列がベクトルでない場合
+    /// @throw igesio::ComputationError ゼロベクトルの正規化を試みた場合
+    /// @throw std::invalid_argument 行列がベクトルでない場合
     template<int M_ = M, int N_ = N>
     auto normalized() const -> std::enable_if_t<
             N_ == 1 || M_ == 1 || (N_ == Dynamic && M_ == Dynamic),
@@ -1352,7 +1355,7 @@ class Matrix {
 
         T norm_value = norm();
         if (norm_value == 0) {
-            throw std::invalid_argument("Cannot normalize a zero vector");
+            throw igesio::ComputationError("Cannot normalize a zero vector");
         }
 
         return (*this) / norm_value;
@@ -1510,6 +1513,7 @@ class Matrix {
     /// @return 逆行列
     /// @note 2x2, 3x3, 4x4行列のみサポート
     /// @throw std::invalid_argument 行列が正方行列でない場合
+    /// @throw igesio::ComputationError 行列が特異な場合
     Matrix<T, N, M> inverse() const {
         auto& m = *this;
         Matrix<T, N, M> result;
@@ -1520,7 +1524,7 @@ class Matrix {
 
         T det = determinant();
         if (det == 0) {
-            throw std::invalid_argument("Matrix is singular and cannot be inverted");
+            throw igesio::ComputationError("Matrix is singular and cannot be inverted");
         }
         if (rows() == 2 && cols() == 2) {
             result(0, 0) =  m(1, 1);
@@ -1985,7 +1989,8 @@ std::string ToString(const Matrix<T, N, M>& mat, bool transpose = false) {
 /// @param b ベクトル2
 /// @param in_degrees 角度を度で取得する場合は`true`、ラジアンで取得する場合は`false`(デフォルト)
 /// @return ベクトルaとbのなす角
-/// @throw std::invalid_argument ベクトルのサイズが異なる場合、またはゼロベクトルが含まれる場合
+/// @throw std::invalid_argument ベクトルのサイズが異なる場合
+/// @throw igesio::ComputationError ゼロベクトルが含まれる場合
 template<typename T, int N1, int N2>
 double AngleBetween(const Vector<T, N1>& a, const Vector<T, N2>& b,
                     bool in_degrees = false) {
@@ -1993,7 +1998,7 @@ double AngleBetween(const Vector<T, N1>& a, const Vector<T, N2>& b,
     double na = a.norm();
     double nb = b.norm();
     if (na == 0.0 || nb == 0.0) {
-        throw std::invalid_argument("Cannot compute angle with zero-length vector.");
+        throw igesio::ComputationError("Cannot compute angle with zero-length vector.");
     }
     // サイズが異なる場合は例外を投げる
     if (a.size() != b.size()) {

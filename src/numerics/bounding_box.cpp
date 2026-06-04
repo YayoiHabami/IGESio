@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/tolerance.h"
 
 namespace {
@@ -623,7 +624,7 @@ igesio::Matrix3d BoundingBox::GetWorldToLocalRotation() const {
 
     // 行列が特異でないかを確認
     if (std::abs(rot.determinant()) < kGeometryTolerance) {
-        throw std::runtime_error(
+        throw igesio::ComputationError(
             "BoundingBox: Cannot compute world-to-local rotation because "
             "the direction matrix is singular:\n" + ToString(rot));
     }

@@ -59,7 +59,7 @@ size_t Point::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 3) {
-        throw igesio::DataFormatError("Point must have at least 3 parameters.");
+        throw igesio::EntityParameterError("Point must have at least 3 parameters.");
     } else if (pd.size() == 3) {
         // subfigureが未定義
         return 3;
@@ -75,7 +75,7 @@ size_t Point::SetMainPDParameters(const pointer2ID& de2id) {
         subfigure_ = PointerContainer<false, ISubfigureDefinition>(
                 GetObjectIDFromParameters(pd, 3, de2id, true));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError(
+        throw igesio::ReferenceError(
             "Failed to set Subfigure Definition pointer: " + std::string(e.what()));
     }
 
@@ -191,8 +191,8 @@ void Point::SetSubfigure(const std::shared_ptr<ISubfigureDefinition>& subfigure)
 std::shared_ptr<const i_ent::ISubfigureDefinition> Point::GetSubfigure() const {
     auto ptr = subfigure_.TryGetEntity<i_ent::ISubfigureDefinition>();
     if (!ptr) {
-        throw std::runtime_error("Pointer of Subfigure Definition entity "
-                                 "is not set or invalid.");
+        throw igesio::ReferenceError("Pointer of Subfigure Definition entity "
+                                     "is not set or invalid.");
     }
     return ptr.value();
 }

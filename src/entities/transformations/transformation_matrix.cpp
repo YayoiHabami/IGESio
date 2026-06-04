@@ -48,7 +48,7 @@ TransMatrix::TransformationMatrix(const Matrix3d& rotation, const Vector3d& tran
     // 値の検証
     auto errors = ValidatePD();
     if (!errors.is_valid) {
-        throw igesio::DataFormatError("Invalid parameters for TransformationMatrix: " +
+        throw igesio::EntityValueError("Invalid parameters for TransformationMatrix: " +
                 errors.Message());
     }
 }
@@ -83,13 +83,13 @@ size_t TransMatrix::SetMainPDParameters(const pointer2ID& de2id) {
     // パラメータの数が12であることを確認
     auto& pd = pd_parameters_;
     if (pd.size() < 12) {
-        throw igesio::DataFormatError("TransformationMatrix requires at least 12 parameters");
+        throw igesio::EntityParameterError("TransformationMatrix requires at least 12 parameters");
     }
     auto form_number = GetFormNumber();
     // フォーム番号が0, 1, 10, 11, 12のいずれかであることを確認
     if (form_number != 0 && form_number != 1 &&
         form_number != 10 && form_number != 11 && form_number != 12) {
-        throw igesio::DataFormatError("Invalid TransformationMatrix form number."
+        throw igesio::EntityValueError("Invalid TransformationMatrix form number."
                                         " Must be 0, 1, 10, 11, or 12.");
     }
 

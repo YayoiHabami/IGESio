@@ -244,7 +244,7 @@ class IDGenerator {
                                      int, PairHash> reserved_ids_;
 
     /// @brief 新しいint型IDを生成する
-    /// @throw std::runtime_error 新しいint_idを生成できなかった場合
+    /// @throw igesio::ImplementationError 新しいint_idを生成できなかった場合
     /// @note 以下の3段階で新しいint_idを生成
     ///       ① 使用中の最大のint_id (int_id_map_のキーの最大値) + 1が
     ///         max_int_id_未満であればそれを採用
@@ -268,13 +268,13 @@ class IDGenerator {
 
     /// @brief 新しいObjectIDを作成する (IgesData, Assembly用)
     /// @param obj_type オブジェクトの種類 (kIgesDataまたはkAssembly)
-    /// @throw std::runtime_error IDを使用中のオブジェクトが多く、生成できなかった場合
+    /// @throw igesio::ImplementationError IDを使用中のオブジェクトが多く、生成できなかった場合
     /// @throw igesio::ImplementationError obj_typeがkIgesDataまたはkAssemblyでない場合
     static ObjectID Generate(const ObjectType);
     /// @brief 新しいObjectIDを作成する (Entity (in program), EntityGraphics, EntityView用)
     /// @param obj_type オブジェクトの種類 (kEntityNew、kEntityGraphicsまたはkEntityView)
     /// @param entity_type エンティティのタイプ
-    /// @throw std::runtime_error IDを使用中のオブジェクトが多く、生成できなかった場合
+    /// @throw igesio::ImplementationError IDを使用中のオブジェクトが多く、生成できなかった場合
     /// @throw igesio::ImplementationError obj_typeがkEntityNew、kEntityGraphics、
     ///        kEntityViewのいずれでもない場合
     static ObjectID Generate(const ObjectType, const uint16_t);
@@ -282,7 +282,7 @@ class IDGenerator {
     /// @param iges_id 読み込み元のIGESファイルに対応するIgesDataのObjectID
     /// @param entity_type エンティティのタイプ
     /// @param de_pointer DEレコードのシーケンス番号
-    /// @throw std::runtime_error IDを使用中のオブジェクトが多く、生成できなかった場合
+    /// @throw igesio::ImplementationError IDを使用中のオブジェクトが多く、生成できなかった場合
     /// @throw std::invalid_argument iges_idが未設定の場合、
     ///        またはiges_idに対応するオブジェクトがIgesDataでない場合
     static ObjectID Reserve(const ObjectID&, const uint16_t, const uint16_t);
@@ -290,7 +290,7 @@ class IDGenerator {
     /// @param iges_id 読み込み元のIGESファイルに対応するIgesDataのObjectID
     /// @param entity_type エンティティのタイプ
     /// @param de_pointer DEレコードのシーケンス番号
-    /// @throw std::runtime_error IDを使用中のオブジェクトが多く、生成できなかった場合
+    /// @throw igesio::ImplementationError IDを使用中のオブジェクトが多く、生成できなかった場合
     /// @throw std::invalid_argument 指定されたIDが予約されていない場合、
     ///        または参照するIdentifierがexpiredの場合
     static ObjectID GetReservedID(const ObjectID&, const uint16_t);

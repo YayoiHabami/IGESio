@@ -83,7 +83,7 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
     auto& pd = pd_parameters_;
 
     if (pd.size() < 4) {
-        throw igesio::DataFormatError(
+        throw igesio::EntityParameterError(
             "SurfaceOfRevolution must have at least 4 parameters");
     }
 
@@ -92,7 +92,7 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
         axis_ = PointerContainer<false, Line>(
             GetObjectIDFromParameters(pd, 0, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError("Failed to get Axis (Line) ID "
+        throw igesio::ReferenceError("Failed to get Axis (Line) ID "
             "from parameters: " + std::string(e.what()));
     }
 
@@ -101,7 +101,7 @@ size_t SurfaceOfRevolution::SetMainPDParameters(const pointer2ID& de2id) {
         generatrix_ = PointerContainer<false, ICurve>(
             GetObjectIDFromParameters(pd, 1, de2id));
     } catch (const std::exception& e) {
-        throw igesio::DataFormatError("Failed to get Generatrix (ICurve) ID "
+        throw igesio::ReferenceError("Failed to get Generatrix (ICurve) ID "
             "from parameters: " + std::string(e.what()));
     }
 
@@ -312,7 +312,7 @@ SurfaceOfRevolution::TryGetDefinedDerivatives(
 i_num::BoundingBox SurfaceOfRevolution::GetDefinedBoundingBox() const {
     // ポインタの確認
     if (!axis_.IsPointerSet() || !generatrix_.IsPointerSet()) {
-        throw std::runtime_error(
+        throw igesio::ReferenceError(
             "Cannot compute bounding box: Axis or Generatrix pointer is not set.");
     }
 
@@ -434,7 +434,7 @@ void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatri
 
 void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double end_angle) {
     if (!(0.0 <= start_angle && start_angle < end_angle && end_angle <= 2.0 * kPi)) {
-        throw std::invalid_argument("Invalid angles: Require 0 <= θstart < θend <= 2*pi");
+        throw igesio::EntityValueError("Invalid angles: Require 0 <= θstart < θend <= 2*pi");
     }
     start_angle_ = start_angle;
     end_angle_ = end_angle;
@@ -443,7 +443,7 @@ void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double e
 std::shared_ptr<const i_ent::Line> SurfaceOfRevolution::GetAxis() const {
     auto ptr = axis_.TryGetEntity<Line>();
     if (!ptr) {
-        throw std::runtime_error("Axis (Line) pointer is not set or invalid.");
+        throw igesio::ReferenceError("Axis (Line) pointer is not set or invalid.");
     }
     return ptr.value();
 }
@@ -451,7 +451,7 @@ std::shared_ptr<const i_ent::Line> SurfaceOfRevolution::GetAxis() const {
 std::shared_ptr<const i_ent::ICurve> SurfaceOfRevolution::GetGeneratrix() const {
     auto ptr = generatrix_.TryGetEntity<ICurve>();
     if (!ptr) {
-        throw std::runtime_error("Generatrix (ICurve) pointer is not set or invalid.");
+        throw igesio::ReferenceError("Generatrix (ICurve) pointer is not set or invalid.");
     }
     return ptr.value();
 }

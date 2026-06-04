@@ -31,6 +31,7 @@
 #include <optional>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/numerics/tolerance.h"
 #include "igesio/entities/curves/circular_arc.h"
@@ -679,4 +680,21 @@ TEST(CompositeCurveContinuityTest, LargeGap_IsValidWithWarning) {
         if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
     }
     EXPECT_TRUE(has_warning);
+}
+
+
+
+/**
+ * エラーケース: コンストラクタの例外型
+ */
+
+// 宣言された曲線数Nに対してポインタ数が不足する場合はEntityParameterError
+TEST(CompositeCurveErrorTest,
+     Constructor_ThrowsEntityParameterErrorWhenCurveCountExceedsParams) {
+    // N=3と宣言するが曲線ポインタは2個のみ
+    const auto param = igesio::IGESParameterVector{3, 1, 2};
+
+    EXPECT_THROW(CompositeCurve cc(
+        i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kCompositeCurve),
+        param), igesio::EntityParameterError);
 }

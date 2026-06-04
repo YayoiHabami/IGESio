@@ -51,7 +51,7 @@ MinimizeScalarResult MinimizeScalar(
 /// @param maxiter 最大反復回数
 /// @return 求根結果tの値 (区間中点)
 /// @throws std::invalid_argument 区間端で符号が同じ場合
-/// @throws std::runtime_error 最大反復回数内に収束しなかった場合
+/// @throws igesio::ComputationError 最大反復回数内に収束しなかった場合
 double FindRootScalar(
     const std::function<double(double)>& func,
     double t_lower, double t_upper,
