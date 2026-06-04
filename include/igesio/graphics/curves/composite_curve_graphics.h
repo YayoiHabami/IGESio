@@ -27,8 +27,8 @@ class CompositeCurveGraphics
     /// @param gl OpenGL関数のラッパー
     /// @throw std::invalid_argument entityがnullptrの場合
     CompositeCurveGraphics(
-            const std::shared_ptr<const entities::CompositeCurve>,
-            const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::CompositeCurve>&,
+            const std::shared_ptr<IOpenGL>&);
 
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、

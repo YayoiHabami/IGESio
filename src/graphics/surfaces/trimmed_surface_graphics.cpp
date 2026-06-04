@@ -20,8 +20,8 @@
  */
 
 igesio::graphics::TrimmedSurfaceGraphics::TrimmedSurfaceGraphics(
-        const std::shared_ptr<const entities::TrimmedSurface> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::TrimmedSurface>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
           edge_buffer_(gl) {
     Synchronize();

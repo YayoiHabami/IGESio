@@ -72,8 +72,8 @@ class EntityGraphics : public IEntityGraphics {
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
     /// @throw std::invalid_argument entityがnullptrの場合
-    EntityGraphics(const std::shared_ptr<const T> entity,
-                   const std::shared_ptr<IOpenGL> gl,
+    EntityGraphics(const std::shared_ptr<const T>& entity,
+                   const std::shared_ptr<IOpenGL>& gl,
                    ShaderType shader_type,
                    bool use_entity_transform)
             : IEntityGraphics(gl, use_entity_transform),

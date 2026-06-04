@@ -145,7 +145,7 @@ void Assembly::ReindexInto(Assembly* root) {
  * エンティティの管理 (IgesDataから移設. 対象はこのノードのentities_のみ)
  */
 
-void Assembly::SetPointerIfUnset(std::shared_ptr<entities::EntityBase> entity) {
+void Assembly::SetPointerIfUnset(const std::shared_ptr<entities::EntityBase>& entity) {
     // nullptrチェック
     if (!entity) return;
 

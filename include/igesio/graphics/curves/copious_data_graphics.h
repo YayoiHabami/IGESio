@@ -33,8 +33,8 @@ class CopiousDataGraphics
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
     /// @throw std::invalid_argument entityがnullptrの場合
-    explicit CopiousDataGraphics(const std::shared_ptr<const entities::CopiousDataBase>,
-                                 const std::shared_ptr<IOpenGL>);
+    explicit CopiousDataGraphics(const std::shared_ptr<const entities::CopiousDataBase>&,
+                                 const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~CopiousDataGraphics();

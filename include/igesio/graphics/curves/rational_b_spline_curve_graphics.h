@@ -36,8 +36,8 @@ class RationalBSplineCurveGraphics
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがICurveを継承していない場合
     explicit RationalBSplineCurveGraphics(
-            const std::shared_ptr<const entities::RationalBSplineCurve>,
-                   const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::RationalBSplineCurve>&,
+                   const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~RationalBSplineCurveGraphics();

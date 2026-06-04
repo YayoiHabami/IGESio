@@ -238,7 +238,7 @@ bool TransMatrix::SetReference(
         return true;
     }
     // 自身(this)からtransformationへの参照が循環を生む場合は設定しない
-    if (i_ent::CreatesTransformationCycle(GetID(), transformation)) {
+    if (i_ent::CreatesTransformationCycle(GetID(), *transformation)) {
         return false;
     }
     // 新規エンティティではde_transformation_matrix_のid_がUnsetIDであり、

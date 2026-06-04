@@ -19,8 +19,8 @@ using igesio::graphics::CircularArcGraphics;
 
 
 CircularArcGraphics::CircularArcGraphics(
-        const std::shared_ptr<const entities::CircularArc> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::CircularArc>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kCircularArc, true) {
     Synchronize();
 }

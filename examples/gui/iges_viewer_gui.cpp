@@ -270,7 +270,7 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
     }
 }
 
-void IgesViewerGUI::AddEntity(std::shared_ptr<entities::EntityBase> entity) {
+void IgesViewerGUI::AddEntity(const std::shared_ptr<entities::EntityBase>& entity) {
     if (!entity->IsSupported()) {
         std::cerr << "Entity type " << ToString(entity->GetType())
                   << " is not supported." << std::endl;

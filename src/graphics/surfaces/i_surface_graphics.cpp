@@ -37,8 +37,8 @@ constexpr int kDefaultDiv = 20;
  */
 
 ISurfaceGraphics::ISurfaceGraphics(
-        const std::shared_ptr<const entities::ISurface> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::ISurface>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
           edge_buffer_(gl) {
     Synchronize();

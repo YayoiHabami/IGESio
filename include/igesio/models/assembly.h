@@ -181,7 +181,7 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @param[out] entity ポインタを設定するエンティティ
     /// @note entityが未登録のポインタを持ち、かつentities_がそれを持つ場合、
     ///       entityにそのポインタを設定する. 対象はこのノードのentities_のみ.
-    void SetPointerIfUnset(std::shared_ptr<entities::EntityBase>);
+    void SetPointerIfUnset(const std::shared_ptr<entities::EntityBase>&);
 
     /// @brief nodeが自身(this)のサブツリーに属すか (自身を含む)
     /// @param node 判定対象のノード
@@ -221,7 +221,7 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @throw std::invalid_argument entityがnullptrの場合
     template<typename T>
     std::enable_if_t<std::is_base_of_v<entities::EntityBase, T>, ObjectID>
-    AddEntity(const std::shared_ptr<T> entity) {
+    AddEntity(const std::shared_ptr<T>& entity) {
         // nullptrチェック
         if (!entity) {
             throw std::invalid_argument("Entity pointer is null");

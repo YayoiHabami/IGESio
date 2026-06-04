@@ -144,7 +144,7 @@ class IgesViewerGUI {
     void LoadIgesFile(const std::string& filename);
 
     /// @brief エンティティをレンダラと型別キャッシュへ追加する (表示対象のみ)
-    void AddEntity(std::shared_ptr<entities::EntityBase> entity);
+    void AddEntity(const std::shared_ptr<entities::EntityBase>& entity);
 
     /// @brief 型別表示フラグ(show_entity_)に従って描画への追加/除去を更新する
     void UpdateEntities();

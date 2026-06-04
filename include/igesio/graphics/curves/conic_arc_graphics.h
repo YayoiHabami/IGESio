@@ -28,8 +28,8 @@ class EllipseGraphics
     /// @throw std::invalid_argument entityがnullptrの場合、
     ///       entityがICurveを継承していない場合、
     ///       entityがConicType::kEllipseでない場合
-    explicit EllipseGraphics(const std::shared_ptr<const entities::ConicArc>,
-                             const std::shared_ptr<IOpenGL>);
+    explicit EllipseGraphics(const std::shared_ptr<const entities::ConicArc>&,
+                             const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~EllipseGraphics();

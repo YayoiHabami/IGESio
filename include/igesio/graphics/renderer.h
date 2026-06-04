@@ -188,7 +188,7 @@ class EntityRenderer {
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
     bool AddEntity(std::shared_ptr<const T> entity,
-                   const std::shared_ptr<const models::GraphicsGlobalParam>
+                   const std::shared_ptr<const models::GraphicsGlobalParam>&
                    global_param = nullptr,
                    const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;
@@ -201,9 +201,9 @@ class EntityRenderer {
         if (auto graphics = CreateEntityGraphics(ptr, gl_)) {
             // グローバルパラメータを設定
             if (global_param) {
-                graphics->SetGlobalParam(global_param);
+                graphics->SetGlobalParam(*global_param);
             } else {
-                graphics->SetGlobalParam(default_global_param_);
+                graphics->SetGlobalParam(*default_global_param_);
             }
 
             // 描画プロパティを設定
@@ -224,7 +224,7 @@ class EntityRenderer {
     template<typename T, typename = std::enable_if_t<std::is_base_of_v<
             entities::IEntityIdentifier, T>>>
     bool AddEntity(std::shared_ptr<T> entity,
-                   const std::shared_ptr<const models::GraphicsGlobalParam>
+                   const std::shared_ptr<const models::GraphicsGlobalParam>&
                    global_param = nullptr,
                    const MaterialProperty& material_property = MaterialProperty()) {
         if (!entity) return false;

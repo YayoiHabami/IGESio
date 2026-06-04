@@ -34,10 +34,10 @@ using igesio::Vector2d;
 
 /// @brief S(u,v) と B(t) から C(t) を生成する
 std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
-        const std::shared_ptr<const i_ent::ISurface>& surface,
-        const std::shared_ptr<const i_ent::ICurve>& base_curve) {
+        const i_ent::ISurface& surface,
+        const i_ent::ICurve& base_curve) {
     // 曲面上の曲線 C(t) を折れ線近似で生成
-    auto polygon = i_ent::ComputeApproximatePolygon(*base_curve, {}, {},
+    auto polygon = i_ent::ComputeApproximatePolygon(base_curve, {}, {},
                                                     kDiscretizationTol);
     const auto& vertices = polygon.vertices;
 
@@ -46,7 +46,7 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     // 各頂点を曲面上に射影
     std::vector<Vector3d> projected_vertices;
     for (const auto& uv : vertices) {
-        auto pt_opt = surface->TryGetPointAt(uv.x(), uv.y());
+        auto pt_opt = surface.TryGetPointAt(uv.x(), uv.y());
         if (!pt_opt) {
             throw igesio::ComputationError("CurveOnAParametricSurface: Failed to project "
                     "base curve point onto surface.");
@@ -55,14 +55,14 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     }
 
     // 端点接線を chain rule で計算: C'(t) = dS/du * u'(t) + dS/dv * v'(t)
-    auto [tmin, tmax] = base_curve->GetParameterRange();
+    auto [tmin, tmax] = base_curve.GetParameterRange();
     i_ent::NurbsEndpointTangents tangents;
     for (bool is_start : {true, false}) {
         double t = is_start ? tmin : tmax;
-        auto db_opt = base_curve->TryGetDerivatives(t, 1);
+        auto db_opt = base_curve.TryGetDerivatives(t, 1);
         if (!db_opt) continue;
         const auto& db = db_opt.value();
-        auto ds_opt = surface->TryGetDerivatives(db[0].x(), db[0].y(), 1);
+        auto ds_opt = surface.TryGetDerivatives(db[0].x(), db[0].y(), 1);
         if (!ds_opt) continue;
         const auto& ds = ds_opt.value();
         Vector3d tangent = ds(1, 0)*db[1].x() + ds(0, 1)*db[1].y();
@@ -557,7 +557,7 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
         auto surf = GetSurface();
 
         // 投射した頂点から3D曲線を生成
-        generated_curve = CreateCurveOnSurface(surf, base_curve);
+        generated_curve = CreateCurveOnSurface(*surf, *base_curve);
         // SubordinateEntitySwitchをkPhysicallyDependentに設定
         if (auto entity_base =
                 std::dynamic_pointer_cast<EntityBase>(generated_curve)) {
@@ -629,7 +629,7 @@ std::pair<std::shared_ptr<i_ent::CurveOnAParametricSurface>, std::shared_ptr<i_e
 i_ent::MakeCurveOnAParametricSurface(const std::shared_ptr<ISurface>& surface,
                                      const std::shared_ptr<ICurve>& base_curve) {
     // 曲線 C(t) を生成
-    auto curve = CreateCurveOnSurface(surface, base_curve);
+    auto curve = CreateCurveOnSurface(*surface, *base_curve);
     // CurveOnAParametricSurface エンティティを生成
     auto curve_on_surface = std::make_shared<CurveOnAParametricSurface>(
             surface, base_curve, curve);

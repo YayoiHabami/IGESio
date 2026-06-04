@@ -46,8 +46,8 @@ class TrimmedSurfaceGraphics
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
     explicit TrimmedSurfaceGraphics(
-            const std::shared_ptr<const entities::TrimmedSurface>,
-            const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::TrimmedSurface>&,
+            const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~TrimmedSurfaceGraphics() override;

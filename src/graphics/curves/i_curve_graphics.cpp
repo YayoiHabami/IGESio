@@ -22,8 +22,8 @@ using ICurveGraphics = igesio::graphics::ICurveGraphics;
 
 
 ICurveGraphics::ICurveGraphics(
-        const std::shared_ptr<const entities::ICurve> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::ICurve>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralCurve, false) {
     Synchronize();
 }

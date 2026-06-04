@@ -182,7 +182,7 @@ class IEntityGraphics {
     /// @param gl OpenGL関数のラッパー
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
-    explicit IEntityGraphics(const std::shared_ptr<IOpenGL>, bool);
+    explicit IEntityGraphics(const std::shared_ptr<IOpenGL>&, bool);
 
 
 
@@ -245,7 +245,8 @@ class IEntityGraphics {
 
     /// @brief 描画用のグローバルパラメータを設定する
     /// @param global_param 描画用のグローバルパラメータ
-    void SetGlobalParam(const std::shared_ptr<const models::GraphicsGlobalParam>);
+    /// @note 内部で調整済みのコピーを保持するため、引数の寿命には依存しない
+    void SetGlobalParam(const models::GraphicsGlobalParam&);
 
     /// @brief グローバル座標系への変換行列を設定する
     /// @param matrix グローバル座標系への変換行列

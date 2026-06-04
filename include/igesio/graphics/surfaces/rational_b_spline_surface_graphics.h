@@ -43,8 +43,8 @@ class RationalBSplineSurfaceGraphics
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがISurfaceを継承していない場合
     explicit RationalBSplineSurfaceGraphics(
-            const std::shared_ptr<const entities::RationalBSplineSurface>,
-            const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::RationalBSplineSurface>&,
+            const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~RationalBSplineSurfaceGraphics();

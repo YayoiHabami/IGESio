@@ -43,8 +43,8 @@ class ISurfaceGraphics
     /// @param gl OpenGL関数のラッパー
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがISurfaceを継承していない場合
-    explicit ISurfaceGraphics(const std::shared_ptr<const entities::ISurface>,
-                              const std::shared_ptr<IOpenGL>);
+    explicit ISurfaceGraphics(const std::shared_ptr<const entities::ISurface>&,
+                              const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~ISurfaceGraphics() override;

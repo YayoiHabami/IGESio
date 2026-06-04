@@ -26,7 +26,7 @@ using ShaderType = igesio::graphics::ShaderType;
  * コンストラクタ
  */
 
-IEntityGraphics::IEntityGraphics(const std::shared_ptr<i_graph::IOpenGL> gl,
+IEntityGraphics::IEntityGraphics(const std::shared_ptr<i_graph::IOpenGL>& gl,
                                  bool use_entity_transform)
         : gl_(gl), use_entity_transform_(use_entity_transform) {}
 
@@ -62,9 +62,9 @@ IEntityGraphics& IEntityGraphics::operator=(IEntityGraphics&& other) noexcept {
  */
 
 void IEntityGraphics::SetGlobalParam(
-        const std::shared_ptr<const models::GraphicsGlobalParam> global_param) {
+        const models::GraphicsGlobalParam& global_param) {
     // 編集のためにコピーを作成
-    auto copy = std::make_shared<models::GraphicsGlobalParam>(*global_param);
+    auto copy = std::make_shared<models::GraphicsGlobalParam>(global_param);
 
     if (copy->max_line_weight <= 1) {
         // 線の最大太さが1(多くのデフォルト)の場合、本ライブラリの仕様に合わせて拡張する

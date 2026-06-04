@@ -504,13 +504,13 @@ class EntityBase : public virtual IEntityIdentifier {
 /// @brief self_idのエンティティからtransformationへ参照を張ると、変換行列の
 ///        参照チェーン (ITransformation::GetRefTransformation) が循環するかを判定する
 /// @param self_id 参照元エンティティのID (新たに張る辺の始点)
-/// @param transformation 参照先の変換行列 (nullの場合は循環なしとみなす)
+/// @param transformation 参照先の変換行列
 /// @return 循環する場合はtrue
 /// @note DEフィールド7は単一ポインタのため参照構造は連結リストとなる.
 ///       transformationのチェーンを辿りself_idに戻れば循環と判定する.
 bool CreatesTransformationCycle(
         const ObjectID& self_id,
-        const std::shared_ptr<const ITransformation>& transformation);
+        const ITransformation& transformation);
 
 }  // namespace igesio::entities
 
