@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <igesio/reader.h>
@@ -627,37 +628,100 @@ void IgesViewerGUI::RenderAssemblyNode(models::Assembly& node) {
         for (const auto& child : node.GetChildAssemblies()) {
             if (child) RenderAssemblyNode(*child);
         }
-        for (const auto& id : node.GetEntityIDs(/*recursive=*/false)) {
-            RenderEntityRow(id);
+        // 同ノード内の他エンティティから参照されているIDの集合
+        // (参照先は参照元エンティティの子階層として表示するため、直下には並べない)
+        std::unordered_set<ObjectID> referenced;
+        for (const auto& pair : node.GetEntities()) {
+            if (!pair.second) continue;
+            for (const auto& ref : pair.second->GetReferencedEntityIDs()) {
+                referenced.insert(ref);
+            }
+        }
+        // 表示順をID昇順で安定させる (GetEntityIDsはunordered_map順のため)
+        auto ids = node.GetEntityIDs(/*recursive=*/false);
+        std::sort(ids.begin(), ids.end(),
+                  [](const ObjectID& a, const ObjectID& b) {
+                      return a.ToInt() < b.ToInt();
+                  });
+        for (const auto& id : ids) {
+            if (referenced.count(id) > 0) continue;
+            std::unordered_set<ObjectID> path;
+            RenderEntityNode(id, path);
         }
         ImGui::TreePop();
     }
     ImGui::PopID();
 }
 
-void IgesViewerGUI::RenderEntityRow(const ObjectID& id) {
-    auto& sel = scene_->ActiveSelection();
+void IgesViewerGUI::RenderEntityNode(const ObjectID& id,
+                                     std::unordered_set<ObjectID>& path) {
+    const auto children = ResolvedReferences(id);
     const std::string label = "[" + std::to_string(id.ToInt()) + "] "
             + GetEntityTypeString(id);
 
+    // DefaultOpenを付けないため、子階層はデフォルトで折りたたまれる
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow
+            | ImGuiTreeNodeFlags_SpanAvailWidth;
+    if (scene_->ActiveSelection().Contains(id)) {
+        flags |= ImGuiTreeNodeFlags_Selected;
+    }
+    if (children.empty()) {
+        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+
     ImGui::PushID(id.ToInt());
-    if (ImGui::Selectable(label.c_str(), sel.Contains(id))) {
-        if (ImGui::GetIO().KeyCtrl) {
-            // Ctrl: トグル (解除は常に可)
-            if (sel.Contains(id)) {
-                sel.Deselect(id);
-                selected_hit_positions_.erase(id);
-            } else {
-                scene_->TrySelectWithLock(sel, id);
-            }
-        } else {
-            sel.Clear();
-            selected_hit_positions_.clear();
-            scene_->TrySelectWithLock(sel, id);
+    const bool open = ImGui::TreeNodeEx(label.c_str(), flags);
+    // 矢印での開閉ではなく、行本体のクリックのみを選択として扱う
+    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+        HandleEntityRowClick(id);
+    }
+    if (open && !children.empty()) {
+        // 現在の再帰経路上のIDを除外し、循環参照による無限再帰を防ぐ
+        path.insert(id);
+        for (const auto& child : children) {
+            if (path.count(child) == 0) RenderEntityNode(child, path);
         }
-        needs_redraw_ = true;
+        path.erase(id);
+        ImGui::TreePop();
     }
     ImGui::PopID();
+}
+
+void IgesViewerGUI::HandleEntityRowClick(const ObjectID& id) {
+    auto& sel = scene_->ActiveSelection();
+    if (ImGui::GetIO().KeyCtrl) {
+        // Ctrl: トグル (解除は常に可)
+        if (sel.Contains(id)) {
+            sel.Deselect(id);
+            selected_hit_positions_.erase(id);
+        } else {
+            scene_->TrySelectWithLock(sel, id);
+        }
+    } else {
+        sel.Clear();
+        selected_hit_positions_.clear();
+        scene_->TrySelectWithLock(sel, id);
+    }
+    needs_redraw_ = true;
+}
+
+std::vector<igesio::ObjectID>
+IgesViewerGUI::ResolvedReferences(const ObjectID& id) const {
+    const auto* owner = scene_->Root().FindOwner(id);
+    if (owner == nullptr) return {};
+    const auto entity = owner->GetEntity(id);
+    if (!entity) return {};
+
+    // 未解決参照やツリー外のIDは子として表示しない. 同一エンティティを
+    // 複数パラメータで参照する場合があるため重複は除去する
+    std::vector<ObjectID> children;
+    std::unordered_set<ObjectID> seen;
+    for (const auto& ref : entity->GetReferencedEntityIDs()) {
+        if (!seen.insert(ref).second) continue;
+        if (scene_->Root().FindOwner(ref) == nullptr) continue;
+        children.push_back(ref);
+    }
+    return children;
 }
 
 void IgesViewerGUI::RenderNodeContextMenu(models::Assembly& node) {

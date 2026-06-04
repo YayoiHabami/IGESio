@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "igesio/graphics/core/gl_backend.h"
@@ -174,8 +175,17 @@ class IgesViewerGUI {
 
     /// @brief Assemblyノードを再帰的にツリー表示する
     void RenderAssemblyNode(models::Assembly& node);
-    /// @brief エンティティ行を表示し、クリックで選択する (Ctrlでトグル)
-    void RenderEntityRow(const ObjectID& id);
+    /// @brief エンティティとその参照先を再帰的にツリー表示する
+    /// @param id 表示するエンティティのID
+    /// @param path 現在の再帰経路上のID集合 (循環参照による無限再帰のガード用)
+    void RenderEntityNode(const ObjectID& id,
+                          std::unordered_set<ObjectID>& path);
+    /// @brief エンティティ行のクリックによる選択を処理する (Ctrlでトグル)
+    void HandleEntityRowClick(const ObjectID& id);
+    /// @brief ツリー内で解決できる参照先のIDを取得する (重複除去済み)
+    /// @param id 参照元エンティティのID
+    /// @return Outlinerで子階層として表示する参照先IDのリスト
+    std::vector<ObjectID> ResolvedReferences(const ObjectID& id) const;
     /// @brief Assemblyノードの右クリックコンテキストメニューを描画する
     void RenderNodeContextMenu(models::Assembly& node);
     /// @brief Inspectorの選択サマリ部を描画する
