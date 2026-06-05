@@ -74,20 +74,12 @@ std::shared_ptr<CircularArc> MakeCircle() {
 /// @brief CTYPE=3 (kCubic), H=0, NDIM=3, N=2 の区分定数スプライン
 /// @details C'=0 のため速度がゼロ. 非角点・非直線部での TryGetSignedCurvature は nullopt
 std::shared_ptr<ParametricSplineCurve> MakeDegree0Spline() {
-    const auto param = igesio::IGESParameterVector{
-        3, 0, 3, 2,
-        0.0, 1.0, 2.0,
-        0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0,
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0,
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0
-    };
-    return std::make_shared<ParametricSplineCurve>(param);
+    // セグメント1: 定数 (0,0,0)、セグメント2: 定数 (1,0,0)
+    igesio::Matrix34d seg2 = igesio::Matrix34d::Zero();
+    seg2(0, 0) = 1.0;
+    return i_ent::MakeParametricSplineCurve(
+        i_ent::ParametricSplineCurveType::kCubic, 0, {0.0, 1.0, 2.0},
+        {igesio::Matrix34d::Zero(), seg2});
 }
 
 }  // namespace

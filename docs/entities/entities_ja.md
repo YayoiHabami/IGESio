@@ -423,26 +423,21 @@ $$\begin{aligned}
     &s = u - T(i)
 \end{aligned}$$
 
-　以下のコード例は、4つの区間に分割された3次のパラメトリックスプライン曲線を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。コード例で使用したパラメータの詳細な値については、[examples/sample_curves.cpp](../../examples/sample_curves.cpp)の`CreateParametricSplineCurve`関数を参照してください。
+　以下のコード例は、4つの区間に分割された3次のパラメトリックスプライン曲線を生成します（図参照）。以下に示すように、ブレークポイントとセグメントごとの多項式係数を`MakeParametricSplineCurve`ファクトリ関数に渡してインスタンスを生成します（末端のTP値は自動計算されます）。コード例で使用したパラメータの詳細な値については、[examples/sample_curves.cpp](../../examples/sample_curves.cpp)の`CreateParametricSplineCurve`関数を参照してください。
 
 ```cpp
-auto param = igesio::IGESParameterVector{
-    6,     // CTYPE: B-Spline
-    3, 3,  // degree, NDIM (3D)
-    4,     // number of segments
-    0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
-     1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
-     0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
-     5.,     0.,    3.,   -2.,  // Az(1) ~ Dz(1)
-     // ...
-    -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
-     8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
-    11.5,    6.0,   0.0,   0.,  // Az(4) ~ Dz(4),
-    -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
-     8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
-    13.0,     6.0,  0.,   0.    // TPZ0 ~ TPZ3
-};
-auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
+const std::vector<double> breakpoints{0.0, 0.5, 1.0, 2.0, 2.25};
+std::vector<igesio::Matrix34d> coefficients(4);
+coefficients[0] <<  1.,     2.,   -5.,    1.,   // x: A(1) ~ D(1)
+                    0.,     2.,    3.,   -1.,   // y
+                    5.,     0.,    3.,   -2.;   // z
+// ... (coefficients[1], coefficients[2])
+coefficients[3] << -4.625, -2.25,  2.5,   8.,
+                    8.0,    2.0,  -3.0,   0.,
+                   11.5,    6.0,   0.0,   0.;
+
+auto spline_c = i_ent::MakeParametricSplineCurve(
+    i_ent::ParametricSplineCurveType::kBSpline, 3, breakpoints, coefficients);
 ```
 
 <img src="./images/parametric_spline_curve.png" width=400px alt="ParametricSplineCurve Example" />

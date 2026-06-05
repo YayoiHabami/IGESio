@@ -196,52 +196,33 @@ inline curve_vec CreateLines() {
 /// @brief Parametric Spline Curveエンティティの作成
 inline curve_vec CreateParametricSplineCurve() {
     TestCurve spline_c("3D parametric spline curve", 3);
-    auto param = igesio::IGESParameterVector{
-        6,     // CTYPE: B-Spline
-        3, 3,  // degree, NDIM (3D)
-        4,     // number of segments
-        0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
-         1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
-         0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
-         5.,     0.,    3.,   -2.,  // Az(1) ~ Dz(1)
-         0.875, -2.25, -3.5,   2.,  // Ax(2) ~ Dx(2)
-         1.625,  4.25,  1.5,  -1.,  // Ay(2) ~ Dy(2)
-         5.5,    1.5,   0.0,   2.,  // Az(2) ~ Dz(2)
-        -0.875, -4.25, -0.5,   1.,  // Ax(3) ~ Dx(3)
-         4.0,    5.0,   0.0,  -1.,  // Ay(3) ~ Dy(3)
-         6.5,    3.0,   3.0,  -1.,  // Az(3) ~ Dz(3)
-        -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
-         8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
-        11.5,    6.0,   0.0,   0.,  // Az(4) ~ Dz(4),
-        -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
-         8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
-        13.0,     6.0,  0.,   0.    // TPZ0 ~ TPZ3
-    };
-    spline_c.curve = std::make_shared<entities::ParametricSplineCurve>(param);
+    const std::vector<double> breakpoints{0.0, 0.5, 1.0, 2.0, 2.25};
+    std::vector<Matrix34d> coefficients(4);
+    coefficients[0] <<  1.,     2.,   -5.,    1.,   // x: A(1) ~ D(1)
+                        0.,     2.,    3.,   -1.,   // y
+                        5.,     0.,    3.,   -2.;   // z
+    coefficients[1] <<  0.875, -2.25, -3.5,   2.,
+                        1.625,  4.25,  1.5,  -1.,
+                        5.5,    1.5,   0.0,   2.;
+    coefficients[2] << -0.875, -4.25, -0.5,   1.,
+                        4.0,    5.0,   0.0,  -1.,
+                        6.5,    3.0,   3.0,  -1.;
+    coefficients[3] << -4.625, -2.25,  2.5,   8.,
+                        8.0,    2.0,  -3.0,   0.,
+                       11.5,    6.0,   0.0,   0.;
+    spline_c.curve = entities::MakeParametricSplineCurve(
+        entities::ParametricSplineCurveType::kBSpline, 3,
+        breakpoints, coefficients);
 
     TestCurve spline_c_2d("2D parametric spline curve", 3);
-    param = igesio::IGESParameterVector{
-        6,     // CTYPE: B-Spline
-        3, 2,  // degree, NDIM (2D)
-        4,     // number of segments
-        0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
-         1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
-         0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
-         0.,     0.,    0.,    0.,  // Az(1) ~ Dz(1)
-         0.875, -2.25, -3.5,   2.,  // Ax(2) ~ Dx(2)
-         1.625,  4.25,  1.5,  -1.,  // Ay(2) ~ Dy(2)
-         0.0,    0.0,   0.0,   0.,  // Az(2) ~ Dz(2)
-        -0.875, -4.25, -0.5,   1.,  // Ax(3) ~ Dx(3)
-         4.0,    5.0,   0.0,  -1.,  // Ay(3) ~ Dy(3)
-         0.0,    0.0,   0.0,   0.,  // Az(3) ~ Dz(3)
-        -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
-         8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
-         0.0,    0.0,   0.0,   0.,  // Az(4) ~ Dz(4),
-        -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
-         8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
-         0.0,     0.0,  0.,   0.    // TPZ0 ~ TPZ3
-    };
-    spline_c_2d.curve = std::make_shared<entities::ParametricSplineCurve>(param);
+    // x, y係数は3D版と同一で、z行をゼロにした平面 (NDIM=2) 版
+    auto coefficients_2d = coefficients;
+    for (auto& segment : coefficients_2d) {
+        segment.row(2).setZero();
+    }
+    spline_c_2d.curve = entities::MakeParametricSplineCurve(
+        entities::ParametricSplineCurveType::kBSpline, 3,
+        breakpoints, coefficients_2d, 2);
     spline_c_2d.Set2DInfo(true, true);
 
     return {spline_c, spline_c_2d};
