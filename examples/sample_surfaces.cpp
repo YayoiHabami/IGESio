@@ -189,8 +189,7 @@ ent_vec CreateTrimmedSurface() {
     auto closed_cons_bs = std::dynamic_pointer_cast<i_ent::EntityBase>(closed_cons);
 
     // Trimmed surface
-    auto trimmed_surf = std::make_shared<i_ent::TrimmedSurface>(nurbs_s);
-    trimmed_surf->AddInnerBoundary(closed_curve);
+    auto trimmed_surf = i_ent::MakeTrimmedSurface(nurbs_s, nullptr, {closed_curve});
     trimmed_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
 
     return {nurbs_s, nurbs_cc, closed_curve, closed_cons_bs, trimmed_surf};

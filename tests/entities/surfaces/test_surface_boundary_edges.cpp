@@ -94,7 +94,7 @@ std::shared_ptr<TrimmedSurface> BuildTrimmed(
         const std::vector<std::shared_ptr<i_ent::ICurve>>& inner_uv = {}) {
     std::shared_ptr<CurveOnAParametricSurface> outer142;
     if (outer_uv) outer142 = MakeBoundary142(base, outer_uv);
-    auto ts = std::make_shared<TrimmedSurface>(base, outer142);
+    auto ts = i_ent::MakeTrimmedSurface(base, outer142, {});
     for (const auto& iv : inner_uv) {
         ts->AddInnerBoundary(MakeBoundary142(base, iv));
     }

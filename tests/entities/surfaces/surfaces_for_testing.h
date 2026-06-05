@@ -188,7 +188,7 @@ inline surface_vec CreateTrimmedSurfaces() {
     auto base = CreateRationalBSplineSurfaces();
 
     TestSurface untrimmed("Trimmed Surface (untrimmed over freeform NURBS)");
-    untrimmed.surface = std::make_shared<entities::TrimmedSurface>(base[1].surface);
+    untrimmed.surface = entities::MakeTrimmedSurface(base[1].surface, nullptr, {});
 
     return {untrimmed};
 }

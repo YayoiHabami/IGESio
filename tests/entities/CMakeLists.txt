@@ -50,6 +50,7 @@ set(TEST_SOURCES
     surfaces/test_surface_of_revolution.cpp
     surfaces/test_tabulated_cylinder.cpp
     surfaces/test_trimmed_surface.cpp
+    surfaces/test_trimmed_surface_edit.cpp
     surfaces/test_surface_line_intersection.cpp
     surfaces/test_curve_surface_inversion.cpp
     surfaces/test_restricted_surface_mesh.cpp

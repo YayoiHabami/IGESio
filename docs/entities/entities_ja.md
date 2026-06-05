@@ -772,9 +772,8 @@ auto [inner_boundary, inner_cons] = i_ent::MakeCurveOnAParametricSurface(
         base_surface, circle_u_v);
 
 // 3. トリム済み曲面の構成
-// 外側境界にベース曲面のパラメータ矩形 D を使用する場合 (N1=0)
-auto trimmed_surf = std::make_shared<i_ent::TrimmedSurface>(base_surface);
-trimmed_surf->AddInnerBoundary(inner_boundary);
+// 外側境界にベース曲面のパラメータ矩形Dを使用する場合 (N1=0; nullptrを渡す)
+auto trimmed_surf = i_ent::MakeTrimmedSurface(base_surface, nullptr, {inner_boundary});
 
 // 有効定義域内であれば、ベース曲面の値を返す
 auto derivs = trimmed_surf->TryGetDerivatives(0.0, 0.0, 1); // 有効

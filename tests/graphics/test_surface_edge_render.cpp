@@ -50,7 +50,7 @@ using i_graph::ShaderType;
 ///       AssemblyへはEntityBase派生の具象型として追加するため、TrimmedSurfaceを返す.
 std::shared_ptr<i_ent::TrimmedSurface> MakeUntrimmedSurface() {
     auto base = i_test::CreateRationalBSplineSurfaces()[1].surface;  // freeform
-    return std::make_shared<i_ent::TrimmedSurface>(base);
+    return i_ent::MakeTrimmedSurface(base, nullptr, {});
 }
 
 }  // namespace

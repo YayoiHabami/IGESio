@@ -775,8 +775,7 @@ auto [inner_boundary, inner_cons] = i_ent::MakeCurveOnAParametricSurface(
 
 // 3. Construct the Trimmed Surface
 // Use the base surface's parameter rectangle D as the outer boundary (N1=0)
-auto trimmed_surf = std::make_shared<i_ent::TrimmedSurface>(base_surface);
-trimmed_surf->AddInnerBoundary(inner_boundary);
+auto trimmed_surf = i_ent::MakeTrimmedSurface(base_surface, nullptr, {inner_boundary});
 
 // If within the valid domain, it returns values from the base surface
 auto derivs = trimmed_surf->TryGetDerivatives(0.0, 0.0, 1); // Valid
