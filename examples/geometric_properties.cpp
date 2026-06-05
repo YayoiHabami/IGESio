@@ -15,6 +15,7 @@
 #include <igesio/entities/surfaces/rational_b_spline_surface.h>
 
 namespace i_ent = igesio::entities;
+using igesio::Matrix3Xd;
 using igesio::Vector3d;
 
 
@@ -26,22 +27,17 @@ using igesio::Vector3d;
 /// @brief Create a Rational B-Spline Curve for testing
 /// @return Shared pointer to the created Rational B-Spline Curve
 std::shared_ptr<i_ent::ICurve> CreateRationalBSplineCurve() {
-    // Create NURBS curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -4.0, -4.0,  0.0,    // control point P(0)
-        -1.5,  7.0,  3.5,    // control point P(1)
-         4.0, -3.0,  1.0,    // control point P(2)
-         4.0,  4.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-
-    return std::make_shared<i_ent::RationalBSplineCurve>(param);
+    // Create NURBS curve (4 control points, degree 3)
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+    cps.col(2) = Vector3d( 4.0, -3.0, 1.0);  // control point P(2)
+    cps.col(3) = Vector3d( 4.0,  4.0, 0.0);  // control point P(3)
+    // weights (all 1.0) and parameter range ([0,1]) are defaulted
+    return i_ent::MakeRationalBSplineCurve(
+        3,                                          // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 }
 
 /// @brief Main function for curves
@@ -123,58 +119,33 @@ void TestCurveGeometricProperties() {
  */
 
 std::shared_ptr<i_ent::ISurface> CreateRationalBSplineSurface() {
-    // Freeform surface
-    auto param = igesio::IGESParameterVector{
-        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-        3, 3,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,         // PROP1-5
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(5,1)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,2) to W(5,3)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,4) to W(5,5)
-        // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
-        -25., -25., -10.,  // Control point (0,0)
-        -15., -25., -8.,   // Control point (1,0)
-        -5., -25., -5.,    // Control point (2,0)
-        5., -25., -3.,     // Control point (3,0)
-        15., -25., -8.,    // Control point (4,0)
-        25., -25., -10.,   // Control point (5,0)
-        -25., -15., -5.,   // Control point (0,1)
-        -15., -15., -4.,   // Control point (1,1)
-        -5., -15., -3.,    // Control point (2,1)
-        5., -15., -2.,     // Control point (3,1)
-        15., -15., -4.,    // Control point (4,1)
-        25., -15., -5.,    // Control point (5,1)
-        -25., -5., 0.,     // Control point (0,2)
-        -15., -5., -4.,    // Control point (1,2)
-        -5., -5., -8.,     // Control point (2,2)
-        5., -5., -8.,      // Control point (3,2)
-        15., -5., -4.,     // Control point (4,2)
-        25., -5., 2.,      // Control point (5,2)
-        -25., 5., 0.,      // Control point (0,3)
-        -15., 5., -4.,     // Control point (1,3)
-        -5., 5., -8.,      // Control point (2,3)
-        5., 5., -8.,       // Control point (3,3)
-        15., 5., -4.,      // Control point (4,3)
-        25., 5., 2.,       // Control point (5,3)
-        -25., 15., -5.,    // Control point (0,4)
-        -15., 15., -4.,    // Control point (1,4)
-        -5., 15., -3.,     // Control point (2,4)
-        5., 15., -2.,      // Control point (3,4)
-        15., 15., -4.,     // Control point (4,4)
-        25., 15., -5.,     // Control point (5,4)
-        -25., 25., -10.,   // Control point (0,5)
-        -15., 25., -8.,    // Control point (1,5)
-        -5., 25., -5.,     // Control point (2,5)
-        5., 25., -3.,      // Control point (3,5)
-        15., 25., -8.,     // Control point (4,5)
-        25., 25., -10.,    // Control point (5,5)
-        0., 3., 0., 3.     // Parameter range in U and V
-    };
-    auto nurbs_freeform = std::make_shared<i_ent::RationalBSplineSurface>(param);
-
-    return nurbs_freeform;
+    // Freeform surface (6x6 control points, degree 3 in U and V)
+    // grid[i][j] = P(i,j) = (-25+10i, -25+10j, z_ij)
+    const std::vector<std::vector<Vector3d>> cp_grid{
+        {Vector3d(-25., -25., -10.), Vector3d(-25., -15., -5.),
+         Vector3d(-25., -5., 0.), Vector3d(-25., 5., 0.),
+         Vector3d(-25., 15., -5.), Vector3d(-25., 25., -10.)},  // P(0,j)
+        {Vector3d(-15., -25., -8.), Vector3d(-15., -15., -4.),
+         Vector3d(-15., -5., -4.), Vector3d(-15., 5., -4.),
+         Vector3d(-15., 15., -4.), Vector3d(-15., 25., -8.)},   // P(1,j)
+        {Vector3d(-5., -25., -5.), Vector3d(-5., -15., -3.),
+         Vector3d(-5., -5., -8.), Vector3d(-5., 5., -8.),
+         Vector3d(-5., 15., -3.), Vector3d(-5., 25., -5.)},     // P(2,j)
+        {Vector3d(5., -25., -3.), Vector3d(5., -15., -2.),
+         Vector3d(5., -5., -8.), Vector3d(5., 5., -8.),
+         Vector3d(5., 15., -2.), Vector3d(5., 25., -3.)},       // P(3,j)
+        {Vector3d(15., -25., -8.), Vector3d(15., -15., -4.),
+         Vector3d(15., -5., -4.), Vector3d(15., 5., -4.),
+         Vector3d(15., 15., -4.), Vector3d(15., 25., -8.)},     // P(4,j)
+        {Vector3d(25., -25., -10.), Vector3d(25., -15., -5.),
+         Vector3d(25., -5., 2.), Vector3d(25., 5., 2.),
+         Vector3d(25., 15., -5.), Vector3d(25., 25., -10.)}};   // P(5,j)
+    // weights (all 1.0) and parameter range ([0,3]x[0,3]) are defaulted
+    return i_ent::MakeRationalBSplineSurface(
+        {3, 3},                                    // degrees {M1, M2}
+        cp_grid,
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 }
 
 /// @brief Main function for surfaces

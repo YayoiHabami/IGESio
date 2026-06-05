@@ -141,73 +141,41 @@ inline surface_vec CreateTabulatedCylinders() {
 inline surface_vec CreateRationalBSplineSurfaces() {
     // Plane (Y = 5)
     TestSurface nurbs_plane("Rational B-Spline Surface: Plane");
-    auto param = igesio::IGESParameterVector{
-        1, 1,  // K1, K2 (Number of control points - 1 in U and V)
-        1, 1,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,  // PROP1-5
-        0., 0., 1., 1.,   // Knot vector in U
-        0., 0., 1., 1.,   // Knot vector in V
-        1., 1., 1., 1.,   // Weights
-        // Control points in IGES order (u-index i varies fastest)
-        -5., 5.,  5.,     // Control point (0,0)
-         5., 5.,  5.,     // Control point (1,0)
-        -5., 5., -5.,     // Control point (0,1)
-         5., 5., -5.,     // Control point (1,1)
-        0., 1., 0., 1.    // Parameter range in U and V
-    };
-    nurbs_plane.surface = std::make_shared<entities::RationalBSplineSurface>(param);
+    nurbs_plane.surface = entities::MakeRationalBSplineSurface(
+        {1, 1},                                              // degrees {M1, M2}
+        {{Vector3d(-5., 5.,  5.), Vector3d(-5., 5., -5.)},   // P(0,j)
+         {Vector3d( 5., 5.,  5.), Vector3d( 5., 5., -5.)}},  // P(1,j)
+        {0., 0., 1., 1.},                                    // knot vector in U
+        {0., 0., 1., 1.});                                   // knot vector in V
 
-    // Freeform surface
+    // Freeform surface (6x6 control points, degree 3 in U and V)
+    // grid[i][j] = P(i,j) = (-25+10i, -25+10j, z_ij)
     TestSurface nurbs_freeform("Rational B-Spline Surface: Freeform");
-    param = igesio::IGESParameterVector{
-        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-        3, 3,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,         // PROP1-5
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(5,1)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,2) to W(5,3)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,4) to W(5,5)
-        // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
-        -25., -25., -10.,  // Control point (0,0)
-        -15., -25., -8.,   // Control point (1,0)
-        -5., -25., -5.,    // Control point (2,0)
-        5., -25., -3.,     // Control point (3,0)
-        15., -25., -8.,    // Control point (4,0)
-        25., -25., -10.,   // Control point (5,0)
-        -25., -15., -5.,   // Control point (0,1)
-        -15., -15., -4.,   // Control point (1,1)
-        -5., -15., -3.,    // Control point (2,1)
-        5., -15., -2.,     // Control point (3,1)
-        15., -15., -4.,    // Control point (4,1)
-        25., -15., -5.,    // Control point (5,1)
-        -25., -5., 0.,     // Control point (0,2)
-        -15., -5., -4.,    // Control point (1,2)
-        -5., -5., -8.,     // Control point (2,2)
-        5., -5., -8.,      // Control point (3,2)
-        15., -5., -4.,     // Control point (4,2)
-        25., -5., 2.,      // Control point (5,2)
-        -25., 5., 0.,      // Control point (0,3)
-        -15., 5., -4.,     // Control point (1,3)
-        -5., 5., -8.,      // Control point (2,3)
-        5., 5., -8.,       // Control point (3,3)
-        15., 5., -4.,      // Control point (4,3)
-        25., 5., 2.,       // Control point (5,3)
-        -25., 15., -5.,    // Control point (0,4)
-        -15., 15., -4.,    // Control point (1,4)
-        -5., 15., -3.,     // Control point (2,4)
-        5., 15., -2.,      // Control point (3,4)
-        15., 15., -4.,     // Control point (4,4)
-        25., 15., -5.,     // Control point (5,4)
-        -25., 25., -10.,   // Control point (0,5)
-        -15., 25., -8.,    // Control point (1,5)
-        -5., 25., -5.,     // Control point (2,5)
-        5., 25., -3.,      // Control point (3,5)
-        15., 25., -8.,     // Control point (4,5)
-        25., 25., -10.,    // Control point (5,5)
-        0., 3., 0., 3.     // Parameter range in U and V
-    };
-    nurbs_freeform.surface = std::make_shared<entities::RationalBSplineSurface>(param);
+    const std::vector<std::vector<Vector3d>> cp_grid{
+        {Vector3d(-25., -25., -10.), Vector3d(-25., -15., -5.),
+         Vector3d(-25., -5., 0.), Vector3d(-25., 5., 0.),
+         Vector3d(-25., 15., -5.), Vector3d(-25., 25., -10.)},  // P(0,j)
+        {Vector3d(-15., -25., -8.), Vector3d(-15., -15., -4.),
+         Vector3d(-15., -5., -4.), Vector3d(-15., 5., -4.),
+         Vector3d(-15., 15., -4.), Vector3d(-15., 25., -8.)},   // P(1,j)
+        {Vector3d(-5., -25., -5.), Vector3d(-5., -15., -3.),
+         Vector3d(-5., -5., -8.), Vector3d(-5., 5., -8.),
+         Vector3d(-5., 15., -3.), Vector3d(-5., 25., -5.)},     // P(2,j)
+        {Vector3d(5., -25., -3.), Vector3d(5., -15., -2.),
+         Vector3d(5., -5., -8.), Vector3d(5., 5., -8.),
+         Vector3d(5., 15., -2.), Vector3d(5., 25., -3.)},       // P(3,j)
+        {Vector3d(15., -25., -8.), Vector3d(15., -15., -4.),
+         Vector3d(15., -5., -4.), Vector3d(15., 5., -4.),
+         Vector3d(15., 15., -4.), Vector3d(15., 25., -8.)},     // P(4,j)
+        {Vector3d(25., -25., -10.), Vector3d(25., -15., -5.),
+         Vector3d(25., -5., 2.), Vector3d(25., 5., 2.),
+         Vector3d(25., 15., -5.), Vector3d(25., 25., -10.)}};   // P(5,j)
+    // weights (all 1.0) and parameter range ([0,3]x[0,3]) are defaulted
+    nurbs_freeform.surface = entities::MakeRationalBSplineSurface(
+        {3, 3},                                    // degrees {M1, M2}
+        cp_grid,
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 
     return {nurbs_plane, nurbs_freeform};
 }

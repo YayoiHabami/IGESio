@@ -50,39 +50,23 @@ void ExpectPositionNear(const Vector3d& actual, const Vector3d& expected,
 /// @brief y=5 の平面 (RationalBSplineSurface, u/v ∈ [0,1], x/z ∈ [-5,5])
 /// @note 変換なし（定義空間 = ワールド空間）
 std::shared_ptr<i_ent::RationalBSplineSurface> MakeYFivePlane() {
-    igesio::IGESParameterVector param{
-        1, 1,
-        1, 1,
-        false, false, true, false, false,
-        0., 0., 1., 1.,
-        0., 0., 1., 1.,
-        1., 1., 1., 1.,
-        -5., 5.,  5.,
-        -5., 5., -5.,
-         5., 5.,  5.,
-         5., 5., -5.,
-        0., 1., 0., 1.
-    };
-    return std::make_shared<i_ent::RationalBSplineSurface>(param);
+    return i_ent::MakeRationalBSplineSurface(
+        {1, 1},                                              // 次数 {M1, M2}
+        {{Vector3d(-5., 5.,  5.), Vector3d( 5., 5.,  5.)},   // P(0,j)
+         {Vector3d(-5., 5., -5.), Vector3d( 5., 5., -5.)}},  // P(1,j)
+        {0., 0., 1., 1.},                                    // Uノット
+        {0., 0., 1., 1.});                                   // Vノット
 }
 
 /// @brief y=0 の平面 (RationalBSplineSurface, u/v ∈ [0,1], x/z ∈ [-5,5])
 /// @note 変換行列で移動・回転するための基底として使用する
 std::shared_ptr<i_ent::RationalBSplineSurface> MakeYZeroPlane() {
-    igesio::IGESParameterVector param{
-        1, 1,
-        1, 1,
-        false, false, true, false, false,
-        0., 0., 1., 1.,
-        0., 0., 1., 1.,
-        1., 1., 1., 1.,
-        -5., 0.,  5.,
-        -5., 0., -5.,
-         5., 0.,  5.,
-         5., 0., -5.,
-        0., 1., 0., 1.
-    };
-    return std::make_shared<i_ent::RationalBSplineSurface>(param);
+    return i_ent::MakeRationalBSplineSurface(
+        {1, 1},                                              // 次数 {M1, M2}
+        {{Vector3d(-5., 0.,  5.), Vector3d( 5., 0.,  5.)},   // P(0,j)
+         {Vector3d(-5., 0., -5.), Vector3d( 5., 0., -5.)}},  // P(1,j)
+        {0., 0., 1., 1.},                                    // Uノット
+        {0., 0., 1., 1.});                                   // Vノット
 }
 
 /// @brief z軸を回転軸とする半径2・高さ4の円柱面 (SurfaceOfRevolution)

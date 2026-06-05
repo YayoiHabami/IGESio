@@ -88,22 +88,13 @@ Vector3d EvalAt(const i_ent::ICurve& curve, const double t) {
 /// @brief 双一次B-Splineサーフェス S(u,v) = (2u, v, 0) を構築する
 /// @note K1=K2=M1=M2=1、パラメータ定義域 [0,1]×[0,1].
 ///       S(B(t))が解析的に計算できるため、生成された曲線の検証に用いる
-std::shared_ptr<i_ent::RationalBSplineSurface> MakeBilinearSurfacePD() {
-    const auto param = igesio::IGESParameterVector{
-        1, 1,                              // K1, K2
-        1, 1,                              // M1, M2
-        false, false, true, false, false,  // PROP1-5
-        0.0, 0.0, 1.0, 1.0,                // Uノット (K1+M1+2=4個)
-        0.0, 0.0, 1.0, 1.0,                // Vノット (K2+M2+2=4個)
-        1.0, 1.0, 1.0, 1.0,                // 重み (4個)
-        // 制御点 (PDの並びはuインデックスが先に変わる)
-        0.0, 0.0, 0.0,      // P(0,0)
-        2.0, 0.0, 0.0,      // P(1,0)
-        0.0, 1.0, 0.0,      // P(0,1)
-        2.0, 1.0, 0.0,      // P(1,1)
-        0.0, 1.0, 0.0, 1.0  // U(0), U(1), V(0), V(1)
-    };
-    return std::make_shared<i_ent::RationalBSplineSurface>(param);
+std::shared_ptr<i_ent::RationalBSplineSurface> MakeBilinearSurface() {
+    return i_ent::MakeRationalBSplineSurface(
+        {1, 1},                                                // 次数 {M1, M2}
+        {{Vector3d(0.0, 0.0, 0.0), Vector3d(0.0, 1.0, 0.0)},   // P(0,j)
+         {Vector3d(2.0, 0.0, 0.0), Vector3d(2.0, 1.0, 0.0)}},  // P(1,j)
+        {0.0, 0.0, 1.0, 1.0},                                  // Uノット
+        {0.0, 0.0, 1.0, 1.0});                                 // Vノット
 }
 
 /// @brief パラメータ空間上の線分B(t)を作成する (z=0)
@@ -137,7 +128,7 @@ struct OmittedBParts {
 ///       (= S(B), B: (0.2,0.2)→(0.8,0.5) に相当)
 OmittedBParts MakeCosWithOmittedB(const bool resolve) {
     OmittedBParts parts;
-    parts.surface = MakeBilinearSurfacePD();
+    parts.surface = MakeBilinearSurface();
     parts.curve = MakeModelSpaceLine();
 
     const igesio::IGESParameterVector params{
@@ -169,7 +160,7 @@ OmittedBParts MakeCosWithOmittedB(const bool resolve) {
 
 // S/B/Cのいずれかがnullptrの場合は例外
 TEST(CurveOnSurfaceCtorTest, Constructor_ThrowsInvalidArgumentWhenAnyPointerNull) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
     const auto base = MakeParamLine(0.2, 0.2, 0.8, 0.5);
     const auto curve = MakeModelSpaceLine();
 
@@ -186,7 +177,7 @@ TEST(CurveOnSurfaceCtorTest, Constructor_ThrowsInvalidArgumentWhenAnyPointerNull
 
 // 参照が解決された状態で構築される
 TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_ResolvedReferences) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
     const auto base = MakeParamLine(0.2, 0.2, 0.8, 0.5);
     const auto [entity, generated] =
         i_ent::MakeCurveOnAParametricSurface(surface, base);
@@ -203,7 +194,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_ResolvedReferences) {
 // 属性省略時: CRTN=kUnspecified、PREF=kSofB (C(t)をS(B(t))から生成するため)
 TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_DefaultCrtnAndSofBPref) {
     const auto [entity, generated] = i_ent::MakeCurveOnAParametricSurface(
-        MakeBilinearSurfacePD(), MakeParamLine(0.2, 0.2, 0.8, 0.5));
+        MakeBilinearSurface(), MakeParamLine(0.2, 0.2, 0.8, 0.5));
 
     EXPECT_EQ(entity->GetCreationType(), CurveCreationType::kUnspecified);
     EXPECT_EQ(entity->GetPreferredRepresentation(),
@@ -213,7 +204,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_DefaultCrtnAndSofBPref)
 // creation_type指定が反映される
 TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_CreationTypeApplied) {
     const auto [entity, generated] = i_ent::MakeCurveOnAParametricSurface(
-        MakeBilinearSurfacePD(), MakeParamLine(0.2, 0.2, 0.8, 0.5),
+        MakeBilinearSurface(), MakeParamLine(0.2, 0.2, 0.8, 0.5),
         CurveCreationType::kProjection);
 
     EXPECT_EQ(entity->GetCreationType(), CurveCreationType::kProjection);
@@ -222,7 +213,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_CreationTypeApplied) {
 // 実体の評価がS(B(t))の解析値と一致し、生成Cの端点も一致する
 TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_EvalMatchesSofB) {
     const auto [entity, generated] = i_ent::MakeCurveOnAParametricSurface(
-        MakeBilinearSurfacePD(), MakeParamLine(0.2, 0.2, 0.8, 0.5));
+        MakeBilinearSurface(), MakeParamLine(0.2, 0.2, 0.8, 0.5));
 
     // B(t) = (0.2+0.6t, 0.2+0.3t) → S(B(t)) = (0.4+1.2t, 0.2+0.3t, 0)
     // (実体の評価はSとBを直接用いるため厳密)
@@ -240,7 +231,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_EvalMatchesSofB) {
 TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_DependentFlagsSet) {
     const auto base = MakeParamLine(0.2, 0.2, 0.8, 0.5);
     const auto [entity, generated] = i_ent::MakeCurveOnAParametricSurface(
-        MakeBilinearSurfacePD(), base);
+        MakeBilinearSurface(), base);
 
     EXPECT_EQ(base->GetEntityUseFlag(), i_ent::EntityUseFlag::k2DParametric);
     EXPECT_EQ(base->GetSubordinateEntitySwitch(),
@@ -256,7 +247,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeCurveOnSurface_AutoC_DependentFlagsSet) {
 // S/Bのnullptrは例外 (ファクトリ側の検証)
 TEST(CurveOnSurfaceFactoryTest,
      MakeCurveOnSurface_AutoC_ThrowsInvalidArgumentWhenNull) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
     const auto base = MakeParamLine(0.2, 0.2, 0.8, 0.5);
 
     EXPECT_THROW(i_ent::MakeCurveOnAParametricSurface(nullptr, base),
@@ -268,7 +259,7 @@ TEST(CurveOnSurfaceFactoryTest,
 // BがSの定義域D外にはみ出す場合は例外 (境界上はちょうど許容)
 TEST(CurveOnSurfaceFactoryTest,
      MakeCurveOnSurface_AutoC_ThrowsEntityValueErrorWhenBOutsideDomain) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
 
     // u = 1.5 まで伸びる線分は定義域 [0,1]² 外
     EXPECT_THROW(
@@ -289,7 +280,7 @@ TEST(CurveOnSurfaceFactoryTest,
 // 渡した参照と属性が反映される
 TEST(CurveOnSurfaceFactoryTest,
      MakeCurveOnSurface_ExplicitC_StoredReferencesAndAttrs) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
     const auto base = MakeParamLine(0.2, 0.2, 0.8, 0.5);
     const auto curve = MakeModelSpaceLine();
     const auto entity = i_ent::MakeCurveOnAParametricSurface(
@@ -308,7 +299,7 @@ TEST(CurveOnSurfaceFactoryTest,
 TEST(CurveOnSurfaceFactoryTest,
      MakeCurveOnSurface_ExplicitC_DefaultAttrsUnspecified) {
     const auto entity = i_ent::MakeCurveOnAParametricSurface(
-        MakeBilinearSurfacePD(), MakeParamLine(0.2, 0.2, 0.8, 0.5),
+        MakeBilinearSurface(), MakeParamLine(0.2, 0.2, 0.8, 0.5),
         MakeModelSpaceLine());
 
     EXPECT_EQ(entity->GetCreationType(), CurveCreationType::kUnspecified);
@@ -319,7 +310,7 @@ TEST(CurveOnSurfaceFactoryTest,
 // S/B/Cのいずれかがnullptrの場合は例外 (コンストラクタ経由の検証)
 TEST(CurveOnSurfaceFactoryTest,
      MakeCurveOnSurface_ExplicitC_ThrowsInvalidArgumentWhenAnyNull) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
     const auto base = MakeParamLine(0.2, 0.2, 0.8, 0.5);
     const auto curve = MakeModelSpaceLine();
 
@@ -340,7 +331,7 @@ TEST(CurveOnSurfaceFactoryTest,
 // u=一定: B端点・評価値・CRTN/PREFを確認
 TEST(CurveOnSurfaceFactoryTest, MakeIsoparametricCurve_UConstant_Geometry) {
     const auto parts = i_ent::MakeIsoparametricCurve(
-        MakeBilinearSurfacePD(), IsoparametricDirection::kUConstant, 0.5);
+        MakeBilinearSurface(), IsoparametricDirection::kUConstant, 0.5);
 
     ASSERT_NE(parts.curve_on_surface, nullptr);
     ASSERT_NE(parts.base_curve, nullptr);
@@ -367,7 +358,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeIsoparametricCurve_UConstant_Geometry) {
 // v=一定: 評価値を確認
 TEST(CurveOnSurfaceFactoryTest, MakeIsoparametricCurve_VConstant_Geometry) {
     const auto parts = i_ent::MakeIsoparametricCurve(
-        MakeBilinearSurfacePD(), IsoparametricDirection::kVConstant, 0.25);
+        MakeBilinearSurface(), IsoparametricDirection::kVConstant, 0.25);
 
     EXPECT_EQ(parts.curve_on_surface->GetCreationType(),
               CurveCreationType::kIsoparametric);
@@ -380,7 +371,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeIsoparametricCurve_VConstant_Geometry) {
 
 // 境界: 定義域端ちょうどの値は許容される
 TEST(CurveOnSurfaceFactoryTest, MakeIsoparametricCurve_BoundaryValue_NoThrow) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
     EXPECT_NO_THROW(i_ent::MakeIsoparametricCurve(
         surface, IsoparametricDirection::kUConstant, 0.0));
     EXPECT_NO_THROW(i_ent::MakeIsoparametricCurve(
@@ -390,7 +381,7 @@ TEST(CurveOnSurfaceFactoryTest, MakeIsoparametricCurve_BoundaryValue_NoThrow) {
 // 定義域外の値は例外 (両端の境界外側)
 TEST(CurveOnSurfaceFactoryTest,
      MakeIsoparametricCurve_ThrowsEntityValueErrorWhenValueOutside) {
-    const auto surface = MakeBilinearSurfacePD();
+    const auto surface = MakeBilinearSurface();
     EXPECT_THROW(
         i_ent::MakeIsoparametricCurve(
             surface, IsoparametricDirection::kUConstant, -1e-6),
@@ -425,7 +416,7 @@ namespace {
 /// @brief セッターテスト用の基準インスタンスを作成する
 std::shared_ptr<CurveOnSurface> MakeDefaultCos() {
     auto [entity, generated] = i_ent::MakeCurveOnAParametricSurface(
-        MakeBilinearSurfacePD(), MakeParamLine(0.2, 0.2, 0.8, 0.5));
+        MakeBilinearSurface(), MakeParamLine(0.2, 0.2, 0.8, 0.5));
     return entity;
 }
 

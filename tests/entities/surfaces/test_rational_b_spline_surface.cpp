@@ -161,6 +161,75 @@ TEST(RationalBSplineSurface, KnotRangeOutside_IsValidWithWarning) {
     EXPECT_TRUE(has_warning);
 }
 
+namespace {
+
+/// @brief ValidatePDの結果に警告 (kWarning) が含まれるかを判定する
+bool HasWarning(const NSurface& surf) {
+    for (const auto& e : surf.ValidatePD().errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) return true;
+    }
+    return false;
+}
+
+}  // namespace
+
+// 回帰: U(1)の上限はS(N1) (= u_knots[size-M1-1]) と比較される。
+// 以前はS(N1+1)を参照しており (off-by-one)、S(N1) < U(1) <= S(N1+1)
+// の範囲外れが警告されなかった。
+TEST(RationalBSplineSurface, KnotRangeUpperBound_WarnsWhenUEndExceedsSN1) {
+    // M1=1, K1=2: u_knots=[0,0,1,2,3] → S(0)=0, S(N1)=2, S(N1+1)=3
+    const auto build = [](const double u_end) {
+        return igesio::IGESParameterVector{
+            2, 1, 1, 1,                        // K1, K2, M1, M2
+            false, false, true, false, false,  // PROP1-5
+            0., 0., 1., 2., 3.,                // u knots
+            0., 0., 1., 1.,                    // v knots
+            1., 1., 1., 1., 1., 1.,            // weights
+            0., 0., 0.,  1., 0., 0.,  2., 0., 0.,  // P(0,0)〜P(2,0)
+            0., 1., 0.,  1., 1., 0.,  2., 1., 0.,  // P(0,1)〜P(2,1)
+            0., u_end, 0., 1.                  // U=[0,u_end], V=[0,1]
+        };
+    };
+
+    // U(1)=2.5はS(N1)=2を超えるため警告 (修正前はS(N1+1)=3と比較し素通り)
+    const NSurface outside(build(2.5));
+    EXPECT_TRUE(outside.ValidatePD().is_valid);
+    EXPECT_TRUE(HasWarning(outside));
+
+    // 境界ちょうど (U(1)=S(N1)=2) は警告なし
+    const NSurface boundary(build(2.0));
+    EXPECT_TRUE(boundary.ValidatePD().is_valid);
+    EXPECT_FALSE(HasWarning(boundary));
+}
+
+// 回帰: V(1)の上限もT(N2) (= v_knots[size-M2-1]) と比較される (u側と同様)
+TEST(RationalBSplineSurface, KnotRangeUpperBound_WarnsWhenVEndExceedsTN2) {
+    // M2=1, K2=2: v_knots=[0,0,1,2,3] → T(0)=0, T(N2)=2, T(N2+1)=3
+    const auto build = [](const double v_end) {
+        return igesio::IGESParameterVector{
+            1, 2, 1, 1,                        // K1, K2, M1, M2
+            false, false, true, false, false,  // PROP1-5
+            0., 0., 1., 1.,                    // u knots
+            0., 0., 1., 2., 3.,                // v knots
+            1., 1., 1., 1., 1., 1.,            // weights
+            0., 0., 0.,  1., 0., 0.,           // P(0,0), P(1,0)
+            0., 1., 0.,  1., 1., 0.,           // P(0,1), P(1,1)
+            0., 2., 0.,  1., 2., 0.,           // P(0,2), P(1,2)
+            0., 1., 0., v_end                  // U=[0,1], V=[0,v_end]
+        };
+    };
+
+    // V(1)=2.5はT(N2)=2を超えるため警告
+    const NSurface outside(build(2.5));
+    EXPECT_TRUE(outside.ValidatePD().is_valid);
+    EXPECT_TRUE(HasWarning(outside));
+
+    // 境界ちょうど (V(1)=T(N2)=2) は警告なし
+    const NSurface boundary(build(2.0));
+    EXPECT_TRUE(boundary.ValidatePD().is_valid);
+    EXPECT_FALSE(HasWarning(boundary));
+}
+
 
 
 /**

@@ -20,6 +20,7 @@
 namespace i_ent = igesio::entities;
 
 using igesio::kPi;
+using igesio::Matrix3Xd;
 using igesio::Vector2d;
 using igesio::Vector3d;
 using ent_vec = std::vector<std::shared_ptr<igesio::EntityBase>>;
@@ -162,21 +163,17 @@ ent_vec CreatePoint() {
 /// @brief Example for Rational B-Spline Curve entity (Type 126)
 /// @note Creates a NURBS curve with specified parameters
 ent_vec CreateRationalBSplineCurve() {
-    // Create NURBS curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -4.0, -4.0,  0.0,    // control point P(0)
-        -1.5,  7.0,  3.5,    // control point P(1)
-         4.0, -3.0,  1.0,    // control point P(2)
-         4.0,  4.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(param);
+    // Create NURBS curve (4 control points, degree 3)
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+    cps.col(2) = Vector3d( 4.0, -3.0, 1.0);  // control point P(2)
+    cps.col(3) = Vector3d( 4.0,  4.0, 0.0);  // control point P(3)
+    // weights (all 1.0) and parameter range ([0,1]) are defaulted
+    auto nurbs_c = i_ent::MakeRationalBSplineCurve(
+        3,                                          // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
     return {nurbs_c};
 }
@@ -184,94 +181,61 @@ ent_vec CreateRationalBSplineCurve() {
 /// @brief Example for Curve on a Parametric Surface entity (Type 142)
 /// @note Creates NURBS curves on NURBS surface
 ent_vec CreateCurveOnParametricSurface() {
-    // Create NURBS surface
-    auto param = igesio::IGESParameterVector{
-        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-        3, 3,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,         // PROP1-5
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
-        // Control points (36 points, each with x, y, z)
-         5., -25., -10.,   // Control point (0,0)
-         5., -15., -5.,    // Control point (0,1)
-         5., -5., 0.,      // Control point (0,2)
-         5., 5., 0.,       // Control point (0,3)
-         5., 15., -5.,     // Control point (0,4)
-         5., 25., -10.,    // Control point (0,5)
-        15., -25., -8.,    // Control point (1,0)
-        15., -15., -4.,    // Control point (1,1)
-        15., -5., -4.,     // Control point (1,2)
-        15., 5., -4.,      // Control point (1,3)
-        15., 15., -4.,     // Control point (1,4)
-        15., 25., -8.,     // Control point (1,5)
-        25., -25., -5.,    // Control point (2,0)
-        25., -15., -3.,    // Control point (2,1)
-        25., -5., -8.,     // Control point (2,2)
-        25., 5., -8.,      // Control point (2,3)
-        25., 15., -3.,     // Control point (2,4)
-        25., 25., -5.,     // Control point (2,5)
-        35., -25., -3.,    // Control point (3,0)
-        35., -15., -2.,    // Control point (3,1)
-        35., -5., -8.,     // Control point (3,2)
-        35., 5., -8.,      // Control point (3,3)
-        35., 15., -2.,     // Control point (3,4)
-        35., 25., -3.,     // Control point (3,5)
-        45., -25., -8.,    // Control point (4,0)
-        45., -15., -4.,    // Control point (4,1)
-        45., -5., -4.,     // Control point (4,2)
-        45., 5., -4.,      // Control point (4,3)
-        45., 15., -4.,     // Control point (4,4)
-        45., 25., -8.,     // Control point (4,5)
-        55., -25., -10.,   // Control point (5,0)
-        55., -15., -5.,    // Control point (5,1)
-        55., -5., 2.,      // Control point (5,2)
-        55., 5., 2.,       // Control point (5,3)
-        55., 15., -5.,     // Control point (5,4)
-        55., 25., -10.,    // Control point (5,5)
-        0., 3., 0., 3.     // Parameter range in U and V
-    };
-    auto nurbs_s = std::make_shared<i_ent::RationalBSplineSurface>(param);
+    // Create NURBS surface (6x6 control points, degree 3 in U and V)
+    // grid[i][j] = P(i,j) = (5+10i, -25+10j, z_ij)
+    const std::vector<std::vector<Vector3d>> cp_grid{
+        {Vector3d(5., -25., -10.), Vector3d(5., -15., -5.),
+         Vector3d(5., -5., 0.), Vector3d(5., 5., 0.),
+         Vector3d(5., 15., -5.), Vector3d(5., 25., -10.)},      // P(0,j)
+        {Vector3d(15., -25., -8.), Vector3d(15., -15., -4.),
+         Vector3d(15., -5., -4.), Vector3d(15., 5., -4.),
+         Vector3d(15., 15., -4.), Vector3d(15., 25., -8.)},     // P(1,j)
+        {Vector3d(25., -25., -5.), Vector3d(25., -15., -3.),
+         Vector3d(25., -5., -8.), Vector3d(25., 5., -8.),
+         Vector3d(25., 15., -3.), Vector3d(25., 25., -5.)},     // P(2,j)
+        {Vector3d(35., -25., -3.), Vector3d(35., -15., -2.),
+         Vector3d(35., -5., -8.), Vector3d(35., 5., -8.),
+         Vector3d(35., 15., -2.), Vector3d(35., 25., -3.)},     // P(3,j)
+        {Vector3d(45., -25., -8.), Vector3d(45., -15., -4.),
+         Vector3d(45., -5., -4.), Vector3d(45., 5., -4.),
+         Vector3d(45., 15., -4.), Vector3d(45., 25., -8.)},     // P(4,j)
+        {Vector3d(55., -25., -10.), Vector3d(55., -15., -5.),
+         Vector3d(55., -5., 2.), Vector3d(55., 5., 2.),
+         Vector3d(55., 15., -5.), Vector3d(55., 25., -10.)}};   // P(5,j)
+    // weights (all 1.0) and parameter range ([0,3]x[0,3]) are defaulted
+    auto nurbs_s = i_ent::MakeRationalBSplineSurface(
+        {3, 3},                                    // degrees {M1, M2}
+        cp_grid,
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
     nurbs_s->OverwriteColor(i_ent::ColorNumber::kGreen);
 
     // Create open curve on a parametric surface
-    param = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         0.0,  0.0,  0.0,    // control point P(0)
-         0.0,  4.0,  0.0,    // control point P(1)
-         2.0, -2.0,  0.0,    // control point P(2)
-         1.5,  2.0,  0.0,    // control point P(3)
-         3.0,  3.0,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(param);
+    // (the curve B(t) is defined in the parameter space of the surface)
+    Matrix3Xd cps(3, 5);
+    cps.col(0) = Vector3d(0.0,  0.0, 0.0);   // control point P(0)
+    cps.col(1) = Vector3d(0.0,  4.0, 0.0);   // control point P(1)
+    cps.col(2) = Vector3d(2.0, -2.0, 0.0);   // control point P(2)
+    cps.col(3) = Vector3d(1.5,  2.0, 0.0);   // control point P(3)
+    cps.col(4) = Vector3d(3.0,  3.0, 0.0);   // control point P(4)
+    auto nurbs_c = i_ent::MakeRationalBSplineCurve(
+        3,                                               // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0});  // knot vector
     auto [open_curve, open_cons] = i_ent::MakeCurveOnAParametricSurface(nurbs_s, nurbs_c);
     open_curve->SetLineWeightNumber(2);
     auto open_cons_bs = std::dynamic_pointer_cast<i_ent::EntityBase>(open_cons);
 
     // Create closed curve on a parametric surface
-    param = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         1.5,  0.5,  0.0,    // control point P(0)
-         0.0,  0.5,  0.0,    // control point P(1)
-         2.0,  4.0,  0.0,    // control point P(2)
-         3.0,  0.5,  0.0,    // control point P(3)
-         1.5,  0.5,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto nurbs_cc = std::make_shared<i_ent::RationalBSplineCurve>(param);
+    cps.col(0) = Vector3d(1.5, 0.5, 0.0);    // control point P(0)
+    cps.col(1) = Vector3d(0.0, 0.5, 0.0);    // control point P(1)
+    cps.col(2) = Vector3d(2.0, 4.0, 0.0);    // control point P(2)
+    cps.col(3) = Vector3d(3.0, 0.5, 0.0);    // control point P(3)
+    cps.col(4) = Vector3d(1.5, 0.5, 0.0);    // control point P(4)
+    auto nurbs_cc = i_ent::MakeRationalBSplineCurve(
+        3,                                               // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0});  // knot vector
     auto [closed_curve, closed_cons] = i_ent::MakeCurveOnAParametricSurface(nurbs_s, nurbs_cc);
     closed_curve->SetLineWeightNumber(2);
     auto closed_cons_bs = std::dynamic_pointer_cast<i_ent::EntityBase>(closed_cons);

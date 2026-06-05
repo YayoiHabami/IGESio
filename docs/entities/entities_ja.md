@@ -476,25 +476,18 @@ point->OverwriteColor(i_ent::ColorNumber::kMagenta);
 >                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
-　`RationalBSplineCurve`は、3次元空間内の有理Bスプライン曲線を表現するためのクラスです。以下のコード例は、4つの制御点、3次の非周期的開放NURBS曲線を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。
-
-　この際の注意点として、`IGESParameterVector`には、intとdoubleを明確に区別して渡してください。例えば以下の7つ目のパラメータ (1つ目のノットベクトル値; `0.0`) を、`0` (int) として渡すと、エラーが発生します。
+　`RationalBSplineCurve`は、3次元空間内の有理Bスプライン曲線を表現するためのクラスです。以下のコード例は、ファクトリ関数`MakeRationalBSplineCurve`を用いて、4つの制御点、3次の非周期的開放NURBS曲線を生成します（図参照）。重み（すべて`1.0`）とパラメータ範囲（ノット定義域）は省略でき、平面性 (PROP1) などのフラグは与えたデータから自動的に導出されます。
 
 ```cpp
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    -4.0, -4.0,  0.0,    // control point P(0)
-    -1.5,  7.0,  3.5,    // control point P(1)
-     4.0, -3.0,  1.0,    // control point P(2)
-     4.0,  4.0,  0.0,    // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = igesio::Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+cps.col(1) = igesio::Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+cps.col(2) = igesio::Vector3d( 4.0, -3.0, 1.0);  // control point P(2)
+cps.col(3) = igesio::Vector3d( 4.0,  4.0, 0.0);  // control point P(3)
+auto nurbs_c = igesio::entities::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 ```
 
 <img src="./images/rational_b_spline_curve.png" width=400px alt="RationalBSplineCurve Example" />
@@ -530,35 +523,27 @@ $$\begin{aligned}
 　`MakeCurveOnAParametricSurface`関数は、`CurveOnAParametricSurface`エンティティと、3次元空間上での曲線表現である`ICurve`エンティティのペアを返します。これは、`CurveOnAParametricSurface`クラスはパラメトリック曲線として定義されますが、IGES 5.3の仕様上、3次元空間上での曲線表現（エンティティ）も必要となるためです。
 
 ```cpp
-// Create NURBS surface
-auto param_s = igesio::IGESParameterVector{
-        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-        3, 3,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,         // PROP1-5
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-        // ... (Weights and Control Points are omitted for brevity)
-        0., 3., 0., 3.     // Parameter range in U and V
-};
-auto nurbs_s = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
+// Create NURBS surface (6x6 control points, degree 3 in U and V)
+// cp_grid[i][j] = P(i,j); weights (all 1.0) and the parameter range are defaulted
+std::vector<std::vector<igesio::Vector3d>> cp_grid = /* ... (see sample_curves.cpp) */;
+auto nurbs_s = i_ent::MakeRationalBSplineSurface(
+    {3, 3},                                    // degrees {M1, M2}
+    cp_grid,
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 nurbs_s->OverwriteColor(i_ent::ColorNumber::kGreen);
 
 // Create a curve in the parameter space (u,v) of the surface
-auto param_c = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         0.0,  0.0,  0.0,    // control point P(0)
-         0.0,  4.0,  0.0,    // control point P(1)
-         2.0, -2.0,  0.0,    // control point P(2)
-         1.5,  2.0,  0.0,    // control point P(3)
-         3.0,  3.0,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(param_c);
+igesio::Matrix3Xd cps(3, 5);
+cps.col(0) = igesio::Vector3d(0.0,  0.0, 0.0);   // control point P(0)
+cps.col(1) = igesio::Vector3d(0.0,  4.0, 0.0);   // control point P(1)
+cps.col(2) = igesio::Vector3d(2.0, -2.0, 0.0);   // control point P(2)
+cps.col(3) = igesio::Vector3d(1.5,  2.0, 0.0);   // control point P(3)
+cps.col(4) = igesio::Vector3d(3.0,  3.0, 0.0);   // control point P(4)
+auto nurbs_c = i_ent::MakeRationalBSplineCurve(
+    3,                                               // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // Create CurveOnAParametricSurface entity
 // This returns a pair of entities:
@@ -606,21 +591,16 @@ $$\begin{aligned}
 // curve1: Line
 auto curve1 = i_ent::MakeLine(Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
 
-// curve2: Rational B-Spline Curve
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    -5.0, 0.0, -6.0,     // control point P(0)
-    -3.0, 4.0, -6.0,     // control point P(1)
-     3.0, 4.0, -6.0,     // control point P(2)
-     5.0, 0.0, -6.0,     // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// curve2: Rational B-Spline Curve (4 control points, degree 3)
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(-5.0, 0.0, -6.0);  // control point P(0)
+cps.col(1) = Vector3d(-3.0, 4.0, -6.0);  // control point P(1)
+cps.col(2) = Vector3d( 3.0, 4.0, -6.0);  // control point P(2)
+cps.col(3) = Vector3d( 5.0, 0.0, -6.0);  // control point P(3)
+auto curve2 = i_ent::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // Ruled surface
 auto ruled_surf = i_ent::MakeRuledSurface(curve1, curve2);
@@ -656,21 +636,16 @@ namespace i_ent = igesio::entities;
 // Axis line
 auto axis_line = i_ent::MakeLine(Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
 
-// Generatrix curve (Rational B-Spline Curve)
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    1.0, -4.0,  0.0,    // control point P(0)
-    1.0, -5.0,  1.5,    // control point P(1)
-    1.0, -3.0,  2.0,    // control point P(2)
-    1.0,  0.0,  4.0,    // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto generatrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// Generatrix curve (Rational B-Spline Curve; 4 control points, degree 3)
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(1.0, -4.0, 0.0);  // control point P(0)
+cps.col(1) = Vector3d(1.0, -5.0, 1.5);  // control point P(1)
+cps.col(2) = Vector3d(1.0, -3.0, 2.0);  // control point P(2)
+cps.col(3) = Vector3d(1.0,  0.0, 4.0);  // control point P(3)
+auto generatrix = i_ent::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // Surface of revolution
 auto surf_rev = i_ent::MakeSurfaceOfRevolution(axis_line, generatrix, 0.0, kPi);
@@ -700,21 +675,16 @@ $$S(u, v) = C(t) + v(L - C(0)) = C(t) + vD$$
 　以下のコード例は、[RationalBSplineCurve](#rationalbsplinecurve-type-126)を準線とし、押し出しベクトル $D = 3 \cdot [1, -1, 0]^\top / \|[1, -1, 0]\|$（方向 $[1, -1, 0]^\top$、長さ3）に沿って押し出した平行曲面を生成します（図参照）。
 
 ```cpp
-// Directrix curve
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    2,  // degree
-    false, false, false, false,   // non-periodic open NURBS curve
-    0., 0., 0., 0.5, 1., 1., 1.,  // knot vector
-    1., 1., 1., 1.,               // weights
-    0.0, -4.0, -4.0,              // control points P(0)
-    0.0,  0.2, -1.1,              // control points P(1)
-    0.0, -1.0,  4.5,              // control points P(2)
-    0.0,  4.0,  4.0,              // control points P(3)
-    0.0, 1.0,                     // parameter range V(0), V(1)
-    1., 0., 0.                    // normal vector of the defining plane
-};
-auto directrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// Directrix curve (4 control points, degree 2)
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(0.0, -4.0, -4.0);  // control point P(0)
+cps.col(1) = Vector3d(0.0,  0.2, -1.1);  // control point P(1)
+cps.col(2) = Vector3d(0.0, -1.0,  4.5);  // control point P(2)
+cps.col(3) = Vector3d(0.0,  4.0,  4.0);  // control point P(3)
+auto directrix = i_ent::MakeRationalBSplineCurve(
+    2,                               // degree
+    cps,
+    {0., 0., 0., 0.5, 1., 1., 1.});  // knot vector
 
 // Axis direction
 Vector3d axis_dir{1., -1., 0.};
@@ -742,29 +712,22 @@ tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 >                     └─ IGeometry <── ISurface <───┘
 > ```
 
-　`RationalBSplineSurface`は、3次元空間内の有理Bスプライン曲面を表現するためのクラスです。以下のコード例は、6x6個の制御点、3次の非周期的開放NURBS曲面を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。コード例で使用したパラメータの詳細な値については、[examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)の`CreateRationalBSplineSurface`関数を参照してください。
-
-　この際の注意点として、`IGESParameterVector`には、intとdoubleを明確に区別して渡してください。例えば以下の8つ目のパラメータ (1つ目のUノットベクトル値; `0.0`) を、`0` (int) として渡すと、エラーが発生します。
+　`RationalBSplineSurface`は、3次元空間内の有理Bスプライン曲面を表現するためのクラスです。以下のコード例は、ファクトリ関数`MakeRationalBSplineSurface`を用いて、6x6個の制御点、3次の非周期的開放NURBS曲面を生成します（図参照）。制御点は`cp_grid[i][j]`が$P(i,j)$（$i$: U方向、$j$: V方向）に対応するグリッドとして与えます。重み（すべて`1.0`）とパラメータ範囲（ノット定義域）は省略でき、閉フラグ (PROP1/PROP2) などは与えたデータから自動的に導出されます。コード例で使用したパラメータの詳細な値については、[examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)の`CreateRationalBSplineSurface`関数を参照してください。
 
 ```cpp
-// Freeform surface
-auto param = igesio::IGESParameterVector{
-    5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-    3, 3,  // M1, M2 (Degree in U and V)
-    false, false, true, false, false,         // PROP1-5
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(5,1)
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,2) to W(5,3)
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,4) to W(5,5)
-    // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
-    -25., -25., -10.,  // Control point (0,0)
-    -15., -25., -8.,   // Control point (1,0)
+// Freeform surface (6x6 control points, degree 3 in U and V)
+// cp_grid[i][j] = P(i,j)
+std::vector<std::vector<igesio::Vector3d>> cp_grid{
+    {igesio::Vector3d(-25., -25., -10.), igesio::Vector3d(-25., -15., -5.),
+     /* ... */ igesio::Vector3d(-25., 25., -10.)},  // P(0,j)
     // ...
-    25., 25., -10.,    // Control point (5,5)
-    0., 3., 0., 3.     // Parameter range in U and V
-};
-auto nurbs_freeform = std::make_shared<igesio::entities::RationalBSplineSurface>(param);
+    {igesio::Vector3d(25., -25., -10.), igesio::Vector3d(25., -15., -5.),
+     /* ... */ igesio::Vector3d(25., 25., -10.)}};  // P(5,j)
+auto nurbs_freeform = igesio::entities::MakeRationalBSplineSurface(
+    {3, 3},                                    // degrees {M1, M2}
+    cp_grid,
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 nurbs_freeform->OverwriteColor(igesio::entities::ColorNumber::kCyan);
 ```
 
@@ -797,8 +760,9 @@ $$\Omega = \overline{\mathrm{int}(\partial\Omega_{\text{out}})} \cap \bigcap_{i=
 ```cpp
 namespace i_ent = igesio::entities;
 
-// 1. ベース曲面の作成 (NURBS Surface)
-auto base_surface = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
+// 1. ベース曲面の作成 (NURBS Surface; RationalBSplineSurfaceの節を参照)
+auto base_surface = i_ent::MakeRationalBSplineSurface(
+        degrees, cp_grid, u_knots, v_knots);
 
 // 2. 内側境界（穴）の作成
 // パラメータ空間(u, v)上での円弧を定義
