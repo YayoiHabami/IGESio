@@ -55,10 +55,9 @@ int main() {
               << "    CompositeCurve range: [" << start_comp << ", " << end_comp
                                                << "]" << std::endl;
 
-    // Create a Color Definition entity (≈ #7FFF4C)
+    // Create a Color Definition entity (#7FFF4C)
     // and overwrite the color of the Composite Curve
-    auto color_def = std::make_shared<i_ent::ColorDefinition>(
-            std::array<double, 3>{50.0, 100.0, 30.0}, "Light Green");
+    auto color_def = i_ent::MakeColorDefinitionFromHex("#7FFF4C", "Light Green");
     composite_curve->OverwriteColor(color_def);
     std::cout << "  The 2nd curve ID (from TryGet): "
               << composite_curve->GetChildEntity(curve2->GetID())->GetID() << std::endl;

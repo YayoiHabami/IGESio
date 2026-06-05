@@ -100,7 +100,6 @@ try {
 
 ```cpp
 #include <memory>
-#include <array>
 #include <iostream>
 #include <igesio/igesio.h>
 
@@ -108,9 +107,9 @@ try {
 // 中心点 (3.0, 0.0)、半径1.0の円
 auto circle = igesio::entities::MakeCircle(igesio::Vector2d{3.0, 0.0}, 1.0);
 
-// Color Definitionエンティティを使用して色を設定 (≈ #4C7FFF)
-auto color_def = std::make_shared<igesio::entities::ColorDefinition>(
-        std::array<double, 3>{30.0, 50.0, 100.0}, "Bright Blue");
+// Color Definitionエンティティを使用して色を設定 (#4C7FFF)
+auto color_def = igesio::entities::MakeColorDefinitionFromHex(
+        "#4C7FFF", "Bright Blue");
 circle->OverwriteColor(color_def);
 
 // IgesDataクラスを作成してエンティティを追加
