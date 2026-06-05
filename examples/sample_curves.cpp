@@ -64,10 +64,7 @@ ent_vec CreateCompositeCurve() {
             Vector2d{-0.5, 1.0}, Vector2d{1.0, 1.0}, Vector2d{-2.0, 1.0});
 
     // Composite curve
-    auto comp_curve = std::make_shared<i_ent::CompositeCurve>();
-    comp_curve->AddCurve(comp_1);
-    comp_curve->AddCurve(comp_2);
-    comp_curve->AddCurve(comp_3);
+    auto comp_curve = i_ent::MakeCompositeCurve({comp_1, comp_2, comp_3});
 
     return {comp_1_trans, comp_1, comp_2, comp_3, comp_curve};
 }

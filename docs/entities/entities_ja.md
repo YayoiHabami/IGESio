@@ -269,10 +269,7 @@ auto comp_3 = igesio::entities::MakeCircularArc(
 
 // Composite curve
 // arc1 --> line --> arc2
-auto comp_curve = std::make_shared<igesio::entities::CompositeCurve>();
-comp_curve->AddCurve(comp_1);
-comp_curve->AddCurve(comp_2);
-comp_curve->AddCurve(comp_3);
+auto comp_curve = igesio::entities::MakeCompositeCurve({comp_1, comp_2, comp_3});
 ```
 
 <img src="./images/composite_curve.png" width=300px alt="CompositeCurve Example" />

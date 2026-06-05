@@ -662,15 +662,30 @@ TEST(CompositeCurveContinuityTest, SmallGap_IsValidNoWarning) {
 // 明らかに大きい隙間 (10, scale~100で0.1相対) → 連続性警告は出るがis_valid=true
 // (描画ブロックしない=本修正の要点)。隙間量は警告閾値の具体値に依存しないよう、
 // あらゆる妥当な連続性許容を確実に超える大きさにしている。
+// NOTE: この大きさの隙間はプログラム構築経路 (AddCurve) ではEntityValueErrorで
+//       拒否されるため、連続性を検証しないファイル読み込み経路
+//       (PDコンストラクタ+参照解決) で構築する。読み込んだ隙間はValidatePDが
+//       kWarningとして報告する、という読み込み側の仕様のテストである。
 TEST(CompositeCurveContinuityTest, LargeGap_IsValidWithWarning) {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
-    // curve0の終点(100,0,0)とcurve1の始点(110,0,0)に10の隙間 (真の不連続レベル)
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{110.0, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
+    const auto l0 = i_ent::MakeLine(
+        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0});
+    // l0の終点(100,0,0)とl1の始点(110,0,0)に10の隙間 (真の不連続レベル)
+    const auto l1 = i_ent::MakeLine(
+        Vector3d{110.0, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0});
+    const auto l2 = i_ent::MakeLine(
+        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0});
+    igesio::pointer2ID de2id;
+    de2id.emplace(1u, l0->GetID());
+    de2id.emplace(3u, l1->GetID());
+    de2id.emplace(5u, l2->GetID());
+    const auto param = igesio::IGESParameterVector{3, 1, 3, 5};
+    auto cc = std::make_shared<CompositeCurve>(
+        i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kCompositeCurve),
+        param, de2id);
+    ASSERT_TRUE(cc->SetUnresolvedReference(l0));
+    ASSERT_TRUE(cc->SetUnresolvedReference(l1));
+    ASSERT_TRUE(cc->SetUnresolvedReference(l2));
+
     const auto result = cc->ValidatePD();
     EXPECT_TRUE(result.is_valid);  // 警告は描画をブロックしない (本修正の要点)
     // 連続性の警告 (kWarning) が含まれる

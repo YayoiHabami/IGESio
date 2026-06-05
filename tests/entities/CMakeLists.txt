@@ -25,6 +25,7 @@ set(TEST_SOURCES
     curves/test_algorithms.cpp
     curves/test_nurbs_approximation_algorithms.cpp
     curves/test_composite_curve.cpp
+    curves/test_composite_curve_edit.cpp
     curves/test_linear_path.cpp
     curves/test_parametric_spline_curve.cpp
     curves/test_rational_b_spline_curve.cpp

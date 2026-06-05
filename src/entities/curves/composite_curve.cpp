@@ -10,10 +10,15 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/core/tolerance.h"
 
 namespace {
@@ -21,33 +26,59 @@ namespace {
 namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::CompositeCurve;
+using i_ent::ICurve;
 using igesio::Vector3d;
 
-/// @brief 各構成曲線の開始グローバルパラメータを計算する
-/// @param cc CompositeCurveの参照
-/// @return 各曲線の開始グローバルパラメータ (サイズ n+1, 末尾は全体の終端)
-std::vector<double>
-ComputeCurveOffsets(const CompositeCurve& cc) {
-    const size_t n = cc.GetCurveCount();
-    std::vector<double> offsets;
-    offsets.reserve(n + 1);
-    double acc = 0.0;
-    offsets.push_back(0.0);
-    for (size_t i = 0; i < n; ++i) {
-        auto curve = cc.GetCurveAt(i);
-        if (!curve) {
-            offsets.push_back(acc);
-            continue;
-        }
-        const auto range = curve->GetParameterRange();
-        if (!std::isfinite(range[0]) || !std::isfinite(range[1])) {
-            offsets.push_back(acc);
-            continue;
-        }
-        acc += range[1] - range[0];
-        offsets.push_back(acc);
+/// @brief 接合点の連続性判定に用いる許容差を計算する
+/// @param a 接合点を構成する一方の端点
+/// @param b 接合点を構成する他方の端点
+/// @return 連続性判定の許容差
+/// @note 絶対許容kGeometryToleranceはCADのモデリング公差由来の端点隙間に
+///       対して厳しすぎるため、座標スケールに対する相対値とする
+double ContinuityTolerance(const Vector3d& a, const Vector3d& b) {
+    const double scale = std::max(a.norm(), b.norm());
+    return std::max(i_num::kGeometryTolerance, 1e-5 * scale);
+}
+
+/// @brief 接合点の連続性を検証し、違反時は例外を投げる
+/// @param prev_end 直前の曲線の終点
+/// @param next_start 直後の曲線の始点
+/// @param context エラーメッセージに含める呼び出し元の名前
+/// @throw igesio::EntityValueError 接合点の隙間が許容差を超える場合
+/// @note いずれかの端点が取得できない場合 (未解決参照・無限長等) は
+///       チェック不能として許容する
+void ThrowIfDiscontinuous(const std::optional<Vector3d>& prev_end,
+                          const std::optional<Vector3d>& next_start,
+                          const std::string& context) {
+    if (!prev_end || !next_start) return;
+    const double tol = ContinuityTolerance(*prev_end, *next_start);
+    if (!i_num::IsApproxEqual(*prev_end, *next_start, tol)) {
+        std::ostringstream oss;
+        oss << context << ": curves must be contiguous, but the gap at the"
+            << " junction (" << (*prev_end - *next_start).norm()
+            << ") exceeds the tolerance (" << tol << ").";
+        throw igesio::EntityValueError(oss.str());
     }
-    return offsets;
+}
+
+/// @brief コンテナに格納された曲線の終点を取得する
+/// @param container 曲線を保持するコンテナ
+/// @return 曲線の終点。曲線が未解決参照、または終点が取得できない場合はnullopt
+std::optional<Vector3d> TryGetEndPointOf(
+        const i_ent::PointerContainer<false, ICurve>& container) {
+    auto curve = container.TryGetEntity<ICurve>();
+    if (!curve || !*curve) return std::nullopt;
+    return (*curve)->TryGetEndPoint();
+}
+
+/// @brief コンテナに格納された曲線の始点を取得する
+/// @param container 曲線を保持するコンテナ
+/// @return 曲線の始点。曲線が未解決参照、または始点が取得できない場合はnullopt
+std::optional<Vector3d> TryGetStartPointOf(
+        const i_ent::PointerContainer<false, ICurve>& container) {
+    auto curve = container.TryGetEntity<ICurve>();
+    if (!curve || !*curve) return std::nullopt;
+    return (*curve)->TryGetStartPoint();
 }
 
 }  // namespace
@@ -234,11 +265,9 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
                 errors.emplace_back("Start point of " + str_i + " is not defined.");
                 continue;
             }
-            // 前の曲線の終点と現在の曲線の始点が一致するか確認。連続性の許容は座標
-            // スケールに対する相対値とする (絶対kGeometryTolerance=1e-9は、CADの
-            // モデリング公差由来の端点隙間に対し厳しすぎるため)。
-            const double scale = std::max(prev_end_point.norm(), start_point->norm());
-            const double continuity_tol = std::max(i_num::kGeometryTolerance, 1e-5 * scale);
+            // 前の曲線の終点と現在の曲線の始点が一致するか確認
+            const double continuity_tol =
+                    ContinuityTolerance(prev_end_point, *start_point);
             // 連続性 (前曲線の終点=現曲線の始点) は幾何的品質の指摘でありkWarningとする。
             // 隙間があっても曲線は使用/描画可能なためis_valid (描画ゲート) はブロックしない。
             // 許容値は警告を出すか否かのみを左右する。CADは隙間を多用するため桁違いに大きい
@@ -269,7 +298,7 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
 
 std::vector<std::array<double, 2>> CompositeCurve::GetLinearSegments() const {
     std::vector<std::array<double, 2>> result;
-    const auto offsets = ComputeCurveOffsets(*this);
+    const auto offsets = GetCurveBreakParameters();
     for (size_t i = 0; i < curves_.size(); ++i) {
         auto curve = curves_[i].GetEntity<ICurve>();
         if (!curve) continue;
@@ -287,7 +316,7 @@ std::vector<std::array<double, 2>> CompositeCurve::GetLinearSegments() const {
 
 std::vector<double> CompositeCurve::GetCornerParams() const {
     std::vector<double> result;
-    const auto offsets = ComputeCurveOffsets(*this);
+    const auto offsets = GetCurveBreakParameters();
     for (size_t i = 0; i < curves_.size(); ++i) {
         auto curve = curves_[i].GetEntity<ICurve>();
         if (!curve) continue;
@@ -304,7 +333,7 @@ std::vector<double> CompositeCurve::GetCornerParams() const {
 }
 
 std::optional<Vector3d> CompositeCurve::TryGetDefinedLeftTangentAt(const double t) const {
-    const auto offsets = ComputeCurveOffsets(*this);
+    const auto offsets = GetCurveBreakParameters();
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
         if (std::abs(t - offsets[i]) < 1e-9) {
@@ -321,7 +350,7 @@ std::optional<Vector3d> CompositeCurve::TryGetDefinedLeftTangentAt(const double 
 }
 
 std::optional<Vector3d> CompositeCurve::TryGetDefinedRightTangentAt(const double t) const {
-    const auto offsets = ComputeCurveOffsets(*this);
+    const auto offsets = GetCurveBreakParameters();
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
         if (std::abs(t - offsets[i]) < 1e-9) {
@@ -412,12 +441,15 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
         return false;  // 無効なポインタは追加できない
     }
 
-    // NOTE: 隣接曲線の連続性 (前曲線の終点=新曲線の始点) はここでは強制しない。
-    // CADの実出力は端点に隙間を持つことが多く、ファイル読み込み経路
-    // (SetMainPDParameters) も連続性を課さない。連続性はValidatePDでkWarningとして
-    // 報告する (描画はブロックしない)。AddCurveは単純な追加に徹し、構築経路と読み込み
-    // 経路で挙動を一貫させる (以前はここで1e-9の厳密一致を要求し隙間付き曲線を拒否
-    // していたが、これは過剰検証でありseverity方式へ移行した)。
+    // NOTE: プログラム構築経路では連続性 (直前の曲線の終点=新曲線の始点) を
+    // 強制する。許容差は座標スケールに対する相対値 (ContinuityTolerance) であり、
+    // CADのモデリング公差由来の微小隙間は許容し、桁違いの真の不連続のみ拒否する。
+    // ファイル読み込み経路 (SetMainPDParameters) はチェックを行わず、連続性は
+    // ValidatePDがkWarningとして報告する (描画はブロックしない)。
+    if (!curves_.empty()) {
+        ThrowIfDiscontinuous(TryGetEndPointOf(curves_.back()),
+                             curve->TryGetStartPoint(), "AddCurve");
+    }
 
     // SubordinateEntitySwitchをkPhysicallyDependentに設定
     if (auto entity_base = std::dynamic_pointer_cast<EntityBase>(curve)) {
@@ -429,10 +461,100 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
     return true;
 }
 
+std::vector<std::shared_ptr<const i_ent::ICurve>>
+CompositeCurve::ReplaceCurves(const size_t first, const size_t last,
+                              const std::vector<std::shared_ptr<ICurve>>& new_curves) {
+    // 引数検証 (検証がすべて通るまでcurves_は変更しない)
+    if (first > last) {
+        throw std::invalid_argument(
+                "ReplaceCurves: first (" + std::to_string(first) +
+                ") must not exceed last (" + std::to_string(last) + ").");
+    }
+    if (last >= curves_.size()) {
+        throw std::out_of_range(
+                "ReplaceCurves: last (" + std::to_string(last) +
+                ") is out of range (curve count: " +
+                std::to_string(curves_.size()) + ").");
+    }
+    for (size_t i = 0; i < new_curves.size(); ++i) {
+        if (!new_curves[i]) {
+            throw std::invalid_argument("ReplaceCurves: new_curves[" +
+                                        std::to_string(i) + "] is null.");
+        }
+    }
+
+    // 置換後の隣接接合 [前隣接, new_curves..., 後隣接] の連続性を検証
+    // (first == 0の場合、先頭の新曲線に前隣接はなくprev_endはnulloptのまま)
+    std::optional<Vector3d> prev_end;
+    if (first > 0) prev_end = TryGetEndPointOf(curves_[first - 1]);
+    for (const auto& curve : new_curves) {
+        ThrowIfDiscontinuous(prev_end, curve->TryGetStartPoint(), "ReplaceCurves");
+        prev_end = curve->TryGetEndPoint();
+    }
+    if (last + 1 < curves_.size()) {
+        ThrowIfDiscontinuous(prev_end, TryGetStartPointOf(curves_[last + 1]),
+                             "ReplaceCurves");
+    }
+
+    // 取り外す曲線を収集 (未解決参照はnullptr)
+    std::vector<std::shared_ptr<const ICurve>> removed;
+    removed.reserve(last - first + 1);
+    for (size_t i = first; i <= last; ++i) {
+        auto curve = curves_[i].TryGetEntity<ICurve>();
+        removed.push_back((curve && *curve) ? *curve : nullptr);
+    }
+
+    // 置換後のリストを構築してから一括で差し替える (強い例外保証)
+    std::vector<PointerContainer<false, ICurve>> replaced;
+    replaced.reserve(curves_.size() - removed.size() + new_curves.size());
+    for (size_t i = 0; i < first; ++i) replaced.push_back(curves_[i]);
+    for (const auto& curve : new_curves) replaced.emplace_back(curve);
+    for (size_t i = last + 1; i < curves_.size(); ++i) replaced.push_back(curves_[i]);
+    curves_.swap(replaced);
+
+    // 新規曲線のSubordinateEntitySwitchをkPhysicallyDependentに設定
+    // (取り外した曲線のスイッチは、他エンティティからの参照有無を本クラスが
+    //  知り得ないため変更しない)
+    for (const auto& curve : new_curves) {
+        if (auto entity_base = std::dynamic_pointer_cast<EntityBase>(curve)) {
+            entity_base->SetSubordinateEntitySwitch(
+                SubordinateEntitySwitch::kPhysicallyDependent);
+        }
+    }
+    return removed;
+}
+
+std::shared_ptr<const i_ent::ICurve>
+CompositeCurve::SetCurveAt(const size_t index,
+                           const std::shared_ptr<ICurve>& curve) {
+    if (!curve) {
+        throw std::invalid_argument("SetCurveAt: curve is null.");
+    }
+    return ReplaceCurves(index, index, {curve}).front();
+}
+
+std::shared_ptr<const i_ent::ICurve> CompositeCurve::RemoveFirstCurve() {
+    if (curves_.empty()) {
+        throw std::out_of_range("RemoveFirstCurve: the composite curve is empty.");
+    }
+    return ReplaceCurves(0, 0, {}).front();
+}
+
+std::shared_ptr<const i_ent::ICurve> CompositeCurve::RemoveLastCurve() {
+    if (curves_.empty()) {
+        throw std::out_of_range("RemoveLastCurve: the composite curve is empty.");
+    }
+    return ReplaceCurves(curves_.size() - 1, curves_.size() - 1, {}).front();
+}
+
+void CompositeCurve::ClearCurves() {
+    curves_.clear();
+}
+
 double CompositeCurve::Length(const double start, const double end) const {
     // パラメータ開始/終了値に対応する曲線とローカルパラメータを取得
-    auto start_result = GetCurveIndexAtParameter(start);
-    auto end_result = GetCurveIndexAtParameter(end);
+    auto start_result = TryGetCurveIndexAtParameter(start);
+    auto end_result = TryGetCurveIndexAtParameter(end);
     if (!start_result || !end_result) {
         throw std::invalid_argument("Parameter out of range in Length calculation.");
     }
@@ -486,24 +608,74 @@ i_num::BoundingBox CompositeCurve::GetDefinedBoundingBox() const {
 
 
 /**
- * CompositeCurve: private methods
+ * CompositeCurve: パラメータ写像・接合診断
  */
 
-std::pair<std::shared_ptr<const i_ent::ICurve>, double>
-CompositeCurve::GetCurveAtParameter(const double t) const {
-    auto result = GetCurveIndexAtParameter(t);
-    if (result) {
-        size_t curve_index = result->first;
-        double t_local = result->second;
-        auto curve = curves_[curve_index].GetEntity<ICurve>();
-        return std::make_pair(curve, t_local);
+std::vector<double> CompositeCurve::GetCurveBreakParameters() const {
+    std::vector<double> breaks;
+    breaks.reserve(curves_.size() + 1);
+    double acc = 0.0;
+    breaks.push_back(0.0);
+    for (const auto& container : curves_) {
+        auto curve = container.TryGetEntity<ICurve>();
+        if (!curve || !*curve) {
+            // 未解決参照の曲線はパラメータ長0として扱う
+            breaks.push_back(acc);
+            continue;
+        }
+        const auto range = (*curve)->GetParameterRange();
+        if (!std::isfinite(range[0]) || !std::isfinite(range[1])) {
+            // 無限長の曲線はパラメータ長0として扱う
+            breaks.push_back(acc);
+            continue;
+        }
+        acc += range[1] - range[0];
+        breaks.push_back(acc);
     }
-    // パラメータtが範囲外の場合
-    return {nullptr, 0.0};
+    return breaks;
+}
+
+std::optional<double>
+CompositeCurve::TryGetGlobalParameter(const size_t index,
+                                      const double t_local) const {
+    if (index >= curves_.size()) {
+        throw std::out_of_range("TryGetGlobalParameter: index " +
+                                std::to_string(index) +
+                                " is out of range (curve count: " +
+                                std::to_string(curves_.size()) + ").");
+    }
+    auto curve = curves_[index].TryGetEntity<ICurve>();
+    if (!curve || !*curve) return std::nullopt;
+    const auto range = (*curve)->GetParameterRange();
+    if (!std::isfinite(range[0]) || !std::isfinite(range[1])) return std::nullopt;
+    // t_localが当該曲線のパラメータ範囲内であることを確認
+    // (浮動小数点数の比較のため、わずかな誤差を許容する)
+    if (t_local < range[0] - i_num::kGeometryTolerance ||
+        t_local > range[1] + i_num::kGeometryTolerance) {
+        return std::nullopt;
+    }
+    return GetCurveBreakParameters()[index] + (t_local - range[0]);
+}
+
+std::vector<std::optional<double>> CompositeCurve::GetJunctionGaps() const {
+    std::vector<std::optional<double>> gaps;
+    if (curves_.size() < 2) return gaps;
+    gaps.reserve(curves_.size() - 1);
+    for (size_t i = 0; i + 1 < curves_.size(); ++i) {
+        const auto end_point = TryGetEndPointOf(curves_[i]);
+        const auto start_point = TryGetStartPointOf(curves_[i + 1]);
+        if (end_point && start_point) {
+            gaps.push_back((*end_point - *start_point).norm());
+        } else {
+            // 端点が取得できない接合点は隙間を定義できない
+            gaps.push_back(std::nullopt);
+        }
+    }
+    return gaps;
 }
 
 std::optional<std::pair<size_t, double>>
-CompositeCurve::GetCurveIndexAtParameter(const double t) const {
+CompositeCurve::TryGetCurveIndexAtParameter(const double t) const {
     double accumulated_length = 0.0;
     for (size_t i = 0; i < curves_.size(); ++i) {
         auto curve_container = curves_[i];
@@ -529,4 +701,55 @@ CompositeCurve::GetCurveIndexAtParameter(const double t) const {
     }
     // パラメータtが範囲外の場合
     return std::nullopt;
+}
+
+
+
+/**
+ * CompositeCurve: private methods
+ */
+
+std::pair<std::shared_ptr<const i_ent::ICurve>, double>
+CompositeCurve::GetCurveAtParameter(const double t) const {
+    auto result = TryGetCurveIndexAtParameter(t);
+    if (result) {
+        size_t curve_index = result->first;
+        double t_local = result->second;
+        auto curve = curves_[curve_index].GetEntity<ICurve>();
+        return std::make_pair(curve, t_local);
+    }
+    // パラメータtが範囲外の場合
+    return {nullptr, 0.0};
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<CompositeCurve>
+i_ent::MakeCompositeCurve(const std::vector<std::shared_ptr<ICurve>>& curves) {
+    if (curves.empty()) {
+        throw std::invalid_argument("MakeCompositeCurve: curves is empty.");
+    }
+    for (size_t i = 0; i < curves.size(); ++i) {
+        if (!curves[i]) {
+            throw std::invalid_argument("MakeCompositeCurve: curves[" +
+                                        std::to_string(i) + "] is null.");
+        }
+    }
+    // 連続性を事前検証する (AddCurve途中での失敗により、一部の入力曲線にのみ
+    // SubordinateEntitySwitch設定の副作用が残ることを防ぐ)
+    for (size_t i = 0; i + 1 < curves.size(); ++i) {
+        ThrowIfDiscontinuous(curves[i]->TryGetEndPoint(),
+                             curves[i + 1]->TryGetStartPoint(),
+                             "MakeCompositeCurve");
+    }
+
+    auto composite = std::make_shared<CompositeCurve>();
+    for (const auto& curve : curves) {
+        composite->AddCurve(curve);
+    }
+    return composite;
 }

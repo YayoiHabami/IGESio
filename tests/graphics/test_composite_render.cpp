@@ -38,12 +38,11 @@ using i_graph::ShaderType;
 /// @brief 2本の線分(直角折れ)からなるCompositeCurveを生成する
 /// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment
 std::shared_ptr<i_ent::CompositeCurve> MakeCompositeOfSegments() {
-    auto cc = std::make_shared<i_ent::CompositeCurve>();
-    cc->AddCurve(i_ent::MakeLine(
-        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(i_ent::MakeLine(
-        igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(
+            igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}),
+        i_ent::MakeLine(
+            igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0})});
 }
 
 }  // namespace

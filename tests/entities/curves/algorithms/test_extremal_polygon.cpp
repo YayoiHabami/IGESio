@@ -418,27 +418,19 @@ namespace {
 /// @brief 2本のLineからなる開いた (閉じていない) CompositeCurve
 /// (0,0,0)→(1,0,0)→(1,1,0)
 std::shared_ptr<CompositeCurve> MakeOpenChain() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(i_ent::MakeLine(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(i_ent::MakeLine(
-        Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}),
+        i_ent::MakeLine(Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0})});
 }
 
 /// @brief 自己交差する閉じたCompositeCurve (8の字: 対角線が交差)
 /// (0,0,0)→(2,2,0)→(2,0,0)→(0,2,0)→(0,0,0)
 std::shared_ptr<CompositeCurve> MakeSelfIntersecting() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(i_ent::MakeLine(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{2.0, 2.0, 0.0}));
-    cc->AddCurve(i_ent::MakeLine(
-        Vector3d{2.0, 2.0, 0.0}, Vector3d{2.0, 0.0, 0.0}));
-    cc->AddCurve(i_ent::MakeLine(
-        Vector3d{2.0, 0.0, 0.0}, Vector3d{0.0, 2.0, 0.0}));
-    cc->AddCurve(i_ent::MakeLine(
-        Vector3d{0.0, 2.0, 0.0}, Vector3d{0.0, 0.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(Vector3d{0.0, 0.0, 0.0}, Vector3d{2.0, 2.0, 0.0}),
+        i_ent::MakeLine(Vector3d{2.0, 2.0, 0.0}, Vector3d{2.0, 0.0, 0.0}),
+        i_ent::MakeLine(Vector3d{2.0, 0.0, 0.0}, Vector3d{0.0, 2.0, 0.0}),
+        i_ent::MakeLine(Vector3d{0.0, 2.0, 0.0}, Vector3d{0.0, 0.0, 0.0})});
 }
 
 }  // namespace

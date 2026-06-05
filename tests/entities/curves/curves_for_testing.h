@@ -98,10 +98,7 @@ inline curve_vec CreateCompositeCurves() {
             std::vector<Vector2d>{{1.0, 1.0}, {1.0, 0.0}, {-2.0, 1.0}}, false);
 
     // Composite curve
-    auto comp_curve = std::make_shared<entities::CompositeCurve>();
-    comp_curve->AddCurve(comp_1);
-    comp_curve->AddCurve(comp_2);
-    comp_curve->AddCurve(comp_3);
+    auto comp_curve = entities::MakeCompositeCurve({comp_1, comp_2, comp_3});
 
     TestCurve composite_curve("composite curve (arc + line + polyline)", comp_curve, 0);
     composite_curve.Set2DInfo(true, true);
@@ -111,9 +108,8 @@ inline curve_vec CreateCompositeCurves() {
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0});
     auto polyline_3d = entities::MakeLinearPath(
             std::vector<Vector3d>{{1.0, 1.0, 1.0}, {2.0, 0.0, -1.0}, {3.0, 1.0, 0.0}});
-    auto composite_curve_3d_ptr = std::make_shared<entities::CompositeCurve>();
-    composite_curve_3d_ptr->AddCurve(line_3d);
-    composite_curve_3d_ptr->AddCurve(polyline_3d);
+    auto composite_curve_3d_ptr =
+            entities::MakeCompositeCurve({line_3d, polyline_3d});
     composite_curve_3d.curve = composite_curve_3d_ptr;
 
     return {composite_curve};

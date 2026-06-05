@@ -43,10 +43,7 @@ int main() {
     auto curve3 = i_ent::MakeCircularArc(
             igesio::Vector2d{1.5, 1.5}, igesio::Vector2d{-0.5, 1.5},
             igesio::Vector2d{3.5, 1.5});
-    auto composite_curve = std::make_shared<i_ent::CompositeCurve>();
-    composite_curve->AddCurve(curve1);
-    composite_curve->AddCurve(curve2);
-    composite_curve->AddCurve(curve3);
+    auto composite_curve = i_ent::MakeCompositeCurve({curve1, curve2, curve3});
     auto [start_1, end_1] = curve1->GetParameterRange();
     auto [start_2, end_2] = curve2->GetParameterRange();
     auto [start_3, end_3] = curve3->GetParameterRange();

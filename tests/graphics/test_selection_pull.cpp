@@ -54,12 +54,11 @@ std::shared_ptr<i_ent::CircularArc> MakeArc() {
 /// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment.
 ///       親(102)と子(各Line)はそれぞれ別IDを持つ.
 std::shared_ptr<i_ent::CompositeCurve> MakeComposite() {
-    auto cc = std::make_shared<i_ent::CompositeCurve>();
-    cc->AddCurve(i_ent::MakeLine(
-        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(i_ent::MakeLine(
-        igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(igesio::Vector3d{0.0, 0.0, 0.0},
+                        igesio::Vector3d{1.0, 0.0, 0.0}),
+        i_ent::MakeLine(igesio::Vector3d{1.0, 0.0, 0.0},
+                        igesio::Vector3d{1.0, 1.0, 0.0})});
 }
 
 }  // namespace
