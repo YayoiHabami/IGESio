@@ -114,12 +114,12 @@ std::shared_ptr<RationalBSplineCurve> MakeStraightNurbs() {
 
 /// @brief 原点中心・半径1の半円 (開曲線)。パラメータ範囲 [0, π]、|C(t)|=1。
 std::shared_ptr<CircularArc> MakeHalfCircle() {
-    return std::make_shared<CircularArc>(Vector2d(0.0, 0.0), 1.0, 0.0, kPi);
+    return i_ent::MakeCircularArc(Vector2d(0.0, 0.0), 1.0, 0.0, kPi);
 }
 
 /// @brief 原点中心・半径1の全円 (閉曲線)。パラメータ範囲 [0, 2π]、|C(t)|=1。
 std::shared_ptr<CircularArc> MakeFullCircle() {
-    return std::make_shared<CircularArc>(Vector2d(0.0, 0.0), 1.0);
+    return i_ent::MakeCircle(Vector2d(0.0, 0.0), 1.0);
 }
 
 

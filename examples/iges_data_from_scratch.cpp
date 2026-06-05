@@ -34,13 +34,13 @@ int main() {
     // - Arc with center (0, 0), start point (1, 0), and end point (0, 1)
     // - Arc with center (0, 1.5), start point (0, 1), and end point (-0.5, 1.5)
     // - Arc with center (1.5, 1.5), start point (-0.5, 1.5), and end point (3.5, 1.5)
-    auto curve1 = std::make_shared<i_ent::CircularArc>(
+    auto curve1 = i_ent::MakeCircularArc(
             igesio::Vector2d{0.0, 0.0}, igesio::Vector2d{1.0, 0.0},
             igesio::Vector2d{0.0, 1.0});
-    auto curve2 = std::make_shared<i_ent::CircularArc>(
+    auto curve2 = i_ent::MakeCircularArc(
             igesio::Vector2d{0.0, 1.5}, igesio::Vector2d{0.0, 1.0},
             igesio::Vector2d{-0.5, 1.5});
-    auto curve3 = std::make_shared<i_ent::CircularArc>(
+    auto curve3 = i_ent::MakeCircularArc(
             igesio::Vector2d{1.5, 1.5}, igesio::Vector2d{-0.5, 1.5},
             igesio::Vector2d{3.5, 1.5});
     auto composite_curve = std::make_shared<i_ent::CompositeCurve>();
@@ -71,11 +71,10 @@ int main() {
     // Create Circular Arc entities and demonstrate their normal and tangent calculations
     // - Arc with center (0, 0), start point (2, 0), end point (0, 2)
     // - Circle with center (1, 0) and radius 1 (z = -1)
-    auto arc = std::make_shared<i_ent::CircularArc>(
+    auto arc = i_ent::MakeCircularArc(
             igesio::Vector2d{0.0, 0.0}, igesio::Vector2d{2.0, 0.0},
             igesio::Vector2d{0.0, 2.0}, 0.0);
-    auto circle = std::make_shared<i_ent::CircularArc>(
-            igesio::Vector2d{1.0, 0.0}, 1.0, -1.0);
+    auto circle = i_ent::MakeCircle(igesio::Vector2d{1.0, 0.0}, 1.0, -1.0);
     auto arc_norm = arc->GetNormalAt(1.5);
     auto arc_tangent = arc->GetTangentAt(1.5);
     auto dot = arc_norm.dot(arc_tangent);

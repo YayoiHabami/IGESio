@@ -4,9 +4,13 @@
  * @author Yayoi Habami
  * @date 2025-08-16
  * @copyright 2025 Yayoi Habami
+ * @note ファクトリ関数 (MakeCircularArc / MakeCircle /
+ *       MakeCircularArcThroughPoints) のテストを含む
  */
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,6 +26,8 @@ using Vector2d = igesio::Vector2d;
 using Vector3d = igesio::Vector3d;
 using CircularArc = igesio::entities::CircularArc;
 constexpr double kPi = igesio::kPi;
+/// @brief 浮動小数点比較の許容誤差
+constexpr double kTol = 1e-9;
 
 }  // namespace
 
@@ -276,4 +282,190 @@ TEST(CircularArcTest, PointTangentNormalAt) {
     EXPECT_FALSE(point_out.has_value());
     EXPECT_FALSE(tangent_out.has_value());
     EXPECT_FALSE(normal_out.has_value());
+}
+
+
+
+/**
+ * ファクトリ関数: MakeCircularArc (中心・始終点版/角度版)
+ *
+ * NOTE: ラップ先コンストラクタが持つ検証の境界精度は上記コンストラクタ
+ *       テストの責務とし、ここでは例外型の透過のみ確認する
+ */
+
+// 代表値: 非原点中心+z_t≠0で各アクセサに値が格納される
+TEST(CircularArcFactoryTest, MakeCircularArc_StoresCenterStartTerminate) {
+    const auto arc = i_ent::MakeCircularArc(
+            Vector2d(1.0, 2.0), Vector2d(3.0, 2.0), Vector2d(1.0, 4.0), 0.5);
+
+    ASSERT_NE(arc, nullptr);
+    EXPECT_TRUE(i_num::IsApproxEqual(arc->Center(), Vector3d(1.0, 2.0, 0.5)));
+    EXPECT_NEAR(arc->Radius(), 2.0, kTol);
+    EXPECT_NEAR(arc->StartAngle(), 0.0, kTol);
+    EXPECT_NEAR(arc->EndAngle(), kPi / 2.0, kTol);
+    EXPECT_TRUE(arc->IsValid());
+}
+
+// エラー透過: 始終点が中心から等距離でない → EntityValueError
+TEST(CircularArcFactoryTest,
+     MakeCircularArc_ThrowsEntityValueErrorWhenNotEquidistant) {
+    EXPECT_THROW(i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), Vector2d(1.0, 0.0), Vector2d(0.0, 2.0)),
+            igesio::EntityValueError);
+}
+
+// 代表値: 半径と始終角が格納され、始角の点の座標が一致する
+TEST(CircularArcFactoryTest, MakeCircularArcFromAngles_StoresRadiusAndAngles) {
+    const auto arc = i_ent::MakeCircularArc(
+            Vector2d(-1.0, 1.0), 2.0, kPi / 6.0, kPi / 2.0, 1.5);
+
+    ASSERT_NE(arc, nullptr);
+    EXPECT_NEAR(arc->Radius(), 2.0, kTol);
+    EXPECT_NEAR(arc->StartAngle(), kPi / 6.0, kTol);
+    EXPECT_NEAR(arc->EndAngle(), kPi / 2.0, kTol);
+
+    const auto start = arc->TryGetDefinedPointAt(kPi / 6.0);
+    ASSERT_TRUE(start.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            *start, Vector3d(-1.0 + std::sqrt(3.0), 2.0, 1.5), kTol));
+}
+
+// 境界/縮退: 同角度 → 閉じた円 (範囲幅2π)
+TEST(CircularArcFactoryTest,
+     MakeCircularArcFromAngles_EqualAnglesYieldsClosedCircle) {
+    const auto arc = i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), 1.0, kPi / 4.0, kPi / 4.0);
+    EXPECT_TRUE(arc->IsClosed());
+    const auto range = arc->GetParameterRange();
+    EXPECT_NEAR(range[1] - range[0], 2.0 * kPi, kTol);
+}
+
+// エラー+境界精度: start_angle > end_angleは厳密比較で棄却され、同値は受理
+TEST(CircularArcFactoryTest,
+     MakeCircularArcFromAngles_ThrowsEntityValueErrorWhenStartExceedsEnd) {
+    EXPECT_THROW(i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), 1.0, kPi / 4.0 + 1e-12, kPi / 4.0),
+            igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), 1.0, kPi / 4.0, kPi / 4.0));
+}
+
+// エラー+境界精度: 半径がkGeometryTolerance (1e-9) の内側→throw、すぐ外→受理
+TEST(CircularArcFactoryTest,
+     MakeCircularArcFromAngles_ThrowsEntityValueErrorWhenRadiusNearZero) {
+    EXPECT_THROW(i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), 1e-10, 0.0, kPi / 2.0),
+            igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), 1e-8, 0.0, kPi / 2.0));
+}
+
+
+
+/**
+ * ファクトリ関数: MakeCircle
+ */
+
+// 代表値/縮退: 閉じた円が生成される
+TEST(CircularArcFactoryTest, MakeCircle_CreatesClosedCircle) {
+    const auto circle = i_ent::MakeCircle(Vector2d(2.0, -1.0), 1.5, 0.25);
+
+    ASSERT_NE(circle, nullptr);
+    EXPECT_TRUE(circle->IsClosed());
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            circle->Center(), Vector3d(2.0, -1.0, 0.25)));
+    EXPECT_NEAR(circle->Radius(), 1.5, kTol);
+    const auto range = circle->GetParameterRange();
+    EXPECT_NEAR(range[1] - range[0], 2.0 * kPi, kTol);
+}
+
+// エラー透過: 半径0 → EntityValueError
+TEST(CircularArcFactoryTest,
+     MakeCircle_ThrowsEntityValueErrorWhenRadiusNearZero) {
+    EXPECT_THROW(i_ent::MakeCircle(Vector2d(0.0, 0.0), 0.0),
+                 igesio::EntityValueError);
+}
+
+
+
+/**
+ * ファクトリ関数: MakeCircularArcThroughPoints
+ */
+
+// 代表値: 反時計回りの3点はそのままの順序で弧になる
+TEST(CircularArcFactoryTest,
+     MakeCircularArcThroughPoints_CcwPointsPreserveOrder) {
+    const auto arc = i_ent::MakeCircularArcThroughPoints(
+            Vector2d(1.0, 0.0), Vector2d(0.0, 1.0), Vector2d(-1.0, 0.0));
+
+    ASSERT_NE(arc, nullptr);
+    EXPECT_TRUE(i_num::IsApproxEqual(arc->Center(), Vector3d(0.0, 0.0, 0.0)));
+    EXPECT_NEAR(arc->Radius(), 1.0, kTol);
+    EXPECT_NEAR(arc->StartAngle(), 0.0, kTol);
+    EXPECT_NEAR(arc->EndAngle(), kPi, kTol);
+
+    // 通過点(0,1)が弧上 (角π/2) に乗る
+    const auto mid = arc->TryGetDefinedPointAt(kPi / 2.0);
+    ASSERT_TRUE(mid.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(*mid, Vector3d(0.0, 1.0, 0.0), kTol));
+}
+
+// 代表値: 時計回りの3点は始終点が入れ替わり、通過点が弧上に保たれる
+TEST(CircularArcFactoryTest,
+     MakeCircularArcThroughPoints_CwPointsSwapEndpoints) {
+    const auto arc = i_ent::MakeCircularArcThroughPoints(
+            Vector2d(1.0, 0.0), Vector2d(0.0, -1.0), Vector2d(-1.0, 0.0));
+
+    // 始点(-1,0)・終点(1,0)の反時計回りの弧 [π, 2π] になる
+    EXPECT_NEAR(arc->StartAngle(), kPi, kTol);
+    EXPECT_NEAR(arc->EndAngle(), 2.0 * kPi, kTol);
+
+    // 通過点(0,-1)が弧上 (角3π/2) に乗る
+    const auto mid = arc->TryGetDefinedPointAt(3.0 * kPi / 2.0);
+    ASSERT_TRUE(mid.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(*mid, Vector3d(0.0, -1.0, 0.0), kTol));
+}
+
+// 代表値: 非対称な3点から外心が正しく計算され、z_tが伝播する
+TEST(CircularArcFactoryTest,
+     MakeCircularArcThroughPoints_ComputesCircumcenter) {
+    const auto arc = i_ent::MakeCircularArcThroughPoints(
+            Vector2d(2.0, 0.0), Vector2d(1.0, 1.0), Vector2d(0.0, 0.0), 2.0);
+
+    EXPECT_TRUE(i_num::IsApproxEqual(arc->Center(), Vector3d(1.0, 0.0, 2.0)));
+    EXPECT_NEAR(arc->Radius(), 1.0, kTol);
+    EXPECT_TRUE(arc->IsValid());
+}
+
+// エラー+境界精度: 共線判定 (|u×v| ≤ kGeometryTolerance·|u||v|)。
+// 中点の浮きsに対し正規化外積≈s/L となる構成で境界を確認する。
+// 大半径構成 (半径~5e7以上) はラップ先の絶対許容誤差による等距離検証と
+// 干渉するため、半径~5e4に収まる小スケール点列を使用する
+TEST(CircularArcFactoryTest,
+     MakeCircularArcThroughPoints_ThrowsEntityValueErrorWhenCollinear) {
+    constexpr double kL = 1e-3;  // 半弦長
+    // 厳密に共線 → throw
+    EXPECT_THROW(i_ent::MakeCircularArcThroughPoints(
+            Vector2d(0.0, 0.0), Vector2d(kL, 0.0), Vector2d(2.0 * kL, 0.0)),
+            igesio::EntityValueError);
+    // s/L = 1e-10 < 1e-9: 許容誤差の内側 → 共線とみなされ棄却
+    EXPECT_THROW(i_ent::MakeCircularArcThroughPoints(
+            Vector2d(0.0, 0.0), Vector2d(kL, 1e-13), Vector2d(2.0 * kL, 0.0)),
+            igesio::EntityValueError);
+    // s/L = 1e-8 > 1e-9: 許容誤差のすぐ外 → 受理され大半径の弧になる
+    std::shared_ptr<CircularArc> arc;
+    EXPECT_NO_THROW(arc = i_ent::MakeCircularArcThroughPoints(
+            Vector2d(0.0, 0.0), Vector2d(kL, 1e-11), Vector2d(2.0 * kL, 0.0)));
+    EXPECT_NEAR(arc->Radius(), 5.0e4, 1.0);
+}
+
+// エラー: 点の一致は共線判定で棄却される
+TEST(CircularArcFactoryTest,
+     MakeCircularArcThroughPoints_ThrowsEntityValueErrorWhenPointsCoincide) {
+    EXPECT_THROW(i_ent::MakeCircularArcThroughPoints(
+            Vector2d(1.0, 1.0), Vector2d(1.0, 1.0), Vector2d(2.0, 3.0)),
+            igesio::EntityValueError);
+    EXPECT_THROW(i_ent::MakeCircularArcThroughPoints(
+            Vector2d(1.0, 1.0), Vector2d(2.0, 3.0), Vector2d(1.0, 1.0)),
+            igesio::EntityValueError);
 }

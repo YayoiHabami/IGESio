@@ -8,6 +8,7 @@
 #include "igesio/entities/curves/circular_arc.h"
 
 #include <cmath>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -261,4 +262,60 @@ double CircularArc::StartAngle() const {
 
 double CircularArc::EndAngle() const {
     return GetParameterRange()[1];
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<CircularArc> i_ent::MakeCircularArc(
+        const Vector2d& center, const Vector2d& start_point,
+        const Vector2d& terminate_point, const double z_t) {
+    return std::make_shared<CircularArc>(
+            center, start_point, terminate_point, z_t);
+}
+
+std::shared_ptr<CircularArc> i_ent::MakeCircularArc(
+        const Vector2d& center, const double radius,
+        const double start_angle, const double end_angle, const double z_t) {
+    return std::make_shared<CircularArc>(
+            center, radius, start_angle, end_angle, z_t);
+}
+
+std::shared_ptr<CircularArc> i_ent::MakeCircle(
+        const Vector2d& center, const double radius, const double z_t) {
+    return std::make_shared<CircularArc>(center, radius, z_t);
+}
+
+std::shared_ptr<CircularArc> i_ent::MakeCircularArcThroughPoints(
+        const Vector2d& start_point, const Vector2d& mid_point,
+        const Vector2d& terminate_point, const double z_t) {
+    const Vector2d u = mid_point - start_point;
+    const Vector2d v = terminate_point - start_point;
+
+    // 外積を辺長の積で正規化した相対判定により、共線と点の一致を一括検出する
+    const double cross = u.x() * v.y() - u.y() * v.x();
+    if (std::abs(cross) <= i_num::kGeometryTolerance * u.norm() * v.norm()) {
+        throw igesio::EntityValueError(
+                "MakeCircularArcThroughPoints: The three points must not be"
+                " collinear or coincident.");
+    }
+
+    // 垂直二等分線の交点として外心を計算する (構成上3点と等距離になるため、
+    // ラップ先コンストラクタの等距離検証は常に通過する)
+    const double u2 = u.squaredNorm(), v2 = v.squaredNorm();
+    const Vector2d center = start_point +
+            Vector2d{v.y() * u2 - u.y() * v2,
+                     u.x() * v2 - v.x() * u2} / (2.0 * cross);
+
+    // Type 100は反時計回りの弧のみ表現可能なため、3点が時計回り (cross < 0)
+    // の場合は始終点を入れ替えて、通過点が弧上に乗るようにする
+    if (cross > 0.0) {
+        return std::make_shared<CircularArc>(
+                center, start_point, terminate_point, z_t);
+    }
+    return std::make_shared<CircularArc>(
+            center, terminate_point, start_point, z_t);
 }

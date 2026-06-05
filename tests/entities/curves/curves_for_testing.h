@@ -72,16 +72,12 @@ using curve_vec = std::vector<TestCurve>;
 /// @brief Circular Arcエンティティの作成
 inline curve_vec CreateCircularArcs() {
     TestCurve circle("R1.5 circle with center(-0.75,0)");
-    circle.curve = std::make_shared<entities::CircularArc>(
-            Vector2d{-0.75, 0.0}, 1.5);
+    circle.curve = entities::MakeCircle(Vector2d{-0.75, 0.0}, 1.5);
     circle.Set2DInfo(true, true);
 
     TestCurve arc("R2 arc with center(1,-1), start angle 4π/3, end angle 5π/2");
-    auto center = Vector2d{1.0, -1.0};
-    auto arc_start = Vector2d{cos(4.0 * kPi / 3.0), sin(4.0 * kPi / 3.0)};
-    auto arc_end   = Vector2d{cos(5.0 * kPi / 2.0), sin(5.0 * kPi / 2.0)};
-    arc.curve = std::make_shared<entities::CircularArc>(
-            center, 2.0 * arc_start + center, 2.0 * arc_end + center);
+    arc.curve = entities::MakeCircularArc(
+            Vector2d{1.0, -1.0}, 2.0, 4.0 * kPi / 3.0, 5.0 * kPi / 2.0);
     arc.Set2DInfo(true, true);
 
     return {circle, arc};
@@ -90,7 +86,7 @@ inline curve_vec CreateCircularArcs() {
 /// @brief Composite Curveエンティティの作成
 inline curve_vec CreateCompositeCurves() {
     // 1. circular arc
-    auto comp_1 = std::make_shared<entities::CircularArc>(
+    auto comp_1 = entities::MakeCircularArc(
             Vector2d{0.5, -1.0}, Vector2d{-1.0, -1.0}, Vector2d{2.0, -1.0});
 
     // 2. line

@@ -49,7 +49,7 @@ constexpr float kTol = 1e-6f;
 /// @return 中心(0,0)・始点(1,0)・終点(0,1)・z=0 の四分円
 /// @note CircularArcはShaderType::kCircularArc (実装済み) に対応するため、層Bでも描画される
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
 }

@@ -104,8 +104,7 @@ You can also create entities programmatically. The following example creates a c
 #include <igesio/igesio.h>
 
 // Create a Circular Arc entity (center: (3.0, 0.0), radius: 1.0)
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-    igesio::Vector2d{3.0, 0.0}, 1.0);
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{3.0, 0.0}, 1.0);
 
 // Set color using Color Definition entity (≈ #4C7FFF)
 auto color_def = std::make_shared<igesio::entities::ColorDefinition>(

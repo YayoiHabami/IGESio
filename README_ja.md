@@ -105,9 +105,8 @@ try {
 #include <igesio/igesio.h>
 
 // Circular Arcエンティティを作成
-// 中心点 (3.0, 0.0)、半径 1.0 の円
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{3.0, 0.0}, 1.0);
+// 中心点 (3.0, 0.0)、半径1.0の円
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{3.0, 0.0}, 1.0);
 
 // Color Definitionエンティティを使用して色を設定 (≈ #4C7FFF)
 auto color_def = std::make_shared<igesio::entities::ColorDefinition>(

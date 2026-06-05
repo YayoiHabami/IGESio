@@ -42,7 +42,7 @@ constexpr float kTol = 1e-4f;
 
 /// @brief スモーク用の単純な円弧 (M_entity=単位)
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
 }

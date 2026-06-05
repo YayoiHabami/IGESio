@@ -44,7 +44,7 @@ igesio::ObjectID MakeId() {
 
 /// @brief 単純な円弧を生成する (ロック判定用の実エンティティ)
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
 }

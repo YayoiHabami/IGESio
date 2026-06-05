@@ -31,13 +31,10 @@ using ent_vec = std::vector<std::shared_ptr<igesio::EntityBase>>;
 ///       2. Arc: center (0, 0), radius 1, start angle 4π/3, end angle 5π/2
 ent_vec CreateCircularArc() {
     double x_diff = 1.25;
-    auto circle = std::make_shared<i_ent::CircularArc>(
-            Vector2d{-x_diff, 0.0}, 1.0);
+    auto circle = i_ent::MakeCircle(Vector2d{-x_diff, 0.0}, 1.0);
 
-    auto arc_start = Vector2d{cos(4.0 * kPi / 3.0), sin(4.0 * kPi / 3.0)};
-    auto arc_end = Vector2d{cos(5.0 * kPi / 2.0), sin(5.0 * kPi / 2.0)};
-    auto arc = std::make_shared<i_ent::CircularArc>(
-            Vector2d{0.0, 0.0}, arc_start, arc_end);
+    auto arc = i_ent::MakeCircularArc(
+            Vector2d{0.0, 0.0}, 1.0, 4.0 * kPi / 3.0, 5.0 * kPi / 2.0);
     auto arc_trans = i_ent::MakeTranslation(Vector3d{x_diff, 0.0, 0.0});
     arc->OverwriteTransformationMatrix(arc_trans);
 
@@ -54,7 +51,7 @@ ent_vec CreateCompositeCurve() {
     auto rotation = igesio::AngleAxisd(kPi, Vector3d::UnitY());
     auto comp_1_trans = i_ent::MakeTransformationMatrix(
             rotation.toRotationMatrix(), Vector3d{0.5, -1.0, 0.0});
-    auto comp_1 = std::make_shared<i_ent::CircularArc>(
+    auto comp_1 = i_ent::MakeCircularArc(
             Vector2d{0.0, 0.0}, Vector2d{-1.5, 0.0}, Vector2d{1.5, 0.0});
     comp_1->OverwriteTransformationMatrix(comp_1_trans);
 
@@ -63,7 +60,7 @@ ent_vec CreateCompositeCurve() {
             Vector3d{-1.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
     // 3. circular arc
-    auto comp_3 = std::make_shared<i_ent::CircularArc>(
+    auto comp_3 = i_ent::MakeCircularArc(
             Vector2d{-0.5, 1.0}, Vector2d{1.0, 1.0}, Vector2d{-2.0, 1.0});
 
     // Composite curve

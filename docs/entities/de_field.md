@@ -162,7 +162,7 @@ std::array<double, 3> color;
 // Create a circle entity with a radius of 5.0 and centered at the origin
 // Each DE field is initialized with the default value
 auto center = Vector2d(0.0, 0.0);
-auto circle = std::make_shared<ent::CircularArc>(center, 5.0);
+auto circle = ent::MakeCircle(center, 5.0);
 
 // Get the default color
 circle->GetColor().GetValueType();    // DEFieldValueType::kDefault

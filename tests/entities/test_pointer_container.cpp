@@ -47,7 +47,7 @@ std::shared_ptr<i_ent::Line> MakeLine() {
 
 /// @brief 単位円 (の3/4円弧) エンティティを作成する
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
             Vector2d(0.0, 0.0), Vector2d(1.0, 0.0), Vector2d(0.0, 1.0));
 }
 

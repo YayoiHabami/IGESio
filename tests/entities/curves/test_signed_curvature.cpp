@@ -64,11 +64,11 @@ std::shared_ptr<LinearPath> MakeUTurnLP() {
 }
 
 /// @brief 半径 R=1.5 の全周円 (CCW 方向)
-/// @details TryGetDerivatives は CircularArc が提供し、
-///          TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAt は ICurve のデフォルト実装を使用する
+/// @details TryGetDerivativesはCircularArcが提供し、
+///          TryGetDefinedLeftTangentAt / TryGetDefinedRightTangentAtは
+///          ICurveのデフォルト実装を使用する
 std::shared_ptr<CircularArc> MakeCircle() {
-    return std::make_shared<CircularArc>(
-        Vector2d{-0.75, 0.0}, 1.5);
+    return i_ent::MakeCircle(Vector2d{-0.75, 0.0}, 1.5);
 }
 
 /// @brief CTYPE=3 (kCubic), H=0, NDIM=3, N=2 の区分定数スプライン

@@ -75,7 +75,7 @@ std::shared_ptr<i_ent::ICurve> MakeUvRectLoop(
 /// @brief z=0平面上の全円ループ (UV境界曲線) を作成する
 std::shared_ptr<i_ent::ICurve> MakeUvCircle(
         const Vector2d& center, const double radius) {
-    return std::make_shared<i_ent::CircularArc>(center, radius);
+    return i_ent::MakeCircle(center, radius);
 }
 
 /// @brief UV曲線をトリム境界 (Type142) に変換する

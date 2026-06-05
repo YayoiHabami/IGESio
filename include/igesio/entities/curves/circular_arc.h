@@ -8,6 +8,8 @@
 #ifndef IGESIO_ENTITIES_CURVES_CIRCULAR_ARC_H_
 #define IGESIO_ENTITIES_CURVES_CIRCULAR_ARC_H_
 
+#include <memory>
+
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/entity_base.h"
 
@@ -152,6 +154,61 @@ class CircularArc : public EntityBase, public virtual ICurve2D {
         return TransformImpl(input, is_point);
     }
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 中心点と始点・終点から円弧を作成する
+/// @param center 円弧の中心座標 (x_c, y_c)
+/// @param start_point 始点の座標 (x_s, y_s)
+/// @param terminate_point 終点の座標 (x_t, y_t)
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたCircularArcのshared_ptr
+/// @throw igesio::EntityValueError 始点と終点が中心から等距離でない場合、
+///        または半径が0に近い場合
+std::shared_ptr<CircularArc> MakeCircularArc(
+        const Vector2d& center, const Vector2d& start_point,
+        const Vector2d& terminate_point, double z_t = 0.0);
+
+/// @brief 中心点・半径・始終角から円弧を作成する
+/// @param center 円弧の中心座標 (x_c, y_c)
+/// @param radius 円弧の半径
+/// @param start_angle 始点の角度 [rad]
+/// @param end_angle 終点の角度 [rad]
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたCircularArcのshared_ptr
+/// @throw igesio::EntityValueError 半径が0に近い場合、
+///        またはstart_angle > end_angleの場合
+std::shared_ptr<CircularArc> MakeCircularArc(
+        const Vector2d& center, double radius,
+        double start_angle, double end_angle, double z_t = 0.0);
+
+/// @brief 閉じた円を作成する
+/// @param center 円の中心座標 (x_c, y_c)
+/// @param radius 円の半径
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたCircularArcのshared_ptr
+/// @throw igesio::EntityValueError 半径が0に近い場合
+std::shared_ptr<CircularArc> MakeCircle(
+        const Vector2d& center, double radius, double z_t = 0.0);
+
+/// @brief 円弧上の3点 (始点・通過点・終点) から円弧を作成する
+/// @param start_point 始点の座標 (x, y)
+/// @param mid_point 弧が通過する中間点の座標 (x, y)
+/// @param terminate_point 終点の座標 (x, y)
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたCircularArcのshared_ptr
+/// @note Type 100は反時計回りの弧のみ表現可能なため、3点が時計回りに並ぶ
+///       場合は始点と終点を入れ替えた弧を生成する (点集合としての幾何は
+///       同一だが、パラメータの進行方向が入力と逆になる)
+/// @throw igesio::EntityValueError 3点が同一直線上にある場合
+///        (一致する点を含む場合も同様)
+std::shared_ptr<CircularArc> MakeCircularArcThroughPoints(
+        const Vector2d& start_point, const Vector2d& mid_point,
+        const Vector2d& terminate_point, double z_t = 0.0);
 
 }  // namespace igesio::entities
 

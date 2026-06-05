@@ -45,7 +45,7 @@ constexpr std::array<float, 4> kHighlight = {1.0f, 0.6f, 0.0f, 1.0f};
 
 /// @brief スモーク用の単純な円弧 (100)
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
 }

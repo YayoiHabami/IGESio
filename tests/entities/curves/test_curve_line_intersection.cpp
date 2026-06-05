@@ -60,7 +60,7 @@ std::shared_ptr<i_ent::Line> MakeZSegment() {
 /// @brief 原点中心・半径2・z=0平面上の単位円 (CircularArc, 閉曲線)
 /// @note C(θ) = (2cosθ, 2sinθ, 0), θ∈[0, 2π]
 std::shared_ptr<i_ent::CircularArc> MakeCircleR2() {
-    return std::make_shared<i_ent::CircularArc>(Vector2d{0., 0.}, 2.0, 0.0);
+    return i_ent::MakeCircle(Vector2d{0., 0.}, 2.0, 0.0);
 }
 
 /// @brief テスト用の探索パラメータ (hit_toleranceを指定)

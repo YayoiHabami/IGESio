@@ -189,11 +189,9 @@ if (entity->IsSupported()) {
 　注意点として、通常のRGB値は (0-255) の範囲で指定されますが、`ColorDefinition`クラスでは (0.0-100.0) の範囲で指定します。例えば、RGB値 (76, 127, 255) は (30.0, 50.0, 100.0) として指定します。
 
 ```cpp
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{0.0, 0.0}, 1.0);
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{0.0, 0.0}, 1.0);
 
-auto blue_circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{3.0, 0.0}, 1.0);
+auto blue_circle = igesio::entities::MakeCircle(igesio::Vector2d{3.0, 0.0}, 1.0);
 
 // Create a Color Definition entity (≈ #4C7FFF)
 // and overwrite the color of the blue_circle entity.
@@ -224,17 +222,12 @@ blue_circle->OverwriteColor(color_def);
 
 ```cpp
 // 1. circle: center (-1.25, 0), radius 1
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{-1.25, 0.0}, 1.0);
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{-1.25, 0.0}, 1.0);
 
 // 2. arc: center (1.25, 0), radius 1, start angle 4π/3, end angle 5π/2
-double start_angle = 4.0 * igesio::kPi / 3.0;
-double end_angle = 5.0 * igesio::kPi / 2.0;
-auto arc_start = igesio::Vector2d{1.25 + cos(start_angle), sin(start_angle)};
-auto arc_end   = igesio::Vector2d{1.25 + cos(end_angle),   sin(end_angle)};
-
-auto arc = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{1.25, 0.0}, arc_start, arc_end);
+auto arc = igesio::entities::MakeCircularArc(
+        igesio::Vector2d{1.25, 0.0}, 1.0,
+        4.0 * igesio::kPi / 3.0, 5.0 * igesio::kPi / 2.0);
 ```
 
 <img src="./images/circular_arc.png" width=600px alt="CircularArc Example" />
@@ -262,7 +255,7 @@ using igesio::Vector3d;
 auto comp_1_trans = igesio::entities::MakeTransformationMatrix(
         igesio::AngleAxisd(igesio::kPi, Vector3d::UnitY()).toRotationMatrix(),
         Vector3d{0.5, -1.0, 0.0});
-auto comp_1 = std::make_shared<igesio::entities::CircularArc>(
+auto comp_1 = igesio::entities::MakeCircularArc(
         Vector2d{0.0, 0.0}, Vector2d{-1.5, 0.0}, Vector2d{1.5, 0.0});
 comp_1->OverwriteTransformationMatrix(comp_1_trans);
 
@@ -271,7 +264,7 @@ auto comp_2 = std::make_shared<igesio::entities::Line>(
         Vector3d{-1.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
 // 3. arc: center (-0.5, 1), radius 1.5, start (1, 1), end (-2, 1) (CW)
-auto comp_3 = std::make_shared<igesio::entities::CircularArc>(
+auto comp_3 = igesio::entities::MakeCircularArc(
         Vector2d{-0.5, 1.0}, Vector2d{1.0, 1.0}, Vector2d{-2.0, 1.0});
 
 // Composite curve
@@ -829,8 +822,7 @@ auto base_surface = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
 
 // 2. 内側境界（穴）の作成
 // パラメータ空間(u, v)上での円弧を定義
-auto circle_u_v = std::make_shared<i_ent::CircularArc>(
-        igesio::Vector2d{1.5, 1.5}, 0.5);
+auto circle_u_v = i_ent::MakeCircle(igesio::Vector2d{1.5, 1.5}, 0.5);
 // Type 142として構成
 auto [inner_boundary, inner_cons] = i_ent::MakeCurveOnAParametricSurface(
         base_surface, circle_u_v);

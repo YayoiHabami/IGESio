@@ -162,7 +162,7 @@ std::array<double, 3> color;
 // 半径5.0、原点中心の円エンティティを作成
 // 各DEフィールドはデフォルト値で初期化される
 auto center = Vector2d(0.0, 0.0);
-auto circle = std::make_shared<ent::CircularArc>(center, 5.0);
+auto circle = ent::MakeCircle(center, 5.0);
 
 // デフォルトの色を取得
 circle->GetColor().GetValueType();    // DEFieldValueType::kDefault

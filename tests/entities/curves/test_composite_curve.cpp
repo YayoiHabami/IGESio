@@ -145,7 +145,7 @@ std::shared_ptr<CompositeCurve> MakePathPath_LeftTurn() {
 /// 全体範囲 [0, π/2+1], 接合点 t=π/2
 std::shared_ptr<CompositeCurve> MakeArcPath_Quarter() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<CircularArc>(
+    cc->AddCurve(i_ent::MakeCircularArc(
         Vector2d{0.0, 0.0},    // 中心
         Vector2d{1.0, 0.0},    // 始点 (角度 0)
         Vector2d{0.0, 1.0}));  // 終点 (角度 π/2, CCW)
