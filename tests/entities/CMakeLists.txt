@@ -18,6 +18,7 @@ set(TEST_SOURCES
     # Curves
     curves/test_i_curve.cpp
     curves/test_circular_arc.cpp
+    curves/test_conic_arc.cpp
     curves/test_algorithms.cpp
     curves/test_nurbs_approximation_algorithms.cpp
     curves/test_composite_curve.cpp

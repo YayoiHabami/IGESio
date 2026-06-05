@@ -77,8 +77,8 @@ ent_vec CreateCompositeCurve() {
 ///          start angle 7π/4, end angle 17π/6
 ent_vec CreateConicArc() {
     // 1. ellipse arc
-    auto ellipse_arc = std::make_shared<i_ent::ConicArc>(
-            std::pair<double, double>{-3.0, 2.0}, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
+    auto ellipse_arc = i_ent::MakeEllipticArc(
+            -3.0, 2.0, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
 
     // Note: Since elliptical arc entities are defined with the origin
     // as their center, use a transformation matrix entity to move the origin.

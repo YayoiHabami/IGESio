@@ -123,13 +123,12 @@ inline curve_vec CreateCompositeCurves() {
 inline curve_vec CreateConicArcs() {
     TestCurve ellipse_arc("ellipse arc with center(0, 0), (rx, ry) = (2, 1), "
                           "angle ∈ [7π/4, 17π/6]");
-    ellipse_arc.curve = std::make_shared<entities::ConicArc>(
-            std::pair<double, double>{2.0, 1.0}, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
+    ellipse_arc.curve = entities::MakeEllipticArc(
+            2.0, 1.0, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
     ellipse_arc.Set2DInfo(true, true);
 
     TestCurve ellipse("full ellipse with rx 2, ry 1");
-    ellipse.curve = std::make_shared<entities::ConicArc>(
-            std::pair<double, double>{2.0, 1.0}, 0.0, 2.0 * kPi);
+    ellipse.curve = entities::MakeEllipse(2.0, 1.0);
     ellipse.Set2DInfo(true, true);
 
     return {ellipse_arc, ellipse};

@@ -296,8 +296,8 @@ comp_curve->AddCurve(comp_3);
 ```cpp
 // 1. ellipse arc: center (0, 3), axis (x, y) = (3, 2),
 //    start angle 7π/4, end angle 17π/6
-auto ellipse_arc = std::make_shared<igesio::entities::ConicArc>(
-        std::pair<double, double>{-3.0, 2.0},  // radii (rx, ry)
+auto ellipse_arc = igesio::entities::MakeEllipticArc(
+        -3.0, 2.0,          // radii (rx, ry)
         7.0 * kPi / 4.0,    // start angle
         17.0 * kPi / 6.0);  // end angle
 
