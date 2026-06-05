@@ -48,7 +48,7 @@ ent_vec CreateRuledSurface() {
     auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
 
     // Ruled surface
-    auto ruled_surf = std::make_shared<i_ent::RuledSurface>(curve1, curve2);
+    auto ruled_surf = i_ent::MakeRuledSurface(curve1, curve2);
     ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
 
     return {curve1, curve2, ruled_surf};
@@ -106,8 +106,8 @@ ent_vec CreateTabulatedCylinder() {
     double axis_length = 3.0;
 
     // Tabulated cylinder
-    auto tab_cyl = std::make_shared<i_ent::TabulatedCylinder>(
-            directrix, axis_dir, axis_length);
+    auto tab_cyl = i_ent::MakeExtrudedSurface(
+            directrix, axis_dir.normalized() * axis_length);
     tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 
     return {directrix, tab_cyl};

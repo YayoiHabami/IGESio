@@ -45,6 +45,8 @@ set(TEST_SOURCES
     # Surfaces
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
+    surfaces/test_ruled_surface.cpp
+    surfaces/test_tabulated_cylinder.cpp
     surfaces/test_trimmed_surface.cpp
     surfaces/test_surface_line_intersection.cpp
     surfaces/test_curve_surface_inversion.cpp

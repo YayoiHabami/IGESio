@@ -623,7 +623,7 @@ auto param = igesio::IGESParameterVector{
 auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
 
 // Ruled surface
-auto ruled_surf = std::make_shared<i_ent::RuledSurface>(curve1, curve2);
+auto ruled_surf = i_ent::MakeRuledSurface(curve1, curve2);
 ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
 ```
 
@@ -696,9 +696,9 @@ surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
 
 $$S(u, v) = C(t) + v(L - C(0)) = C(t) + vD$$
 
-ここで、$D$ は方向ベクトルであり、$C(0)$ は曲線 $C(t)$ の始点です。また、$t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$、$u,v \in [0, 1]$ です。IGES 5.3では、押し出し開始位置 $L$ をパラメータとして指定します。本ライブラリでは、以下のコード例に示すように、押し出し方向ベクトル $D$ を直接指定することも可能です。
+ここで、$D$ は方向ベクトルであり、$C(0)$ は曲線 $C(t)$ の始点です。また、$t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$、$u,v \in [0, 1]$ です。IGES 5.3では、母線の終点 $L$ をパラメータとして指定します（`MakeTabulatedCylinder(directrix, location)`が対応）。本ライブラリでは、以下のコード例に示すように、`MakeExtrudedSurface(directrix, extrusion)`により押し出しベクトル $D$ を直接指定することも可能です。
 
-　以下のコード例は、[RationalBSplineCurve](#rationalbsplinecurve-type-126)を準線とし、方向ベクトル $D = 3 * [1, -1, 0]^\top$ に沿って押しだした平行曲面を生成します（図参照）。
+　以下のコード例は、[RationalBSplineCurve](#rationalbsplinecurve-type-126)を準線とし、押し出しベクトル $D = 3 \cdot [1, -1, 0]^\top / \|[1, -1, 0]\|$（方向 $[1, -1, 0]^\top$、長さ3）に沿って押し出した平行曲面を生成します（図参照）。
 
 ```cpp
 // Directrix curve
@@ -722,10 +722,10 @@ Vector3d axis_dir{1., -1., 0.};
 double axis_length = 3.0;
 
 // Tabulated cylinder
-// 押し出し方向ベクトル D = axis_length * axis_dirを指定する場合
-// -> 押し出し位置Lを指定する場合は、directrixとVector3d型のlocationの2つを引数に与える
-auto tab_cyl = std::make_shared<i_ent::TabulatedCylinder>(
-        directrix, axis_dir, axis_length);
+// 押し出しベクトル D = axis_length * axis_dir.normalized() で準線を押し出す
+// -> 母線の終点Lを直接指定する場合はMakeTabulatedCylinder(directrix, location)を使用する
+auto tab_cyl = i_ent::MakeExtrudedSurface(
+        directrix, axis_dir.normalized() * axis_length);
 tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 ```
 

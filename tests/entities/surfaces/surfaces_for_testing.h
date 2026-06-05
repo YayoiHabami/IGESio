@@ -69,12 +69,12 @@ inline surface_vec CreateRuledSurfaces() {
 
     // Ruled surface
     TestSurface ruled_surface("Ruled Surface");
-    ruled_surface.surface = std::make_shared<entities::RuledSurface>(curve1, curve2);
+    ruled_surface.surface = entities::MakeRuledSurface(curve1, curve2);
 
     // Ruled surface (reversed)
     TestSurface ruled_surface_reversed("Ruled Surface (reversed)");
     ruled_surface_reversed.surface =
-        std::make_shared<entities::RuledSurface>(curve1, curve2, true);
+        entities::MakeRuledSurface(curve1, curve2, true);
 
     return {ruled_surface, ruled_surface_reversed};
 }
@@ -131,8 +131,8 @@ inline surface_vec CreateTabulatedCylinders() {
 
     // Tabulated cylinder
     TestSurface tabulated_cylinder("Tabulated Cylinder");
-    tabulated_cylinder.surface = std::make_shared<entities::TabulatedCylinder>(
-            directrix, axis_dir, axis_length);
+    tabulated_cylinder.surface = entities::MakeExtrudedSurface(
+            directrix, axis_dir.normalized() * axis_length);
 
     return {tabulated_cylinder};
 }

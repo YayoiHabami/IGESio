@@ -8,11 +8,13 @@
 #include "igesio/entities/surfaces/ruled_surface.h"
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/core/tolerance.h"
 
 namespace {
@@ -21,6 +23,22 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::RuledSurface;
 using igesio::Vector3d;
+
+/// @brief nullptrチェックを行った上で曲線のIDを取得する
+/// @param curve 曲線エンティティ
+/// @param name エラーメッセージに使用する引数名
+/// @return 曲線のObjectID
+/// @throw std::invalid_argument curveがnullptrの場合
+/// @note 委譲コンストラクタの引数リスト内で逆参照する前に
+///       nullptrを検出するためのヘルパー
+igesio::ObjectID GetCurveID(const std::shared_ptr<i_ent::ICurve>& curve,
+                            const std::string& name) {
+    if (curve == nullptr) {
+        throw std::invalid_argument(
+            name + " of RuledSurface must not be nullptr.");
+    }
+    return curve->GetID();
+}
 
 }  // namespace
 
@@ -47,14 +65,9 @@ RuledSurface::RuledSurface(
 RuledSurface::RuledSurface(const std::shared_ptr<ICurve>& curve1,
                            const std::shared_ptr<ICurve>& curve2,
                            const bool is_reversed, const bool is_developable)
-        : RuledSurface({curve1->GetID(), curve2->GetID(),
+        : RuledSurface({GetCurveID(curve1, "curve1"),
+                        GetCurveID(curve2, "curve2"),
                         is_reversed, is_developable}) {
-    // nullptrの確認
-    if (curve1 == nullptr || curve2 == nullptr) {
-        throw std::invalid_argument("curve1 and curve2 of RuledSurface "
-                                    "must not be nullptr.");
-    }
-
     // 参照の解決
     SetCurve1(curve1);
     SetCurve2(curve2);
@@ -332,6 +345,15 @@ void RuledSurface::SetCurve2(const std::shared_ptr<ICurve>& curve) {
     }
 }
 
+i_ent::RuledSurfaceForm RuledSurface::GetSurfaceForm() const noexcept {
+    return (GetFormNumber() == 0) ? RuledSurfaceForm::kEqualArcLength
+                                  : RuledSurfaceForm::kEqualParameters;
+}
+
+void RuledSurface::SetSurfaceForm(const RuledSurfaceForm form) noexcept {
+    form_number_ = static_cast<int>(form);
+}
+
 
 
 /**
@@ -355,4 +377,33 @@ std::pair<double, double> RuledSurface::GetParametersTS(const double u) const {
     }
     return {range1[0] + u * (range1[1] - range1[0]),
             range2[0] + u * (range2[1] - range2[0])};
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<RuledSurface> i_ent::MakeRuledSurface(
+        const std::shared_ptr<ICurve>& curve1,
+        const std::shared_ptr<ICurve>& curve2,
+        const bool is_reversed, const bool is_developable) {
+    if (curve1 == nullptr || curve2 == nullptr) {
+        throw std::invalid_argument(
+            "MakeRuledSurface: curve1 and curve2 must not be nullptr.");
+    }
+    // 同一エンティティを両側に指定するとValidatePDがエラーとなるため、
+    // 構築時点で検出する
+    if (curve1->GetID() == curve2->GetID()) {
+        throw igesio::EntityValueError(
+            "MakeRuledSurface: curve1 and curve2 must be different entities.");
+    }
+
+    auto surface = std::make_shared<RuledSurface>(
+            curve1, curve2, is_reversed, is_developable);
+    // 本実装の評価は与えられたパラメータ化をそのまま用いるため、
+    // 等相対パラメータ (Form 1) を明示する
+    surface->SetSurfaceForm(RuledSurfaceForm::kEqualParameters);
+    return surface;
 }

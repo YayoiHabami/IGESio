@@ -623,7 +623,7 @@ auto param = igesio::IGESParameterVector{
 auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
 
 // Ruled surface
-auto ruled_surf = std::make_shared<i_ent::RuledSurface>(curve1, curve2);
+auto ruled_surf = i_ent::MakeRuledSurface(curve1, curve2);
 ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
 ```
 
@@ -696,9 +696,9 @@ The `TabulatedCylinder` class is used to represent a ruled surface in 3D space. 
 
 $$S(u, v) = C(t) + v(L - C(0)) = C(t) + vD$$
 
-Where $D$ is the direction vector, and $C(0)$ is the start point of the curve $C(t)$. Also, $t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$ and $u,v \in [0, 1]$. In IGES 5.3, the extrusion start position $L$ is specified as a parameter. In this library, it is also possible to directly specify the extrusion direction vector $D$, as shown in the code example below.
+Where $D$ is the direction vector, and $C(0)$ is the start point of the curve $C(t)$. Also, $t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$ and $u,v \in [0, 1]$. In IGES 5.3, the terminate point $L$ of the generatrix is specified as a parameter; this form corresponds to `MakeTabulatedCylinder(directrix, location)`. In this library, it is also possible to directly specify the extrusion vector $D$ via `MakeExtrudedSurface(directrix, extrusion)`, as shown in the code example below.
 
-The following code example generates a tabulated cylinder by sweeping a [RationalBSplineCurve](#rationalbsplinecurve-type-126) along the direction vector $D = 3 * [1, -1, 0]^\top$ (see figure).
+The following code example generates a tabulated cylinder by sweeping a [RationalBSplineCurve](#rationalbsplinecurve-type-126) along the extrusion vector $D = 3 \cdot [1, -1, 0]^\top / \|[1, -1, 0]\|$ (direction $[1, -1, 0]^\top$, length 3; see figure).
 
 ```cpp
 // Directrix curve
@@ -722,10 +722,10 @@ Vector3d axis_dir{1., -1., 0.};
 double axis_length = 3.0;
 
 // Tabulated cylinder
-// When specifying the extrusion direction vector D = axis_length * axis_dir
-// -> When specifying the extrusion position L, give directrix and Vector3d type location as arguments.
-auto tab_cyl = std::make_shared<i_ent::TabulatedCylinder>(
-    directrix, axis_dir, axis_length);
+// Sweep the directrix along the extrusion vector D = axis_length * axis_dir.normalized()
+// -> To specify the terminate point L of the generatrix instead, use MakeTabulatedCylinder(directrix, location)
+auto tab_cyl = i_ent::MakeExtrudedSurface(
+    directrix, axis_dir.normalized() * axis_length);
 tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 ```
 

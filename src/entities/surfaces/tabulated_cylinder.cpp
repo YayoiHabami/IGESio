@@ -9,11 +9,14 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/core/tolerance.h"
 
 namespace {
@@ -22,6 +25,21 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::TabulatedCylinder;
 using igesio::Vector3d;
+
+/// @brief nullptrチェックを行った上で準線のIDを取得する
+/// @param directrix 準線エンティティ
+/// @return 準線のObjectID
+/// @throw std::invalid_argument directrixがnullptrの場合
+/// @note 委譲コンストラクタの引数リスト内で逆参照する前に
+///       nullptrを検出するためのヘルパー
+igesio::ObjectID GetDirectrixID(
+        const std::shared_ptr<i_ent::ICurve>& directrix) {
+    if (directrix == nullptr) {
+        throw std::invalid_argument(
+            "Directrix curve of TabulatedCylinder cannot be nullptr.");
+    }
+    return directrix->GetID();
+}
 
 }  // namespace
 
@@ -48,12 +66,8 @@ TabulatedCylinder::TabulatedCylinder(
 
 TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
                                      const Vector3d& location_vector)
-        : TabulatedCylinder({directrix->GetID(), location_vector(0),
+        : TabulatedCylinder({GetDirectrixID(directrix), location_vector(0),
                              location_vector(1), location_vector(2)}) {
-    if (directrix == nullptr) {
-        throw std::invalid_argument(
-            "Directrix curve of TabulatedCylinder cannot be nullptr.");
-    }
     // 曲線の始点とlocation_vectorが一致する場合はエラー
     auto start_pt_opt = directrix->TryGetDefinedStartPoint();
     if (start_pt_opt.has_value()) {
@@ -70,11 +84,7 @@ TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
 TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
                                      const Vector3d& direction,
                                      const double length)
-        : TabulatedCylinder({directrix->GetID(), 0.0, 0.0, 0.0}) {
-    if (directrix == nullptr) {
-        throw std::invalid_argument(
-            "Directrix curve of TabulatedCylinder cannot be nullptr.");
-    }
+        : TabulatedCylinder({GetDirectrixID(directrix), 0.0, 0.0, 0.0}) {
     auto start_pt_opt = directrix->TryGetDefinedStartPoint();
     if (!start_pt_opt.has_value()) {
         throw std::invalid_argument(
@@ -390,6 +400,19 @@ Vector3d TabulatedCylinder::GetDirection() const {
     }
 }
 
+std::optional<Vector3d> TabulatedCylinder::TryGetDefinedDirection() const {
+    auto directrix = directrix_.TryGetEntity<ICurve>();
+    if (!directrix) return std::nullopt;
+    auto start_pt_opt = directrix.value()->TryGetDefinedStartPoint();
+    if (!start_pt_opt.has_value()) return std::nullopt;
+    return location_vector_ - start_pt_opt.value();
+}
+
+std::optional<Vector3d> TabulatedCylinder::TryGetDirection() const {
+    // 方向ベクトルはベクトルとして変換する (v' = Rv)
+    return Transform(TryGetDefinedDirection(), false);
+}
+
 
 
 /**
@@ -412,4 +435,37 @@ double TabulatedCylinder::GetDirectrixParameterAtU(const double u) const {
     }
 
     return t_start + u * (t_end - t_start);  // tの範囲が有限の場合
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<TabulatedCylinder> i_ent::MakeTabulatedCylinder(
+        const std::shared_ptr<ICurve>& directrix,
+        const Vector3d& location_vector) {
+    if (directrix == nullptr) {
+        throw std::invalid_argument(
+            "MakeTabulatedCylinder: directrix must not be nullptr.");
+    }
+    return std::make_shared<TabulatedCylinder>(directrix, location_vector);
+}
+
+std::shared_ptr<TabulatedCylinder> i_ent::MakeExtrudedSurface(
+        const std::shared_ptr<ICurve>& directrix,
+        const Vector3d& extrusion) {
+    if (directrix == nullptr) {
+        throw std::invalid_argument(
+            "MakeExtrudedSurface: directrix must not be nullptr.");
+    }
+    if (i_num::IsApproxZero(extrusion.norm())) {
+        throw igesio::EntityValueError(
+            "MakeExtrudedSurface: extrusion vector must not be zero.");
+    }
+    // コンストラクタは始点 + direction.normalized()*length を終点とするため、
+    // (extrusion, |extrusion|) を渡すと終点はC(0) + extrusionとなる
+    return std::make_shared<TabulatedCylinder>(
+            directrix, extrusion, extrusion.norm());
 }
