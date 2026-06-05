@@ -29,8 +29,7 @@ using ent_vec = std::vector<std::shared_ptr<igesio::EntityBase>>;
 /// @brief Example for Ruled Surface entity (Type 118)
 ent_vec CreateRuledSurface() {
     // curve1: Line
-    auto curve1 = std::make_shared<i_ent::Line>(
-        Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
+    auto curve1 = i_ent::MakeLine(Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
 
     // curve2: Rational B-Spline Curve
     auto param = igesio::IGESParameterVector{
@@ -58,8 +57,7 @@ ent_vec CreateRuledSurface() {
 /// @brief Example for Surface of Revolution entity (Type 120)
 ent_vec CreateSurfaceOfRevolution() {
     // Axis of revolution:
-    auto axis_line = std::make_shared<i_ent::Line>(
-        Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
+    auto axis_line = i_ent::MakeLine(Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
 
     // Generatrix curve
     auto param = igesio::IGESParameterVector{

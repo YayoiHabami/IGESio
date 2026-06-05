@@ -51,7 +51,7 @@ using surface_vec = std::vector<TestSurface>;
 /// @brief Ruled Surfaceエンティティの作成
 inline surface_vec CreateRuledSurfaces() {
     // curve1: Line
-    auto curve1 = std::make_shared<entities::Line>(
+    auto curve1 = entities::MakeLine(
             Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
     // curve2: Rational B-Spline Curve
     auto param = igesio::IGESParameterVector{
@@ -84,7 +84,7 @@ inline surface_vec CreateRuledSurfaces() {
 /// @brief Surface of Revolutionエンティティの作成
 inline surface_vec CreateSurfaceOfRevolutions() {
     // Axis of revolution:
-    auto axis_line = std::make_shared<entities::Line>(
+    auto axis_line = entities::MakeLine(
             Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
 
     // Generatrix: Rational B-Spline Curve

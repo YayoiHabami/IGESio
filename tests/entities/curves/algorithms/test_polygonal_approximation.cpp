@@ -92,7 +92,7 @@ const Vector3d kNormalZ(0.0, 0.0, 1.0);
 /// @brief Type 110 線分 (0,0,0)-(2,1,0)。開曲線・直線部は報告しない。
 ///        パラメータ範囲 [0, 1]。
 std::shared_ptr<Line> MakeLineSegment() {
-    return std::make_shared<Line>(Vector3d(0.0, 0.0, 0.0),
+    return i_ent::MakeLine(Vector3d(0.0, 0.0, 0.0),
                                   Vector3d(2.0, 1.0, 0.0));
 }
 

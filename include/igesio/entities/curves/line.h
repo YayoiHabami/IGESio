@@ -8,6 +8,7 @@
 #ifndef IGESIO_ENTITIES_CURVES_LINE_H_
 #define IGESIO_ENTITIES_CURVES_LINE_H_
 
+#include <memory>
 #include <utility>
 
 #include "igesio/entities/interfaces/i_curve.h"
@@ -156,6 +157,38 @@ class Line : public EntityBase, public virtual ICurve3D {
         return TransformImpl(input, is_point);
     }
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 2点から線分/半直線/直線を作成する
+/// @param start_point 始点 P1 の座標値 (x, y, z)
+/// @param terminate_point 終点または通過点 P2 の座標値 (x, y, z)
+/// @param line_type 線のタイプ (Segment, Ray, Line)
+/// @return 作成されたLineのshared_ptr
+/// @throw igesio::EntityValueError 始点と終点が同一の場合
+std::shared_ptr<Line> MakeLine(
+        const Vector3d& start_point, const Vector3d& terminate_point,
+        LineType line_type = LineType::kSegment);
+
+/// @brief 始点と方向ベクトルから半直線 (Form 1) を作成する
+/// @param origin 始点 P1 の座標値 (x, y, z)
+/// @param direction 方向ベクトル (通過点は P2 = origin + direction)
+/// @return 作成されたLineのshared_ptr
+/// @throw igesio::EntityValueError directionがゼロベクトルに近い場合
+std::shared_ptr<Line> MakeRay(
+        const Vector3d& origin, const Vector3d& direction);
+
+/// @brief 通過点と方向ベクトルから直線 (Form 2) を作成する
+/// @param point 直線が通る点 P1 の座標値 (x, y, z)
+/// @param direction 方向ベクトル (もう一つの通過点は P2 = point + direction)
+/// @return 作成されたLineのshared_ptr
+/// @throw igesio::EntityValueError directionがゼロベクトルに近い場合
+std::shared_ptr<Line> MakeUnboundedLine(
+        const Vector3d& point, const Vector3d& direction);
 
 }  // namespace igesio::entities
 

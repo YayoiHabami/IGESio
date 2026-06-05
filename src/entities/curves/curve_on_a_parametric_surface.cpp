@@ -42,7 +42,7 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     const auto& vertices = polygon.vertices;
 
     // kPolyLineを生成
-    auto curve_2d = std::make_shared<i_ent::LinearPath>(vertices);
+    auto curve_2d = i_ent::MakeLinearPath(vertices);
     // 各頂点を曲面上に射影
     std::vector<Vector3d> projected_vertices;
     for (const auto& uv : vertices) {
@@ -79,7 +79,7 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
         opts.tolerance = kDiscretizationTol * 10.0;
         return i_ent::ApproximateWithNurbs(projected_vertices, tangents, opts);
     } catch (const std::exception&) {
-        return std::make_shared<i_ent::LinearPath>(projected_vertices);
+        return i_ent::MakeLinearPath(projected_vertices);
     }
 }
 
@@ -122,7 +122,7 @@ std::shared_ptr<i_ent::LinearPath> BuildParamSpaceBaseCurve(
     // 退化チェック (閉ループは3点以上、開折れ線は2点以上)
     if (uv.size() < (is_closed ? 3u : 2u)) return nullptr;
 
-    return std::make_shared<i_ent::LinearPath>(uv, is_closed);
+    return i_ent::MakeLinearPath(uv, is_closed);
 }
 
 }  // namespace

@@ -12,6 +12,8 @@
  *     TryGetDefinedLeftTangentAt(t),    TryGetDefinedRightTangentAt(t)
  *   [ICurve デフォルト実装; LinearPath の挙動を通じて確認]
  *     CornerExteriorAngle(t, n), TryGetSignedCurvature(t, n)
+ *   [ファクトリ関数]
+ *     MakeLinearPath (2D+is_closed+z_t / 3D / 頂点+ベクトル)
  *
  * NOTE:
  *   - 1頂点のLinearPathはIGESの仕様上そもそも作成できないためテストケースは用意しない
@@ -31,6 +33,7 @@
 #include <optional>
 #include <vector>
 
+#include "igesio/common/errors.h"
 #include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/linear_path.h"
 
@@ -556,4 +559,108 @@ TEST(LinearPathSignedCurvatureTest, NormalFlipped_SignFlipped) {
     ASSERT_TRUE(kappa_neg.has_value());
     EXPECT_TRUE(std::isinf(*kappa_pos) && *kappa_pos > 0.0);
     EXPECT_TRUE(std::isinf(*kappa_neg) && *kappa_neg < 0.0);
+}
+
+
+/**
+ * ファクトリ関数: MakeLinearPath
+ */
+
+// 代表値: 2D非ループ → kPlanarPolyline (Form 11)、z=0、長さ=辺長和
+TEST(LinearPathFactoryTest, MakeLinearPath2D_CreatesPlanarPolyline) {
+    const std::vector<Vector2d> vertices{{0.0, 0.0}, {3.0, 4.0}, {3.0, 6.0}};
+    const auto path = i_ent::MakeLinearPath(vertices);
+
+    ASSERT_NE(path, nullptr);
+    EXPECT_EQ(path->GetDataType(), i_ent::CopiousDataType::kPlanarPolyline);
+    ASSERT_EQ(path->GetCount(), vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        EXPECT_TRUE(i_num::IsApproxEqual(
+                path->Coordinate(i),
+                Vector3d(vertices[i].x(), vertices[i].y(), 0.0), kTol));
+    }
+    EXPECT_FALSE(path->IsClosed());
+    EXPECT_NEAR(path->Length(), 7.0, kTol);  // 5 + 2
+    EXPECT_TRUE(path->IsValid());
+}
+
+// 代表値/縮退: is_closed=true → kPlanarLoop (Form 63)、長さに閉鎖辺を含む
+TEST(LinearPathFactoryTest, MakeLinearPath2D_CreatesPlanarLoopWhenClosed) {
+    const std::vector<Vector2d> square{
+            {0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}, {0.0, 1.0}};
+    const auto loop = i_ent::MakeLinearPath(square, true);
+
+    EXPECT_EQ(loop->GetDataType(), i_ent::CopiousDataType::kPlanarLoop);
+    EXPECT_TRUE(loop->IsClosed());
+    EXPECT_NEAR(loop->Length(), 4.0, kTol);  // 3辺 + 閉鎖辺
+    EXPECT_TRUE(loop->IsValid());
+}
+
+// 代表値: z_tが全頂点に適用され、IP=1の「全z同一」検証を通過する
+TEST(LinearPathFactoryTest, MakeLinearPath2D_AppliesZt) {
+    const std::vector<Vector2d> vertices{{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}};
+    const auto path = i_ent::MakeLinearPath(vertices, false, 2.5);
+
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        EXPECT_NEAR(path->Coordinate(i).z(), 2.5, kTol);
+    }
+    EXPECT_TRUE(path->IsValid());
+}
+
+// 代表値: 3D頂点列 → kPolyline3D (Form 12)
+TEST(LinearPathFactoryTest, MakeLinearPath3D_CreatesPolyline3D) {
+    const std::vector<Vector3d> vertices{
+            {0.0, 0.0, 0.0}, {1.0, 1.0, 1.0}, {2.0, 0.0, -1.0}};
+    const auto path = i_ent::MakeLinearPath(vertices);
+
+    EXPECT_EQ(path->GetDataType(), i_ent::CopiousDataType::kPolyline3D);
+    ASSERT_EQ(path->GetCount(), vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        EXPECT_TRUE(i_num::IsApproxEqual(
+                path->Coordinate(i), vertices[i], kTol));
+    }
+    EXPECT_TRUE(path->IsValid());
+}
+
+// 代表値: 頂点+ベクトル → kPolylineAndVectors (Form 13)
+TEST(LinearPathFactoryTest,
+     MakeLinearPathWithVectors_CreatesPolylineAndVectors) {
+    const std::vector<Vector3d> vertices{{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}};
+    const std::vector<Vector3d> vectors{{0.0, 0.0, 1.0}, {0.0, 1.0, 0.0}};
+    const auto path = i_ent::MakeLinearPath(vertices, vectors);
+
+    EXPECT_EQ(path->GetDataType(),
+              i_ent::CopiousDataType::kPolylineAndVectors);
+    ASSERT_EQ(path->GetCount(), vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        EXPECT_TRUE(i_num::IsApproxEqual(
+                path->Coordinate(i), vertices[i], kTol));
+        EXPECT_TRUE(i_num::IsApproxEqual(path->Addition(i), vectors[i], kTol));
+    }
+    EXPECT_TRUE(path->IsValid());
+}
+
+// エラー+境界精度: 2頂点未満→throw、2頂点ちょうど→受理 (2D/3D両方)
+TEST(LinearPathFactoryTest,
+     MakeLinearPath_ThrowsEntityValueErrorWhenFewerThanTwoVertices) {
+    EXPECT_THROW(i_ent::MakeLinearPath(std::vector<Vector2d>{{0.0, 0.0}}),
+                 igesio::EntityValueError);
+    EXPECT_THROW(i_ent::MakeLinearPath(std::vector<Vector3d>{{0.0, 0.0, 0.0}}),
+                 igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeLinearPath(
+            std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}}));
+    EXPECT_NO_THROW(i_ent::MakeLinearPath(
+            std::vector<Vector3d>{{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}}));
+}
+
+// エラー: 頂点とベクトルの数の不一致→throw、同数→受理
+TEST(LinearPathFactoryTest,
+     MakeLinearPathWithVectors_ThrowsEntityValueErrorWhenSizeMismatch) {
+    const std::vector<Vector3d> vertices{
+            {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {2.0, 0.0, 0.0}};
+    EXPECT_THROW(i_ent::MakeLinearPath(vertices, std::vector<Vector3d>{
+            {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0}}),
+            igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeLinearPath(vertices, std::vector<Vector3d>{
+            {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0}, {0.0, 0.0, 1.0}}));
 }

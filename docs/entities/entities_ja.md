@@ -260,7 +260,7 @@ auto comp_1 = igesio::entities::MakeCircularArc(
 comp_1->OverwriteTransformationMatrix(comp_1_trans);
 
 // 2. line: start (-1, -1), end (1, 1)
-auto comp_2 = std::make_shared<igesio::entities::Line>(
+auto comp_2 = igesio::entities::MakeLine(
         Vector3d{-1.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
 // 3. arc: center (-0.5, 1), radius 1.5, start (1, 1), end (-2, 1) (CW)
@@ -344,12 +344,10 @@ ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 　`CopiousData`は、フォーム1～3 (座標2つ組、座標3つ組、座標6つ組) の点群データを表現するためのクラスです。以下のコード例は、5つの3次元座標点からなる点群を生成します（[CopiousDataBaseの図参照](#copiousdatabase-type-106)）。
 
 ```cpp
-igesio::Matrix3Xd copious_coords(3, 5);
-copious_coords << 3.0,  2.0, 2.0, 0.0, -1.0,
-                  0.0,  1.0, 2.0, 3.0,  2.0,
-                  1.0, -1.0, 0.0, 1.0,  0.0;
-auto copious = std::make_shared<igesio::entities::CopiousData>(
-        igesio::entities::CopiousDataType::kPoints3D, copious_coords);
+const std::vector<igesio::Vector3d> copious_points{
+        {3.0, 0.0, 1.0}, {2.0, 1.0, -1.0}, {2.0, 2.0, 0.0},
+        {0.0, 3.0, 1.0}, {-1.0, 2.0, 0.0}};
+auto copious = igesio::entities::MakeCopiousData(copious_points);
 ```
 
 #### `LinearPath` (type 106, forms 11-13)
@@ -367,8 +365,7 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 ```cpp
 auto copious_trans =
         igesio::entities::MakeTranslation(igesio::Vector3d{5.0, 0.0, 0.0});
-auto linear_path = std::make_shared<igesio::entities::LinearPath>(
-        igesio::entities::CopiousDataType::kPolyline3D, copious_coords);
+auto linear_path = igesio::entities::MakeLinearPath(copious_points);
 linear_path->OverwriteTransformationMatrix(copious_trans);
 ```
 
@@ -388,22 +385,16 @@ linear_path->OverwriteTransformationMatrix(copious_trans);
 using igesio::Vector3d;
 
 // 1. segment: start (0, -1, 0), end (1, 1, 0)
-auto start = Vector3d{0.0, -1.0, 0.0};
-auto end = Vector3d{1.0, 1.0, 0.0};
-auto line_segment = std::make_shared<igesio::entities::Line>(
-        start, end, igesio::entities::LineType::kSegment);
+auto line_segment = igesio::entities::MakeLine(
+        Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
 // 2. semi-infinite line: start (2, -1, 0), direction (1, 2, 0)
-start = Vector3d{2.0, -1.0, 0.0};
-end = start + Vector3d{1.0, 2.0, 0.0};
-auto ray = std::make_shared<igesio::entities::Line>(
-        start, end, igesio::entities::LineType::kRay);
+auto ray = igesio::entities::MakeRay(
+        Vector3d{2.0, -1.0, 0.0}, Vector3d{1.0, 2.0, 0.0});
 
 // 3. infinite line: point (4, -1, 0), direction (1, 2, 0)
-start = Vector3d{4.0, -1.0, 0.0};
-end = start + Vector3d{1.0, 2.0, 0.0};
-auto line = std::make_shared<igesio::entities::Line>(
-        start, end, igesio::entities::LineType::kLine);
+auto line = igesio::entities::MakeUnboundedLine(
+        Vector3d{4.0, -1.0, 0.0}, Vector3d{1.0, 2.0, 0.0});
 ```
 
 <img src="./images/line.png" width=400px alt="Line Example" />
@@ -475,7 +466,7 @@ auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
 > Note: 現在、Subfigure Definitionエンティティは未実装です。
 
 ```cpp
-auto point = std::make_shared<i_ent::Point>(Vector3d{1.0, 2.0, 3.0});
+auto point = i_ent::MakePoint(Vector3d{1.0, 2.0, 3.0});
 point->OverwriteColor(i_ent::ColorNumber::kMagenta);
 ```
 
@@ -621,8 +612,7 @@ $$\begin{aligned}
 
 ```cpp
 // curve1: Line
-auto curve1 = std::make_shared<i_ent::Line>(
-    Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
+auto curve1 = i_ent::MakeLine(Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
 
 // curve2: Rational B-Spline Curve
 auto param = igesio::IGESParameterVector{
@@ -672,8 +662,7 @@ using igesio::Vector3d;
 namespace i_ent = igesio::entities;
 
 // Axis line
-auto axis_line = std::make_shared<i_ent::Line>(
-    Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
+auto axis_line = i_ent::MakeLine(Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
 
 // Generatrix curve (Rational B-Spline Curve)
 auto param = igesio::IGESParameterVector{
@@ -867,9 +856,8 @@ $$T = \begin{bmatrix} R & P \\ 0 & 1 \end{bmatrix} \in \mathbb{R}^{4\times 4}$$
 
 ```cpp
 // (0,0,0) から (1,1,1) までの線分を定義
-auto segment = std::make_shared<igesio::entities::Line>(
-        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 1.0},
-        igesio::entities::LineType::kSegment);
+auto segment = igesio::entities::MakeLine(
+        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 1.0});
 
 // 変換行列を定義: 回転なし、平行移動ベクトル = (1,2,3)
 auto transform =

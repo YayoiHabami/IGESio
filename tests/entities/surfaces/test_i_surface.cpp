@@ -398,7 +398,7 @@ TEST(ISurfaceTest, Area) {
     {
         // Y軸周りに原点中心の1/4円弧を回転させてできる曲面
         // 半径2の球の1/8面の面積 = 4πr^2 / 8 = 2π
-        auto axis = std::make_shared<i_ent::Line>(
+        auto axis = i_ent::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{0.0, 1.0, 0.0});
         auto cir_arc = i_ent::MakeCircularArc(
             Vector2d{0.0, 0.0}, Vector2d{2.0, 0.0}, Vector2d{0.0, 2.0});

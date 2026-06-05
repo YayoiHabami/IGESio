@@ -59,9 +59,9 @@ std::shared_ptr<i_ent::RationalBSplineSurface> MakeYFivePlane() {
 /// @brief z軸を回転軸とする半径2・高さ4の円柱面 (SurfaceOfRevolution)
 /// @note S(u,v) = (2*cos(v), 2*sin(v), 4*u), u∈[0,1], v∈[0,2π]
 std::shared_ptr<i_ent::SurfaceOfRevolution> MakeCylinder() {
-    auto axis = std::make_shared<i_ent::Line>(
+    auto axis = i_ent::MakeLine(
         Vector3d{0., 0., 0.}, Vector3d{0., 0., 1.});
-    auto generatrix = std::make_shared<i_ent::Line>(
+    auto generatrix = i_ent::MakeLine(
         Vector3d{2., 0., 0.}, Vector3d{2., 0., 4.});
     return std::make_shared<i_ent::SurfaceOfRevolution>(
         axis, generatrix, 0.0, 2.0 * igesio::kPi);
@@ -120,7 +120,7 @@ TEST(CurveSurfaceInversion, InvertCurve_RecoversEndpointUV_OnPlane) {
     auto surface = MakeYFivePlane();
     const Vector3d p0 = surface->GetPointAt(0.2, 0.3);
     const Vector3d p1 = surface->GetPointAt(0.7, 0.6);
-    const auto curve = std::make_shared<i_ent::Line>(p0, p1);
+    const auto curve = i_ent::MakeLine(p0, p1);
 
     const auto arcs = InvertCurveOntoSurface(*surface, *curve);
     // split 既定 off のため弧は1本

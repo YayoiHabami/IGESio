@@ -120,8 +120,10 @@ CopiousDataBase::ValidatePD() const {
             "Addition must be empty for CopiousDataType with IP=1 or 2.");
     }
 
-    if (ip == 1) {
+    if (ip == 1 && coordinates_.cols() > 0) {
         // IP=1の場合: すべてのZ座標値が同じであること
+        // (空の座標値は上で「2組以上必要」のエラー済みのため、ここでは範囲外
+        //  アクセスを避けてスキップする)
         double z_value = coordinates_(2, 0);
         for (size_t i = 1; i < coordinates_.cols(); ++i) {
             double z_i = coordinates_(2, i);

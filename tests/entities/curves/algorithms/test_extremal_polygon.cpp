@@ -419,9 +419,9 @@ namespace {
 /// (0,0,0)→(1,0,0)→(1,1,0)
 std::shared_ptr<CompositeCurve> MakeOpenChain() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0}));
     return cc;
 }
@@ -430,13 +430,13 @@ std::shared_ptr<CompositeCurve> MakeOpenChain() {
 /// (0,0,0)→(2,2,0)→(2,0,0)→(0,2,0)→(0,0,0)
 std::shared_ptr<CompositeCurve> MakeSelfIntersecting() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{2.0, 2.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{2.0, 2.0, 0.0}, Vector3d{2.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{2.0, 0.0, 0.0}, Vector3d{0.0, 2.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 2.0, 0.0}, Vector3d{0.0, 0.0, 0.0}));
     return cc;
 }

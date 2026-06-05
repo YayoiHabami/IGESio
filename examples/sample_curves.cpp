@@ -56,8 +56,8 @@ ent_vec CreateCompositeCurve() {
     comp_1->OverwriteTransformationMatrix(comp_1_trans);
 
     // 2. line
-    auto comp_2 = std::make_shared<i_ent::Line>(
-            Vector3d{-1.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
+    auto comp_2 = i_ent::MakeLine(Vector3d{-1.0, -1.0, 0.0},
+                                  Vector3d{1.0, 1.0, 0.0});
 
     // 3. circular arc
     auto comp_3 = i_ent::MakeCircularArc(
@@ -93,17 +93,14 @@ ent_vec CreateConicArc() {
 ///       2. Polyline: (8,0,1), (7,1,-1), (7,2,0), (5,3,1), (4,2,0)
 ent_vec CreateCopiousData() {
     // 1. Points
-    igesio::Matrix3Xd copious_coords(3, 5);
-    copious_coords << 3.0,  2.0, 2.0, 0.0, -1.0,
-                      0.0,  1.0, 2.0, 3.0,  2.0,
-                      1.0, -1.0, 0.0, 1.0,  0.0;
-    auto copious = std::make_shared<i_ent::CopiousData>(
-            i_ent::CopiousDataType::kPoints3D, copious_coords);
+    const std::vector<Vector3d> copious_points{
+            {3.0, 0.0, 1.0}, {2.0, 1.0, -1.0}, {2.0, 2.0, 0.0},
+            {0.0, 3.0, 1.0}, {-1.0, 2.0, 0.0}};
+    auto copious = i_ent::MakeCopiousData(copious_points);
 
     // 2. Polyline with transformation
     auto copious_trans = i_ent::MakeTranslation(Vector3d{5.0, 0.0, 0.0});
-    auto linear_path = std::make_shared<i_ent::LinearPath>(
-            i_ent::CopiousDataType::kPolyline3D, copious_coords);
+    auto linear_path = i_ent::MakeLinearPath(copious_points);
     linear_path->OverwriteTransformationMatrix(copious_trans);
 
     return {copious, copious_trans, linear_path};
@@ -116,20 +113,17 @@ ent_vec CreateCopiousData() {
 ent_vec CreateLine() {
     // 1. segment
     auto start = Vector3d{0.0, -1.0, 0.0};
-    auto end = Vector3d{1.0, 1.0, 0.0};
-    auto line_segment = std::make_shared<i_ent::Line>(
-            start, end, i_ent::LineType::kSegment);
+    auto direction = Vector3d{1.0, 2.0, 0.0};
+    auto line_segment = i_ent::MakeLine(start, start + direction);
 
     // 2. semi-infinite line
     auto ray_trans = i_ent::MakeTranslation(Vector3d{2.0, 0, 0.0});
-    auto ray = std::make_shared<i_ent::Line>(
-            start, end, i_ent::LineType::kRay);
+    auto ray = i_ent::MakeRay(start, direction);
     ray->OverwriteTransformationMatrix(ray_trans);
 
     // 3. infinite line
     auto line_trans = i_ent::MakeTranslation(Vector3d{4.0, 0, 0.0});
-    auto line = std::make_shared<i_ent::Line>(
-            start, end, i_ent::LineType::kLine);
+    auto line = i_ent::MakeUnboundedLine(start, direction);
     line->OverwriteTransformationMatrix(line_trans);
 
     return {line_segment, ray_trans, ray, line_trans, line};
@@ -168,7 +162,7 @@ ent_vec CreateParametricSplineCurve() {
 /// @brief Example for Point entity (Type 116)
 /// @note Creates a point at (1, 2, 3)
 ent_vec CreatePoint() {
-    auto point = std::make_shared<i_ent::Point>(Vector3d{1.0, 2.0, 3.0});
+    auto point = i_ent::MakePoint(Vector3d{1.0, 2.0, 3.0});
     point->OverwriteColor(i_ent::ColorNumber::kMagenta);
     return {point};
 }

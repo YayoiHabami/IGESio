@@ -164,6 +164,18 @@ class Point : public EntityBase, public virtual IGeometry {
     }
 };
 
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 点エンティティを作成する
+/// @param position 点の位置ベクトル
+/// @return 作成されたPointのshared_ptr
+/// @note 描画用サブフィギュアが必要な場合は、作成後にSetSubfigure()で設定する
+std::shared_ptr<Point> MakePoint(const Vector3d& position);
+
 }  // namespace igesio::entities
 
 #endif  // IGESIO_ENTITIES_CURVES_POINT_H_

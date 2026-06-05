@@ -52,7 +52,7 @@ void ExpectPositionNear(const Vector3d& actual, const Vector3d& expected,
 /// @brief z軸方向の線分 (0,0,-5)→(0,0,5) (定義空間=ワールド空間)
 /// @note C(t) = (0, 0, -5 + 10t), t∈[0,1]. z=0 で t=0.5
 std::shared_ptr<i_ent::Line> MakeZSegment() {
-    return std::make_shared<i_ent::Line>(
+    return i_ent::MakeLine(
         Vector3d{0., 0., -5.}, Vector3d{0., 0., 5.},
         i_ent::LineType::kSegment);
 }

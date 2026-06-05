@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -228,4 +229,37 @@ std::pair<const Vector3d&, const Vector3d&> Line::GetDefinedAnchorPoints() const
 std::pair<const Vector3d, const Vector3d> Line::GetAnchorPoints() const {
     return {Transform(start_point_, true).value(),
             Transform(terminate_point_, true).value()};
+}
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<Line> i_ent::MakeLine(
+        const Vector3d& start_point, const Vector3d& terminate_point,
+        const LineType line_type) {
+    return std::make_shared<Line>(start_point, terminate_point, line_type);
+}
+
+std::shared_ptr<Line> i_ent::MakeRay(
+        const Vector3d& origin, const Vector3d& direction) {
+    // 方向が定まらないため、ゼロベクトルは不可
+    if (i_num::IsApproxZero(direction.norm(), i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeRay: Direction must not be a zero vector.");
+    }
+    return std::make_shared<Line>(
+            origin, origin + direction, LineType::kRay);
+}
+
+std::shared_ptr<Line> i_ent::MakeUnboundedLine(
+        const Vector3d& point, const Vector3d& direction) {
+    // 方向が定まらないため、ゼロベクトルは不可
+    if (i_num::IsApproxZero(direction.norm(), i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeUnboundedLine: Direction must not be a zero vector.");
+    }
+    return std::make_shared<Line>(
+            point, point + direction, LineType::kLine);
 }

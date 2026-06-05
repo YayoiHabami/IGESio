@@ -67,8 +67,7 @@ constexpr double kEps = 1e-9;
 /// Line: (0,0,0)→(1,0,0), range=[0,1]
 std::shared_ptr<CompositeCurve> MakeSingleLine() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
+    cc->AddCurve(i_ent::MakeLine(Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
     return cc;
 }
 
@@ -78,9 +77,9 @@ std::shared_ptr<CompositeCurve> MakeSingleLine() {
 /// 全体範囲 [0,2], 接合点 t=1
 std::shared_ptr<CompositeCurve> MakeLineLine_LeftTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0}));
     return cc;
 }
@@ -91,9 +90,9 @@ std::shared_ptr<CompositeCurve> MakeLineLine_LeftTurn() {
 /// 全体範囲 [0,2], 接合点 t=1
 std::shared_ptr<CompositeCurve> MakeLineLine_RightTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, -1.0, 0.0}));
     return cc;
 }
@@ -105,9 +104,9 @@ std::shared_ptr<CompositeCurve> MakeLineLine_RightTurn() {
 /// NOTE: 接線連続だが接合点は角点として報告される（CompositeCurveの仕様）
 std::shared_ptr<CompositeCurve> MakeLineLine_Straight() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{1.0, 0.0, 0.0}, Vector3d{2.0, 0.0, 0.0}));
     return cc;
 }
@@ -118,9 +117,9 @@ std::shared_ptr<CompositeCurve> MakeLineLine_Straight() {
 /// 全体範囲 [0,3], 接合点 t=1, サブカーブ角点 t=2
 std::shared_ptr<CompositeCurve> MakeLineLinearPath_LeftTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{1.0, 0.0}, {2.0, 0.0}, {2.0, 1.0}}, false));
     return cc;
 }
@@ -132,9 +131,9 @@ std::shared_ptr<CompositeCurve> MakeLineLinearPath_LeftTurn() {
 /// NOTE: Line の代わりに LinearPath を使用（GetLinearSegments テスト用）
 std::shared_ptr<CompositeCurve> MakePathPath_LeftTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}}, false));
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{1.0, 0.0}, {1.0, 1.0}}, false));
     return cc;
 }
@@ -149,7 +148,7 @@ std::shared_ptr<CompositeCurve> MakeArcPath_Quarter() {
         Vector2d{0.0, 0.0},    // 中心
         Vector2d{1.0, 0.0},    // 始点 (角度 0)
         Vector2d{0.0, 1.0}));  // 終点 (角度 π/2, CCW)
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 1.0}, {0.0, 2.0}}, false));
     return cc;
 }
@@ -163,7 +162,7 @@ std::shared_ptr<CompositeCurve> MakeArcPath_Quarter() {
 ///       オフセット計算を検証するためのファクトリ
 std::shared_ptr<CompositeCurve> MakePathNURBS_NonZeroRange() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}}, false));
     // degree-1 NURBS: K=2, M=1, ノット=[2,2,3.5,5,5], range=[2,5]
     // ノットベクトルサイズ = K+M+2 = 5, 重みサイズ = K+1 = 3
@@ -648,12 +647,12 @@ TEST(CompositeCurveSignedCurvatureTest, NormalFlipped_SignFlipped) {
 // 端点が許容内 (scale~100 → tol=1e-3) の隙間 (3e-4) → 警告なし・is_valid=true
 TEST(CompositeCurveContinuityTest, SmallGap_IsValidNoWarning) {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
     // curve0の終点(100,0,0)とcurve1の始点(100.0003,0,0)に 3e-4 の隙間 (CADモデリング公差相当)
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{100.0003, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
     const auto result = cc->ValidatePD();
     EXPECT_TRUE(result.is_valid);

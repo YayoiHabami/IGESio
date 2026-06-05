@@ -196,3 +196,12 @@ std::shared_ptr<const i_ent::ISubfigureDefinition> Point::GetSubfigure() const {
     }
     return ptr.value();
 }
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<Point> i_ent::MakePoint(const Vector3d& position) {
+    return std::make_shared<Point>(position);
+}

@@ -64,7 +64,7 @@ std::shared_ptr<i_ent::ISurface> MakeClosedBaseSurface() {
 std::shared_ptr<i_ent::ICurve> MakeUvRectLoop(
         const double umin, const double vmin,
         const double umax, const double vmax) {
-    return std::make_shared<i_ent::LinearPath>(
+    return i_ent::MakeLinearPath(
         std::vector<Vector2d>{
             {umin, vmin}, {umax, vmin}, {umax, vmax}, {umin, vmax}},
         true);

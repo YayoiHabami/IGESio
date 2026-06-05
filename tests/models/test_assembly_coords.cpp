@@ -97,7 +97,7 @@ igesio::Matrix4d MakeTransform(const double angle, const Vector3d& axis,
 
 /// @brief 始点・終点を持つ線分エンティティ (M_entityは単位) を生成する
 std::shared_ptr<Line> MakeLine(const Vector3d& start, const Vector3d& end) {
-    return std::make_shared<Line>(start, end, i_ent::LineType::kSegment);
+    return i_ent::MakeLine(start, end);
 }
 
 /// @brief root→a→b の3段ツリーと、bへ追加した線分を束ねる
@@ -546,7 +546,7 @@ TEST_F(AssemblyCoordsTest, GetWorldBoundingBox_PlanarMemberReturnsFlatBox) {
 TEST_F(AssemblyCoordsTest,
        GetWorldBoundingBox_AllDegenerateMembersReturnNullopt) {
     auto root = std::make_shared<Assembly>();
-    root->AddEntity(std::make_shared<Point>(Vector3d(2, 2, 2)));  // 0次元
+    root->AddEntity(i_ent::MakePoint(Vector3d(2, 2, 2)));  // 0次元
     root->AddEntity(MakeLine({0, 0, 0}, {1, 0, 0}));  // x軸平行 = 1次元
 
     EXPECT_FALSE(root->GetWorldBoundingBox().has_value());

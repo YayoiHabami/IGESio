@@ -37,21 +37,21 @@ constexpr double kAngleTol = 1e-5;
 /// @brief 非ループ LinearPath: (0,0)→(1,0)→(1,1)
 /// @details 内部頂点 t=1 での外角 = +π/2 (法線(0,0,1)基準では左折り)
 std::shared_ptr<LinearPath> MakeLeftTurnLP() {
-    return std::make_shared<LinearPath>(
+    return i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}, {1.0, 1.0}}, false);
 }
 
 /// @brief 非ループ LinearPath: (0,0)→(1,0)→(1,-1)
 /// @details 内部頂点 t=1 での外角 = -π/2 (法線(0,0,1)基準では右折り)
 std::shared_ptr<LinearPath> MakeRightTurnLP() {
-    return std::make_shared<LinearPath>(
+    return i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}, {1.0, -1.0}}, false);
 }
 
 /// @brief 非ループ LinearPath: (0,0)→(1,0)→(2,0)
 /// @details 内部頂点 t=1 での外角 = 0 (直線通過)
 std::shared_ptr<LinearPath> MakeStraightLP() {
-    return std::make_shared<LinearPath>(
+    return i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}, {2.0, 0.0}}, false);
 }
 
@@ -59,7 +59,7 @@ std::shared_ptr<LinearPath> MakeStraightLP() {
 /// @details 内部頂点 t=1 での外角 = π (atan2(0,-1); 完全折り返し).
 ///          TryGetSignedCurvature は +∞ を返す
 std::shared_ptr<LinearPath> MakeUTurnLP() {
-    return std::make_shared<LinearPath>(
+    return i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}, {0.0, 0.0}}, false);
 }
 
@@ -243,7 +243,7 @@ TEST(SignedCurvatureGeneralTest, Circle_Negative) {
 /// @details Line は GetLinearSegments をオーバーライドしないため非直線部扱いとなり、
 ///          一般分岐 (c1×c2)/|c1|³ を経由して 0 が返る
 TEST(SignedCurvatureGeneralTest, LineSegment_ZeroCurvature) {
-    const auto line = std::make_shared<Line>(
+    const auto line = i_ent::MakeLine(
         Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0},
         i_ent::LineType::kSegment);
     const Vector3d n(0.0, 0.0, 1.0);

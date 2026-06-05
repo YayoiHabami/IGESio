@@ -90,11 +90,11 @@ inline curve_vec CreateCompositeCurves() {
             Vector2d{0.5, -1.0}, Vector2d{-1.0, -1.0}, Vector2d{2.0, -1.0});
 
     // 2. line
-    auto comp_2 = std::make_shared<entities::Line>(
+    auto comp_2 = entities::MakeLine(
             Vector3d{2.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
     // 3. polyline
-    auto comp_3 = std::make_shared<entities::LinearPath>(
+    auto comp_3 = entities::MakeLinearPath(
             std::vector<Vector2d>{{1.0, 1.0}, {1.0, 0.0}, {-2.0, 1.0}}, false);
 
     // Composite curve
@@ -107,9 +107,9 @@ inline curve_vec CreateCompositeCurves() {
     composite_curve.Set2DInfo(true, true);
 
     TestCurve composite_curve_3d("3D composite curve (line + polyline)", 0);
-    auto line_3d = std::make_shared<entities::Line>(
+    auto line_3d = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0});
-    auto polyline_3d = std::make_shared<entities::LinearPath>(
+    auto polyline_3d = entities::MakeLinearPath(
             std::vector<Vector3d>{{1.0, 1.0, 1.0}, {2.0, 0.0, -1.0}, {3.0, 1.0, 0.0}});
     auto composite_curve_3d_ptr = std::make_shared<entities::CompositeCurve>();
     composite_curve_3d_ptr->AddCurve(line_3d);
@@ -137,34 +137,26 @@ inline curve_vec CreateConicArcs() {
 /// @brief Copious Dataエンティティの作成
 inline curve_vec CreateCopiousData() {
     TestCurve points("3D copious points (5 points)", -1);
-    igesio::Matrix3Xd copious_coords(3, 5);
-    copious_coords << 3.0,  2.0, 2.0, 0.0, -1.0,
-                      0.0,  1.0, 2.0, 3.0,  2.0,
-                      1.0, -1.0, 0.0, 1.0,  0.0;
-    points.curve = std::make_shared<entities::CopiousData>(
-        entities::CopiousDataType::kPoints3D, copious_coords);
+    const std::vector<Vector3d> copious_points{
+        {3.0, 0.0, 1.0}, {2.0, 1.0, -1.0}, {2.0, 2.0, 0.0},
+        {0.0, 3.0, 1.0}, {-1.0, 2.0, 0.0}};
+    points.curve = entities::MakeCopiousData(copious_points);
 
     TestCurve polyline("3D polyline (5 points)", 0);
-    polyline.curve = std::make_shared<entities::LinearPath>(
-        entities::CopiousDataType::kPolyline3D, copious_coords);
+    polyline.curve = entities::MakeLinearPath(copious_points);
 
     TestCurve points_2d("2D copious points (5 points)", -1);
-    igesio::Matrix3Xd copious_coords_2d(3, 5);
-    copious_coords_2d << 3.0,  2.0, 2.0, 0.0, -1.0,
-                         0.0,  1.0, 2.0, 3.0,  2.0,
-                         0.0,  0.0, 0.0, 0.0,  0.0;
-    points_2d.curve = std::make_shared<entities::CopiousData>(
-        entities::CopiousDataType::kPlanarPoints, copious_coords_2d);
+    const std::vector<Vector2d> copious_points_2d{
+        {3.0, 0.0}, {2.0, 1.0}, {2.0, 2.0}, {0.0, 3.0}, {-1.0, 2.0}};
+    points_2d.curve = entities::MakeCopiousData(copious_points_2d);
     points_2d.Set2DInfo(true, true);
 
     TestCurve polyline_2d("2D polyline (5 points)", 0);
-    polyline_2d.curve = std::make_shared<entities::LinearPath>(
-        entities::CopiousDataType::kPlanarPolyline, copious_coords_2d);
+    polyline_2d.curve = entities::MakeLinearPath(copious_points_2d);
     polyline_2d.Set2DInfo(true, true);
 
     TestCurve closed_2d_loop("2D closed loop (5 points)", 0);
-    closed_2d_loop.curve = std::make_shared<entities::LinearPath>(
-        entities::CopiousDataType::kPlanarLoop, copious_coords_2d);
+    closed_2d_loop.curve = entities::MakeLinearPath(copious_points_2d, true);
     closed_2d_loop.Set2DInfo(true, true);
 
     return {points, polyline, points_2d, polyline_2d, closed_2d_loop};
@@ -175,30 +167,30 @@ inline curve_vec CreateLines() {
     using LT = entities::LineType;
 
     TestCurve segment("segment from (0,-1,0) to (1,1,0)", 1);
-    segment.curve = std::make_shared<entities::Line>(
+    segment.curve = entities::MakeLine(
             Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0}, LT::kSegment);
     segment.Set2DInfo(true, true);
 
     TestCurve ray("ray from (0,-1,0) through (1,1,0)", 1);
-    ray.curve = std::make_shared<entities::Line>(
+    ray.curve = entities::MakeLine(
             Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0}, LT::kRay);
     ray.Set2DInfo(true, true);
 
     TestCurve line("line through (0,-1,0) and (1,1,0)", 1);
-    line.curve = std::make_shared<entities::Line>(
+    line.curve = entities::MakeLine(
             Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0}, LT::kLine);
     line.Set2DInfo(true, true);
 
     TestCurve segment_3d("3D segment from (0,0,0) to (1,1,1)", 1);
-    segment_3d.curve = std::make_shared<entities::Line>(
+    segment_3d.curve = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0}, LT::kSegment);
 
     TestCurve ray_3d("3D ray from (0,0,0) through (1,1,1)", 1);
-    ray_3d.curve = std::make_shared<entities::Line>(
+    ray_3d.curve = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0}, LT::kRay);
 
     TestCurve line_3d("3D line through (0,0,0) and (1,1,1)", 1);
-    line_3d.curve = std::make_shared<entities::Line>(
+    line_3d.curve = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0}, LT::kLine);
 
     return {segment, ray, line, segment_3d, ray_3d, line_3d};

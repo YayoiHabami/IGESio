@@ -55,9 +55,9 @@ std::shared_ptr<i_ent::CircularArc> MakeArc() {
 ///       親(102)と子(各Line)はそれぞれ別IDを持つ.
 std::shared_ptr<i_ent::CompositeCurve> MakeComposite() {
     auto cc = std::make_shared<i_ent::CompositeCurve>();
-    cc->AddCurve(std::make_shared<i_ent::Line>(
+    cc->AddCurve(i_ent::MakeLine(
         igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<i_ent::Line>(
+    cc->AddCurve(i_ent::MakeLine(
         igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0}));
     return cc;
 }

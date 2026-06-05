@@ -77,7 +77,7 @@ igesio::Matrix4d MakeTransform(const double angle, const Vector3d& axis,
 
 /// @brief 始点・終点を持つ線分エンティティ (M_entityは単位) を生成する
 std::shared_ptr<Line> MakeLine(const Vector3d& start, const Vector3d& end) {
-    return std::make_shared<Line>(start, end, i_ent::LineType::kSegment);
+    return i_ent::MakeLine(start, end);
 }
 
 /// @brief Assembly直下から最初のLine(110)を曲線として取り出す

@@ -39,9 +39,9 @@ using i_graph::ShaderType;
 /// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment
 std::shared_ptr<i_ent::CompositeCurve> MakeCompositeOfSegments() {
     auto cc = std::make_shared<i_ent::CompositeCurve>();
-    cc->AddCurve(std::make_shared<i_ent::Line>(
+    cc->AddCurve(i_ent::MakeLine(
         igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<i_ent::Line>(
+    cc->AddCurve(i_ent::MakeLine(
         igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0}));
     return cc;
 }
