@@ -46,7 +46,6 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/common/iges_parameter_vector.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/numerics/geometric/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
@@ -99,17 +98,15 @@ std::shared_ptr<Line> MakeLineSegment() {
 /// @brief degree-1 の直線 NURBS (0,0,0)-(1,0,0)。開曲線で GetLinearSegments() が
 ///        全範囲を覆う (終了条件①の検証用)。パラメータ範囲 [0, 1]。
 std::shared_ptr<RationalBSplineCurve> MakeStraightNurbs() {
-    return std::make_shared<RationalBSplineCurve>(
-        igesio::IGESParameterVector{
-            1, 1,                       // K (制御点数-1), M (次数)
-            true, false, true, false,   // PROP1-4 (平面/閉/多項式/周期)
-            0., 0., 1., 1.,             // ノットベクトル
-            1., 1.,                     // 重み
-            0., 0., 0.,                 // 制御点0
-            1., 0., 0.,                 // 制御点1
-            0., 1.,                     // V(0), V(1)
-            0., 0., 1.                  // 定義平面の法線
-        });
+    igesio::Matrix3Xd cps(3, 2);
+    cps.col(0) = Vector3d(0.0, 0.0, 0.0);  // 制御点0
+    cps.col(1) = Vector3d(1.0, 0.0, 0.0);  // 制御点1
+    return i_ent::MakeRationalBSplineCurve(
+        1,                                 // M (次数)
+        cps,
+        {0.0, 0.0, 1.0, 1.0},              // ノットベクトル
+        {},                                // 重み (全1.0)
+        std::array<double, 2>{0.0, 1.0});  // V(0), V(1)
 }
 
 /// @brief 原点中心・半径1の半円 (開曲線)。パラメータ範囲 [0, π]、|C(t)|=1。

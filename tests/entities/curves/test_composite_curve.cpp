@@ -50,7 +50,6 @@ using i_ent::CircularArc;
 using i_ent::CompositeCurve;
 using i_ent::Line;
 using i_ent::LinearPath;
-using i_ent::RationalBSplineCurve;
 constexpr double kPi = igesio::kPi;
 /// @brief 浮動小数点比較の許容誤差
 constexpr double kTol = 1e-9;
@@ -165,20 +164,16 @@ std::shared_ptr<CompositeCurve> MakePathNURBS_NonZeroRange() {
     cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}}, false));
     // degree-1 NURBS: K=2, M=1, ノット=[2,2,3.5,5,5], range=[2,5]
-    // ノットベクトルサイズ = K+M+2 = 5, 重みサイズ = K+1 = 3
-    const auto param = igesio::IGESParameterVector{
-        2,                         // K (制御点数 - 1)
-        1,                         // M (次数)
-        false, false, true, false,  // PROP1-4 (非周期, 非閉, 多項式, 非平面外)
-        2.0, 2.0, 3.5, 5.0, 5.0,    // ノットベクトル (K+M+2=5 個)
-        1.0, 1.0, 1.0,             // 重み (K+1=3 個)
-        1.0, 0.0, 0.0,             // P0 = (1,0,0)
-        1.0, 1.0, 0.0,             // P1 = (1,1,0) (内部ノット t=3.5 に対応)
-        1.0, 2.0, 0.0,             // P2 = (1,2,0)
-        2.0, 5.0,                  // V(0)=2, V(1)=5
-        0.0, 0.0, 1.0              // 法線ベクトル
-    };
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(param));
+    igesio::Matrix3Xd cps(3, 3);
+    cps.col(0) = Vector3d(1.0, 0.0, 0.0);  // P0 = (1,0,0)
+    cps.col(1) = Vector3d(1.0, 1.0, 0.0);  // P1 = (1,1,0) (内部ノット t=3.5 に対応)
+    cps.col(2) = Vector3d(1.0, 2.0, 0.0);  // P2 = (1,2,0)
+    cc->AddCurve(i_ent::MakeRationalBSplineCurve(
+        1,                                  // M (次数)
+        cps,
+        {2.0, 2.0, 3.5, 5.0, 5.0},          // ノットベクトル (K+M+2=5 個)
+        {},                                 // 重み (全1.0)
+        std::array<double, 2>{2.0, 5.0}));  // V(0)=2, V(1)=5
     return cc;
 }
 

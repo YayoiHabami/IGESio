@@ -29,6 +29,7 @@ set(TEST_SOURCES
     curves/test_linear_path.cpp
     curves/test_parametric_spline_curve.cpp
     curves/test_rational_b_spline_curve.cpp
+    curves/test_rational_b_spline_curve_edit.cpp
     curves/test_signed_curvature.cpp
     curves/test_curve_line_intersection.cpp
     curves/algorithms/test_extremal_polygon.cpp

@@ -9,6 +9,7 @@
 #ifndef IGESIO_TESTS_ENTITIES_CURVES_CURVES_FOR_TESTING_H_
 #define IGESIO_TESTS_ENTITIES_CURVES_CURVES_FOR_TESTING_H_
 
+#include <array>
 #include <limits>
 #include <memory>
 #include <string>
@@ -249,54 +250,43 @@ inline curve_vec CreateParametricSplineCurve() {
 /// @brief Rational B-Spline Curveエンティティの作成
 inline curve_vec CreateRationalBSplineCurve() {
     TestCurve nurbs_c_2d("2D rational B-spline curve", 3);
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -2.5, -5.5,  0.0,    // control point P(0)
-        -2.0,  4.0,  0.0,    // control point P(1)
-         8.5,  2.5,  0.0,    // control point P(2)
-         5.5, -2.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    nurbs_c_2d.curve = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(-2.5, -5.5, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-2.0,  4.0, 0.0);  // control point P(1)
+    cps.col(2) = Vector3d(8.5,   2.5, 0.0);  // control point P(2)
+    cps.col(3) = Vector3d(5.5,  -2.0, 0.0);  // control point P(3)
+    nurbs_c_2d.curve = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
     nurbs_c_2d.Set2DInfo(true, true);
 
     TestCurve nurbs_closed_2d("2D closed rational B-spline curve", 0);
-    param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-         0.0,  5.0,  0.0,    // control point P(0)
-        -4.0,  0.0,  0.0,    // control point P(1)
-         4.0,  0.0,  0.0,    // control point P(2)
-         0.0,  5.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    nurbs_closed_2d.curve = std::make_shared<entities::RationalBSplineCurve>(param);
+    cps.col(0) = Vector3d(0.0,   5.0, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-4.0,  0.0, 0.0);  // control point P(1)
+    cps.col(2) = Vector3d(4.0,   0.0, 0.0);  // control point P(2)
+    cps.col(3) = Vector3d(0.0,   5.0, 0.0);  // control point P(3)
+    nurbs_closed_2d.curve = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
     nurbs_closed_2d.Set2DInfo(true, true);
 
     TestCurve nurbs_c("3D rational B-spline curve", 3);
-    param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -4.0, -4.0,  0.0,    // control point P(0)
-        -1.5,  7.0,  3.5,    // control point P(1)
-         4.0, -3.0,  1.0,    // control point P(2)
-         4.0,  4.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    nurbs_c.curve = std::make_shared<entities::RationalBSplineCurve>(param);
+    cps.col(0) = Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+    cps.col(2) = Vector3d(4.0,  -3.0, 1.0);  // control point P(2)
+    cps.col(3) = Vector3d(4.0,   4.0, 0.0);  // control point P(3)
+    nurbs_c.curve = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     return {nurbs_c_2d, nurbs_closed_2d, nurbs_c};
 }
@@ -355,40 +345,33 @@ inline curve_vec CreateCurveOnAParametricSurface() {
 
     // Create curve on the surface
     TestCurve curve_on_surface("open curve on a parametric surface", 2);
-    param = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         0.0,  0.0,  0.0,    // control point P(0)
-         0.0,  4.0,  0.0,    // control point P(1)
-         2.0, -2.0,  0.0,    // control point P(2)
-         1.5,  2.0,  0.0,    // control point P(3)
-         3.0,  3.0,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto nurbs_c = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 5);
+    cps.col(0) = Vector3d(0.0,  0.0, 0.0);   // control point P(0)
+    cps.col(1) = Vector3d(0.0,  4.0, 0.0);   // control point P(1)
+    cps.col(2) = Vector3d(2.0, -2.0, 0.0);   // control point P(2)
+    cps.col(3) = Vector3d(1.5,  2.0, 0.0);   // control point P(3)
+    cps.col(4) = Vector3d(3.0,  3.0, 0.0);   // control point P(4)
+    auto nurbs_c = entities::MakeRationalBSplineCurve(
+        3,                                              // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                             // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});               // parameter range V(0), V(1)
     auto [open_curve, _] = entities::MakeCurveOnAParametricSurface(nurbs_s, nurbs_c);
     curve_on_surface.curve = open_curve;
 
     TestCurve closed_curve_on_surface("closed curve on a parametric surface", 2);
-    param = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         1.5,  0.5,  0.0,    // control point P(0)
-         0.0,  0.5,  0.0,    // control point P(1)
-         2.0,  4.0,  0.0,    // control point P(2)
-         3.0,  0.5,  0.0,    // control point P(3)
-         1.5,  0.5,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto nurbs_cc = std::make_shared<entities::RationalBSplineCurve>(param);
+    cps.col(0) = Vector3d(1.5, 0.5, 0.0);    // control point P(0)
+    cps.col(1) = Vector3d(0.0, 0.5, 0.0);    // control point P(1)
+    cps.col(2) = Vector3d(2.0, 4.0, 0.0);    // control point P(2)
+    cps.col(3) = Vector3d(3.0, 0.5, 0.0);    // control point P(3)
+    cps.col(4) = Vector3d(1.5, 0.5, 0.0);    // control point P(4)
+    auto nurbs_cc = entities::MakeRationalBSplineCurve(
+        3,                                              // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                             // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});               // parameter range V(0), V(1)
     auto [closed_curve, __] = entities::MakeCurveOnAParametricSurface(nurbs_s, nurbs_cc);
     closed_curve_on_surface.curve = closed_curve;
 

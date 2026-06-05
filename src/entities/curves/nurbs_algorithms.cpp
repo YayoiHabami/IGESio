@@ -735,12 +735,9 @@ std::shared_ptr<RationalBSplineCurve> ApproximateWithNurbs(
     RunApproxLoop(points, t_bar, D, m, k_init, r, options,
                   knots, ctrl);
 
-    const unsigned int k_final =
-        static_cast<unsigned int>(ctrl.cols()) - 1;
-    const std::vector<double> weights(k_final + 1, 1.0);
-    return std::make_shared<RationalBSplineCurve>(
-        k_final, m, knots, weights, ctrl,
-        std::array<double, 2>{0.0, 1.0});
+    // 重みは省略 (全1.0の多項式形式)
+    return MakeRationalBSplineCurve(
+        m, ctrl, knots, {}, std::array<double, 2>{0.0, 1.0});
 }
 
 std::shared_ptr<RationalBSplineCurve> ApproximateWithNurbs(
@@ -792,12 +789,9 @@ std::shared_ptr<RationalBSplineCurve> ApproximateWithNurbs(
     RunApproxLoop(samples, t_bar, D, m, k_init, r, options,
                   knots, ctrl);
 
-    const unsigned int k_final =
-        static_cast<unsigned int>(ctrl.cols()) - 1;
-    const std::vector<double> weights(k_final + 1, 1.0);
-    return std::make_shared<RationalBSplineCurve>(
-        k_final, m, knots, weights, ctrl,
-        std::array<double, 2>{0.0, 1.0});
+    // 重みは省略 (全1.0の多項式形式)
+    return MakeRationalBSplineCurve(
+        m, ctrl, knots, {}, std::array<double, 2>{0.0, 1.0});
 }
 
 }  // namespace igesio::entities

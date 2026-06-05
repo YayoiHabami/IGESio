@@ -9,6 +9,7 @@
 #ifndef IGESIO_TESTS_ENTITIES_SURFACES_SURFACES_FOR_TESTING_H_
 #define IGESIO_TESTS_ENTITIES_SURFACES_SURFACES_FOR_TESTING_H_
 
+#include <array>
 #include <limits>
 #include <memory>
 #include <string>
@@ -54,20 +55,17 @@ inline surface_vec CreateRuledSurfaces() {
     auto curve1 = entities::MakeLine(
             Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
     // curve2: Rational B-Spline Curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -5.0, 0.0, -6.0,     // control point P(0)
-        -3.0, 4.0, -6.0,     // control point P(1)
-         3.0, 4.0, -6.0,     // control point P(2)
-         5.0, 0.0, -6.0,     // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto curve2 = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(-5.0, 0.0, -6.0);  // control point P(0)
+    cps.col(1) = Vector3d(-3.0, 4.0, -6.0);  // control point P(1)
+    cps.col(2) = Vector3d(3.0,  4.0, -6.0);  // control point P(2)
+    cps.col(3) = Vector3d(5.0,  0.0, -6.0);  // control point P(3)
+    auto curve2 = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     // Ruled surface
     TestSurface ruled_surface("Ruled Surface");
@@ -88,20 +86,17 @@ inline surface_vec CreateSurfaceOfRevolutions() {
             Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
 
     // Generatrix: Rational B-Spline Curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        1.0, -4.0,  0.0,    // control point P(0)
-        1.0, -5.0,  1.5,    // control point P(1)
-        1.0, -3.0,  2.0,    // control point P(2)
-        1.0,  0.0,  4.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        1.0, 0.0, 0.0        // normal vector of the defining plane
-    };
-    auto generatrix = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(1.0, -4.0, 0.0);   // control point P(0)
+    cps.col(1) = Vector3d(1.0, -5.0, 1.5);   // control point P(1)
+    cps.col(2) = Vector3d(1.0, -3.0, 2.0);   // control point P(2)
+    cps.col(3) = Vector3d(1.0,  0.0, 4.0);   // control point P(3)
+    auto generatrix = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     // Surface of Revolution
     TestSurface rev_full("Surface of Revolution (0 to 2π)");
@@ -118,20 +113,17 @@ inline surface_vec CreateSurfaceOfRevolutions() {
 /// @brief Tabulated Cylinderエンティティの作成
 inline surface_vec CreateTabulatedCylinders() {
     // Directrix curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,   // non-periodic open NURBS curve
-        0., 0., 0., 0., 1., 1., 1., 1.,  // knot vector
-        1., 1., 1., 1.,               // weights
-        0.0, -4.0, -4.0,              // control points P(0)
-        0.0,  0.2, -1.1,              // control points P(1)
-        0.0, -1.0,  4.5,              // control points P(2)
-        0.0,  4.0,  4.0,              // control points P(3)
-        0.0, 1.0,                     // parameter range V(0), V(1)
-        1., 0., 0.                    // normal vector of the defining plane
-    };
-    auto directrix = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(0.0, -4.0, -4.0);  // control point P(0)
+    cps.col(1) = Vector3d(0.0,  0.2, -1.1);  // control point P(1)
+    cps.col(2) = Vector3d(0.0, -1.0,  4.5);  // control point P(2)
+    cps.col(3) = Vector3d(0.0,  4.0,  4.0);  // control point P(3)
+    auto directrix = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     // Axis direction
     Vector3d axis_dir{1., -1., 0.};
