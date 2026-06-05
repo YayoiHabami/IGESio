@@ -402,7 +402,7 @@ TEST(ISurfaceTest, Area) {
             Vector3d{0.0, 0.0, 0.0}, Vector3d{0.0, 1.0, 0.0});
         auto cir_arc = i_ent::MakeCircularArc(
             Vector2d{0.0, 0.0}, Vector2d{2.0, 0.0}, Vector2d{0.0, 2.0});
-        auto surface = std::make_shared<i_ent::SurfaceOfRevolution>(
+        auto surface = i_ent::MakeSurfaceOfRevolution(
             axis, cir_arc, 0.0, igesio::kPi / 2.0);
 
         auto area = surface->Area();

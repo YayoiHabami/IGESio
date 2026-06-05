@@ -9,8 +9,10 @@
 
 #include <algorithm>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "igesio/numerics/core/tolerance.h"
@@ -22,6 +24,54 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::SurfaceOfRevolution;
 using igesio::Vector3d;
+
+/// @brief 回転角度の制約 0 < TA-SA <= 2π を満たすか
+/// @param start_angle 回転の開始角度SA [rad]
+/// @param end_angle 回転の終了角度TA [rad]
+/// @note 規格はSA・TAの絶対値ではなく差のみを制約する。上限は厳密比較では
+///       なく許容誤差付き比較とする。全周回転(360°)ではCADが終了角を2πの
+///       十進近似で出力し、double化で差が真の2πをわずかに超える
+///       (例: 6.28318530717959 ≈ 2π+4e-15)ことがあるため(値はクランプせず
+///       原値を保持)。
+bool IsValidAngleRange(const double start_angle, const double end_angle) {
+    return start_angle < end_angle
+           && i_num::IsApproxLEQ(end_angle - start_angle, 2.0 * igesio::kPi);
+}
+
+/// @brief 回転角度の制約 0 < TA-SA <= 2π を検証する
+/// @param start_angle 回転の開始角度SA [rad]
+/// @param end_angle 回転の終了角度TA [rad]
+/// @throw igesio::EntityValueError 制約を満たさない場合
+void ValidateAngleRange(const double start_angle, const double end_angle) {
+    if (!IsValidAngleRange(start_angle, end_angle)) {
+        throw igesio::EntityValueError(
+            "Invalid angles: Require 0 < θend - θstart <= 2*pi, but got "
+            "θstart = " + std::to_string(start_angle) + "[rad] and "
+            "θend = " + std::to_string(end_angle) + "[rad].");
+    }
+}
+
+/// @brief 値コンストラクタ用のPDパラメータを構築する
+/// @param axis 回転軸 (Lineエンティティへのポインタ)
+/// @param generatrix 母線 (ICurveを継承したエンティティへのポインタ)
+/// @return 構築されたIGESParameterVector
+/// @throw std::invalid_argument axisまたはgeneratrixがnullptrの場合
+/// @note 委譲コンストラクタの初期化式でnullptrを参照しないよう、
+///       GetID()の呼び出し前にここでnull検証を行う
+igesio::IGESParameterVector BuildSorParameters(
+        const std::shared_ptr<i_ent::Line>& axis,
+        const std::shared_ptr<i_ent::ICurve>& generatrix,
+        const double start_angle, const double end_angle) {
+    if (!axis) {
+        throw std::invalid_argument(
+            "axis of SurfaceOfRevolution must not be nullptr");
+    }
+    if (!generatrix) {
+        throw std::invalid_argument(
+            "generatrix of SurfaceOfRevolution must not be nullptr");
+    }
+    return {axis->GetID(), generatrix->GetID(), start_angle, end_angle};
+}
 
 }  // namespace
 
@@ -49,17 +99,8 @@ SurfaceOfRevolution::SurfaceOfRevolution(
         const std::shared_ptr<Line>& axis,
         const std::shared_ptr<ICurve>& generatrix,
         const double start_angle, const double end_angle)
-        : SurfaceOfRevolution({axis->GetID(), generatrix->GetID(),
-                               start_angle, end_angle}) {
-    if (axis == nullptr) {
-        throw std::invalid_argument(
-            "axis of SurfaceOfRevolution must not be nullptr");
-    }
-    if (generatrix == nullptr) {
-        throw std::invalid_argument(
-            "generatrix of SurfaceOfRevolution must not be nullptr");
-    }
-
+        : SurfaceOfRevolution(BuildSorParameters(
+              axis, generatrix, start_angle, end_angle)) {
     // 参照の解決
     SetAxis(axis);
     SetGeneratrix(generatrix);
@@ -202,16 +243,11 @@ igesio::ValidationResult SurfaceOfRevolution::ValidatePD() const {
         }
     }
 
-    // 回転角度
-    // 0 <= start_angle < end_angle <= 2*pi
-    // 上限は厳密比較ではなく許容誤差付き比較とする。全周回転(360°)では
-    // CADが終了角を2πの十進近似で出力し、double化で真の2πをわずかに超える
-    // (例: 6.28318530717959 ≈ 2π+4e-15)ことがあるため(値はクランプせず原値を保持)。
-    if (!(0.0 <= start_angle_ && start_angle_ < end_angle_
-          && i_num::IsApproxLEQ(end_angle_, 2.0 * kPi))) {
+    // 回転角度: 0 < θend - θstart <= 2*pi (許容誤差等はIsValidAngleRange参照)
+    if (!IsValidAngleRange(start_angle_, end_angle_)) {
         // 角度は幾何的品質の指摘 (kWarning) とし描画はブロックしない
         // (過回転でも周期的に評価でき、退化(start>=end)は何も描かないだけ)。
-        errors.emplace_back("Invalid angles: Require 0 <= θstart < θend <= 2*pi, "
+        errors.emplace_back("Invalid angles: Require 0 < θend - θstart <= 2*pi, "
                             "but got θstart = " + std::to_string(start_angle_) + "[rad] and "
                             "θend = " + std::to_string(end_angle_) + "[rad].",
                             igesio::ValidationSeverity::kWarning);
@@ -234,9 +270,8 @@ bool SurfaceOfRevolution::IsUClosed() const {
 }
 
 bool SurfaceOfRevolution::IsVClosed() const {
-    // v方向は回転角度に依存する
-    return i_num::IsApproxEqual(start_angle_, 0.0)
-           && i_num::IsApproxEqual(end_angle_, 2.0 * kPi);
+    // v方向は回転角度がちょうど全周 (θend - θstart = 2π) の場合に閉じる
+    return i_num::IsApproxEqual(end_angle_ - start_angle_, 2.0 * kPi);
 }
 
 std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
@@ -433,9 +468,7 @@ void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatri
 }
 
 void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double end_angle) {
-    if (!(0.0 <= start_angle && start_angle < end_angle && end_angle <= 2.0 * kPi)) {
-        throw igesio::EntityValueError("Invalid angles: Require 0 <= θstart < θend <= 2*pi");
-    }
+    ValidateAngleRange(start_angle, end_angle);
     start_angle_ = start_angle;
     end_angle_ = end_angle;
 }
@@ -454,4 +487,44 @@ std::shared_ptr<const i_ent::ICurve> SurfaceOfRevolution::GetGeneratrix() const 
         throw igesio::ReferenceError("Generatrix (ICurve) pointer is not set or invalid.");
     }
     return ptr.value();
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<SurfaceOfRevolution> i_ent::MakeSurfaceOfRevolution(
+        const std::shared_ptr<Line>& axis,
+        const std::shared_ptr<ICurve>& generatrix,
+        const double start_angle, const double end_angle) {
+    // 角度は値コンストラクタでは検証されないため、構築前に検証する
+    ValidateAngleRange(start_angle, end_angle);
+    return std::make_shared<SurfaceOfRevolution>(
+        axis, generatrix, start_angle, end_angle);
+}
+
+std::pair<std::shared_ptr<SurfaceOfRevolution>, std::shared_ptr<i_ent::Line>>
+i_ent::MakeSurfaceOfRevolution(
+        const Vector3d& axis_point, const Vector3d& axis_direction,
+        const std::shared_ptr<ICurve>& generatrix,
+        const double start_angle, const double end_angle) {
+    ValidateAngleRange(start_angle, end_angle);
+
+    // 軸の方向が定まらないため、ゼロベクトルは不可
+    if (i_num::IsApproxZero(axis_direction.norm(), i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+            "MakeSurfaceOfRevolution: Axis direction must not be a zero vector.");
+    }
+    // 孤立した軸Lineが生成されるのを防ぐため、軸の生成前に検証する
+    if (!generatrix) {
+        throw std::invalid_argument(
+            "generatrix of SurfaceOfRevolution must not be nullptr");
+    }
+
+    auto axis = MakeLine(axis_point, axis_point + axis_direction);
+    auto surface = std::make_shared<SurfaceOfRevolution>(
+        axis, generatrix, start_angle, end_angle);
+    return {surface, axis};
 }

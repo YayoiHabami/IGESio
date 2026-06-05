@@ -126,10 +126,11 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     /// @throw std::invalid_argument generatrixがnullptrの場合
     void SetGeneratrix(const std::shared_ptr<ICurve>&);
     /// @brief 回転範囲を変更する
-    /// @param start_angle 回転の開始角度 [rad]
-    /// @param end_angle 回転の終了角度 [rad]
-    /// @throw igesio::EntityValueError 0 <= start_angle < end_angle <= 2*pi
-    ///        を満たさない場合
+    /// @param start_angle 回転の開始角度SA [rad]
+    /// @param end_angle 回転の終了角度TA [rad]
+    /// @throw igesio::EntityValueError 0 < TA - SA <= 2*pi を満たさない場合
+    /// @note 規格はSA・TAの絶対値ではなく差のみを制約する
+    ///       (SA < 0 や TA > 2*pi も適法)
     void SetAngleRange(const double = 0.0, const double = 2.0 * kPi);
 
     /// @brief 回転軸を取得する
@@ -145,6 +146,13 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     std::array<double, 2> GetAngleRange() const {
         return {start_angle_, end_angle_};
     }
+
+    /// @brief 回転軸のポインタが解決済みか
+    /// @note GetAxis()と異なり、未設定でも例外を投げない事前確認用
+    bool HasAxis() const noexcept { return axis_.IsPointerSet(); }
+    /// @brief 母線のポインタが解決済みか
+    /// @note GetGeneratrix()と異なり、未設定でも例外を投げない事前確認用
+    bool HasGeneratrix() const noexcept { return generatrix_.IsPointerSet(); }
 
 
 
@@ -213,6 +221,42 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
         return TransformImpl(input, is_point);
     }
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 既存のLineを回転軸としてSurfaceOfRevolutionを作成する
+/// @param axis 回転軸 (Lineエンティティへのポインタ)
+/// @param generatrix 母線 (ICurveを継承したエンティティへのポインタ)
+/// @param start_angle 回転の開始角度SA [rad]
+/// @param end_angle 回転の終了角度TA [rad]
+/// @return 作成されたSurfaceOfRevolutionのshared_ptr
+/// @throw std::invalid_argument axisまたはgeneratrixがnullptrの場合
+/// @throw igesio::EntityValueError 0 < TA - SA <= 2*pi を満たさない場合
+std::shared_ptr<SurfaceOfRevolution> MakeSurfaceOfRevolution(
+        const std::shared_ptr<Line>& axis,
+        const std::shared_ptr<ICurve>& generatrix,
+        double start_angle = 0.0, double end_angle = 2.0 * kPi);
+
+/// @brief 回転軸を点と方向ベクトルから自動生成してSurfaceOfRevolutionを作成する
+/// @param axis_point 回転軸が通る点P1
+/// @param axis_direction 回転軸の方向ベクトル (軸の終点はP2 = P1 + axis_direction)
+/// @param generatrix 母線 (ICurveを継承したエンティティへのポインタ)
+/// @param start_angle 回転の開始角度SA [rad]
+/// @param end_angle 回転の終了角度TA [rad]
+/// @return 本体と自動生成された軸Line (Type 110) のペア.
+///         軸Lineは呼び出し側でモデル (IgesData) へ登録すること
+/// @throw std::invalid_argument generatrixがnullptrの場合
+/// @throw igesio::EntityValueError axis_directionがゼロベクトルに近い場合、
+///        または 0 < TA - SA <= 2*pi を満たさない場合
+std::pair<std::shared_ptr<SurfaceOfRevolution>, std::shared_ptr<Line>>
+MakeSurfaceOfRevolution(
+        const Vector3d& axis_point, const Vector3d& axis_direction,
+        const std::shared_ptr<ICurve>& generatrix,
+        double start_angle = 0.0, double end_angle = 2.0 * kPi);
 
 }  // namespace igesio::entities
 

@@ -92,8 +92,7 @@ std::shared_ptr<i_ent::SurfaceOfRevolution> MakeCylinder() {
         Vector3d{0., 0., 0.}, Vector3d{0., 0., 1.});
     auto generatrix = i_ent::MakeLine(
         Vector3d{2., 0., 0.}, Vector3d{2., 0., 4.});
-    return std::make_shared<i_ent::SurfaceOfRevolution>(
-        axis, generatrix, 0.0, 2.0 * igesio::kPi);
+    return i_ent::MakeSurfaceOfRevolution(axis, generatrix, 0.0, 2.0 * igesio::kPi);
 }
 
 /// @brief デフォルトの探索パラメータ (テスト用・サンプル数を増やしてある)

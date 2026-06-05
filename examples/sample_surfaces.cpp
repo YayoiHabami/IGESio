@@ -76,8 +76,7 @@ ent_vec CreateSurfaceOfRevolution() {
     auto generatrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
 
     // Surface of revolution
-    auto surf_rev = std::make_shared<i_ent::SurfaceOfRevolution>(
-        axis_line, generatrix, 0.0, kPi);
+    auto surf_rev = i_ent::MakeSurfaceOfRevolution(axis_line, generatrix, 0.0, kPi);
     surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
 
     return {axis_line, generatrix, surf_rev};
