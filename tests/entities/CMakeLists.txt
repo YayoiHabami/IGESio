@@ -20,6 +20,7 @@ set(TEST_SOURCES
     curves/test_circular_arc.cpp
     curves/test_conic_arc.cpp
     curves/test_copious_data.cpp
+    curves/test_curve_on_a_parametric_surface.cpp
     curves/test_line.cpp
     curves/test_point.cpp
     curves/test_algorithms.cpp
