@@ -49,6 +49,7 @@ using igesio::Matrix4d;
 using igesio::Vector3d;
 using i_mdl::Assembly;
 using i_mdl::CoordFrame;
+using i_mdl::MakeAssembly;
 using i_ent::Line;
 
 /// @brief 浮動小数点比較の許容誤差
@@ -196,7 +197,7 @@ TEST(MaterializeTest, RotationAppliesToVectorNotTranslation) {
 // フラット化後は子Assemblyを持たない
 TEST(FlattenTest, ProducesFlatTreeWithoutChildAssemblies) {
     i_mdl::IgesData src;
-    auto child = std::make_shared<Assembly>();
+    auto child = MakeAssembly();
     child->SetGlobalTransform(MakeTranslation({10, 0, 0}));
     child->AddEntity(MakeLine({0, 0, 0}, {1, 0, 0}));
     src.Root().AddChildAssembly(child);
@@ -219,7 +220,7 @@ TEST(FlattenTest, CopiesDescription) {
 // 畳み込んだワールド点が、元のAssemblyビューのワールド点と一致する (エンドツーエンド不変)
 TEST(FlattenTest, FoldedWorldPointMatchesAssemblyView) {
     i_mdl::IgesData src;
-    auto child = std::make_shared<Assembly>();
+    auto child = MakeAssembly();
     child->SetGlobalTransform(MakeTransform(kPiHalf, {0, 0, 1}, {1, 2, 3}));
     auto line = MakeLine({0, 0, 0}, {1, 0, 0});
     const auto line_id = child->AddEntity(line);
@@ -245,7 +246,7 @@ TEST(FlattenTest, FoldedWorldPointMatchesAssemblyView) {
 // 非単位配置では生成124がフラットマップに含まれ、複製がそれを参照する
 TEST(FlattenTest, EmitsGeneratedTransformAndClosure) {
     i_mdl::IgesData src;
-    auto child = std::make_shared<Assembly>();
+    auto child = MakeAssembly();
     child->SetGlobalTransform(MakeTranslation({7, 0, 0}));
     child->AddEntity(MakeLine({0, 0, 0}, {1, 0, 0}));
     src.Root().AddChildAssembly(child);
@@ -283,7 +284,7 @@ TEST(WriterFlatOutputTest, FlattensChildAssemblyEntities) {
     i_mdl::IgesData src;
     src.Root().AddEntity(MakeLine({0, 0, 0}, {1, 0, 0}));
     src.Root().AddEntity(MakeLine({0, 0, 0}, {0, 1, 0}));
-    auto child = std::make_shared<Assembly>();
+    auto child = MakeAssembly();
     child->AddEntity(MakeLine({0, 0, 0}, {0, 0, 1}));
     src.Root().AddChildAssembly(child);
 

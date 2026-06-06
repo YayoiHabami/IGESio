@@ -55,7 +55,7 @@ std::shared_ptr<i_ent::CircularArc> MakeArc() {
 
 // 既定では空のアクティブ選択セットを1つ持つ
 TEST(SceneTest, Constructor_HasOneEmptyActiveSelection) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     EXPECT_TRUE(scene.ActiveSelection().Empty());
@@ -64,7 +64,7 @@ TEST(SceneTest, Constructor_HasOneEmptyActiveSelection) {
 
 // RootPtr/Root はコンストラクタに渡したrootを共有する
 TEST(SceneTest, RootPtr_SharesRootWithConstructorArg) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     EXPECT_EQ(scene.RootPtr().get(), root.get());
@@ -73,7 +73,7 @@ TEST(SceneTest, RootPtr_SharesRootWithConstructorArg) {
 
 // CreateSelectionSet は新規セットを追加するがアクティブは変えない
 TEST(SceneTest, CreateSelectionSet_AddsSetWithoutChangingActive) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     const auto active_before = scene.ActiveSelectionId();
@@ -86,7 +86,7 @@ TEST(SceneTest, CreateSelectionSet_AddsSetWithoutChangingActive) {
 
 // アクティブセットの切替で、各セットの内容が独立に保たれる
 TEST(SceneTest, ActivateSelectionSet_SwitchesIndependentSets) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     const auto set1 = scene.ActiveSelectionId();
@@ -110,7 +110,7 @@ TEST(SceneTest, ActivateSelectionSet_SwitchesIndependentSets) {
 
 // アンカー(主選択)はセット毎で、アクティブセット(Scene)とは別概念である
 TEST(SceneTest, Anchor_IsPerSetDistinctFromActiveSet) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     const auto id_a = MakeId();
@@ -127,7 +127,7 @@ TEST(SceneTest, Anchor_IsPerSetDistinctFromActiveSet) {
 
 // 未知のハンドルに対する切替は失敗し、アクティブは変わらない
 TEST(SceneTest, ActivateSelectionSet_ReturnsFalseForUnknownHandle) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     const auto active_before = scene.ActiveSelectionId();
@@ -137,7 +137,7 @@ TEST(SceneTest, ActivateSelectionSet_ReturnsFalseForUnknownHandle) {
 
 // PickFilterの既定値はすべて有効
 TEST(SceneTest, Filter_DefaultsToAllTrue) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     const auto& f = scene.Filter();
@@ -151,8 +151,8 @@ TEST(SceneTest, Filter_DefaultsToAllTrue) {
 
 // 祖先がロックされていなければ実効的に選択可能
 TEST(SceneTest, IsEffectivelySelectable_TrueWhenUnlocked) {
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
     auto arc = MakeArc();
     child->AddEntity(arc);
@@ -162,8 +162,8 @@ TEST(SceneTest, IsEffectivelySelectable_TrueWhenUnlocked) {
 
 // 所有ノードまたは祖先がロックされていれば選択不可
 TEST(SceneTest, IsEffectivelySelectable_FalseWhenAncestorLocked) {
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
     auto arc = MakeArc();
     child->AddEntity(arc);
@@ -179,7 +179,7 @@ TEST(SceneTest, IsEffectivelySelectable_FalseWhenAncestorLocked) {
 
 // TrySelectWithLock: 非ロック要素は選択され、trueを返す
 TEST(SceneTest, TrySelectWithLock_SelectsWhenUnlocked) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     auto arc = MakeArc();
     root->AddEntity(arc);
     i_mod::Scene scene(root);
@@ -190,8 +190,8 @@ TEST(SceneTest, TrySelectWithLock_SelectsWhenUnlocked) {
 
 // TrySelectWithLock: ロック要素は拒否されるが、SelectionSet直呼びは迂回できる
 TEST(SceneTest, TrySelectWithLock_RejectsWhenAncestorLocked) {
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
     auto arc = MakeArc();
     child->AddEntity(arc);
@@ -209,7 +209,7 @@ TEST(SceneTest, TrySelectWithLock_RejectsWhenAncestorLocked) {
 
 // TrySelectWithLock: bodiesフィルタが無効なら拒否する
 TEST(SceneTest, TrySelectWithLock_RejectsWhenBodiesFilterDisabled) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     auto arc = MakeArc();
     root->AddEntity(arc);
     i_mod::Scene scene(root);
@@ -223,8 +223,8 @@ TEST(SceneTest, TrySelectWithLock_RejectsWhenBodiesFilterDisabled) {
 
 // SelectOwningAssembly: 所有ノードのメンバのみ一括選択し、所有AssemblyのIDを返す
 TEST(SceneTest, SelectOwningAssembly_SelectsMembersOfOwningNode) {
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
     auto arc_root = MakeArc();  // root直接所有 (所有ノードの外)
     auto arc_a = MakeArc();
@@ -246,8 +246,8 @@ TEST(SceneTest, SelectOwningAssembly_SelectsMembersOfOwningNode) {
 
 // SelectOwningAssembly: ロックされた子ノードのメンバはスキップする
 TEST(SceneTest, SelectOwningAssembly_SkipsLockedMembers) {
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto locked = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto locked = i_mod::MakeAssembly();
     root->AddChildAssembly(locked);
     auto arc_a = MakeArc();  // root直下 (選択可)
     auto arc_b = MakeArc();  // lockedノード内 (選択不可)
@@ -268,7 +268,7 @@ TEST(SceneTest, SelectOwningAssembly_SkipsLockedMembers) {
 
 // SelectOwningAssembly: ツリーに無いIDは nullopt を返し、選択は変化しない
 TEST(SceneTest, SelectOwningAssembly_ReturnsNulloptForUnknownId) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     auto arc = MakeArc();
     root->AddEntity(arc);
     i_mod::Scene scene(root);
@@ -281,8 +281,8 @@ TEST(SceneTest, SelectOwningAssembly_ReturnsNulloptForUnknownId) {
 
 // DeselectOwningAssembly: 所有ノードのメンバのみ一括解除し、他ノードは残す
 TEST(SceneTest, DeselectOwningAssembly_DeselectsMembersOfOwningNode) {
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
     auto arc_root = MakeArc();  // root直接所有 (所有ノードの外)
     auto arc_a = MakeArc();
@@ -307,7 +307,7 @@ TEST(SceneTest, DeselectOwningAssembly_DeselectsMembersOfOwningNode) {
 
 // DeselectOwningAssembly: ツリーに無いIDは nullopt を返し、選択は変化しない
 TEST(SceneTest, DeselectOwningAssembly_ReturnsNulloptForUnknownId) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     auto arc = MakeArc();
     root->AddEntity(arc);
     i_mod::Scene scene(root);
@@ -321,7 +321,7 @@ TEST(SceneTest, DeselectOwningAssembly_ReturnsNulloptForUnknownId) {
 
 // 選択粒度の既定はbody単位で、SetGranularityで切り替えられる
 TEST(SceneTest, Granularity_DefaultsToBodyAndIsSettable) {
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     i_mod::Scene scene(root);
 
     EXPECT_EQ(scene.Granularity(), i_mod::SelectionGranularity::kBody);

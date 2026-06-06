@@ -65,9 +65,9 @@ TEST(SceneWalkTest, NestedTransform_AccumulatedIntoModel) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     root->SetGlobalTransform(Translate(1.0, 0.0, 0.0));
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto child = i_mod::MakeAssembly();
     child->SetGlobalTransform(Translate(0.0, 2.0, 0.0));
     root->AddChildAssembly(child);
 
@@ -97,8 +97,8 @@ TEST(SceneWalkTest, InvisibleSubtree_NotDrawn) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
     child->Metadata().visible = false;  // 非表示
     root->AddChildAssembly(child);
 
@@ -123,8 +123,8 @@ TEST(SceneWalkTest, SuppressedSubtree_NotDrawn) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
     child->Metadata().suppressed = true;  // 抑制
     root->AddChildAssembly(child);
 

@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -706,4 +707,16 @@ void Assembly::PrepareGeometryCaches(const bool recursive) const {
             entities, [](const std::shared_ptr<i_ent::EntityBase>& e) {
         e->PrepareGeometryCache();
     });
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<Assembly> i_models::MakeAssembly(const std::string& name) {
+    auto assembly = std::make_shared<Assembly>();
+    assembly->Metadata().name = name;
+    return assembly;
 }

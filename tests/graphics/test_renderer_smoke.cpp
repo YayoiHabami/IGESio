@@ -112,7 +112,7 @@ TEST(RendererSmokeTest, Draw_RunsShaderBucketingPath) {
     ASSERT_TRUE(renderer.AddEntity(arc));
 
     // 描画はScene走査に一本化されたため、rootへarcを入れSceneを束ねる
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     root->AddEntity(arc);
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);

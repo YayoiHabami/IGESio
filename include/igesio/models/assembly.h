@@ -528,6 +528,19 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     void PrepareGeometryCaches(bool recursive = true) const;
 };
 
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief Assemblyを作成する
+/// @param name アセンブリ名 (Metadata().nameに設定する。省略時は空のまま)
+/// @return 作成されたAssemblyのshared_ptr
+/// @note Assemblyはenable_shared_from_thisを継承するため、必ずshared_ptrとして
+///       生成する必要がある。本ファクトリはその規約を構造的に保証する
+std::shared_ptr<Assembly> MakeAssembly(const std::string& name = "");
+
 }  // namespace igesio::models
 
 #endif  // IGESIO_MODELS_ASSEMBLY_H_

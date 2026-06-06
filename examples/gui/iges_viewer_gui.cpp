@@ -157,7 +157,7 @@ IgesViewerGUI::IgesViewerGUI(
     renderer_.EnableTransparency(true);
 
     // 空のSceneを生成し、レンダラへ束ねる (ロード時にBindSceneRootで差し替える)
-    scene_ = std::make_unique<models::Scene>(std::make_shared<models::Assembly>());
+    scene_ = std::make_unique<models::Scene>(models::MakeAssembly());
     renderer_.SetScene(scene_.get());
 }
 
@@ -731,8 +731,7 @@ void IgesViewerGUI::RenderNodeContextMenu(models::Assembly& node) {
     models::Assembly* np = &node;
     if (ImGui::MenuItem("New child")) {
         pending_action_ = [this, np]() {
-            auto created = std::make_shared<models::Assembly>();
-            created->Metadata().name = "Assembly";
+            auto created = models::MakeAssembly("Assembly");
             np->AddChildAssembly(created);
             renderer_.MarkSceneDirty();
             needs_redraw_ = true;
@@ -911,8 +910,7 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     models::Assembly* np = &node;
     if (ImGui::Button("New child")) {
         pending_action_ = [this, np]() {
-            auto created = std::make_shared<models::Assembly>();
-            created->Metadata().name = "Assembly";
+            auto created = models::MakeAssembly("Assembly");
             np->AddChildAssembly(created);
             renderer_.MarkSceneDirty();
             needs_redraw_ = true;
@@ -983,8 +981,7 @@ void IgesViewerGUI::GroupSelectionIntoNewAssembly() {
     models::Assembly* parent = FocusedNode();
     if (parent == nullptr) parent = &root;
 
-    auto group = std::make_shared<models::Assembly>();
-    group->Metadata().name = "Group";
+    auto group = models::MakeAssembly("Group");
     parent->AddChildAssembly(group);
 
     const std::vector<ObjectID> ids(sel.Items().begin(), sel.Items().end());
