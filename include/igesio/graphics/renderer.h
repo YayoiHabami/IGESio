@@ -125,6 +125,11 @@ class EntityRenderer {
     /// @brief 背景色
     std::array<float, 4> background_color_ = {1.0f, 1.0f, 1.0f, 1.0f};  // 白色
 
+    /// @brief 環境光 (アンビエント) の色 (RGB) [0.0 - 1.0]
+    /// @note IBLの代替として、面シェーダーが一定の環境光として反射する.
+    ///       金属は誘電体と異なり拡散を持たないため、この値が暗部の明るさを決める
+    std::array<float, 3> ambient_color_ = {0.35f, 0.35f, 0.35f};
+
     /// @brief カメラクラス
     /// @note mutable: 自動クリップ球はシーンの派生キャッシュであり、
     ///       constな同期経路 (EnsureSynced/ResyncGeometries) から更新される
@@ -301,6 +306,18 @@ class EntityRenderer {
     /// @param alpha 不透明度 [0.0 - 1.0] (デフォルト: 1.0f)
     void SetBackgroundColor(const float, const float,
                             const float, const float = 1.0f);
+
+    /// @brief 環境光 (アンビエント) の色を取得する
+    /// @return 環境光の色 (RGB) [0.0 - 1.0]
+    std::array<float, 3> GetAmbientColor() const;
+
+    /// @brief 環境光 (アンビエント) の色を設定する
+    /// @param red 赤成分 [0.0 - 1.0]
+    /// @param green 緑成分 [0.0 - 1.0]
+    /// @param blue 青成分 [0.0 - 1.0]
+    /// @note IBLの代替として面シェーダーが反射する一定の環境光. 値を上げると
+    ///       暗部 (特に金属) が明るくなる. 反映には`Draw()`の呼び出しが必要
+    void SetAmbientColor(const float, const float, const float);
 
     /// @brief カメラの参照を取得する (const)
     /// @return カメラの参照

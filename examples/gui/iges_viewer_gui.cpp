@@ -11,12 +11,16 @@
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
 #include <igesio/reader.h>
+#include <igesio/entities/interfaces/i_surface.h>
+#include <igesio/graphics/core/material_property.h>
 
 namespace {
 
@@ -37,6 +41,31 @@ constexpr float kStatusBarHeight = 28.0f;
 constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse
         | ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+/// @brief 物体色＋材質のプリセット (色の系統)
+struct ColorScheme {
+    /// @brief Combo表示名
+    const char* name;
+    /// @brief 説明 (ホバー時にツールチップ表示)
+    const char* tooltip;
+    /// @brief 物体の既定色 (RGB; [0,1]). std::nulloptで元のIGES色を維持する
+    std::optional<std::array<float, 3>> object_color;
+    /// @brief 金属度 [0,1]
+    float metallic;
+    /// @brief 表面粗さ [0,1]
+    float roughness;
+};
+
+/// @brief 選択肢として提示する色の系統の一覧
+/// @note 先頭(インデックス0)は元のIGES色・標準マットへ戻すための既定系統
+const std::vector<ColorScheme> kColorSchemes = {
+    {"IGES Default", "元のIGES色・標準マット", std::nullopt,            0.0f, 0.5f},
+    {"Steel",        "鋼/シルバー金属",  {{0.60f, 0.62f, 0.65f}},      1.0f, 0.35f},
+    {"Gold",         "ゴールド金属",     {{1.00f, 0.78f, 0.34f}},      1.0f, 0.30f},
+    {"Copper",       "銅/ブロンズ金属",  {{0.95f, 0.55f, 0.35f}},      1.0f, 0.35f},
+    {"Plastic Red",  "つや消し赤樹脂",   {{0.85f, 0.15f, 0.12f}},      0.0f, 0.45f},
+    {"Plastic Blue", "つや消し青樹脂",   {{0.18f, 0.35f, 0.85f}},      0.0f, 0.40f},
+};
 
 /// @brief GLFWのマウスボタン定数をMouseButtonへ変換する
 MouseButton ToMouseButton(const int glfw_button) {
@@ -256,6 +285,8 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
 
         // シーンをモデルのrootへ束ねる (描画時にツリーを走査させる)
         BindSceneRoot(iges_data_.RootPtr());
+        // 読み込んだエンティティへ現在の色の系統(物体色＋材質)を反映する
+        ApplyColorScheme();
         renderer_.Camera().Reset();
         // 起動後の初回読み込み時のみ、モデル全体を自動でフィットする
         if (!initial_fit_done_) {
@@ -307,6 +338,27 @@ void IgesViewerGUI::ApplyDisplayFilter() {
         if (!p.second) filter.hidden_types.insert(p.first);
     }
     renderer_.SetDisplayFilter(filter);
+    needs_redraw_ = true;
+}
+
+void IgesViewerGUI::ApplyColorScheme() {
+    if (!scene_) return;
+    const auto& scheme = kColorSchemes[color_scheme_index_];
+
+    // 物体色: rootのオーバーライドとして設定する (個別ノードの色は最近接優先で
+    //         温存される). nullopt の系統は元のIGES色へ戻す
+    scene_->Root().SetColorOverride(scheme.object_color);
+
+    // 材質: 面単位でしか設定できないため、表示対象の面エンティティへ個別適用する
+    for (const auto& [type, list] : entities_) {
+        for (const auto& entity : list) {
+            if (!std::dynamic_pointer_cast<const entities::ISurface>(entity)) continue;
+            MaterialProperty mp;  // ao/opacity/textureは既定値
+            mp.metallic = scheme.metallic;
+            mp.roughness = scheme.roughness;
+            renderer_.SetMaterialProperty(entity->GetID(), mp);
+        }
+    }
     needs_redraw_ = true;
 }
 
@@ -420,6 +472,21 @@ void IgesViewerGUI::RenderMenuBar() {
         if (ImGui::ColorEdit3("Background",
                               renderer_.GetBackgroundColorRef().data())) {
             needs_redraw_ = true;
+        }
+        // 色の系統 (物体色＋材質のプリセット) を選ぶ
+        if (ImGui::BeginCombo("Color Scheme",
+                              kColorSchemes[color_scheme_index_].name)) {
+            for (int i = 0; i < static_cast<int>(kColorSchemes.size()); ++i) {
+                const bool selected = (i == color_scheme_index_);
+                if (ImGui::Selectable(kColorSchemes[i].name, selected)) {
+                    color_scheme_index_ = i;
+                    ApplyColorScheme();
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", kColorSchemes[i].tooltip);
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
         }
         bool aa = renderer_.IsAntialiasingEnabled();
         if (ImGui::MenuItem("Antialiasing", nullptr, &aa)) {

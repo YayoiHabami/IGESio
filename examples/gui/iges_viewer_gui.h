@@ -78,6 +78,8 @@ class IgesViewerGUI {
 
     /// @brief 削除系操作のポリシー (0:Reject, 1:Cascade, 2:Orphan; ImGui用)
     int removal_policy_ = 0;
+    /// @brief 選択中の色の系統(物体色＋材質プリセット)のインデックス
+    int color_scheme_index_ = 0;
     /// @brief Outlinerで操作対象としてフォーカス中のAssemblyノードID
     std::optional<ObjectID> focused_assembly_id_;
     /// @brief 直近の編集操作の結果メッセージ (ステータスバー表示用)
@@ -150,6 +152,11 @@ class IgesViewerGUI {
 
     /// @brief 型別表示フラグ(show_entity_)をレンダラの表示フィルタへ反映する
     void ApplyDisplayFilter();
+
+    /// @brief 選択中の色の系統(物体色＋材質プリセット)をモデル全体へ適用する
+    /// @note 物体色はrootのColorOverrideとして設定し(個別ノード色は最近接優先で温存)、
+    ///       材質は表示対象の面エンティティへ個別にSetMaterialPropertyする
+    void ApplyColorScheme();
 
     /// @brief 描画対象のシーンをモデルのrootへ束ね直す (選択はリセットされる)
     void BindSceneRoot(std::shared_ptr<models::Assembly> root);

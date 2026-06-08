@@ -444,6 +444,15 @@ void EntityRenderer::SetBackgroundColor(
     background_color_ = {red, green, blue, alpha};
 }
 
+std::array<float, 3> EntityRenderer::GetAmbientColor() const {
+    return ambient_color_;
+}
+
+void EntityRenderer::SetAmbientColor(
+        const float red, const float green, const float blue) {
+    ambient_color_ = {red, green, blue};
+}
+
 void EntityRenderer::SetSettings(const GraphicsSettings& settings) {
     // アンチエイリアシング
     if (settings.enable_antialiasing != settings_.enable_antialiasing) {
@@ -685,6 +694,11 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
 
         // 光源のパラメータを設定 (配列uniformとして送信)
         if (UsesLighting(shader_type)) {
+            // 視点位置 (鏡面・アンビエントFresnelで使用) と環境光色を送信
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "viewPos_WorldSpace"),
+                            1, camera_.GetPosition().data());
+            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "ambientColor"),
+                            1, ambient_color_.data());
             gl_->Uniform1i(gl_->GetUniformLocation(program_id, "numLights"),
                            num_lights);
             if (num_lights > 0) {
