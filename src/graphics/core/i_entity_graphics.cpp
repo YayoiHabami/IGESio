@@ -80,7 +80,7 @@ void IEntityGraphics::SetGlobalParam(
     global_param_ = copy;
 }
 
-void IEntityGraphics::SetWorldTransform(const igesio::Matrix4f& matrix) {
+void IEntityGraphics::SetWorldTransform(const igesio::Matrix4d& matrix) {
     world_transform_ = matrix;
 }
 

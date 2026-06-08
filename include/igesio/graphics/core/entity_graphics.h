@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/entity_base.h"
@@ -348,16 +349,17 @@ class EntityGraphics : public IEntityGraphics {
     /// @brief グローバル座標系への変換行列を設定する
     /// @param matrix グローバル座標系への変換行列 (親→モデル空間)
     /// @note 子要素 (複合ノード) を持つ場合は、matrix·M_entityを子へ伝播する.
-    void SetWorldTransform(const igesio::Matrix4f& matrix) override {
+    void SetWorldTransform(const igesio::Matrix4d& matrix) override {
         world_transform_ = matrix;
         if (child_graphics_.empty()) return;
 
-        // 子要素には matrix·M_entity を伝播する (M_entityは各子が自前で扱わない前提)
-        igesio::Matrix4f child_transform = matrix;
+        // 子要素には matrix·M_entity を伝播する (M_entityは各子が自前で扱わない前提).
+        // 単精度往復による誤差累積を避けるため、伝播はdoubleで行う
+        igesio::Matrix4d child_transform = matrix;
         if (auto ptr =
                 std::dynamic_pointer_cast<const entities::EntityBase>(entity_)) {
-            const igesio::Matrix4f m_entity = ptr->GetTransformationMatrix()
-                    .GetTransformation().template cast<float>();
+            const igesio::Matrix4d m_entity = ptr->GetTransformationMatrix()
+                    .GetTransformation();
             child_transform = matrix * m_entity;
         }
         for (auto& [st, list] : child_graphics_) {
@@ -367,22 +369,31 @@ class EntityGraphics : public IEntityGraphics {
         }
     }
 
-    /// @brief グローバル座標系への変換行列を取得する
-    /// @return グローバル座標系への変換行列.
+    /// @brief グローバル座標系への変換行列をGPU用の単精度で取得する
+    /// @return グローバル座標系への変換行列 (float).
     ///         use_entity_transform_がtrueの場合は、
     ///         `SetWorldTransform`で設定された変換行列に
     ///         entity_が参照する変換行列を掛け合わせたものを返す.
+    /// @note CPU側の幾何計算 (BB・ピッキング等) では精度を失わないよう
+    ///       GetWorldTransformD() を使用すること.
     igesio::Matrix4f GetWorldTransform() const override {
+        // 単精度はGL境界でのみ生成する. 一時へのダングリング参照を避けるため、
+        // doubleの正準値を名前付きローカルに受けてから単精度へ変換する
+        const igesio::Matrix4d w = GetWorldTransformD();
+        return w.cast<float>();
+    }
+
+    /// @brief グローバル座標系への変換行列を倍精度で取得する (CPU幾何の正準値)
+    /// @return グローバル座標系への変換行列 (double).
+    ///         use_entity_transform_がtrueの場合は、
+    ///         `SetWorldTransform`で設定された変換行列に
+    ///         entity_が参照する変換行列を掛け合わせたものを返す.
+    igesio::Matrix4d GetWorldTransformD() const override {
         if (use_entity_transform_ && entity_) {
             auto ptr = std::dynamic_pointer_cast<const entities::EntityBase>(entity_);
             if (ptr) {
-                // entity_が参照する変換行列を掛け合わせる
-                // NOTE: cast<float>()は遅延評価式を返すため、autoで受けると
-                //       GetTransformation()が返す一時Matrix4dへのダングリング参照
-                //       となる (Release最適化時にUBで描画が破綻する)。具体型で
-                //       受けて一時が生存中に即時評価・コピーさせる。
-                const igesio::Matrix4f entity_transform = ptr->GetTransformationMatrix()
-                        .GetTransformation().template cast<float>();
+                const igesio::Matrix4d entity_transform =
+                        ptr->GetTransformationMatrix().GetTransformation();
                 return world_transform_ * entity_transform;
             }
         }
@@ -543,10 +554,10 @@ class EntityGraphics : public IEntityGraphics {
 
         if (!entity_) return {};
 
-        // world_transform_ (親->ワールド) をdoubleへ昇格して適用する
+        // world_transform_ (親->ワールド) を適用する
         // (GetWorldBoundingBoxと同じ規約. TryGetPointAtは親空間を返すため、
         //  これを掛けるとワールド座標になる)
-        const igesio::Matrix4d wt = world_transform_.cast<double>();
+        const igesio::Matrix4d& wt = world_transform_;
 
         if (const auto* surf =
                 dynamic_cast<const entities::ISurface*>(entity_.get())) {
@@ -576,9 +587,12 @@ class EntityGraphics : public IEntityGraphics {
         // GetBoundingBox()はエンティティ自身のDE変換を適用済み(親空間)。
         // world_transform_ (親→ワールド) を適用してワールド空間のBBを得る。
         auto bb = geom->GetBoundingBox();
-        const igesio::Matrix4d wt = world_transform_.cast<double>();
+        const igesio::Matrix4d& wt = world_transform_;
         const igesio::Matrix3d r = wt.block<3, 3>(0, 0);
         const igesio::Vector3d t = wt.block<3, 1>(0, 3);
+        // 回転成分が退化変換(スケール・せん断・射影等)の場合はBBを構成できないため、
+        // throwを越境させず深度推定のフォールバックに委ねる(constなピック経路の保護)。
+        if (!numerics::IsRotation(r)) return std::nullopt;
         bb.Transform(r, t);
         return bb;
     }

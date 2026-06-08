@@ -580,7 +580,6 @@ void EntityRenderer::WalkAssembly(
     if (!disp.visible || disp.suppressed) return;
 
     const igesio::Matrix4d accum = parent_accum * node.GetGlobalTransform();
-    const igesio::Matrix4f accum_f = accum.cast<float>();
 
     // 色/不透明度のオーバーライドは最近接が優先 (子の設定が祖先を上書きする)
     const auto color_ovr = disp.color_override ? disp.color_override : inherited_color;
@@ -613,8 +612,9 @@ void EntityRenderer::WalkAssembly(
         }
 
         // ピッキング/描画の整合のためワールド変換をリフレッシュする.
-        // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける)
-        graphics->SetWorldTransform(accum_f);
+        // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける).
+        // 正準値はdoubleで保持し、単精度化はGPUアップロード時のみ行う
+        graphics->SetWorldTransform(accum);
 
         // 解決したオーバーライドをフレーム毎にPUSHする (world_transform_と同じ派生キャッシュ).
         // まずentity固有色へ戻し、指定があるRGB/不透明度のみ差し替える

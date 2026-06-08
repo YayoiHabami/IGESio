@@ -164,7 +164,9 @@ class IEntityGraphics {
     ///       `ICurveGraphics`等の、離散化をCPU上で行うグラフィックスクラスでは、
     ///       エンティティがDEレコード7で指定する変換行列を含まない.
     /// @note 頂点シェーダーの`model`変数に対応する.
-    igesio::Matrix4f world_transform_ = igesio::Matrix4f::Identity();
+    /// @note CPU側の正準値として倍精度で保持する. GPUへ渡す際にのみ単精度へ
+    ///       変換することで、BB計算・ピッキング等の幾何計算での精度損失を防ぐ.
+    igesio::Matrix4d world_transform_ = igesio::Matrix4d::Identity();
     /// @brief model変数にentity_が参照する変換行列を使用するか
     /// @note 通常、model変数には、エンティティよりも上位の変換行列
     ///       (親 -> ... -> モデル空間)　を使用する. 各個別エンティティの
@@ -286,13 +288,18 @@ class IEntityGraphics {
     ///       モデル空間までの各親の変換行列をすべて掛け合わせたもの) を指定する.
     ///       `ICurveGraphics`等の、離散化をCPU上で行うグラフィックスクラスでは、
     ///       エンティティがDEレコード7で指定する変換行列を含まない.
-    virtual void SetWorldTransform(const igesio::Matrix4f&);
-    /// @brief グローバル座標系への変換行列を取得する
-    /// @return グローバル座標系への変換行列.
+    virtual void SetWorldTransform(const igesio::Matrix4d&);
+    /// @brief グローバル座標系への変換行列をGPU用の単精度で取得する
+    /// @return グローバル座標系への変換行列 (float).
     ///         use_entity_transform_がtrueの場合は、
     ///         `SetWorldTransform`で設定された変換行列に
     ///         entity_が参照する変換行列を掛け合わせたものを返す.
+    /// @note CPU側の幾何計算では精度を失わないようGetWorldTransformD()を使うこと.
     virtual igesio::Matrix4f GetWorldTransform() const = 0;
+    /// @brief グローバル座標系への変換行列を倍精度で取得する (CPU幾何の正準値)
+    /// @return グローバル座標系への変換行列 (double).
+    ///         use_entity_transform_がtrueの場合の扱いはGetWorldTransform()と同じ.
+    virtual igesio::Matrix4d GetWorldTransformD() const = 0;
 
     /// @brief 現在のメインの色を取得する
     /// @return メインの色 (RGBA; [0, 1]の範囲)

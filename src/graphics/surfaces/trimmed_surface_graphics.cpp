@@ -113,7 +113,7 @@ igesio::graphics::TrimmedSurfaceGraphics::GetSelectionSamples(
         const SelectionSampleParams& params) const {
     if (!entity_) return {};
 
-    const igesio::Matrix4d wt = world_transform_.cast<double>();
+    const igesio::Matrix4d& wt = world_transform_;
     SelectionSamples result;
 
     // 外周ループ: N1=0 ならパラメータ矩形、N1=1 ならトリム境界曲線(142)を使用

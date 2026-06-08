@@ -254,14 +254,17 @@ void BoundingBox::Rotate(const Matrix3d& rot, const Vector3d& center) {
     // rotがほぼIdentityであれば何もしない
     if (IsApproxIdentity(rot))  return;
 
-    // 回転行列の検証 (直交行列かつ行列式が1)
-    Eigen::Matrix3d should_be_identity = rot * rot.transpose();
-    if (!i_num::IsApproxIdentity(should_be_identity) ||
-        !i_num::IsApproxEqual(rot.determinant(), 1.0)) {
+    // 回転行列の検証 (直交行列かつ行列式が+1).
+    // GPU由来の変換行列は単精度往復で約1e-7の非直交残差を持つため、float尺度の
+    // 許容誤差で判定する. 真にスケール・せん断・NaN等を含む不正な入力のみ弾く.
+    if (!i_num::IsRotation(rot)) {
         throw std::invalid_argument(
             "BoundingBox: Rotation matrix must be orthogonal with determinant 1, "
             "but got matrix:\n" + ToString(rot));
     }
+    // 許容誤差内のほぼ回転行列を最近接の真の回転行列へ正規化する.
+    // (方向ベクトルの正規直交性を厳密に保ち、誤差の累積を防ぐ)
+    const Matrix3d r = i_num::NearestRotation(rot);
 
     // centerが無限大の成分を持つ場合はエラー
     if (!center.allFinite()) {
@@ -272,12 +275,12 @@ void BoundingBox::Rotate(const Matrix3d& rot, const Vector3d& center) {
 
     // centerを中心に回転
     if (!(control_ - center).isZero(kGeometryTolerance)) {
-        control_ = rot * (control_ - center) + center;
+        control_ = r * (control_ - center) + center;
     }
 
     // 方向ベクトルを回転
     for (auto& dir : directions_) {
-        dir = rot * dir;
+        dir = r * dir;
     }
 }
 

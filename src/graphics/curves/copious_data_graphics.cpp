@@ -128,7 +128,7 @@ std::vector<igesio::graphics::RayHit> CopiousDataGraphics::Intersect(
     // 描画位置に一致させる: model = GetWorldTransform(), VBO = 定義空間座標
     const Vector3d p1 = ray.origin + ray.direction;
     constexpr auto kRay = numerics::BoundingBox::DirectionType::kRay;
-    const igesio::Matrix4d m = GetWorldTransform().cast<double>();
+    const igesio::Matrix4d m = GetWorldTransformD();
     const auto& coords = entity_->Coordinates();
     const auto count = entity_->GetCount();
 
@@ -161,7 +161,7 @@ igesio::graphics::SelectionSamples CopiousDataGraphics::GetSelectionSamples(
     }
 
     // 点列 (form 1-3): 各頂点を描画位置に一致させてpointsに格納する
-    const igesio::Matrix4d m = GetWorldTransform().cast<double>();
+    const igesio::Matrix4d m = GetWorldTransformD();
     const auto& coords = entity_->Coordinates();
     const auto count = entity_->GetCount();
 
