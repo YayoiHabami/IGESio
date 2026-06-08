@@ -75,13 +75,14 @@ std::array<double, 2> CopiousData::GetParameterRange() const {
 
 std::optional<i_ent::CurveDerivatives>
 CopiousData::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
-    if (t < GetParameterRange()[0] || t > GetParameterRange()[1]) {
-        return std::nullopt;
-    }
+    // 境界の浮動小数点誤差を許容し域内へ丸める
+    const auto range = GetParameterRange();
+    auto tc = i_num::TryClampToRange(t, range[0], range[1]);
+    if (!tc) return std::nullopt;
 
     CurveDerivatives result(n);
 
-    auto [index, dist] = GetNearestVertexAt(t);
+    auto [index, dist] = GetNearestVertexAt(*tc);
     if (i_num::IsApproxZero(dist, i_num::kGeometryTolerance)) {
         result[0] = Coordinates().col(index);
     }

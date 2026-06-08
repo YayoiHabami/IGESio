@@ -7,7 +7,9 @@
  */
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -91,6 +93,27 @@ TEST(RationalBSplineSurface, TryGetDefinedPointAt) {
             EXPECT_TRUE(i_num::IsApproxEqual((*pt_opt).y(), 25.0));
         }
     }
+}
+
+// TryGetDefinedPointAtのテスト (境界の浮動小数点丸めに対する頑健性)
+// - パラメータ上端/下端を1 ULP超えた点でも評価できることを確認する.
+//   旧実装は厳密比較で弾き例外を送出していた (報告事例の回帰防止).
+//   一方、許容誤差を明確に超える域外値は従来どおり拒否されること.
+TEST(RationalBSplineSurface, TryGetDefinedPointAt_BoundaryOvershootIsTolerated) {
+    auto plane = CreatePlane();
+    ASSERT_TRUE(plane->Validate().is_valid);
+
+    const double v_over = std::nextafter(1.0, 2.0);    // 上端 + 1 ULP
+    const double u_under = std::nextafter(0.0, -1.0);  // 下端 - 1 ULP
+
+    auto pt = plane->TryGetDefinedPointAt(u_under, v_over);
+    ASSERT_TRUE(pt.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(pt->y(), 25.0));
+    EXPECT_NO_THROW(plane->GetPointAt(u_under, v_over));
+
+    // 許容誤差を明確に超える域外は従来どおり拒否 (nullopt / 例外)
+    EXPECT_FALSE(plane->TryGetDefinedPointAt(1.0 + 1e-6, 0.5).has_value());
+    EXPECT_THROW(plane->GetPointAt(1.0 + 1e-6, 0.5), std::out_of_range);
 }
 
 // TryGetDefinedPointAtのテスト (u/v方向の取り違え検出)

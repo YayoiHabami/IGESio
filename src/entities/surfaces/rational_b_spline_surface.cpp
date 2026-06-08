@@ -748,11 +748,8 @@ igesio::ValidationResult RationalBSplineSurface::ValidatePD() const {
 std::optional<i_ent::SurfaceDerivatives>
 RationalBSplineSurface::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
-    // パラメータ範囲チェック
-    if (u < parameter_range_[0] || u > parameter_range_[1] ||
-        v < parameter_range_[2] || v > parameter_range_[3]) {
-        return std::nullopt;
-    }
+    // 範囲チェック・域内クランプは基底関数計算 (TryComputeBasisFunctions) が
+    // 許容誤差つきで行うため、ここでは行わない (曲線版と同方針)。
 
     // 基底関数の計算
     auto basis_u_opt = ::TryComputeBasisFunctions(u, true, order, *this);

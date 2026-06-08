@@ -196,14 +196,16 @@ bool CircularArc::IsClosed() const {
 std::optional<i_ent::CurveDerivatives>
 CircularArc::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
-    if (t < range[0] || t > range[1]) return std::nullopt;
+    // 境界の浮動小数点誤差を許容し域内へ丸める
+    auto tc = i_num::TryClampToRange(t, range[0], range[1]);
+    if (!tc) return std::nullopt;
 
     const double radius = Radius();
 
     CurveDerivatives result(n);
     // n階導関数を一般式で計算（位相は k * PI/2 で増える）
     for (unsigned int k = 0; k <= n; ++k) {
-        double phase = t + static_cast<double>(k) * (kPi / 2.0);
+        double phase = *tc + static_cast<double>(k) * (kPi / 2.0);
         result[k] = Vector3d{
             radius * std::cos(phase),
             radius * std::sin(phase),

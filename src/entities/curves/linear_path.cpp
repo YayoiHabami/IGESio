@@ -240,13 +240,18 @@ std::array<double, 2> LinearPath::GetParameterRange() const {
 
 std::optional<i_ent::CurveDerivatives>
 LinearPath::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
-    auto idx = GetSegmentIndexAt(t);
+    // 境界の浮動小数点誤差を許容し域内へ丸める
+    const auto range = GetParameterRange();
+    auto tc = i_num::TryClampToRange(t, range[0], range[1]);
+    if (!tc) return std::nullopt;
+
+    auto idx = GetSegmentIndexAt(*tc);
     if (!idx.has_value())  return std::nullopt;
 
     CurveDerivatives result(n);
 
     // 0階導関数: 点の座標値
-    auto point_opt = GetCoordinateAtLength(t);
+    auto point_opt = GetCoordinateAtLength(*tc);
     if (point_opt.has_value()) {
         result[0] = point_opt.value();
     } else {

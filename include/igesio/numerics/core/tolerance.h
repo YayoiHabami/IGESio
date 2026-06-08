@@ -9,6 +9,7 @@
 #define IGESIO_NUMERICS_CORE_TOLERANCE_H_
 
 #include <limits>
+#include <optional>
 
 #include "igesio/numerics/core/matrix.h"
 
@@ -172,6 +173,18 @@ bool IsApproxGreaterThan(const double, const double, const double = kParameterTo
 /// @param tolerance 許容誤差 (デフォルトはkParameterTolerance)
 /// @note a=b=±∞の場合もtrue
 bool IsApproxGEQ(const double, const double, const double = kParameterTolerance);
+
+/// @brief 値tが許容誤差を考慮して範囲[lo, hi]内にあるかを判定し、
+///        範囲内であれば[lo, hi]へクランプした値を返す
+/// @param t 判定する値
+/// @param lo 範囲の下限
+/// @param hi 範囲の上限
+/// @param tolerance 許容誤差 (デフォルトはkParameterTolerance)
+/// @return 範囲内ならstd::clamp(t, lo, hi)、範囲外ならstd::nullopt
+/// @note 厳密比較では境界値が浮動小数点丸めで僅かに域外へ出た際に
+///       評価不能となるため、許容誤差つき比較で判定し域内へ丸める
+std::optional<double> TryClampToRange(
+    double t, double lo, double hi, double tolerance = kParameterTolerance);
 
 }  // namespace igesio
 

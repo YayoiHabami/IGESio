@@ -284,14 +284,14 @@ TabulatedCylinder::TryGetDefinedDerivatives(
     // ポインタの確認
     if (!directrix_.IsPointerSet()) return std::nullopt;
 
-    // パラメータ範囲の確認
+    // パラメータ範囲の確認 (境界の浮動小数点誤差を許容し域内へ丸める)
     auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (u < umin || u > umax || v < vmin || v > vmax) {
-        return std::nullopt;
-    }
+    auto uc = i_num::TryClampToRange(u, umin, umax);
+    auto vc = i_num::TryClampToRange(v, vmin, vmax);
+    if (!uc || !vc) return std::nullopt;
 
     // 準線の導関数を計算
-    double t = GetDirectrixParameterAtU(u);
+    double t = GetDirectrixParameterAtU(*uc);
     auto deriv_opt = GetDirectrix()->TryGetDerivatives(t, order);
     if (!deriv_opt.has_value()) return std::nullopt;
     const auto& c_deriv = deriv_opt.value();
@@ -304,7 +304,7 @@ TabulatedCylinder::TryGetDefinedDerivatives(
     SurfaceDerivatives s_deriv(order);
 
     // S^(0, 0) = C(t) + v * D
-    s_deriv(0, 0) = c_deriv[0] + v * GetDirection();
+    s_deriv(0, 0) = c_deriv[0] + *vc * GetDirection();
 
     // S^(n_u, 0) = C^(n_u)(t) * (dt/du)^(n_u)
     for (unsigned int n_u = 1; n_u <= order; ++n_u) {

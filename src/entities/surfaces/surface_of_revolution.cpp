@@ -301,26 +301,26 @@ SurfaceOfRevolution::TryGetDefinedDerivatives(
         return std::nullopt;
     }
 
-    // パラメータ範囲のチェック
+    // パラメータ範囲のチェック (境界の浮動小数点誤差を許容し域内へ丸める)
     auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
-        return std::nullopt;
-    }
+    auto uc = i_num::TryClampToRange(u, umin, umax);
+    auto vc = i_num::TryClampToRange(v, vmin, vmax);
+    if (!uc || !vc) return std::nullopt;
 
     // 回転軸の始点P0と方向ベクトルDを取得
     const auto& [P0, end_point] = GetAxis()->GetAnchorPoints();
     auto D = (end_point - P0).normalized();
 
     // 母線の偏導関数を取得
-    auto curve_deriv_opt = GetGeneratrix()->TryGetDerivatives(u, order);
+    auto curve_deriv_opt = GetGeneratrix()->TryGetDerivatives(*uc, order);
     if (!curve_deriv_opt) return std::nullopt;
     auto c_deriv = curve_deriv_opt.value();
 
     // サーフェスの偏導関数を計算
     // 計算式の詳細については[docs/entities/surfaces/120_surface_of_revolution_ja.md]を参照
     SurfaceDerivatives s_deriv(order);
-    const double cos_v = std::cos(v);
-    const double sin_v = std::sin(v);
+    const double cos_v = std::cos(*vc);
+    const double sin_v = std::sin(*vc);
     for (unsigned int nu = 0; nu <= order; ++nu) {
         // C(u) - P0 または C^(nu)(u) を計算
         const auto& c_n = c_deriv[nu];
@@ -341,7 +341,7 @@ SurfaceOfRevolution::TryGetDefinedDerivatives(
                                + D * dot_d_cp_n * (1.0 - cos_v);
             } else {
                 // S^(nu, nv)(u, v)
-                const double angle = v + nv * kPi / 2.0;
+                const double angle = *vc + nv * kPi / 2.0;
                 const auto term1 = cp_n - D * dot_d_cp_n;
                 s_deriv(nu, nv) = term1 * std::cos(angle) + cross_d_cp_n * std::sin(angle);
             }

@@ -7,6 +7,9 @@
  */
 #include "igesio/numerics/core/tolerance.h"
 
+#include <algorithm>
+#include <optional>
+
 namespace {
 
 namespace i_num = igesio::numerics;
@@ -48,4 +51,13 @@ bool i_num::IsApproxGEQ(const double a, const double b, const double tolerance) 
     if (a == -kInf && b == -kInf)  return true;
 
     return (a > b) || IsApproxEqual(a, b, tolerance);
+}
+
+std::optional<double> i_num::TryClampToRange(
+        const double t, const double lo, const double hi, const double tolerance) {
+    if (IsApproxLessThan(t, lo, tolerance) ||
+        IsApproxGreaterThan(t, hi, tolerance)) {
+        return std::nullopt;
+    }
+    return std::clamp(t, lo, hi);
 }

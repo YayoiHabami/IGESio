@@ -235,14 +235,14 @@ RuledSurface::TryGetDefinedDerivatives(
         return std::nullopt;
     }
 
-    // パラメータの範囲チェック
+    // パラメータの範囲チェック (境界の浮動小数点誤差を許容し域内へ丸める)
     auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
-        return std::nullopt;
-    }
+    auto uc = i_num::TryClampToRange(u, umin, umax);
+    auto vc = i_num::TryClampToRange(v, vmin, vmax);
+    if (!uc || !vc) return std::nullopt;
 
     // 曲線の導関数を取得
-    auto [t, s] = GetParametersTS(u);
+    auto [t, s] = GetParametersTS(*uc);
     auto deriv1_opt = GetCurve1()->TryGetDerivatives(t, order);
     auto deriv2_opt = GetCurve2()->TryGetDerivatives(s, order);
     if (!deriv1_opt || !deriv2_opt)  return std::nullopt;
@@ -264,8 +264,8 @@ RuledSurface::TryGetDefinedDerivatives(
     for (unsigned int n_u = 0; n_u <= order; ++n_u) {
         auto max_n_v = order - n_u;
         if (max_n_v >= 0) {
-            s_deriv(n_u, 0) = (1 - v) * deriv1[n_u] * std::pow(dt, n_u)
-                            + v * deriv2[n_u] * std::pow(sigma * ds, n_u);
+            s_deriv(n_u, 0) = (1 - *vc) * deriv1[n_u] * std::pow(dt, n_u)
+                            + *vc * deriv2[n_u] * std::pow(sigma * ds, n_u);
         }
         if (max_n_v >= 1) {
             s_deriv(n_u, 1) = -1.0 * deriv1[n_u] * std::pow(dt, n_u)
