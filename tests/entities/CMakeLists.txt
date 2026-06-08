@@ -14,6 +14,7 @@ set(TEST_SOURCES
     # Entity Base
     test_entity_base.cpp
     test_pointer_container.cpp
+    test_geometry_revision.cpp
 
     # Curves
     curves/test_i_curve.cpp

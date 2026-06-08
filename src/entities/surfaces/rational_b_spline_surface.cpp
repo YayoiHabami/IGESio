@@ -890,6 +890,7 @@ void RationalBSplineSurface::SetControlPointAt(
     }
     control_points_.col(i * n_v + j) = point;
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 void RationalBSplineSurface::SetControlPoints(const Matrix3Xd& control_points) {
@@ -902,6 +903,7 @@ void RationalBSplineSurface::SetControlPoints(const Matrix3Xd& control_points) {
     }
     control_points_ = control_points;
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 void RationalBSplineSurface::SetWeightAt(
@@ -917,6 +919,7 @@ void RationalBSplineSurface::SetWeightAt(
     weights_(i, j) = weight;
     is_polynomial_ = IsPolynomialWeights(weights_);
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 void RationalBSplineSurface::SetWeights(const MatrixXd& weights) {
@@ -943,6 +946,7 @@ void RationalBSplineSurface::SetWeights(const MatrixXd& weights) {
     weights_ = weights;
     is_polynomial_ = IsPolynomialWeights(weights_);
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 void RationalBSplineSurface::SetUKnots(const std::vector<double>& knots) {
@@ -958,6 +962,7 @@ void RationalBSplineSurface::SetUKnots(const std::vector<double>& knots) {
     }
     u_knots_ = knots;
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 void RationalBSplineSurface::SetVKnots(const std::vector<double>& knots) {
@@ -973,6 +978,7 @@ void RationalBSplineSurface::SetVKnots(const std::vector<double>& knots) {
     }
     v_knots_ = knots;
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 void RationalBSplineSurface::SetParameterRange(
@@ -992,6 +998,7 @@ void RationalBSplineSurface::SetParameterRange(
     parameter_range_ = range;
     // 閉フラグは両端U(0)/U(1) (V(0)/V(1)) における一致で定義されるため再計算
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 bool RationalBSplineSurface::SetSurfaceType(
@@ -1009,6 +1016,7 @@ bool RationalBSplineSurface::SetSurfaceType(
         case RationalBSplineSurfaceType::kRuledSurface:
         case RationalBSplineSurfaceType::kGeneralQuadricSurface:
             form_number_ = static_cast<int>(type);
+            MarkGeometryModified();
             return true;
     }
     return false;  // 無効なタイプ
@@ -1042,6 +1050,7 @@ void RationalBSplineSurface::SetData(
     is_v_periodic_ = is_v_periodic;
     is_polynomial_ = IsPolynomialWeights(weights_);
     UpdateClosedness();
+    MarkGeometryModified();
 }
 
 void RationalBSplineSurface::UpdateClosedness() {

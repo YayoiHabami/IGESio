@@ -160,7 +160,10 @@ class RuledSurface : public EntityBase, public virtual ISurface {
     /// @param is_reversed falseの場合、s = smin + u(smax - smin)、trueの場合、
     ///                    s = smax - u(smax - smin) である. tについては常に
     ///                    t = tmin + u(tmax - tmin) である.
-    void SetIsReversed(const bool is_reversed) noexcept { is_reversed_ = is_reversed; }
+    void SetIsReversed(const bool is_reversed) noexcept {
+        is_reversed_ = is_reversed;
+        MarkGeometryModified();
+    }
 
     /// @brief 可展面（developable surface）かどうか (DEVFLG) を取得する
     /// @return 可展面の場合はtrue、そうでない場合はfalse
@@ -169,6 +172,7 @@ class RuledSurface : public EntityBase, public virtual ISurface {
     /// @param is_developable 可展面の場合はtrue、そうでない場合はfalse
     void SetIsDevelopable(const bool is_developable) noexcept {
         is_developable_ = is_developable;
+        MarkGeometryModified();
     }
 
     /// @brief フォーム番号 (パラメータ化の種別) を取得する

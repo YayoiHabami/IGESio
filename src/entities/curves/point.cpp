@@ -186,6 +186,7 @@ void Point::SetSubfigure(const std::shared_ptr<ISubfigureDefinition>& subfigure)
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::ISubfigureDefinition> Point::GetSubfigure() const {

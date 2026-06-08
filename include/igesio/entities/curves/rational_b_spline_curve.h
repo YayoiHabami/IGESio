@@ -313,6 +313,7 @@ class RationalBSplineCurve : public EntityBase, public virtual ICurve3D {
     ///       trueであっても特別な処理は行わない
     void SetPeriodic(const bool is_periodic) noexcept {
         is_periodic_ = is_periodic;
+        MarkGeometryModified();
     }
 
     /// @brief 曲線の種類 (フォーム番号) を設定する

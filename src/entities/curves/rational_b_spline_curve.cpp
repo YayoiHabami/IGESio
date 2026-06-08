@@ -654,6 +654,7 @@ void RationalBSplineCurve::SetControlPointAt(
     }
     control_points_.col(static_cast<int>(i)) = point;
     UpdatePlanarity();
+    MarkGeometryModified();
 }
 
 void RationalBSplineCurve::SetControlPoints(const Matrix3Xd& control_points) {
@@ -666,6 +667,7 @@ void RationalBSplineCurve::SetControlPoints(const Matrix3Xd& control_points) {
     }
     control_points_ = control_points;
     UpdatePlanarity();
+    MarkGeometryModified();
 }
 
 void RationalBSplineCurve::SetWeightAt(const size_t i, const double weight) {
@@ -681,6 +683,7 @@ void RationalBSplineCurve::SetWeightAt(const size_t i, const double weight) {
                 std::to_string(weight) + ".");
     }
     weights_[i] = weight;
+    MarkGeometryModified();
 }
 
 void RationalBSplineCurve::SetWeights(const std::vector<double>& weights) {
@@ -699,6 +702,7 @@ void RationalBSplineCurve::SetWeights(const std::vector<double>& weights) {
         }
     }
     weights_ = weights;
+    MarkGeometryModified();
 }
 
 void RationalBSplineCurve::SetKnots(const std::vector<double>& knots) {
@@ -713,6 +717,7 @@ void RationalBSplineCurve::SetKnots(const std::vector<double>& knots) {
         throw igesio::EntityValueError("Knot vector must be non-decreasing.");
     }
     knots_ = knots;
+    MarkGeometryModified();
 }
 
 void RationalBSplineCurve::SetParameterRange(
@@ -724,6 +729,7 @@ void RationalBSplineCurve::SetParameterRange(
                 ", V(1) = " + std::to_string(range[1]) + ".");
     }
     parameter_range_ = range;
+    MarkGeometryModified();
 }
 
 bool RationalBSplineCurve::SetCurveType(const RationalBSplineCurveType type) {
@@ -735,6 +741,7 @@ bool RationalBSplineCurve::SetCurveType(const RationalBSplineCurveType type) {
         type == RationalBSplineCurveType::kParabolicArc ||
         type == RationalBSplineCurveType::kHyperbolicArc) {
         form_number_ = static_cast<int>(type);
+        MarkGeometryModified();
         return true;
     }
     return false;  // 無効なタイプ
@@ -759,6 +766,7 @@ void RationalBSplineCurve::SetData(
     parameter_range_ = range;
     is_periodic_ = is_periodic;
     UpdatePlanarity();
+    MarkGeometryModified();
 }
 
 void RationalBSplineCurve::UpdatePlanarity() {

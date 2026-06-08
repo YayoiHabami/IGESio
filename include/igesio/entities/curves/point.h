@@ -102,7 +102,10 @@ class Point : public EntityBase, public virtual IGeometry {
 
     /// @brief (定義空間における) 点の位置ベクトルを設定する
     /// @param position 点の位置ベクトル
-    void SetDefinedPosition(const Vector3d& position) { position_ = position; }
+    void SetDefinedPosition(const Vector3d& position) {
+        position_ = position;
+        MarkGeometryModified();
+    }
     /// @brief (定義空間における) 点の位置ベクトルを取得する
     /// @return 点の位置ベクトル
     const Vector3d& GetDefinedPosition() const { return position_; }

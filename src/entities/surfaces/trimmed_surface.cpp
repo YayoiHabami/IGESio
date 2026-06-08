@@ -462,6 +462,7 @@ void TrimmedSurface::SetSurface(const std::shared_ptr<ISurface>& surface) {
                 SubordinateEntitySwitch::kPhysicallyDependent);
     }
     InvalidateDomainCache();
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::CurveOnAParametricSurface>
@@ -480,6 +481,7 @@ void TrimmedSurface::SetOuterBoundary(
         outer_boundary_ = PointerContainer<false, CurveOnAParametricSurface>(
                 IDGenerator::UnsetID());
         InvalidateDomainCache();
+        MarkGeometryModified();
         return;
     }
     // 境界の参照曲面がトリム対象曲面と一致することを確認する
@@ -496,6 +498,7 @@ void TrimmedSurface::SetOuterBoundary(
                 SubordinateEntitySwitch::kPhysicallyDependent);
     }
     InvalidateDomainCache();
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::CurveOnAParametricSurface>
@@ -528,6 +531,7 @@ void TrimmedSurface::AddInnerBoundary(
                 SubordinateEntitySwitch::kPhysicallyDependent);
     }
     InvalidateDomainCache();
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::CurveOnAParametricSurface>
@@ -546,6 +550,7 @@ TrimmedSurface::RemoveInnerBoundaryAt(size_t index) {
     inner_boundaries_.erase(inner_boundaries_.begin()
                             + static_cast<std::ptrdiff_t>(index));
     InvalidateDomainCache();
+    MarkGeometryModified();
     return removed;
 }
 
@@ -579,12 +584,14 @@ TrimmedSurface::SetInnerBoundaryAt(
                 SubordinateEntitySwitch::kPhysicallyDependent);
     }
     InvalidateDomainCache();
+    MarkGeometryModified();
     return removed;
 }
 
 void TrimmedSurface::ClearInnerBoundaries() {
     inner_boundaries_.clear();
     InvalidateDomainCache();
+    MarkGeometryModified();
 }
 
 

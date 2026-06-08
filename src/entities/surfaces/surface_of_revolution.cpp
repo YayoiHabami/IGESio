@@ -447,6 +447,7 @@ void SurfaceOfRevolution::SetAxis(const std::shared_ptr<Line>& axis) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatrix) {
@@ -465,12 +466,14 @@ void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatri
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double end_angle) {
     ValidateAngleRange(start_angle, end_angle);
     start_angle_ = start_angle;
     end_angle_ = end_angle;
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::Line> SurfaceOfRevolution::GetAxis() const {

@@ -584,6 +584,7 @@ void CurveOnSurface::SetSurface(const std::shared_ptr<ISurface>& surface) {
     } else {
         surface_.OverwritePointer(surface);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
@@ -628,6 +629,7 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
         curve_bs->SetSubordinateEntitySwitch(i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
     }
 
+    MarkGeometryModified();
     return generated_curve;
 }
 
@@ -638,6 +640,7 @@ bool CurveOnSurface::SetCreationType(const CurveCreationType type) {
         type == CurveCreationType::kIntersection ||
         type == CurveCreationType::kIsoparametric) {
         creation_type_ = type;
+        MarkGeometryModified();
         return true;
     }
     return false;  // 無効なタイプ
@@ -649,6 +652,8 @@ bool CurveOnSurface::SetPreferredRepresentation(const PreferredRepresentation pr
         pref == PreferredRepresentation::kC ||
         pref == PreferredRepresentation::kEquallyPreferred) {
         preferred_representation_ = pref;
+        // 優先表現はレンダラの表現選択 (S(B(t))/C(t)) に影響する
+        MarkGeometryModified();
         return true;
     }
     return false;  // 無効な値
@@ -802,9 +807,9 @@ bool CurveOnSurface::SetBaseCurve(const std::shared_ptr<const ICurve>& base_curv
         ValidateBaseCurveInDomain(*surf_opt.value(), *base_curve);
     }
 
-    if (base_curve->GetID() == base_curve_.GetID()) {
-        return base_curve_.SetPointer(base_curve);
-    } else {
-        return base_curve_.OverwritePointer(base_curve);
-    }
+    const bool ok = (base_curve->GetID() == base_curve_.GetID())
+            ? base_curve_.SetPointer(base_curve)
+            : base_curve_.OverwritePointer(base_curve);
+    if (ok) MarkGeometryModified();
+    return ok;
 }

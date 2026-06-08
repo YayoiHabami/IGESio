@@ -318,6 +318,7 @@ void RuledSurface::SetCurve1(const std::shared_ptr<ICurve>& curve) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::ICurve> RuledSurface::GetCurve2() const {
@@ -343,6 +344,7 @@ void RuledSurface::SetCurve2(const std::shared_ptr<ICurve>& curve) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 i_ent::RuledSurfaceForm RuledSurface::GetSurfaceForm() const noexcept {
@@ -352,6 +354,8 @@ i_ent::RuledSurfaceForm RuledSurface::GetSurfaceForm() const noexcept {
 
 void RuledSurface::SetSurfaceForm(const RuledSurfaceForm form) noexcept {
     form_number_ = static_cast<int>(form);
+    // Form 0/1はパラメータ対応 (弧長/等パラメータ) を変えるため形状に影響する
+    MarkGeometryModified();
 }
 
 

@@ -334,6 +334,7 @@ class RationalBSplineSurface : public EntityBase, public virtual ISurface {
     ///       trueであっても特別な処理は行わない
     void SetUPeriodic(const bool is_periodic) noexcept {
         is_u_periodic_ = is_periodic;
+        MarkGeometryModified();
     }
 
     /// @brief v方向の周期フラグ (PROP5) を設定する
@@ -341,6 +342,7 @@ class RationalBSplineSurface : public EntityBase, public virtual ISurface {
     ///       trueであっても特別な処理は行わない
     void SetVPeriodic(const bool is_periodic) noexcept {
         is_v_periodic_ = is_periodic;
+        MarkGeometryModified();
     }
 
     /// @brief 曲面の種類 (フォーム番号) を設定する

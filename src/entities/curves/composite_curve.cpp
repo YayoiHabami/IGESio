@@ -458,6 +458,7 @@ bool CompositeCurve::AddCurve(const std::shared_ptr<ICurve>& curve) {
     }
 
     curves_.emplace_back(curve);
+    MarkGeometryModified();
     return true;
 }
 
@@ -521,6 +522,8 @@ CompositeCurve::ReplaceCurves(const size_t first, const size_t last,
                 SubordinateEntitySwitch::kPhysicallyDependent);
         }
     }
+    // SetCurveAt/RemoveFirstCurve/RemoveLastCurveも本メソッド経由でバンプされる
+    MarkGeometryModified();
     return removed;
 }
 
@@ -549,6 +552,7 @@ std::shared_ptr<const i_ent::ICurve> CompositeCurve::RemoveLastCurve() {
 
 void CompositeCurve::ClearCurves() {
     curves_.clear();
+    MarkGeometryModified();
 }
 
 double CompositeCurve::Length(const double start, const double end) const {

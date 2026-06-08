@@ -341,6 +341,7 @@ void TabulatedCylinder::SetDirectrix(const std::shared_ptr<ICurve>& directrix) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::ICurve> TabulatedCylinder::GetDirectrix() const {
@@ -362,6 +363,7 @@ void TabulatedCylinder::SetLocationVector(const Vector3d& location_vector) {
     }
 
     location_vector_ = location_vector;
+    MarkGeometryModified();
 }
 
 Vector3d TabulatedCylinder::GetLocationVector() const {
@@ -383,6 +385,7 @@ void TabulatedCylinder::SetDirection(const Vector3d& direction, const double len
                 "location vector of TabulatedCylinder cannot be the same.");
         }
         location_vector_ = new_location_vector;
+        MarkGeometryModified();
     } else {
         // 曲線の始点が不明な場合は、位置ベクトルを更新しない
         throw igesio::ReferenceError(

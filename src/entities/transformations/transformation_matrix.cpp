@@ -237,6 +237,7 @@ bool TransMatrix::SetReference(
     if (!transformation) {
         // 参照を解除
         de_transformation_matrix_.Reset();
+        MarkGeometryModified();
         return true;
     }
     // 自身(this)からtransformationへの参照が循環を生む場合は設定しない
@@ -247,6 +248,7 @@ bool TransMatrix::SetReference(
     // SetPointerはID不一致のため何も設定しない (黙って無視される). 参照先IDを
     // 設定したうえでポインタを保持するため、OverwritePointerを使用する.
     de_transformation_matrix_.OverwritePointer(transformation);
+    MarkGeometryModified();
     return true;
 }
 
@@ -270,6 +272,7 @@ bool TransMatrix::SetMatrixType(const MatrixType type) {
         type == MatrixType::kCartesianOffset || type == MatrixType::kCylindricalCoordinates ||
         type == MatrixType::kSphericalCoordinates) {
         form_number_ = static_cast<int>(type);
+        MarkGeometryModified();
         return true;
     }
     return false;  // 無効なタイプ

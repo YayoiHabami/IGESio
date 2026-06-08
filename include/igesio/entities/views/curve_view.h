@@ -9,6 +9,7 @@
 #define IGESIO_ENTITIES_VIEWS_CURVE_VIEW_H_
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -81,6 +82,11 @@ class CurveView : public ICurve {
     int GetFormNumber() const override { return base_->GetFormNumber(); }
     /// @brief サポート対象かどうかを取得する(元へ委譲)
     bool IsSupported() const override { return base_->IsSupported(); }
+    /// @brief ジオメトリリビジョンを取得する(元へ委譲)
+    /// @note 転送しないと元エンティティの形状編集がビュー越しに検知されない
+    uint64_t GeometryRevision() const override {
+        return base_->GeometryRevision();
+    }
 
 
 
