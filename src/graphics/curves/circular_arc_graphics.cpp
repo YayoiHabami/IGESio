@@ -61,7 +61,7 @@ void CircularArcGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void CircularArcGraphics::Synchronize() {
+void CircularArcGraphics::DoSynchronize() {
     // 既存のリソースを解放
     Cleanup();
 

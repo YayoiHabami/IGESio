@@ -480,8 +480,8 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @return 削除した場合はtrue. 未存在/このサブツリー外/編集不可、または
     ///         kRejectで参照が残る場合はfalse(無変更)
     /// @note 所有ノードを逆引きで特定し、このノードのサブツリー内のみを対象とする.
-    ///       削除後はルートの逆引きインデックスからも除去する. 構造編集後は呼び出し側で
-    ///       描画の再走査(MarkSceneDirty)を行うこと(Assemblyはレンダラを知らない).
+    ///       削除後はルートの逆引きインデックスからも除去する. 描画への反映は
+    ///       モデルリビジョン経由で自動検知されるため、呼び出し側の通知は不要.
     bool RemoveEntity(const ObjectID& id,
                       RemovalPolicy policy = RemovalPolicy::kReject);
 

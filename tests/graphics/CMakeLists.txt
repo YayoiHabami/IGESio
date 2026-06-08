@@ -3,6 +3,8 @@ set(TEST_SOURCES
     test_selection_pull.cpp
     test_composite_render.cpp
     test_scene_walk.cpp
+    test_scene_reconcile.cpp
+    test_picking_reconcile.cpp
     test_override_pull.cpp
     test_surface_edge_render.cpp
 )

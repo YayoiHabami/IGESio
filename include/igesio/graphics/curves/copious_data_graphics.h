@@ -59,7 +59,7 @@ class CopiousDataGraphics
     bool IsDrawable() const override;
 
     /// @brief エンティティをセットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief レイと各頂点の近接判定を行う
     /// @param ray ワールド空間のレイ (kRayとして扱う)

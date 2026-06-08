@@ -305,17 +305,15 @@ void EntityRenderer::Initialize() {
 }
 
 void EntityRenderer::Cleanup() {
-    // 描画オブジェクトのクリーンアップ
-    for (auto& [shader_type, objects] : draw_objects_) {
-        for (auto& [id, object] : objects) {
-            object->Cleanup();
-        }
-        objects.clear();
+    // 描画オブジェクトのクリーンアップ (nullptrは負キャッシュのためスキップ)
+    for (auto& [id, object] : graphics_cache_) {
+        if (object) object->Cleanup();
     }
-    draw_objects_.clear();
-    // キャッシュ描画リストも破棄する (draw_objects_の要素を指すため)
+    graphics_cache_.clear();
+    // キャッシュ描画/可視リストも破棄する (graphics_cache_の要素を指すため)
     draw_list_.clear();
-    scene_dirty_ = true;
+    visible_list_.clear();
+    local_dirty_ = true;
 
     // シェーダープログラムの削除
     for (auto& [shader_type, program_id] : shader_programs_) {
@@ -330,57 +328,91 @@ void EntityRenderer::Cleanup() {
 
 
 /**
- * エンティティの取得/設定
+ * シーン同期 (Reconcile)
  */
 
-void EntityRenderer::AddGraphicsObject(
-        std::unique_ptr<IEntityGraphics>&& graphics) {
-    if (!graphics) return;
-
-    if (HasEntity(graphics->GetEntityID())) {
-        // すでに同じIDのエンティティが存在する場合は何もしない
+void EntityRenderer::EnsureSynced() const {
+    if (scene_ == nullptr || gl_ == nullptr) return;
+    const auto& root = scene_->Root();
+    // リビジョン値は同一rootに対してのみ比較可能なため、同一性とペアで比較する
+    if (!local_dirty_ && synced_root_ == root.GetID()
+            && synced_revision_ == root.Revision()) {
         return;
     }
 
-    // 新しい描画オブジェクトを追加
-    draw_objects_[graphics->GetShaderType()][graphics->GetEntityID()]
-            = std::move(graphics);
-    // 走査対象が増えたので次回描画で描画リストを再構築する
-    scene_dirty_ = true;
+    SweepStaleGraphics(root);
+    RebuildDrawList();
+    UpdateAutoClipSphere();
+
+    synced_revision_ = root.Revision();
+    synced_root_ = root.GetID();
+    local_dirty_ = false;
 }
 
-void EntityRenderer::RemoveEntity(const ObjectID& id) {
-    for (auto& [shader_type, objects] : draw_objects_) {
-        auto it = objects.find(id);
-        if (it != objects.end()) {
-            it->second->Cleanup();  // OpenGLリソースを解放
-            objects.erase(it);  // 描画オブジェクトを削除
-            // draw_list_は当該ポインタを保持し得るため破棄し、次回再構築する
-            draw_list_.clear();
-            scene_dirty_ = true;
-            return;  // 削除が完了したら終了
+void EntityRenderer::SweepStaleGraphics(const models::Assembly& root) const {
+    // 逆引きインデックスでO(1)/件. 追加のツリー走査は不要
+    for (auto it = graphics_cache_.begin(); it != graphics_cache_.end();) {
+        if (root.FindOwner(it->first) == nullptr) {
+            if (it->second) it->second->Cleanup();  // OpenGLリソースを解放
+            it = graphics_cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    // 所有者を失ったマテリアル設定も破棄する
+    for (auto it = material_overrides_.begin();
+         it != material_overrides_.end();) {
+        if (root.FindOwner(it->first) == nullptr) {
+            it = material_overrides_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    for (auto it = pending_material_ids_.begin();
+         it != pending_material_ids_.end();) {
+        if (root.FindOwner(*it) == nullptr) {
+            it = pending_material_ids_.erase(it);
+        } else {
+            ++it;
         }
     }
 }
 
-bool EntityRenderer::HasEntity(const ObjectID& id) const {
-    // draw_objects_を走査
-    for (const auto& [shader_type, objects] : draw_objects_) {
-        if (objects.find(id) != objects.end()) {
-            return true;
+void EntityRenderer::ResyncGeometries() const {
+    bool resynced = false;
+    for (const auto& [id, graphics] : visible_list_) {
+        if (graphics->NeedsResync()) {
+            graphics->Synchronize();
+            resynced = true;
         }
     }
-    return false;
+    // 形状変更はBBoxも変えるため、自動クリップ球を追従させる
+    if (resynced) UpdateAutoClipSphere();
 }
 
-i_graph::ShaderType
-EntityRenderer::GetEntityShaderType(const ObjectID& id) const {
-    for (const auto& [shader_type, objects] : draw_objects_) {
-        if (objects.find(id) != objects.end()) {
-            return shader_type;
-        }
+i_graph::IEntityGraphics* EntityRenderer::FindOrCreateGraphics(
+        const ObjectID& id,
+        const std::shared_ptr<entities::EntityBase>& entity) const {
+    auto it = graphics_cache_.find(id);
+    if (it != graphics_cache_.end()) {
+        return it->second.get();  // nullptrは負キャッシュ (再試行しない)
     }
-    return ShaderType::kNone;
+
+    // 遅延生成. 生成失敗 (型起因の恒久的失敗) はnullptrを負キャッシュする
+    auto ptr = std::static_pointer_cast<const entities::IEntityIdentifier>(entity);
+    auto graphics = CreateEntityGraphics(ptr, gl_);
+    if (graphics) {
+        graphics->SetGlobalParam(*default_global_param_);
+        // ビュー層のマテリアルオーバーライドを生成時に適用する
+        auto mat_it = material_overrides_.find(id);
+        if (mat_it != material_overrides_.end()) {
+            graphics->MaterialProperty() = mat_it->second;
+        }
+        graphics->SyncTexture();
+        pending_material_ids_.erase(id);  // 生成時に適用済み
+    }
+    const auto result = graphics_cache_.emplace(id, std::move(graphics));
+    return result.first->second.get();
 }
 
 
@@ -477,8 +509,8 @@ void EntityRenderer::Draw() const {
                  background_color_[2], background_color_[3]);
     gl_->Clear(gl::kColorBufferBit | gl::kDepthBufferBit);
 
-    // 描画するエンティティが1つもない場合は何もしない
-    if (IsEmpty()) return;
+    // シーン(描画の基準ツリー)が未設定なら描画しない (描画はScene走査に一本化)
+    if (scene_ == nullptr) return;
 
     // 現在の表示サイズと、このクラスが保持している表示サイズが異なる場合は更新
     auto [x, y, width, height] = GetCurrentViewport();
@@ -486,34 +518,28 @@ void EntityRenderer::Draw() const {
         gl_->Viewport(0, 0, display_width_, display_height_);
     }
 
-    // シーン(描画の基準ツリー)が未設定なら描画しない (描画はScene走査に一本化)
-    if (scene_ == nullptr) return;
+    // モデルリビジョン (構造・変換・表示状態) との突き合わせと、
+    // ジオメトリリビジョン (形状) の遅延再同期.
+    // カメラ操作・選択変更だけの再描画では走査せずキャッシュを再利用する
+    // (選択ハイライトは毎フレームctxからPULLされるため再walkは不要)
+    EnsureSynced();
+    ResyncGeometries();
+
+    // 描画するエンティティが1つもない場合は何もしない
+    if (visible_list_.empty()) return;
 
     // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)
     const DrawContext ctx{&scene_->ActiveSelection(), kSelectionColor};
-
-    // dirty時のみ描画リストを再構築し (Assemblyツリー走査)、それを実行する.
-    // カメラ操作・選択変更だけの再描画では走査せずキャッシュを再利用する
-    // (選択ハイライトは毎フレームctxからPULLされるため再walkは不要)
-    if (scene_dirty_) {
-        RebuildDrawList();
-        scene_dirty_ = false;
-    }
     ExecuteDrawList(ctx);
 }
 
 void EntityRenderer::SetScene(const models::Scene* scene) {
     scene_ = scene;
-    scene_dirty_ = true;
+    local_dirty_ = true;
     UpdateAutoClipSphere();
 }
 
-void EntityRenderer::MarkSceneDirty() {
-    scene_dirty_ = true;
-    UpdateAutoClipSphere();
-}
-
-void EntityRenderer::UpdateAutoClipSphere() {
+void EntityRenderer::UpdateAutoClipSphere() const {
     if (scene_ != nullptr) {
         if (const auto bbox = scene_->Root().GetWorldBoundingBox()) {
             if (const auto sphere = ComputeBoundingSphere(*bbox)) {
@@ -539,6 +565,7 @@ void EntityRenderer::FitView() {
 
 void EntityRenderer::RebuildDrawList() const {
     draw_list_.clear();
+    visible_list_.clear();
     if (scene_ == nullptr) return;
     WalkAssembly(scene_->Root(), igesio::Matrix4d::Identity(),
                  std::nullopt, std::nullopt);
@@ -561,10 +588,29 @@ void EntityRenderer::WalkAssembly(
             disp.opacity_override ? disp.opacity_override : inherited_opacity;
 
     for (const auto& [id, entity] : node.GetEntities()) {
-        // キャッシュに在席する = 投入時フィルタを通過した描画対象
-        // (ここではShouldRenderEntity/Validateを呼ばない)
-        auto* graphics = FindGraphics(id);
+        if (!entity) continue;
+        // 物理従属エンティティは親 (複合曲線・トリム面等) の描画オブジェクトが
+        // 子として描画するため、独立した描画対象としない
+        // (二重描画と重複ピックの防止)
+        if (entity->GetSubordinateEntitySwitch()
+                == entities::SubordinateEntitySwitch::kPhysicallyDependent) {
+            continue;
+        }
+        // ビュー状態の型フィルタ (キャッシュは温存し、収集のみ抑止する)
+        if (!display_filter_.ShouldRender(entity->GetType())) continue;
+
+        // キャッシュ未在席なら遅延生成する (負キャッシュのnullptrはスキップ)
+        auto* graphics = FindOrCreateGraphics(id, entity);
         if (graphics == nullptr) continue;
+
+        // マテリアルの遅延適用 (setterはGLを触らないため、GL前提のここで行う)
+        if (pending_material_ids_.erase(id) > 0) {
+            auto mat_it = material_overrides_.find(id);
+            graphics->MaterialProperty() =
+                    (mat_it != material_overrides_.end())
+                    ? mat_it->second : i_graph::MaterialProperty();
+            graphics->SyncTexture();
+        }
 
         // ピッキング/描画の整合のためワールド変換をリフレッシュする.
         // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける)
@@ -589,6 +635,8 @@ void EntityRenderer::WalkAssembly(
                 draw_list_[st].push_back(graphics);
             }
         }
+        // ピック用の平坦リストへエンティティ毎に一意に収集する
+        visible_list_.emplace_back(id, graphics);
     }
 
     for (const auto& child : node.GetChildAssemblies()) {
@@ -734,6 +782,10 @@ std::vector<i_graph::EntityHit> EntityRenderer::PickEntities(
     const int w = display_width_, h = display_height_;
     if (w <= 0 || h <= 0) return hits;
 
+    // 描画キャッシュをツリーと突き合わせる. これにより削除済み・非表示・抑制中・
+    // フィルタ除外のエンティティは構造的にヒット不能になる
+    EnsureSynced();
+
     // フォールバック深度: カメラのターゲットをレイへ射影した距離
     const igesio::Vector3d target = camera_.GetTarget().cast<double>();
     const igesio::Vector3d position = camera_.GetPosition().cast<double>();
@@ -741,31 +793,31 @@ std::vector<i_graph::EntityHit> EntityRenderer::PickEntities(
     if (fallback_depth <= 0.0) fallback_depth = (target - position).norm();
     if (fallback_depth <= 0.0) fallback_depth = 1.0;  // 最終フォールバック
 
-    for (const auto& [shader_type, objects] : draw_objects_) {
-        for (const auto& [id, object] : objects) {
-            if (!object || !object->CanIntersect()) continue;
+    // 可視リストを走査する (draw_list_は複合を複数シェーダーへ重複登録するため、
+    // エンティティ毎に一意なこちらで二重判定を避ける)
+    for (const auto& [id, object] : visible_list_) {
+        if (!object || !object->CanIntersect()) continue;
 
-            // 代表深度: BB中心をレイへ射影。BBが無限/未定義ならフォールバック
-            double depth = fallback_depth;
-            const auto bb = object->GetWorldBoundingBox();
-            if (bb && bb->IsFinite()) {
-                const auto vertices = bb->GetFiniteVertices();
-                if (!vertices.empty()) {
-                    const igesio::Vector3d center = Centroid(vertices);
-                    depth = (center - ray.origin).dot(ray.direction);
-                }
+        // 代表深度: BB中心をレイへ射影。BBが無限/未定義ならフォールバック
+        double depth = fallback_depth;
+        const auto bb = object->GetWorldBoundingBox();
+        if (bb && bb->IsFinite()) {
+            const auto vertices = bb->GetFiniteVertices();
+            if (!vertices.empty()) {
+                const igesio::Vector3d center = Centroid(vertices);
+                depth = (center - ray.origin).dot(ray.direction);
             }
-            if (depth <= 0.0) depth = fallback_depth;
+        }
+        if (depth <= 0.0) depth = fallback_depth;
 
-            // 曲線ヒット許容量をワールド距離へ換算してパラメータを上書き
-            RayIntersectionParams p = params;
-            p.curve_hit_tolerance = i_graph::PixelToWorldSize(
-                    camera_, w, h, screen_x, screen_y, depth,
-                    params.curve_hit_pixels);
+        // 曲線ヒット許容量をワールド距離へ換算してパラメータを上書き
+        RayIntersectionParams p = params;
+        p.curve_hit_tolerance = i_graph::PixelToWorldSize(
+                camera_, w, h, screen_x, screen_y, depth,
+                params.curve_hit_pixels);
 
-            for (const auto& rh : object->Intersect(ray, p)) {
-                hits.push_back({id, rh});
-            }
+        for (const auto& rh : object->Intersect(ray, p)) {
+            hits.push_back({id, rh});
         }
     }
 
@@ -798,6 +850,9 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
     const int w = display_width_, h = display_height_;
     if (w <= 0 || h <= 0) return result;
 
+    // 描画キャッシュをツリーと突き合わせる (PickEntitiesと同様)
+    EnsureSynced();
+
     // VP行列を一度だけ計算し、各サンプルの射影で使い回す
     const float aspect = static_cast<float>(w) / static_cast<float>(h);
     const igesio::Matrix4d vp =
@@ -811,33 +866,29 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
     sp.adaptive_width = w;
     sp.adaptive_height = h;
 
-    for (const auto& [shader_type, objects] : draw_objects_) {
-        for (const auto& [id, object] : objects) {
-            if (!object) continue;
+    for (const auto& [id, object] : visible_list_) {
+        if (!object) continue;
 
-            // 粗カリングを先に行い、範囲外エンティティのサンプリングを省く
-            if (!MayOverlapRect(object->GetWorldBoundingBox(), rect, vp, w, h)) {
-                continue;
-            }
-
-            const auto samples = object->GetSelectionSamples(sp);
-            if (samples.polylines.empty() && samples.points.empty()) continue;
-
-            const bool hit = (mode == BoxSelectionMode::kContained)
-                    ? ContainedInRect(samples, rect, vp, w, h)
-                    : CrossesRect(samples, rect, vp, w, h);
-            if (hit) result.push_back(id);
+        // 粗カリングを先に行い、範囲外エンティティのサンプリングを省く
+        if (!MayOverlapRect(object->GetWorldBoundingBox(), rect, vp, w, h)) {
+            continue;
         }
+
+        const auto samples = object->GetSelectionSamples(sp);
+        if (samples.polylines.empty() && samples.points.empty()) continue;
+
+        const bool hit = (mode == BoxSelectionMode::kContained)
+                ? ContainedInRect(samples, rect, vp, w, h)
+                : CrossesRect(samples, rect, vp, w, h);
+        if (hit) result.push_back(id);
     }
     return result;
 }
 
 i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) const {
-    for (const auto& [shader_type, objects] : draw_objects_) {
-        auto it = objects.find(id);
-        if (it != objects.end()) {
-            return it->second.get();
-        }
+    auto it = graphics_cache_.find(id);
+    if (it != graphics_cache_.end()) {
+        return it->second.get();
     }
     return nullptr;
 }
@@ -1051,14 +1102,4 @@ void EntityRenderer::InitShaders() {
 
         shader_programs_[shader_type] = program_id;
     }
-}
-
-bool EntityRenderer::IsEmpty() const {
-    if (draw_objects_.empty()) return true;
-
-    // 1つもエンティティ（描画オブジェクト）が設定されていない場合は空
-    for (const auto& [shader_type, objects] : draw_objects_) {
-        if (!objects.empty()) return false;
-    }
-    return true;
 }

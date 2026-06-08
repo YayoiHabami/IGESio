@@ -42,7 +42,7 @@ CurveOnSurfaceGraphics::~CurveOnAParametricSurfaceGraphics() {
 
 
 
-void CurveOnSurfaceGraphics::Synchronize() {
+void CurveOnSurfaceGraphics::DoSynchronize() {
     std::shared_ptr<const i_ent::ICurve> curve;
     try {
         // 曲線を取得

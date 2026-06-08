@@ -69,7 +69,7 @@ void RationalBSplineCurveGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void RationalBSplineCurveGraphics::Synchronize() {
+void RationalBSplineCurveGraphics::DoSynchronize() {
     // 既存のリソースを開放
     Cleanup();
 

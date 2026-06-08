@@ -8,6 +8,7 @@
 #ifndef IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 #define IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -178,6 +179,15 @@ class IEntityGraphics {
     /// @brief 描画に関するグローバルパラメータ
     std::shared_ptr<const models::GraphicsGlobalParam> global_param_;
 
+    /// @brief Synchronize()実行時に記録した同期キー
+    /// @note CurrentGeometryKey()との不一致が再テッセレーションの要否を表す
+    uint64_t synced_geometry_key_ = 0;
+
+    /// @brief 再同期の実体 (エンティティのジオメトリからGPUリソースを再構築する)
+    /// @note 呼び出しはSynchronize() (NVI) 経由でのみ行うこと.
+    ///       キー記録を基底で一元化するための分離
+    virtual void DoSynchronize() = 0;
+
     /// @brief コンストラクタ
     /// @param gl OpenGL関数のラッパー
     /// @param use_entity_transform シェーダーのmodel変数に
@@ -229,10 +239,29 @@ class IEntityGraphics {
     virtual void Draw(gl::Uint, const std::pair<float, float>&,
                       const DrawContext&) const = 0;
 
-    /// @brief エンティティをセットアップする
-    /// @note 内部で参照するエンティティの状態に基づいて、
-    ///       描画用のリソースを再セットアップする
-    virtual void Synchronize() = 0;
+    /// @brief エンティティをセットアップする (NVI; 非virtual)
+    /// @note 内部で参照するエンティティの状態に基づいて、描画用のリソースを
+    ///       再セットアップ (DoSynchronize) し、末尾で同期キーを記録する.
+    ///       キー記録を基底で一元化し、各実装の記録漏れを構造的に排除する
+    void Synchronize() {
+        DoSynchronize();
+        synced_geometry_key_ = CurrentGeometryKey();
+    }
+
+    /// @brief 現在の同期キーを計算する
+    /// @return テッセレーションが読む全エンティティの (ObjectID, GeometryRevision)
+    ///         を順序通りにハッシュ結合した値
+    /// @note 既定実装はEntityGraphics<T>にあり、自エンティティ+DE変換チェーン+
+    ///       物理従属子 (GetChildIDs) を再帰的に結合する. 同一性(ID)を含めることで、
+    ///       参照集合の変化とカウンタの変化の両方が必ずキーに現れる
+    ///       (リビジョン総和では参照先交換時に相殺しうるため不可)
+    virtual uint64_t CurrentGeometryKey() const = 0;
+
+    /// @brief 再Synchronizeが必要か
+    /// @return 最後のSynchronize以降に同期キーが変化した場合はtrue
+    bool NeedsResync() const {
+        return synced_geometry_key_ != CurrentGeometryKey();
+    }
 
     /// @brief テクスチャ用の描画リソースを同期する
     virtual void SyncTexture() = 0;

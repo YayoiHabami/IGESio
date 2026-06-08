@@ -51,7 +51,7 @@ void igesio::graphics::TrimmedSurfaceGraphics::DrawImpl(
  * public
  */
 
-void igesio::graphics::TrimmedSurfaceGraphics::Synchronize() {
+void igesio::graphics::TrimmedSurfaceGraphics::DoSynchronize() {
     Cleanup();
     SyncTexture();
     GenerateSurfaceData();

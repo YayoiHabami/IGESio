@@ -49,7 +49,7 @@ class CurveOnAParametricSurfaceGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief OpenGLリソースを解放する
     void Cleanup() override;

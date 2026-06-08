@@ -65,7 +65,7 @@ class PointGraphics
     bool IsDrawable() const override;
 
     /// @brief エンティティをセットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief レイとの交差判定が可能か
     /// @return 常にtrue (点とレイの近接判定を行う)

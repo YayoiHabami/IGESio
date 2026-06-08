@@ -73,7 +73,7 @@ void RationalBSplineSurfaceGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void RationalBSplineSurfaceGraphics::Synchronize() {
+void RationalBSplineSurfaceGraphics::DoSynchronize() {
     Cleanup();
     SyncTexture();
 

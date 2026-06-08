@@ -63,7 +63,7 @@ void ISurfaceGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void ISurfaceGraphics::Synchronize() {
+void ISurfaceGraphics::DoSynchronize() {
     // 既存のリソースを解放
     Cleanup();
 

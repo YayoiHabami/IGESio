@@ -240,20 +240,19 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
     try {
         iges_data_ = igesio::ReadIges(filename);
 
-        // 既存の描画オブジェクト・キャッシュをクリア
-        for (auto& p : entities_) {
-            for (auto& entity : p.second) renderer_.RemoveEntity(entity->GetID());
-        }
+        // UI側のキャッシュをクリア (描画オブジェクトはレンダラがツリーとの
+        // 突き合わせで自動破棄・生成するため、手動のRemove/Addは不要)
         entities_.clear();
         show_entity_.clear();
         focused_assembly_id_ = std::nullopt;
         selected_hit_positions_.clear();
         last_edit_status_.clear();
 
-        // エンティティを取得してレンダラ・キャッシュへ追加
+        // 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
         for (const auto& pair : iges_data_.Root().GetEntities()) {
-            AddEntity(pair.second);
+            CacheEntityType(pair.second);
         }
+        ApplyDisplayFilter();
 
         // シーンをモデルのrootへ束ねる (描画時にツリーを走査させる)
         BindSceneRoot(iges_data_.RootPtr());
@@ -270,7 +269,8 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
     }
 }
 
-void IgesViewerGUI::AddEntity(const std::shared_ptr<entities::EntityBase>& entity) {
+void IgesViewerGUI::CacheEntityType(
+        const std::shared_ptr<entities::EntityBase>& entity) {
     if (!entity->IsSupported()) {
         std::cerr << "Entity type " << ToString(entity->GetType())
                   << " is not supported." << std::endl;
@@ -295,25 +295,18 @@ void IgesViewerGUI::AddEntity(const std::shared_ptr<entities::EntityBase>& entit
         return;
     }
 
-    if (!renderer_.AddEntity(entity)) {
-        std::cerr << "Failed to add entity " << entity->GetID() << std::endl;
-        return;
-    }
     entities_[type].push_back(entity);
     show_entity_[type] = true;
 }
 
-void IgesViewerGUI::UpdateEntities() {
-    for (auto& p : show_entity_) {
-        const bool show = p.second;
-        for (auto& entity : entities_[p.first]) {
-            if (show) {
-                renderer_.AddEntity(entity);
-            } else {
-                renderer_.RemoveEntity(entity->GetID());
-            }
-        }
+void IgesViewerGUI::ApplyDisplayFilter() {
+    // 型別表示フラグをレンダラの表示フィルタへ変換する
+    // (除外型の描画オブジェクトはレンダラ側で温存され、再表示は安価)
+    graphics::DisplayFilter filter;
+    for (const auto& p : show_entity_) {
+        if (!p.second) filter.hidden_types.insert(p.first);
     }
+    renderer_.SetDisplayFilter(filter);
     needs_redraw_ = true;
 }
 
@@ -340,19 +333,15 @@ void IgesViewerGUI::OnModelEdited() {
             ++it;
         }
     }
-    // ツリーから消えたエンティティの描画オブジェクトを除去し、型別キャッシュも剪定する
+    // ツリーから消えたエンティティの型別キャッシュ (UI用) を剪定する
+    // (描画オブジェクトはレンダラのSweepが自動で破棄する)
     for (auto& p : entities_) {
         auto& vec = p.second;
         vec.erase(std::remove_if(vec.begin(), vec.end(),
                 [&](const std::shared_ptr<entities::EntityBase>& e) {
-                    if (scene_->Root().FindOwner(e->GetID()) != nullptr) {
-                        return false;
-                    }
-                    renderer_.RemoveEntity(e->GetID());
-                    return true;
+                    return scene_->Root().FindOwner(e->GetID()) == nullptr;
                 }), vec.end());
     }
-    renderer_.MarkSceneDirty();
     needs_redraw_ = true;
 }
 
@@ -446,7 +435,7 @@ void IgesViewerGUI::RenderMenuBar() {
         if (ImGui::BeginMenu("Filters")) {
             if (ImGui::Checkbox("Show All", &show_all_)) {
                 for (auto& p : show_entity_) p.second = show_all_;
-                UpdateEntities();
+                ApplyDisplayFilter();
             }
             ImGui::Separator();
             bool changed = false;
@@ -456,7 +445,7 @@ void IgesViewerGUI::RenderMenuBar() {
                     if (show_all_ && !p.second) show_all_ = false;
                 }
             }
-            if (changed) UpdateEntities();
+            if (changed) ApplyDisplayFilter();
             ImGui::EndMenu();
         }
         ImGui::EndMenu();
@@ -606,7 +595,6 @@ void IgesViewerGUI::RenderAssemblyNode(models::Assembly& node) {
     bool visible = node.Display().visible;
     if (ImGui::Checkbox("##vis", &visible)) {
         node.SetVisible(visible);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
     ImGui::SameLine();
@@ -733,7 +721,6 @@ void IgesViewerGUI::RenderNodeContextMenu(models::Assembly& node) {
         pending_action_ = [this, np]() {
             auto created = models::MakeAssembly("Assembly");
             np->AddChildAssembly(created);
-            renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         };
     }
@@ -840,13 +827,11 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     bool node_visible = node.Display().visible;
     if (ImGui::Checkbox("Visible", &node_visible)) {
         node.SetVisibleRecursive(node_visible);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
     bool node_suppressed = node.Display().suppressed;
     if (ImGui::Checkbox("Suppressed", &node_suppressed)) {
         node.SetSuppressedRecursive(node_suppressed);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
 
@@ -857,7 +842,6 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
                 ? std::optional<std::array<float, 3>>(
                         std::array<float, 3>{0.8f, 0.8f, 0.8f})
                 : std::nullopt);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
     if (node.Display().color_override.has_value()) {
@@ -865,7 +849,6 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
         std::array<float, 3> color = *node.Display().color_override;
         if (ImGui::ColorEdit3("##color", color.data())) {
             node.SetColorOverride(color);
-            renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         }
     }
@@ -875,14 +858,12 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     if (ImGui::Checkbox("Opacity override", &has_opacity)) {
         node.SetOpacityOverride(
                 has_opacity ? std::optional<float>(1.0f) : std::nullopt);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
     if (node.Display().opacity_override.has_value()) {
         float opacity = *node.Display().opacity_override;
         if (ImGui::SliderFloat("##opacity", &opacity, 0.0f, 1.0f)) {
             node.SetOpacityOverride(opacity);
-            renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         }
     }
@@ -902,7 +883,6 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
         m(1, 3) = translate[1];
         m(2, 3) = translate[2];
         node.ComposeGlobalTransform(m);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
 
@@ -914,7 +894,6 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
         pending_action_ = [this, np]() {
             auto created = models::MakeAssembly("Assembly");
             np->AddChildAssembly(created);
-            renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         };
     }

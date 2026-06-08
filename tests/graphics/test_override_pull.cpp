@@ -80,7 +80,6 @@ TEST(OverridePullTest, ParentColorOverride_AppliesToDescendant) {
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -112,7 +111,6 @@ TEST(OverridePullTest, NearestColorOverrideWins) {
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -142,7 +140,6 @@ TEST(OverridePullTest, OpacityOverride_ChangesAlphaKeepsRgb) {
     auto root = i_mod::MakeAssembly();
     root->SetOpacityOverride(0.5f);
     root->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -172,7 +169,6 @@ TEST(OverridePullTest, NoOverride_UsesEntityColor) {
 
     auto root = i_mod::MakeAssembly();
     root->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 

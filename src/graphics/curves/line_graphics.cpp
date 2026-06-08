@@ -92,7 +92,7 @@ void SegmentGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void SegmentGraphics::Synchronize() {
+void SegmentGraphics::DoSynchronize() {
     // 既存のリソースを開放
     Cleanup();
 
@@ -212,7 +212,7 @@ void LineGraphics::DrawImpl(
     gl_->UseProgram(0);
 }
 
-void LineGraphics::Synchronize() {
+void LineGraphics::DoSynchronize() {
     // 既存のリソースを開放
     Cleanup();
 

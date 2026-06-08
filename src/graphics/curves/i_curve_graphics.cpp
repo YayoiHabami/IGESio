@@ -86,7 +86,7 @@ void ICurveGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void ICurveGraphics::Synchronize() {
+void ICurveGraphics::DoSynchronize() {
     // 既存のリソースを解放
     Cleanup();
 

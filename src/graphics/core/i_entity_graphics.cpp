@@ -35,7 +35,8 @@ IEntityGraphics::IEntityGraphics(IEntityGraphics&& other) noexcept
           is_color_overridden_(other.is_color_overridden_),
           world_transform_(std::move(other.world_transform_)),
           use_entity_transform_(other.use_entity_transform_),
-          gl_(std::move(other.gl_)) {
+          gl_(std::move(other.gl_)),
+          synced_geometry_key_(other.synced_geometry_key_) {
     other.is_color_overridden_ = false;
 }
 
@@ -47,6 +48,7 @@ IEntityGraphics& IEntityGraphics::operator=(IEntityGraphics&& other) noexcept {
         world_transform_ = std::move(other.world_transform_);
         use_entity_transform_ = other.use_entity_transform_;
         gl_ = std::move(other.gl_);
+        synced_geometry_key_ = other.synced_geometry_key_;
 
         // ムーブ元のフラグをリセット
         other.is_color_overridden_ = false;

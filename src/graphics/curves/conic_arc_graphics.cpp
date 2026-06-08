@@ -70,7 +70,7 @@ void EllipseGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void EllipseGraphics::Synchronize() {
+void EllipseGraphics::DoSynchronize() {
     // 既存のリソースを解放
     Cleanup();
 

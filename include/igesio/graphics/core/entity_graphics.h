@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -28,6 +30,49 @@
 
 
 namespace igesio::graphics {
+
+/// @brief 同期キーへ (ObjectID, GeometryRevision) を順序通りに結合する
+/// @param seed 現在のキー値
+/// @param entity 結合するエンティティ
+/// @return 結合後のキー値
+/// @note boost::hash_combine方式. リビジョンの総和では参照先交換時に増減が
+///       相殺しうるため、同一性(ID)と値(rev)をハッシュで畳み込む
+inline uint64_t CombineGeometryKey(uint64_t seed,
+                                   const entities::IEntityIdentifier& entity) {
+    constexpr uint64_t kGolden = 0x9e3779b97f4a7c15ULL;
+    seed ^= std::hash<ObjectID>{}(entity.GetID())
+            + kGolden + (seed << 6) + (seed >> 2);
+    seed ^= entity.GeometryRevision() + kGolden + (seed << 6) + (seed >> 2);
+    return seed;
+}
+
+/// @brief エンティティ自身・DE変換チェーン・物理従属子を再帰的にキーへ結合する
+/// @param seed 現在のキー値
+/// @param entity 起点エンティティ
+/// @return 結合後のキー値
+/// @note テッセレーションが読む参照先 (DE変換行列・複合曲線の子・トリム面の境界・
+///       ルールド面の子曲線等) の形状変更を、親グラフィックスの再同期要否として
+///       検知するための走査. DE変換チェーンの循環はSetReference側で防止済み.
+///       物理従属はDAGであり循環しない前提
+inline uint64_t CombineGeometryKeyRecursive(
+        uint64_t seed, const entities::IEntityIdentifier& entity) {
+    seed = CombineGeometryKey(seed, entity);
+    const auto* base = dynamic_cast<const entities::EntityBase*>(&entity);
+    if (base == nullptr) return seed;
+
+    // DE変換チェーン (共有TransformationMatrixの編集を参照元の再同期として検知)
+    for (auto t = base->GetTransformationMatrix().GetPointer();
+         t != nullptr; t = t->GetRefTransformation()) {
+        seed = CombineGeometryKey(seed, *t);
+    }
+    // 物理従属子 (未解決参照はスキップ. 解決時は集合の変化としてキーに現れる)
+    for (const auto& cid : base->GetChildIDs()) {
+        if (const auto child = base->GetChildEntity(cid)) {
+            seed = CombineGeometryKeyRecursive(seed, *child);
+        }
+    }
+    return seed;
+}
 
 /// @brief エンティティの描画情報を管理するクラス
 /// @tparam T エンティティの型
@@ -154,6 +199,16 @@ class EntityGraphics : public IEntityGraphics {
     /// @return 描画オブジェクトのID
     const ObjectID& GetGraphicsID() const override {
         return graphics_id_;
+    }
+
+    /// @brief 現在の同期キーを計算する
+    /// @return 自エンティティ+DE変換チェーン+物理従属子(再帰)の
+    ///         (ObjectID, GeometryRevision) ハッシュ結合
+    /// @note 複合系 (CompositeCurve/CurveOnSurface/TrimmedSurface) の参照先も
+    ///       GetChildIDs経由で結合されるため、通常はオーバーライド不要
+    uint64_t CurrentGeometryKey() const override {
+        if (!entity_) return 0;
+        return CombineGeometryKeyRecursive(0, *entity_);
     }
 
     /// @brief エンティティの描画を行う

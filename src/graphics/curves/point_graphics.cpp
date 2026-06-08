@@ -117,7 +117,7 @@ void PointGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void PointGraphics::Synchronize() {
+void PointGraphics::DoSynchronize() {
     // 既存のリソースを開放
     Cleanup();
 

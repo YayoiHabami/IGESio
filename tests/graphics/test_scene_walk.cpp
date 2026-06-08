@@ -73,7 +73,6 @@ TEST(SceneWalkTest, NestedTransform_AccumulatedIntoModel) {
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -104,7 +103,6 @@ TEST(SceneWalkTest, InvisibleSubtree_NotDrawn) {
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -130,7 +128,6 @@ TEST(SceneWalkTest, SuppressedSubtree_NotDrawn) {
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 

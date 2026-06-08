@@ -69,7 +69,7 @@ bool CopiousDataGraphics::IsDrawable() const {
     return vbo_ != 0 && vertex_count_ > 0;
 }
 
-void CopiousDataGraphics::Synchronize() {
+void CopiousDataGraphics::DoSynchronize() {
     Cleanup();
 
     const auto& coords = entity_->Coordinates();

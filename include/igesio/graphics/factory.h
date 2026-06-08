@@ -40,6 +40,11 @@ CreateSurfaceGraphics(const std::shared_ptr<const entities::ISurface>&,
 /// @param entity 描画するエンティティのポインタ
 /// @param gl OpenGL関数のラッパー
 /// @return 作成された描画オブジェクト、無効な場合はnullptr
+/// @note 不変条件: nullptrの返却は「型起因の恒久的失敗」(未サポート型・
+///       描画対応のないインターフェース) のみとすること. レンダラはnullptrを
+///       負キャッシュとして保持し、同一エンティティの生成を再試行しない.
+///       将来データ依存の失敗 (一時的に不完全な形状等) を導入する場合は、
+///       失敗時のジオメトリリビジョンを記録し変化時に再試行する設計が必要
 std::unique_ptr<IEntityGraphics>
 CreateEntityGraphics(const std::shared_ptr<const entities::IEntityIdentifier>&,
                      const std::shared_ptr<IOpenGL>&);

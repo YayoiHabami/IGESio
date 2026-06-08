@@ -9,7 +9,7 @@
  * - 層A (オブジェクト単位・無条件): `CreateEntityGraphics`で生成した描画オブジェクトの
  *   `Draw(program, viewport)`が、`model`行列・`mainColor`・draw呼び出しを発行すること.
  *   GL文脈もシェーダー初期化も不要 (P2で焼き込み廃止→PULLへ変える際の基準).
- * - 層B (レンダラ単位・要Initialize): `Initialize()`→`AddEntity`→`SetScene`→`Draw()`が
+ * - 層B (レンダラ単位・要Initialize): `Initialize()`→`SetScene`→`Draw()`が
  *   シェーダーバッチ経路 (UseProgram/共通uniform/型ループ) を通ること. シェーダー初期化
  *   (実GLSLの`__FILE__`基準読込) に失敗した環境では`GTEST_SKIP`する.
  *
@@ -109,7 +109,6 @@ TEST(RendererSmokeTest, Draw_RunsShaderBucketingPath) {
     }
 
     auto arc = MakeArc();
-    ASSERT_TRUE(renderer.AddEntity(arc));
 
     // 描画はScene走査に一本化されたため、rootへarcを入れSceneを束ねる
     auto root = i_mod::MakeAssembly();

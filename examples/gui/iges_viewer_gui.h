@@ -143,17 +143,20 @@ class IgesViewerGUI {
     /// @brief IGESファイルを読み込み、シーン・描画・キャッシュを再構築する
     void LoadIgesFile(const std::string& filename);
 
-    /// @brief エンティティをレンダラと型別キャッシュへ追加する (表示対象のみ)
-    void AddEntity(const std::shared_ptr<entities::EntityBase>& entity);
+    /// @brief 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
+    /// @note 描画オブジェクト自体はレンダラがSceneツリーとの突き合わせで
+    ///       遅延生成するため、ここではUI状態のみを構築する
+    void CacheEntityType(const std::shared_ptr<entities::EntityBase>& entity);
 
-    /// @brief 型別表示フラグ(show_entity_)に従って描画への追加/除去を更新する
-    void UpdateEntities();
+    /// @brief 型別表示フラグ(show_entity_)をレンダラの表示フィルタへ反映する
+    void ApplyDisplayFilter();
 
     /// @brief 描画対象のシーンをモデルのrootへ束ね直す (選択はリセットされる)
     void BindSceneRoot(std::shared_ptr<models::Assembly> root);
 
     /// @brief モデル(Assemblyツリー)編集後の同期処理
-    /// @note 消えたIDを選択/hit座標とレンダラ・型別キャッシュから除去し、再走査を予約する.
+    /// @note 消えたIDを選択/hit座標と型別キャッシュ (UI用) から除去する.
+    ///       描画オブジェクトの破棄はレンダラのSweepが自動で行う.
     void OnModelEdited();
 
     /**

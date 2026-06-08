@@ -116,7 +116,6 @@ TEST(SurfaceEdgeRenderTest, DisplayMode_FiltersFillAndEdge) {
     }
 
     auto surf = MakeUntrimmedSurface();
-    ASSERT_TRUE(renderer.AddEntity(surf));
     auto root = i_mod::MakeAssembly();
     root->AddEntity(surf);
     i_mod::Scene scene(root);
