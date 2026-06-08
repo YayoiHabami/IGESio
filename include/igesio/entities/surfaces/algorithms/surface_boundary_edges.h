@@ -66,6 +66,17 @@ SurfaceBoundaryEdges ComputeRestrictedSurfaceEdges(
 SurfaceBoundaryEdges ComputeParametricSurfaceEdges(
         const ISurface&, const SurfaceBoundaryEdgeParams& = {});
 
+/// @brief スイープ系曲面の折り目に沿う内部稜線エッジを生成する
+/// @param surface 曲面
+/// @param params 生成パラメータ
+/// @return 各u方向折り目u_cにおけるv方向アイソ曲線 S(u_c, v) の折れ線群
+/// @note ISurface::GetUCreaseParameters() が返す角パラメータのうち、パラメータ
+///       矩形の内部 (u0 < u_c < u1) のもののみを対象とする (端は境界辺と重複)。
+///       角を持たない曲面 (既定で空) では空を返す。境界辺とは別概念のため、
+///       描画側で境界エッジへ連結して用いる。
+SurfaceBoundaryEdges ComputeSurfaceCreaseEdges(
+        const ISurface&, const SurfaceBoundaryEdgeParams& = {});
+
 }  // namespace igesio::entities
 
 #endif  // IGESIO_ENTITIES_SURFACES_ALGORITHMS_SURFACE_BOUNDARY_EDGES_H_

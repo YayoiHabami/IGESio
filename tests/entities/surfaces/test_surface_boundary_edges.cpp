@@ -7,11 +7,14 @@
  * @note 対象は公開関数:
  *       - entities::ComputeParametricSurfaceEdges(const ISurface&, params)
  *       - entities::ComputeRestrictedSurfaceEdges(const IRestrictedSurface&, params)
+ *       - entities::ComputeSurfaceCreaseEdges(const ISurface&, params)
  *       検証する不変量:
  *       - 一般曲面: パラメータ矩形の4アイソ辺 / 端点が4隅に一致 / 分割数の反映 /
  *         閉方向の継ぎ目辺の除外 (include_seamsで切替)
  *       - 制限付き曲面: 未トリム外周=矩形4辺 / 穴で内周ループ追加 / 明示外周は単一ループ /
  *         閉基底での継ぎ目除外
+ *       - 折り目稜線: 内部の折り目1つにつき1ループ / S(u_c, v)アイソ曲線に一致 /
+ *         滑らかな曲面では空 / 分割数の反映
  *       - 幾何整合: S(B(t))が基底曲面 (平面y=5) 上に乗る
  *
  * TODO: 無限パラメータ範囲のクランプ (テスト用曲面に無限域の曲面が無いため未カバー)。
@@ -26,8 +29,11 @@
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
+#include "igesio/entities/curves/line.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"
+#include "igesio/entities/surfaces/surface_of_revolution.h"
+#include "igesio/entities/surfaces/tabulated_cylinder.h"
 #include "igesio/entities/surfaces/trimmed_surface.h"
 #include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
 #include "./surfaces_for_testing.h"
@@ -42,6 +48,7 @@ using i_ent::TrimmedSurface;
 using i_ent::CurveOnAParametricSurface;
 using i_ent::SurfaceBoundaryEdges;
 using i_ent::SurfaceBoundaryEdgeParams;
+using igesio::kPi;
 
 /// @brief 位置の許容誤差
 constexpr double kPosTol = 1e-6;
@@ -121,6 +128,39 @@ bool MatchesAnyCorner(const Vector3d& p,
                       const std::vector<Vector3d>& corners) {
     return std::any_of(corners.begin(), corners.end(),
                        [&](const Vector3d& c) { return (p - c).norm() < kPosTol; });
+}
+
+/// @brief 折り目(角)を2つ持つ段付き回転面を作成する (Y軸回り; 母線はXY平面内)
+/// @note 母線(1,0,0)-(1,2,0)-(2,2,0)-(2,4,0): 折り目は弧長2.0(半径1,高さ2)と
+///       3.0(半径2,高さ2)。全周回転のためv方向に閉じる。
+std::shared_ptr<i_ent::ISurface> MakeSteppedRevolution() {
+    auto axis = i_ent::MakeLine(Vector3d{0., 0., 0.}, Vector3d{0., 1., 0.});
+    auto gen = i_ent::MakeLinearPath(std::vector<Vector3d>{
+        Vector3d{1., 0., 0.}, Vector3d{1., 2., 0.},
+        Vector3d{2., 2., 0.}, Vector3d{2., 4., 0.}});
+    return i_ent::MakeSurfaceOfRevolution(axis, gen, 0., 2. * kPi);
+}
+
+/// @brief 折り目(角)を1つ持つL字準線の平行曲面を作成する
+/// @note 準線(-3,0,0)-(0,0,0)-(0,3,0)を+Zへ押し出す。折り目はu=0.5。
+std::shared_ptr<i_ent::ISurface> MakeLShapedExtrusion() {
+    auto dir = i_ent::MakeLinearPath(std::vector<Vector3d>{
+        Vector3d{-3., 0., 0.}, Vector3d{0., 0., 0.}, Vector3d{0., 3., 0.}});
+    return i_ent::MakeExtrudedSurface(dir, Vector3d{0., 0., 5.});
+}
+
+/// @brief ループの各点がv方向アイソ曲線 S(u_c, v) 上に乗ることを検査する
+void AssertLoopIsVIsoCurve(const i_ent::ISurface& surf, const double uc,
+                           const double v0, const double v1,
+                           const std::vector<Vector3d>& loop) {
+    ASSERT_GE(loop.size(), 2u);
+    const int div = static_cast<int>(loop.size()) - 1;
+    for (int k = 0; k <= div; ++k) {
+        const double v = v0 + (v1 - v0) * k / static_cast<double>(div);
+        const auto p = surf.TryGetPointAt(uc, v);
+        ASSERT_TRUE(p.has_value());
+        EXPECT_LT((loop[k] - *p).norm(), kPosTol);
+    }
 }
 
 }  // namespace
@@ -264,4 +304,60 @@ TEST(ComputeRestrictedSurfaceEdges, ClosedBaseUntrimmed_SkipsSeam) {
 
     // 閉基底の未トリム外周は継ぎ目を除外し、開方向の2辺のみ
     EXPECT_EQ(edges.loops.size(), 2u);
+}
+
+
+
+/**
+ * ComputeSurfaceCreaseEdges: 折り目(角)の内部稜線
+ */
+
+// 滑らかな曲面 (折り目なし) ではループを生成しない
+TEST(ComputeSurfaceCreaseEdges, SmoothSurface_ProducesNoLoops) {
+    auto plane = MakePlane();
+    EXPECT_TRUE(i_ent::ComputeSurfaceCreaseEdges(*plane).loops.empty());
+}
+
+// 段付き回転面: 内部の折り目2本ぶんのループを生成する (各 divisions+1 点)
+TEST(ComputeSurfaceCreaseEdges, SteppedRevolution_ProducesOneLoopPerCorner) {
+    auto surf = MakeSteppedRevolution();
+
+    const auto edges = i_ent::ComputeSurfaceCreaseEdges(*surf);
+
+    EXPECT_EQ(edges.loops.size(), 2u);
+    for (const auto& loop : edges.loops) {
+        EXPECT_EQ(loop.size(), 65u);  // 全周のため分割なし (既定 divisions=64)
+    }
+}
+
+// 生成したループは折り目位置のv方向アイソ曲線 S(u_c, v) に一致する
+TEST(ComputeSurfaceCreaseEdges, LoopsLieOnVIsoCurves) {
+    auto surf = MakeSteppedRevolution();
+    const auto vrange = surf->GetParameterRange();  // {u0,u1,v0,v1}
+    const auto creases = surf->GetUCreaseParameters();
+
+    const auto edges = i_ent::ComputeSurfaceCreaseEdges(*surf);
+
+    // ループはGetUCreaseParameters()の順 (弧長2.0, 3.0) で並ぶ
+    ASSERT_EQ(edges.loops.size(), creases.size());
+    for (std::size_t i = 0; i < creases.size(); ++i) {
+        AssertLoopIsVIsoCurve(*surf, creases[i], vrange[2], vrange[3],
+                              edges.loops[i]);
+    }
+}
+
+// L字準線の平行曲面: 内部の折り目1本ぶんのループを生成する
+TEST(ComputeSurfaceCreaseEdges, LShapedExtrusion_ProducesOneLoop) {
+    auto surf = MakeLShapedExtrusion();
+    EXPECT_EQ(i_ent::ComputeSurfaceCreaseEdges(*surf).loops.size(), 1u);
+}
+
+// 分割数がサンプル点数に反映される
+TEST(ComputeSurfaceCreaseEdges, Divisions_ControlsSampleCount) {
+    auto surf = MakeSteppedRevolution();
+
+    const auto edges = i_ent::ComputeSurfaceCreaseEdges(*surf, {8, false});
+
+    ASSERT_FALSE(edges.loops.empty());
+    for (const auto& loop : edges.loops) EXPECT_EQ(loop.size(), 9u);
 }

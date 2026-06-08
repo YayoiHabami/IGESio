@@ -65,8 +65,10 @@ void ISurfaceGraphics::DoSynchronize() {
     // 頂点・法線データとインデックスデータを生成
     GenerateSurfaceData();
 
-    // 境界エッジ (パラメータ矩形の4アイソ辺) を構築する
-    const auto edges = entities::ComputeParametricSurfaceEdges(*entity_);
+    // 境界エッジ (パラメータ矩形の4アイソ辺) と、折り目の内部稜線を構築する
+    auto edges = entities::ComputeParametricSurfaceEdges(*entity_);
+    auto creases = entities::ComputeSurfaceCreaseEdges(*entity_);
+    for (auto& loop : creases.loops) edges.loops.push_back(std::move(loop));
     edge_buffer_.Build(edges.loops);
 
     // VAO, VBO, EBOを生成
