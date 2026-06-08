@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/surfaces/ruled_surface.h"
 
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -274,6 +275,34 @@ RuledSurface::TryGetDefinedDerivatives(
     }
 
     return s_deriv;
+}
+
+std::vector<double> RuledSurface::GetUCreaseParameters() const {
+    std::vector<double> result;
+
+    // C1: t = t_min + u(t_max - t_min) より u = (t - t_min)/(t_max - t_min)
+    if (auto c1 = curve1_.TryGetEntity<ICurve>()) {
+        auto r1 = c1.value()->GetParameterRange();
+        const double d1 = r1[1] - r1[0];
+        if (std::isfinite(d1) && !i_num::IsApproxZero(d1)) {
+            for (const double t_c : c1.value()->GetCornerParams()) {
+                result.push_back((t_c - r1[0]) / d1);
+            }
+        }
+    }
+
+    // C2: DIRFLG (is_reversed_) に応じて s -> u を写像する
+    if (auto c2 = curve2_.TryGetEntity<ICurve>()) {
+        auto r2 = c2.value()->GetParameterRange();
+        const double d2 = r2[1] - r2[0];
+        if (std::isfinite(d2) && !i_num::IsApproxZero(d2)) {
+            for (const double s_c : c2.value()->GetCornerParams()) {
+                result.push_back(is_reversed_ ? (r2[1] - s_c) / d2
+                                              : (s_c - r2[0]) / d2);
+            }
+        }
+    }
+    return result;
 }
 
 i_num::BoundingBox RuledSurface::GetDefinedBoundingBox() const {

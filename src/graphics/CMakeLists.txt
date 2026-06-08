@@ -17,6 +17,7 @@ add_library(igesio_graphics STATIC
     curves/rational_b_spline_curve_graphics.cpp        # 126
     curves/curve_on_a_parametric_surface_graphics.cpp  # 142
 
+    surfaces/surface_mesh.cpp                          # general surface mesh
     surfaces/i_surface_graphics.cpp                    # general surfaces
     surfaces/rational_b_spline_surface_graphics.cpp    # 128
     surfaces/trimmed_surface_graphics.cpp              # 144

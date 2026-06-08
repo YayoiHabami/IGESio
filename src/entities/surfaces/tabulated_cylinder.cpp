@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/surfaces/tabulated_cylinder.h"
 
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -259,6 +260,22 @@ std::array<double, 4> TabulatedCylinder::GetParameterRange() const {
     double u_end = (t_end == std::numeric_limits<double>::infinity()) ?
                    std::numeric_limits<double>::infinity() : 1.0;
     return {u_start, u_end, 0.0, 1.0};
+}
+
+std::vector<double> TabulatedCylinder::GetUCreaseParameters() const {
+    auto directrix_curve = directrix_.TryGetEntity<ICurve>();
+    if (!directrix_curve) return {};
+
+    // u = (t - t_start)/(t_end - t_start) で準線の角点tをuへ写像する
+    auto [t_start, t_end] = directrix_curve.value()->GetParameterRange();
+    const double dt = t_end - t_start;
+    if (!std::isfinite(dt) || i_num::IsApproxZero(dt)) return {};
+
+    std::vector<double> result;
+    for (const double t_c : directrix_curve.value()->GetCornerParams()) {
+        result.push_back((t_c - t_start) / dt);
+    }
+    return result;
 }
 
 std::optional<i_ent::SurfaceDerivatives>

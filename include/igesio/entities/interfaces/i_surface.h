@@ -132,6 +132,14 @@ class ISurface : public virtual IEntityIdentifier,
     ///       トリム等でドメインが制限されるサブクラスはこれをオーバーライドすること。
     virtual bool IsInDomain(const double u, const double v) const;
 
+    /// @brief u方向に折れ目(接線不連続な稜線)が走るパラメータuの一覧を返す
+    /// @return 折れ目のuパラメータ値. 既定では空 (滑らかな曲面)
+    /// @note 母線・準線などの断面曲線が角点を持つ掃引系曲面 (SurfaceOfRevolution,
+    ///       TabulatedCylinder, RuledSurface) でオーバーライドする. 描画の
+    ///       メッシュ生成が、この位置にサンプル線を挿入し法線を片側評価して
+    ///       角を立てる (ハードエッジ化する) ために使用する
+    virtual std::vector<double> GetUCreaseParameters() const;
+
 
 
     /**

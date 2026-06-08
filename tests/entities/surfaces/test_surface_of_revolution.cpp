@@ -46,6 +46,7 @@
 #include "igesio/common/validation_result.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/line.h"
+#include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/surfaces/surface_of_revolution.h"
 
 namespace {
@@ -658,4 +659,42 @@ TEST(SurfaceOfRevolutionGeometryTest, GetDefinedBoundingBox_FullRotation) {
     }
     ExpectVectorNear(min_v, Vector3d(-1.0, -1.0, 0.0));
     ExpectVectorNear(max_v, Vector3d(1.0, 1.0, 1.0));
+}
+
+
+
+/**
+ * GetUCreaseParameters() のテスト
+ *
+ * u方向は母線のパラメータに一致するため、母線の角点をそのまま返す.
+ */
+
+// 母線が角を持つ折れ線の場合、その角点パラメータ (母線のGetCornerParams) を返す
+TEST(SurfaceOfRevolutionCreaseTest,
+     GetUCreaseParameters_ReturnsGeneratrixCornersWhenPolyline) {
+    // 母線: 折れ線 (1,0,0)-(1,0,2)-(2,0,2) (xz平面内, z軸を含む平面)
+    // 角は中央頂点; LinearPathは弧長パラメータのため累積長 = 2.0
+    auto generatrix = i_ent::MakeLinearPath(std::vector<Vector3d>{
+        Vector3d{1., 0., 0.}, Vector3d{1., 0., 2.}, Vector3d{2., 0., 2.}});
+    auto surf = i_ent::MakeSurfaceOfRevolution(
+        MakeZAxis(), generatrix, 0., 2. * kPi);
+
+    const auto creases = surf->GetUCreaseParameters();
+    const auto expected = generatrix->GetCornerParams();
+    ASSERT_EQ(creases.size(), 1u);
+    ASSERT_EQ(expected.size(), 1u);
+    EXPECT_NEAR(creases[0], expected[0], kTol);  // 母線の角点を素通し
+    EXPECT_NEAR(creases[0], 2.0, kTol);          // 累積長 (1,0,0)->(1,0,2)
+}
+
+// 滑らかな母線 (直線) の場合は空 (角なし)
+TEST(SurfaceOfRevolutionCreaseTest,
+     GetUCreaseParameters_EmptyWhenSmoothGeneratrix) {
+    EXPECT_TRUE(MakeUnitCylinder()->GetUCreaseParameters().empty());
+}
+
+// 母線ポインタ未解決の場合は空 (throwしない)
+TEST(SurfaceOfRevolutionCreaseTest,
+     GetUCreaseParameters_EmptyWhenGeneratrixUnset) {
+    EXPECT_TRUE(MakeUnresolvedSurface()->GetUCreaseParameters().empty());
 }

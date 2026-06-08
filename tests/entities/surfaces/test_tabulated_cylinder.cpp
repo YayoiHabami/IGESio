@@ -29,10 +29,12 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 #include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/entities/curves/line.h"
+#include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/surfaces/tabulated_cylinder.h"
 #include "igesio/entities/transformations/transformation_matrix.h"
 
@@ -253,4 +255,33 @@ TEST(TabulatedCylinderConstructorTest,
      Constructor_ThrowsInvalidArgumentWhenDirectrixIsNull_DirectionOverload) {
     EXPECT_THROW(TabulatedCylinder(nullptr, Vector3d(0.0, 0.0, 1.0), 2.0),
                  std::invalid_argument);
+}
+
+
+
+/**
+ * GetUCreaseParameters() のテスト
+ *
+ * 準線の角点 t を u = (t - t_start)/(t_end - t_start) で u∈[0,1] へ写像する.
+ */
+
+// 準線が角を持つ折れ線の場合、角点を単位区間へ写像して返す
+TEST(TabulatedCylinderCreaseTest,
+     GetUCreaseParameters_MapsDirectrixCornersToUnitInterval) {
+    // 準線: 折れ線 (0,0,0)-(0,2,0)-(1,2,0) (長さ2 + 1 = 3, 角は累積長2.0)
+    auto directrix = i_ent::MakeLinearPath(std::vector<Vector3d>{
+        Vector3d{0., 0., 0.}, Vector3d{0., 2., 0.}, Vector3d{1., 2., 0.}});
+    auto surface = i_ent::MakeExtrudedSurface(directrix, Vector3d{0., 0., 5.});
+
+    const auto creases = surface->GetUCreaseParameters();
+    ASSERT_EQ(creases.size(), 1u);
+    EXPECT_NEAR(creases[0], 2.0 / 3.0, kTol);  // 角(累積長2.0) / 全長3.0
+}
+
+// 滑らかな準線 (直線) の場合は空 (角なし)
+TEST(TabulatedCylinderCreaseTest,
+     GetUCreaseParameters_EmptyWhenSmoothDirectrix) {
+    auto surface = i_ent::MakeExtrudedSurface(
+        MakeDirectrix(), Vector3d{0., 3., 4.});
+    EXPECT_TRUE(surface->GetUCreaseParameters().empty());
 }

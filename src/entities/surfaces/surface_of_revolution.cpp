@@ -286,6 +286,13 @@ std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
     return {umin, umax, start_angle_, end_angle_};
 }
 
+std::vector<double> SurfaceOfRevolution::GetUCreaseParameters() const {
+    // u方向は母線のパラメータに一致するため、母線の角点をそのまま返す
+    auto generatrix_curve = generatrix_.TryGetEntity<ICurve>();
+    if (!generatrix_curve) return {};
+    return generatrix_curve.value()->GetCornerParams();
+}
+
 std::optional<i_ent::SurfaceDerivatives>
 SurfaceOfRevolution::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {

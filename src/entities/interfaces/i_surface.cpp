@@ -106,6 +106,11 @@ bool ISurface::IsInDomain(const double u, const double v) const {
     return u >= range[0] && u <= range[1] && v >= range[2] && v <= range[3];
 }
 
+std::vector<double> ISurface::GetUCreaseParameters() const {
+    // 既定は滑らかな曲面とみなし折れ目なし. 掃引系曲面でオーバーライドする
+    return {};
+}
+
 
 
 /**

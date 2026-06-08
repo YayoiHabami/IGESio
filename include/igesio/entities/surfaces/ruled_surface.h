@@ -227,6 +227,11 @@ class RuledSurface : public EntityBase, public virtual ISurface {
         return {0.0, 1.0, 0.0, 1.0};
     }
 
+    /// @brief u方向に折れ目があるパラメータuの一覧を返す
+    /// @return C1・C2(参照曲線)の角点をu∈[0,1]へ写像した和集合. 参照曲線が
+    ///         未設定やパラメータ範囲が無限・退化の場合は該当分を除外する
+    std::vector<double> GetUCreaseParameters() const override;
+
     /// @brief 定義空間におけるサーフェスの偏導関数 S^(i,j)(u, v) を計算する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v

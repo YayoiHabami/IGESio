@@ -25,6 +25,8 @@
  */
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -32,6 +34,7 @@
 #include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/entities/curves/line.h"
+#include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/surfaces/ruled_surface.h"
 
 namespace {
@@ -75,6 +78,27 @@ std::shared_ptr<i_ent::Line> MakeCurve1() {
 /// @brief C2: C1をY方向に+5だけ平行移動した線分 (0,5,0)→(10,5,0)
 std::shared_ptr<i_ent::Line> MakeCurve2() {
     return i_ent::MakeLine(Vector3d(0.0, 5.0, 0.0), Vector3d(10.0, 5.0, 0.0));
+}
+
+/// @brief 角を1つ持つ折れ線を作成する (xy平面内のV字)
+/// @param y_offset 全頂点のy座標オフセット (C1/C2を分離するため)
+/// @param apex_x 中央頂点のx座標 (非対称化に使用; 既定は対称な0)
+std::shared_ptr<i_ent::LinearPath> MakeCorneredPath(
+        const double y_offset, const double apex_x = 0.0) {
+    return i_ent::MakeLinearPath(std::vector<Vector3d>{
+        Vector3d{-4., y_offset, 0.}, Vector3d{apex_x, y_offset + 3., 0.},
+        Vector3d{4., y_offset, 0.}});
+}
+
+/// @brief 折れ目におけるパラメータ列を順不同で比較する
+void ExpectCreasesNear(std::vector<double> actual,
+                       std::vector<double> expected, const double tol = kTol) {
+    std::sort(actual.begin(), actual.end());
+    std::sort(expected.begin(), expected.end());
+    ASSERT_EQ(actual.size(), expected.size());
+    for (size_t i = 0; i < actual.size(); ++i) {
+        EXPECT_NEAR(actual[i], expected[i], tol);
+    }
 }
 
 }  // namespace
@@ -258,4 +282,63 @@ TEST(RuledSurfaceSetterTest, Validate_ErrorWhenSameCurveBothSides) {
 
     EXPECT_NO_THROW(surface->SetCurve2(c1));
     EXPECT_FALSE(surface->Validate().is_valid);
+}
+
+
+
+/**
+ * GetUCreaseParameters() のテスト
+ *
+ * C1の角は u=(t-t0)/(t1-t0)、C2の角は DIRFLG に応じて
+ * 非反転 u=(s-s0)/(s1-s0) / 反転 u=(s1-s)/(s1-s0) へ写像し、和集合を返す.
+ */
+
+// C1のみ角を持つ場合、C1の角を u へ写像して返す (対称V字 -> u=0.5)
+TEST(RuledSurfaceCreaseTest, GetUCreaseParameters_MapsCurve1Corner) {
+    auto c1 = MakeCorneredPath(0.0);  // 対称V字
+    auto surface = i_ent::MakeRuledSurface(c1, MakeCurve2());
+
+    const auto creases = surface->GetUCreaseParameters();
+    ASSERT_EQ(creases.size(), 1u);
+    EXPECT_NEAR(creases[0], 0.5, kTol);
+}
+
+// 両曲線が角を持つ場合、両方を u へ写像した和集合を返す
+TEST(RuledSurfaceCreaseTest, GetUCreaseParameters_UnionsBothCurveCorners) {
+    auto c1 = MakeCorneredPath(0.0);          // 対称 -> u=0.5
+    auto c2 = MakeCorneredPath(5.0, 1.0);     // 非対称 -> u≠0.5
+    auto surface = i_ent::MakeRuledSurface(c1, c2);
+
+    const auto r1 = c1->GetParameterRange();
+    const auto r2 = c2->GetParameterRange();
+    const double u1 = (c1->GetCornerParams()[0] - r1[0]) / (r1[1] - r1[0]);
+    const double u2 = (c2->GetCornerParams()[0] - r2[0]) / (r2[1] - r2[0]);
+    ExpectCreasesNear(surface->GetUCreaseParameters(), {u1, u2});
+}
+
+// DIRFLG反転時、C2の角は終端からの u=(s1-s)/(s1-s0) へ写像される
+TEST(RuledSurfaceCreaseTest, GetUCreaseParameters_ReversedMapsCurve2FromEnd) {
+    auto c1 = MakeCurve1();                // 直線 (角なし)
+    auto c2 = MakeCorneredPath(5.0, 1.0);  // 非対称な角
+
+    auto fwd = i_ent::MakeRuledSurface(c1, c2, /*is_reversed=*/false);
+    auto rev = i_ent::MakeRuledSurface(c1, c2, /*is_reversed=*/true);
+
+    const auto r2 = c2->GetParameterRange();
+    const double sc = c2->GetCornerParams()[0];
+    const double u_fwd = (sc - r2[0]) / (r2[1] - r2[0]);
+    const double u_rev = (r2[1] - sc) / (r2[1] - r2[0]);
+
+    ASSERT_EQ(fwd->GetUCreaseParameters().size(), 1u);
+    ASSERT_EQ(rev->GetUCreaseParameters().size(), 1u);
+    EXPECT_NEAR(fwd->GetUCreaseParameters()[0], u_fwd, kTol);
+    EXPECT_NEAR(rev->GetUCreaseParameters()[0], u_rev, kTol);
+    // 非対称な角のため、反転で値が変わることを確認 (反転写像の検証)
+    EXPECT_GT(std::abs(u_fwd - u_rev), 1e-3);
+}
+
+// 両曲線とも滑らか (直線) の場合は空
+TEST(RuledSurfaceCreaseTest, GetUCreaseParameters_EmptyWhenBothSmooth) {
+    auto surface = i_ent::MakeRuledSurface(MakeCurve1(), MakeCurve2());
+    EXPECT_TRUE(surface->GetUCreaseParameters().empty());
 }

@@ -498,3 +498,21 @@ TEST(ISurfaceTest, GetBoundingBox) {
                 << "Max distance to box: " << max_distance;
     }
 }
+
+
+
+/**
+ * GetUCreaseParameters() の基底デフォルト
+ *
+ * オーバーライドしない曲面 (滑らかなNURBS等) は既定の空リストを返すこと.
+ * 掃引系曲面 (118/120/122) のオーバーライド検証は各エンティティの
+ * テストファイルが担う.
+ */
+
+// NURBS曲面 (Type 128; 非オーバーライド) は折れ目なし (空) を返す
+TEST(ISurfaceCreaseDefaultTest, GetUCreaseParameters_EmptyForNurbsSurface) {
+    for (const auto& s : i_test::CreateRationalBSplineSurfaces()) {
+        EXPECT_TRUE(s.surface->GetUCreaseParameters().empty())
+            << "surface: " << s.name;
+    }
+}

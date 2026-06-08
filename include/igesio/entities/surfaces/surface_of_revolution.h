@@ -194,6 +194,10 @@ class SurfaceOfRevolution : public EntityBase, public virtual ISurface {
     ///       `std::numeric_limits<double>::infinity()`となる
     std::array<double, 4> GetParameterRange() const override;
 
+    /// @brief u方向(母線方向)に折れ目があるパラメータuの一覧を返す
+    /// @return 母線(generatrix)の角点パラメータ. 母線未設定の場合は空
+    std::vector<double> GetUCreaseParameters() const override;
+
     /// @brief 定義空間におけるサーフェスの偏導関数 S^(i,j)(u, v) を計算する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v
