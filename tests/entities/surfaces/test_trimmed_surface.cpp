@@ -48,6 +48,8 @@ using i_ent::CurveOnAParametricSurface;
 constexpr double kTol = 1e-9;
 /// @brief 境界精度テストで辺から内/外へずらすオフセット
 constexpr double kBoundaryEps = 0.01;
+/// @brief 実CAD出力の境界ループに見られる継ぎ目ギャップ相当の値
+constexpr double kSeamGap = 4e-6;
 
 /// @brief 基底NURBS平面 D=[0,1]² を作成する
 std::shared_ptr<i_ent::ISurface> MakePlane() {
@@ -172,6 +174,30 @@ TEST(TrimmedSurfaceDomain, InnerHoleExcluded) {
     EXPECT_FALSE(ts->IsInDomain(0.5, 0.5));  // 穴の内部
     EXPECT_TRUE(ts->IsInDomain(0.3, 0.5));   // 外側内かつ穴の外
     EXPECT_FALSE(ts->IsInDomain(0.1, 0.5));  // 外側境界の外
+}
+
+// 実CAD出力の境界ループには継ぎ目に微小ギャップが存在しうる。
+// 許容内のギャップを持つ非閉ループでも境界がスキップされずトリムが有効となること
+// (継ぎ目ギャップがIsClosed()==falseを誘発し、トリムが暗黙に放棄される問題の回帰)
+TEST(TrimmedSurfaceDomain, NearlyClosedOuterLoopStillTrims) {
+    auto plane = MakePlane();
+    // 矩形 [0.2,0.8]² の終点を始点からkSeamGapだけずらした開ポリライン
+    // (kPlanarPolyline; IsClosed()==false だが実効的には閉ループ)
+    auto loop = i_ent::MakeLinearPath(
+        std::vector<Vector2d>{
+            {0.2, 0.2}, {0.8, 0.2}, {0.8, 0.8}, {0.2, 0.8},
+            {0.2 + kSeamGap, 0.2}},
+        false);
+    ASSERT_FALSE(loop->IsClosed());
+    auto outer = MakeBoundary142(plane, loop);
+    auto ts = std::make_shared<TrimmedSurface>(plane, outer);
+
+    // 境界がスキップされず、外側領域多角形が構築される
+    EXPECT_TRUE(ts->GetOuterDomainPolygon().has_value());
+    // トリムが有効: ループ内はtrue、D内だがループ外はfalse
+    EXPECT_TRUE(ts->IsInDomain(0.5, 0.5));
+    EXPECT_FALSE(ts->IsInDomain(0.1, 0.5));
+    EXPECT_FALSE(ts->IsInDomain(0.5, 0.9));
 }
 
 TEST(TrimmedSurfaceDomain, MultipleHolesExcluded) {

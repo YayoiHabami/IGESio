@@ -39,21 +39,31 @@ double PointLineDistance(
         const Vector3d&, const Vector3d&, const Vector3d&,
         const std::pair<bool, bool>& = {false, false});
 
+/// @brief 閉性判定の相対許容誤差のデフォルト値
+/// @note 始終点ギャップ <= この値×曲線の広がり (サンプル点のAABB対角長) なら
+///       閉曲線とみなす。実CADが出力するトリム境界ループの継ぎ目には1e-6程度の
+///       ギャップが普通に存在するため、トリム用途では厳密判定にしない
+constexpr double kCurveClosureRelTolerance = 1e-4;
+
 /// @brief 閉曲線の内包・外包・近似多角形を計算する
 /// @param curve 対象の閉曲線 (自己交差なし)
 /// @param n_vert 内包・外包多角形の初期分割数
 /// @param reference_normal 曲線が乗る平面の法線ベクトル
 /// @param curvature_eps 曲率判定の閾値
 /// @param distance_eps 近似多角形の許容距離
+/// @param closure_rel_tol 閉性判定の相対許容. 始終点ギャップがこの値×曲線の広がり
+///        以下なら閉曲線とみなす. 0なら`IsClosed()`による厳密判定のみ
 /// @return 内包・外包・近似多角形を保持するデータ構造
-/// @throws std::invalid_argument curve が閉曲線でない場合、自己交差が検出された場合
+/// @throws std::invalid_argument curve が閉曲線でない場合 (始終点ギャップが
+///         closure_rel_tol×曲線の広がりを超える場合)、自己交差が検出された場合
 /// @throws igesio::ComputationError 接線・曲率の計算に失敗した場合
 numerics::CurveContainmentPolygons ComputeContainmentPolygons(
     const ICurve& curve,
     int n_vert,
     const Vector3d& reference_normal,
     double curvature_eps = 1e-3,
-    double distance_eps = 1e-3);
+    double distance_eps = 1e-3,
+    double closure_rel_tol = kCurveClosureRelTolerance);
 
 }  // namespace igesio::entities
 
