@@ -273,15 +273,17 @@ std::optional<iio::SectionType> iio::IgesReader::GetNextSectionType() {
 i_model::IntermediateIgesData igesio::ReadIgesIntermediate(
         const std::string& file_path, const bool validate_strictly) {
     // IGESファイルを読み込む
-    auto absolute_path = std::filesystem::absolute(file_path);
+    // file_pathはUTF-8として扱う. Windowsではpath(std::string)がANSIコード
+    // ページ解釈となり全角パスを開けないため、u8pathでpathを構築する
+    auto absolute_path = std::filesystem::absolute(std::filesystem::u8path(file_path));
     if (!std::filesystem::exists(absolute_path)) {
         throw iio::FileOpenError(
-                "The file does not exist: " + absolute_path.string());
+                "The file does not exist: " + absolute_path.u8string());
     } else if (!std::filesystem::is_regular_file(absolute_path)) {
         throw iio::FileOpenError(
-                "The path is not a regular file: " + absolute_path.string());
+                "The path is not a regular file: " + absolute_path.u8string());
     }
-    IgesReader reader(absolute_path.string());
+    IgesReader reader(absolute_path.u8string());
 
     i_model::IntermediateIgesData data;
 
