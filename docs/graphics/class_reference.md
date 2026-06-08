@@ -136,7 +136,7 @@
 | 関数 | 説明 |
 |---|---|
 | `Select` / `Deselect` / `Toggle` / `Replace` / `Clear` | 選択集合の操作 |
-| `Contains(id)` / `Items()` | 選択状態の照会 |
+| `Contains(id)` / `Items()` | 選択状態の照会(`Items()`は選択順の一覧を返す) |
 | `Active()` | アンカー(主選択)を取得する |
 
 ### `models::PickFilter` (`include/igesio/models/pick_filter.h`)

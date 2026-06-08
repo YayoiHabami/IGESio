@@ -135,3 +135,56 @@ TEST(SelectionSetTest, Clear_NoOpWhenEmpty) {
 
     EXPECT_EQ(s.Version(), v0);
 }
+
+// Itemsは選択した順序でIDを返す
+TEST(SelectionSetTest, Items_PreservesSelectionOrder) {
+    SelectionSet s;
+    const auto a = MakeId();
+    const auto b = MakeId();
+    const auto c = MakeId();
+    s.Select(a);
+    s.Select(b);
+    s.Select(c);
+
+    const auto& items = s.Items();
+    ASSERT_EQ(items.size(), 3u);
+    EXPECT_EQ(items[0], a);
+    EXPECT_EQ(items[1], b);
+    EXPECT_EQ(items[2], c);
+}
+
+// Deselectで中間要素を除去しても残りの順序は保たれる
+TEST(SelectionSetTest, Items_KeepsOrderAfterDeselect) {
+    SelectionSet s;
+    const auto a = MakeId();
+    const auto b = MakeId();
+    const auto c = MakeId();
+    s.Select(a);
+    s.Select(b);
+    s.Select(c);
+
+    s.Deselect(b);
+
+    const auto& items = s.Items();
+    ASSERT_EQ(items.size(), 2u);
+    EXPECT_EQ(items[0], a);
+    EXPECT_EQ(items[1], c);
+}
+
+// 選択済みIDの再Selectは順序位置を維持し、activeのみ更新する
+TEST(SelectionSetTest, Select_KeepsPositionWhenAlreadySelected) {
+    SelectionSet s;
+    const auto a = MakeId();
+    const auto b = MakeId();
+    s.Select(a);
+    s.Select(b);
+
+    s.Select(a);  // 再選択 (末尾へは移動しない)
+
+    const auto& items = s.Items();
+    ASSERT_EQ(items.size(), 2u);
+    EXPECT_EQ(items[0], a);
+    EXPECT_EQ(items[1], b);
+    ASSERT_TRUE(s.Active().has_value());
+    EXPECT_EQ(*s.Active(), a);
+}
