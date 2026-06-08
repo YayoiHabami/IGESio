@@ -46,21 +46,29 @@ For coordinate systems and placement (transform views, frame specification, and 
 - A list of child `Assembly` nodes (physical ownership; nesting = the logical tree)
 - A weak reference to the parent `Assembly` (`std::weak_ptr`; empty at the root; used for path traversal)
 - A global transform matrix `Matrix4d` (placement equivalent to Solid Assembly Type 184; the identity matrix by default)
-- Metadata `AssemblyMetadata`
+- Metadata `AssemblyMetadata` and display state `DisplayState`
+- The model revision (a change counter aggregated at the root)
 
-The metadata `AssemblyMetadata` is auxiliary information referenced during rendering and editing.
+The metadata `AssemblyMetadata` holds annotations and interaction locks that are read live on access. Since it does not affect the derived rendering caches, it may be edited freely through the mutable reference returned by `Metadata()` (no change notification is required).
 
 | Member | Meaning |
 | --- | --- |
 | `name` | The name of the assembly |
-| `visible` | Visibility (display toggle). Even when hidden, it exists logically and is included in bounding box, validation, output, and queries |
-| `suppressed` | Suppression. Logically excludes the node from the model (cascades to descendants). When suppressed, it is not drawn and is also excluded from bounding box, validation, output, and queries |
 | `role_tag` | An arbitrary classification string indicating a role |
 | `lock` | Lock state (`selectable` / `editable`) |
+
+The display state `DisplayState` holds state that affects the derived rendering caches. It is read through the const reference returned by `Display()`, and modified only through the setters `SetVisible`, `SetSuppressed`, `SetColorOverride`, and `SetOpacityOverride` (the model revision advances only when the value actually changes).
+
+| Member | Meaning |
+| --- | --- |
+| `visible` | Visibility (display toggle). Even when hidden, it exists logically and is included in bounding box, validation, output, and queries |
+| `suppressed` | Suppression. Logically excludes the node from the model (cascades to descendants). When suppressed, it is not drawn and is also excluded from bounding box, validation, output, and queries |
 | `color_override` | Color override (RGB; $[0, 1]$ ). If unset, the member's color is used |
 | `opacity_override` | Opacity override ( $[0, 1]$ ). If unset, the member's value is used |
 
 An entity is drawn when `visible` and `!suppressed`.
+
+The model revision is a monotonically increasing counter aggregated at the root, advanced by every change to the structure (adding/removing/moving entities and child `Assembly` nodes), the global transform, or the display state. It is obtained with `Revision()` (a non-root node also returns the root's value). The rendering layer uses changes of this value to decide whether resynchronization is needed, so no manual notification is required after editing.
 
 ## Two Layers: Membership and Reference
 
@@ -121,11 +129,13 @@ The main editing members are shown below.
 | `MoveEntityTo(id, dest)` | Move an entity to another node (must share the same root) |
 | `MoveChildAssemblyTo(child_id, dest)` | Move a direct child `Assembly` to another node |
 | `AddChildAssembly(child)` | Add a child `Assembly` |
+| Display-state setters such as `SetVisible(visible)` | Set the display state (`DisplayState`) of this node |
 | `SetVisibleRecursive(visible)` | Set visibility for this node and all descendants at once |
 | `SetSuppressedRecursive(suppressed)` | Set suppression for this node and all descendants at once |
 | `SetColorOverrideRecursive(color)` | Set the color override for this node and all descendants at once |
 | `SetOpacityOverrideRecursive(opacity)` | Set the opacity override for this node and all descendants at once |
 | `ComposeGlobalTransform(transform)` | Compose an additional transform onto this node's global transform (non-recursive) |
+| `Revision()` | Get the model revision aggregated at the root |
 | `ValidateSelfContainedRecursive()` | Recursively verify that each node can resolve its references in a self-contained manner |
 
 `ComposeGlobalTransform` computes `global_transform_ = transform * global_transform_` (post-application in the parent frame) and does not recurse, because the change propagates to descendants naturally through the cumulative transform at render time. The transform is assumed to have no scale (equivalent to a 124 transform).
@@ -134,7 +144,7 @@ The main editing members are shown below.
 
 Lock enforcement is handled by `IsEffectivelySelectable(id)` and `IsEffectivelyEditable(id)`. These fold `lock.selectable` / `lock.editable` from the owning node up to the root with AND toward the ancestors. An ID not in the tree is treated as unrestricted (`true`).
 
-Note that re-walking for rendering after structural editing is the caller's responsibility (`Assembly` does not know about the renderer; see [Relationship with Scene](#relationship-with-scene)).
+Note that changes to the structure, the transform, and the display state are aggregated into the model revision (`Revision()`), which the rendering layer detects automatically on the next draw. `Assembly` does not know about the renderer, and no notification from the editing side to the renderer is required (see [Relationship with Scene](#relationship-with-scene)).
 
 ## Spatial Query
 

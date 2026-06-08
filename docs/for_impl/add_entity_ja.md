@@ -268,7 +268,7 @@ void i_ent::EntityFactory::Initialize() {
 
 ```
 EntityRenderer
-  └─ draw_objects_: ShaderType → EntityID → IEntityGraphics
+  └─ graphics_cache_: EntityID → IEntityGraphics (Sceneツリーとの突き合わせで遅延生成)
                                               ↑
                                CreateEntityGraphics()  (factory.cpp)
                                  ├─ ICurve → CreateCurveGraphics()

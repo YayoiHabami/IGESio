@@ -68,11 +68,11 @@
     - [x] 読み込み時は検証を緩くする（外部IGESファイルが開けないため）
   - [x] v0.7.3: 読み込みの高速化
   - [x] v0.7.4: graphicsモジュールの再設計（GLADの隠蔽等）
-  - [ ] v0.7.5: エラークラスの整理・体系化
-  - [ ] v0.7.6: インターフェースの整理（ユーザーがshared_ptrをあまり意識せずに使えるようにするなど）
-    - [ ] numericsモジュールの階層化
-  - [ ] v0.7.7: Plane, Offset Surface, Property等の頻繁に使用されるが比較的実装が簡単なエンティティの実装
+  - [x] v0.7.5: エラークラスの整理・体系化
 - [ ] **v0.8: Manifold Solid B-Rep Objectへの対応** (6)
+  - [ ] v0.8.0: インターフェースの整理（ユーザーがshared_ptrをあまり意識せずに使えるようにするなど）
+  - [ ] v0.8.1: Plane, Offset Surface, Property等の頻繁に使用されるが比較的実装が簡単なエンティティの実装
+  - 対応に合わせて、CMakeオプショナルでSTEPのAP242読み込み機能を追加する（STEPcodeを使用予定）
 - [ ] **v0.9: Constructive Solid Geometryへの対応** (8)
 - [ ] **v1.0: 主要なエンティティクラスへの対応** (Untested, Annotation、Property等を除く)
 

@@ -6,13 +6,15 @@
 
 全描画クラスの型消去基底クラス。具体型は`EntityGraphics<T>`(複合ノードもこれが担う)が実装する。
 
-**主要な純粋仮想関数**
+**主要関数**
 
 | 関数 | 説明 |
 |---|---|
 | `Draw(shader, shader_type, viewport, ctx)` | 指定したShaderTypeに一致する場合に描画する(選択等はctxからPULL) |
 | `Draw(shader, viewport, ctx)` | ShaderTypeを問わず描画する |
-| `Synchronize()` | エンティティの状態に基づいてOpenGLリソースを再構築する |
+| `Synchronize()` | エンティティの状態に基づいてOpenGLリソースを再構築する(非virtual)。実体の`DoSynchronize()`(protected純粋仮想)を実行し、末尾で同期キーを記録する |
+| `CurrentGeometryKey()` | テッセレーションが読む全エンティティの`(ObjectID, GeometryRevision)`をハッシュ結合した同期キーを返す |
+| `NeedsResync()` | 最後の`Synchronize()`以降に同期キーが変化したか(再同期が必要か)を返す |
 | `SyncTexture()` | テクスチャリソースを同期する |
 | `GetShaderTypes()` | このオブジェクト(と子)が使用するShaderTypeの集合を返す |
 | `Cleanup()` | OpenGLリソースを解放する |
@@ -49,9 +51,10 @@
 | 対象 | 説明 |
 |---|---|
 | `DrawImpl(shader, viewport)` | 常にオーバーライドが必要。OpenGL描画コマンドを実行する |
-| `Synchronize()` | 常にオーバーライドが必要。VAO/VBOを構築する |
+| `DoSynchronize()` | 常にオーバーライドが必要。VAO/VBOを構築する(呼び出しは`Synchronize()`経由) |
 | `Cleanup()` | VAO以外のOpenGLリソース (VBO, SSBO等) がある場合にオーバーライド |
 | `IsDrawable()` | `vao_ != 0` 以外の条件が必要な場合にオーバーライド |
+| `CurrentGeometryKey()` | 既定実装(自エンティティ+DE変換チェーン+物理従属子`GetChildIDs`の再帰結合)で参照集合を網羅できない場合のみオーバーライド |
 
 **サブクラスからアクセスできる protected メンバ**
 
@@ -91,18 +94,26 @@
 | 関数 | 説明 |
 |---|---|
 | `Initialize()` | シェーダーのコンパイル・リンクを行う |
-| `AddEntity(entity, global_param, material_property)` | エンティティを描画対象に追加する |
-| `RemoveEntity(id)` | エンティティを描画対象から削除する |
-| `HasEntity(id)` | エンティティが登録済みかを返す |
-| `Draw()` | 全エンティティを描画する |
+| `Draw()` | Sceneツリーと同期(Reconcile)したうえで全エンティティを描画する |
 | `CaptureScreenshot()` | 現在の描画状態をキャプチャして `Texture` を返す |
 | `Camera()` | カメラへの参照を返す |
 | `Light()` | 光源への参照を返す |
 | `SetDisplaySize(w, h)` | 描画対象サイズを設定する |
 | `SetBackgroundColor(r, g, b, a)` | 背景色を設定する |
 | `SetScene(scene)` | 描画対象の`models::Scene`を設定する (rootと選択を一元管理) |
-| `MarkSceneDirty()` | ツリー変更を通知し、次回描画で再走査させる |
-| `PickEntities(...)` / `PickEntitiesInRect(...)` | レイ/矩形でヒットしたエンティティIDを返す |
+| `SetDisplayFilter(filter)` / `GetDisplayFilter()` | エンティティ型単位の表示フィルタ(レンダラ単位のビュー状態)を設定・取得する |
+| `SetMaterialProperty(id, material)` / `ClearMaterialProperty(id)` | エンティティ毎の描画プロパティのオーバーライドを設定・解除する(GLコンテキスト前提を持たず、適用は次回の描画/ピック時) |
+| `PickEntities(...)` / `PickEntitiesInRect(...)` | レイ/矩形でヒットしたエンティティIDを返す(可視リスト走査のため、削除済み・非表示・抑制中・フィルタ除外のエンティティはヒットしない) |
+
+描画オブジェクトはSceneツリーの派生キャッシュとして管理される。描画/ピックの冒頭でツリーと
+突き合わせ(Reconcile)、未在席の描画オブジェクトを遅延生成し、ツリーから削除されたものをSweepで
+破棄する。ツリーの編集(構造・大域変換・表示状態)は`Assembly`のモデルリビジョンで、エンティティの
+形状編集はジオメトリリビジョン(同期キー)で自動検知されるため、編集後にレンダラへ通知するAPIは
+存在しない。詳細は`overview.md`§4-5を参照。
+
+`DisplayFilter`は非表示にするエンティティ型の集合(`hidden_types`)を保持する構造体で、
+`ShouldRender(type)`で描画対象かを判定する。除外された型の描画オブジェクトは温存され、
+解除時に再利用される。
 
 選択状態はレンダラではなく`models::Scene`/`SelectionSet`が保持する。レンダラはピッキングでIDを返すのみで、選択の確定は`Scene`(対話では`TrySelectWithLock`)が行う。
 
@@ -195,7 +206,7 @@ IGESが保持しない、描画専用のマテリアルプロパティ。
 ### クリッピング面
 
 - 近接/遠方クリッピング面(near/far)は、通常は自動クリッピングにより決定される。`SetAutoClipSphere`で登録されたシーンの外接球と現在のカメラ位置からnear/farが毎回導出されるため、ズームやパンでカメラが移動してもシーンがクリップされない。
-- 外接球はレンダラがシーンの設定・変更時(`SetScene`/`MarkSceneDirty`)に自動で更新するほか、`Camera::FitToBoundingBox`(FitView)でも登録される。
+- 外接球はレンダラがシーンの設定時(`SetScene`)と描画/ピック時の同期(ツリー変更・形状変更の検知時)に自動で更新するほか、`Camera::FitToBoundingBox`(FitView)でも登録される。
 - `SetClippingPlanes`を呼ぶと自動クリッピングは解除され、設定した手動値に固定される。シーン未設定時のフォールバック値は`kDefaultNearPlane`/`kDefaultFarPlane`である。
 
 ## Light (`include/igesio/graphics/core/light.h`)

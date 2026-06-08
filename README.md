@@ -111,9 +111,9 @@ auto color_def = igesio::entities::MakeColorDefinitionFromHex(
 circle->OverwriteColor(color_def);
 
 // Create IgesData and add entities
-igesio::models::IgesData iges_data;
-iges_data.AddEntity(color_def);
-iges_data.AddEntity(circle);
+igesio::IgesData iges_data;
+iges_data.Root().AddEntity(color_def);
+iges_data.Root().AddEntity(circle);
 
 // Write to IGES file
 auto success = igesio::WriteIges(iges_data, "created_circle.igs");
