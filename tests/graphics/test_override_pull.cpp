@@ -74,7 +74,7 @@ TEST(OverridePullTest, ParentColorOverride_AppliesToDescendant) {
     }
 
     auto root = i_mod::MakeAssembly();
-    root->Metadata().color_override = std::array<float, 3>{1.0f, 0.0f, 0.0f};
+    root->SetColorOverride(std::array<float, 3>{1.0f, 0.0f, 0.0f});
     auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
 
@@ -105,9 +105,9 @@ TEST(OverridePullTest, NearestColorOverrideWins) {
     }
 
     auto root = i_mod::MakeAssembly();
-    root->Metadata().color_override = std::array<float, 3>{1.0f, 0.0f, 0.0f};
+    root->SetColorOverride(std::array<float, 3>{1.0f, 0.0f, 0.0f});
     auto child = i_mod::MakeAssembly();
-    child->Metadata().color_override = std::array<float, 3>{0.0f, 1.0f, 0.0f};
+    child->SetColorOverride(std::array<float, 3>{0.0f, 1.0f, 0.0f});
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();
@@ -140,7 +140,7 @@ TEST(OverridePullTest, OpacityOverride_ChangesAlphaKeepsRgb) {
     const auto natural = NaturalColor(arc, gl);
 
     auto root = i_mod::MakeAssembly();
-    root->Metadata().opacity_override = 0.5f;
+    root->SetOpacityOverride(0.5f);
     root->AddEntity(arc);
     ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);

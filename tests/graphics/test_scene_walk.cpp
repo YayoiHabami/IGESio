@@ -99,7 +99,7 @@ TEST(SceneWalkTest, InvisibleSubtree_NotDrawn) {
 
     auto root = i_mod::MakeAssembly();
     auto child = i_mod::MakeAssembly();
-    child->Metadata().visible = false;  // 非表示
+    child->SetVisible(false);  // 非表示
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();
@@ -125,7 +125,7 @@ TEST(SceneWalkTest, SuppressedSubtree_NotDrawn) {
 
     auto root = i_mod::MakeAssembly();
     auto child = i_mod::MakeAssembly();
-    child->Metadata().suppressed = true;  // 抑制
+    child->SetSuppressed(true);  // 抑制
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();

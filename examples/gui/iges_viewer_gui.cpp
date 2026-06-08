@@ -603,9 +603,9 @@ void IgesViewerGUI::RenderAssemblyNode(models::Assembly& node) {
     ImGui::PushID(node.GetID().ToInt());
 
     // 可視チェック (このノードのサブツリー表示をトグル)
-    bool visible = node.Metadata().visible;
+    bool visible = node.Display().visible;
     if (ImGui::Checkbox("##vis", &visible)) {
-        node.Metadata().visible = visible;
+        node.SetVisible(visible);
         renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
@@ -837,13 +837,13 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     }
 
     // 可視・抑制
-    bool node_visible = node.Metadata().visible;
+    bool node_visible = node.Display().visible;
     if (ImGui::Checkbox("Visible", &node_visible)) {
         node.SetVisibleRecursive(node_visible);
         renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
-    bool node_suppressed = node.Metadata().suppressed;
+    bool node_suppressed = node.Display().suppressed;
     if (ImGui::Checkbox("Suppressed", &node_suppressed)) {
         node.SetSuppressedRecursive(node_suppressed);
         renderer_.MarkSceneDirty();
@@ -851,35 +851,37 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     }
 
     // 色オーバーライド
-    bool has_color = node.Metadata().color_override.has_value();
+    bool has_color = node.Display().color_override.has_value();
     if (ImGui::Checkbox("Color override", &has_color)) {
-        node.Metadata().color_override = has_color
+        node.SetColorOverride(has_color
                 ? std::optional<std::array<float, 3>>(
                         std::array<float, 3>{0.8f, 0.8f, 0.8f})
-                : std::nullopt;
+                : std::nullopt);
         renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
-    if (node.Metadata().color_override.has_value()) {
-        if (ImGui::ColorEdit3("##color",
-                              node.Metadata().color_override->data())) {
+    if (node.Display().color_override.has_value()) {
+        // setter経由で書き戻すため、編集はローカルコピーで受ける
+        std::array<float, 3> color = *node.Display().color_override;
+        if (ImGui::ColorEdit3("##color", color.data())) {
+            node.SetColorOverride(color);
             renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         }
     }
 
     // 不透明度オーバーライド
-    bool has_opacity = node.Metadata().opacity_override.has_value();
+    bool has_opacity = node.Display().opacity_override.has_value();
     if (ImGui::Checkbox("Opacity override", &has_opacity)) {
-        node.Metadata().opacity_override =
-                has_opacity ? std::optional<float>(1.0f) : std::nullopt;
+        node.SetOpacityOverride(
+                has_opacity ? std::optional<float>(1.0f) : std::nullopt);
         renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
-    if (node.Metadata().opacity_override.has_value()) {
-        float opacity = *node.Metadata().opacity_override;
+    if (node.Display().opacity_override.has_value()) {
+        float opacity = *node.Display().opacity_override;
         if (ImGui::SliderFloat("##opacity", &opacity, 0.0f, 1.0f)) {
-            node.Metadata().opacity_override = opacity;
+            node.SetOpacityOverride(opacity);
             renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         }

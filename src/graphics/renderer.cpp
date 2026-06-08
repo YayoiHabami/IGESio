@@ -548,17 +548,17 @@ void EntityRenderer::WalkAssembly(
         const models::Assembly& node, const igesio::Matrix4d& parent_accum,
         const std::optional<std::array<float, 3>>& inherited_color,
         const std::optional<float>& inherited_opacity) const {
-    const auto& meta = node.Metadata();
+    const auto& disp = node.Display();
     // 非表示・抑制のサブツリーは描画対象から除外する
-    if (!meta.visible || meta.suppressed) return;
+    if (!disp.visible || disp.suppressed) return;
 
     const igesio::Matrix4d accum = parent_accum * node.GetGlobalTransform();
     const igesio::Matrix4f accum_f = accum.cast<float>();
 
     // 色/不透明度のオーバーライドは最近接が優先 (子の設定が祖先を上書きする)
-    const auto color_ovr = meta.color_override ? meta.color_override : inherited_color;
+    const auto color_ovr = disp.color_override ? disp.color_override : inherited_color;
     const auto opacity_ovr =
-            meta.opacity_override ? meta.opacity_override : inherited_opacity;
+            disp.opacity_override ? disp.opacity_override : inherited_opacity;
 
     for (const auto& [id, entity] : node.GetEntities()) {
         // キャッシュに在席する = 投入時フィルタを通過した描画対象

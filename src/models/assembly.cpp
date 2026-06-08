@@ -186,6 +186,8 @@ void Assembly::AddEntities(
         entities_[id] = entity;
         RegisterInIndex(id, this);
     }
+    // 構造変更としてモデルリビジョンをバンプする (一括追加で1回)
+    BumpRevision();
 
     // 全件登録後に参照解決を1回だけ行う (O(エンティティ数+参照数)).
     // 各エンティティの未解決参照のうち、このノードが持つものを解決することで、
@@ -287,6 +289,8 @@ void Assembly::AddChildAssembly(const std::shared_ptr<Assembly>& child) {
 
     // 子とその子孫のエンティティをルートの逆引きインデックスへ登録する
     child->ReindexInto(RootRaw());
+    // 構造変更としてモデルリビジョンをバンプする (編入先rootへ集約される)
+    BumpRevision();
 }
 
 std::shared_ptr<Assembly> Assembly::Root() {
@@ -402,6 +406,9 @@ bool Assembly::IsChainEditable(const Assembly* node) const {
 void Assembly::EraseEntity(Assembly* owner, const ObjectID& id) {
     owner->entities_.erase(id);
     RootRaw()->entity_index_.erase(id);
+    // 構造変更としてモデルリビジョンをバンプする (削除の成功経路はここに集約
+    // されているため、kReject拒否・ロック拒否等の無変更経路ではバンプされない)
+    BumpRevision();
 }
 
 std::vector<igesio::ObjectID>
@@ -499,6 +506,8 @@ bool Assembly::RemoveChildAssembly(const ObjectID& child_id,
     Assembly* root = RootRaw();
     for (const auto& eid : inside) root->entity_index_.erase(eid);
     children_.erase(it);  // shared_ptrが落ち、サブツリーが破棄される
+    // 構造変更としてモデルリビジョンをバンプする (成功経路のみ)
+    BumpRevision();
 
     // kCascade: 外部の参照元も連鎖削除する
     if (policy == RemovalPolicy::kCascade) {
@@ -517,6 +526,8 @@ void Assembly::Clear() {
     }
     entities_.clear();
     children_.clear();
+    // 構造変更としてモデルリビジョンをバンプする
+    BumpRevision();
 }
 
 void Assembly::MoveEntityTo(const ObjectID& id, Assembly& dest) {
@@ -535,6 +546,8 @@ void Assembly::MoveEntityTo(const ObjectID& id, Assembly& dest) {
     dest.entities_[id] = entity;
     dest.SetPointerIfUnset(entity);        // dest内で参照を張り直す
     RootRaw()->entity_index_[id] = &dest;  // 逆引きownerを更新
+    // 構造変更としてモデルリビジョンをバンプする (同一rootのため1回でよい)
+    BumpRevision();
 }
 
 void Assembly::MoveChildAssemblyTo(const ObjectID& child_id, Assembly& dest) {
@@ -565,17 +578,20 @@ void Assembly::MoveChildAssemblyTo(const ObjectID& child_id, Assembly& dest) {
     children_.erase(it);
     child->parent_ = dest.weak_from_this();
     dest.children_.push_back(child);
+    // 親の付け替えは累積変換・継承オーバーライドを変えるためバンプする (同一root)
+    BumpRevision();
 }
 
 void Assembly::SetVisibleRecursive(const bool visible) {
-    metadata_.visible = visible;
+    // 単体setter経由で適用する (値が変化したノードのみリビジョンがバンプされる)
+    SetVisible(visible);
     for (const auto& child : children_) {
         if (child) child->SetVisibleRecursive(visible);
     }
 }
 
 void Assembly::SetSuppressedRecursive(const bool suppressed) {
-    metadata_.suppressed = suppressed;
+    SetSuppressed(suppressed);
     for (const auto& child : children_) {
         if (child) child->SetSuppressedRecursive(suppressed);
     }
@@ -583,7 +599,7 @@ void Assembly::SetSuppressedRecursive(const bool suppressed) {
 
 void Assembly::SetColorOverrideRecursive(
         const std::optional<std::array<float, 3>>& color) {
-    metadata_.color_override = color;
+    SetColorOverride(color);
     for (const auto& child : children_) {
         if (child) child->SetColorOverrideRecursive(color);
     }
@@ -591,7 +607,7 @@ void Assembly::SetColorOverrideRecursive(
 
 void Assembly::SetOpacityOverrideRecursive(
         const std::optional<float>& opacity) {
-    metadata_.opacity_override = opacity;
+    SetOpacityOverride(opacity);
     for (const auto& child : children_) {
         if (child) child->SetOpacityOverrideRecursive(opacity);
     }
@@ -600,6 +616,7 @@ void Assembly::SetOpacityOverrideRecursive(
 void Assembly::ComposeGlobalTransform(const igesio::Matrix4d& transform) {
     // 親フレームでの後付け合成 (左から掛ける)
     global_transform_ = transform * global_transform_;
+    BumpRevision();
 }
 
 igesio::ValidationResult Assembly::ValidateSelfContainedRecursive() const {
