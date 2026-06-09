@@ -96,6 +96,26 @@ double Cross2D(double ax, double ay, double bx, double by) {
     return ax * by - ay * bx;
 }
 
+/// @brief 相対許容を加味した2次元向き符号を返す
+///
+/// 行列式値を、それを構成する2ベクトルの長さ(の二乗)を基準に評価する。
+/// |value| <= rel_tol * |u| * |v| のとき共線とみなし0を返す。これにより
+/// おそらくFMA縮約等の浮動小数点評価差(ARM64とx86-64の差)で符号が揺れる微小行列式を
+/// 共線側へ一貫して倒し、プラットフォーム間で結果を一致させる。sqrtを避けるため
+/// 二乗値で比較する。
+///
+/// @param value Cross2Dで得た行列式値
+/// @param u_len_sq 基準ベクトルの長さの二乗
+/// @param w_len_sq もう一方のベクトルの長さの二乗
+/// @param rel_tol 相対許容 (sinθに対する閾値)
+/// @return +1 / -1 / 0 (共線)
+int OrientationSign(double value, double u_len_sq, double w_len_sq,
+                    double rel_tol) {
+    const double eps_sq = rel_tol * rel_tol * u_len_sq * w_len_sq;
+    if (value * value <= eps_sq) return 0;
+    return (value > 0.0) ? 1 : -1;
+}
+
 /// @brief 2次元多角形の符号付き面積を返す (shoelace formula)
 ///
 /// @param pts_2d 頂点の2次元座標列 (std::array<double, 2> のベクトル)
@@ -122,11 +142,35 @@ bool SegmentsIntersect2D(const std::array<double, 2>& a,
                          const std::array<double, 2>& b,
                          const std::array<double, 2>& c,
                          const std::array<double, 2>& d) {
-    const double d1 = Cross2D(d[0]-c[0], d[1]-c[1], a[0]-c[0], a[1]-c[1]);
-    const double d2 = Cross2D(d[0]-c[0], d[1]-c[1], b[0]-c[0], b[1]-c[1]);
-    const double d3 = Cross2D(b[0]-a[0], b[1]-a[1], c[0]-a[0], c[1]-a[1]);
-    const double d4 = Cross2D(b[0]-a[0], b[1]-a[1], d[0]-a[0], d[1]-a[1]);
-    return (d1 * d2 < 0.0) && (d3 * d4 < 0.0);
+    // 行列式を構成するベクトル長の積に対する相対許容。おそらくFMA縮約の有無
+    // (ARM64とx86-64の差) で符号が反転し得る微小(≒共線)行列式を共線と
+    // みなす閾値。真の交差(交差角がこの値より大)は影響を受けない。
+    constexpr double kCrossRelTol = 1e-9;
+
+    const double cdx = d[0] - c[0], cdy = d[1] - c[1];
+    const double abx = b[0] - a[0], aby = b[1] - a[1];
+    const double cd_sq = cdx * cdx + cdy * cdy;
+    const double ab_sq = abx * abx + aby * aby;
+
+    // a, b が線分cdの支持直線をまたぐか
+    const double acx = a[0] - c[0], acy = a[1] - c[1];
+    const double bcx = b[0] - c[0], bcy = b[1] - c[1];
+    const int s1 = OrientationSign(Cross2D(cdx, cdy, acx, acy),
+                                   cd_sq, acx * acx + acy * acy, kCrossRelTol);
+    const int s2 = OrientationSign(Cross2D(cdx, cdy, bcx, bcy),
+                                   cd_sq, bcx * bcx + bcy * bcy, kCrossRelTol);
+    // c, d が線分abの支持直線をまたぐか
+    const double cax = c[0] - a[0], cay = c[1] - a[1];
+    const double dax = d[0] - a[0], day = d[1] - a[1];
+    const int s3 = OrientationSign(Cross2D(abx, aby, cax, cay),
+                                   ab_sq, cax * cax + cay * cay, kCrossRelTol);
+    const int s4 = OrientationSign(Cross2D(abx, aby, dax, day),
+                                   ab_sq, dax * dax + day * day, kCrossRelTol);
+
+    // 端点共有・共線(縮退)は交差とみなさない。両線分が互いの支持直線を
+    // 厳密にまたぐ場合のみ真の交差とする。
+    return (s1 != 0 && s2 != 0 && s1 != s2)
+        && (s3 != 0 && s4 != 0 && s3 != s4);
 }
 
 /// @brief 点が2次元単純多角形の内部または境界(eps以内)にあるかを判定する
