@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "igesio/numerics/core/matrix.h"
+#include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/entities/interfaces/i_restricted_surface.h"
 
@@ -44,6 +45,18 @@ struct SurfaceBoundaryEdgeParams {
     /// @note falseの場合、IsUClosed()/IsVClosed()がtrueの方向の両端アイソ辺を除外する
     bool include_seams = false;
 };
+
+/// @brief 曲線の等間隔サンプルに、開区間内の角点パラメータを併合した列を返す
+/// @param curve サンプリング対象の曲線 (角点取得にGetCornerParamsを使用)
+/// @param t0 サンプリング範囲の開始値 (有限値; 無限端は呼び出し側でクランプ済み)
+/// @param t1 サンプリング範囲の終了値 (有限値; t1 > t0 であること)
+/// @param divisions 等間隔分割数 (1以上)
+/// @return [t0, t1] の等間隔点と (t0, t1) 内の角点を併合し、昇順ソート・近接重複
+///         除去したパラメータ列。t1 <= t0 または divisions < 1 のときは空
+/// @note 角点 (GetCornerParams) を評価点に含めることで、折れ線が曲線の角を
+///       丸めず正確に通過する。角点を持たない曲線では等間隔点のみを返す
+std::vector<double> BuildCornerAwareSampleParams(
+        const ICurve& curve, double t0, double t1, int divisions);
 
 /// @brief 制限付き曲面 (Type 144等) の境界エッジを生成する
 /// @param surface 制限付き曲面

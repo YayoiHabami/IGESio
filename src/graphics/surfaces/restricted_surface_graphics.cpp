@@ -173,11 +173,14 @@ void igesio::graphics::RestrictedSurfaceGraphics::AppendBoundaryWorldPolyline(
     if (std::isinf(t0)) t0 = -kInfiniteParamClamp;
     if (std::isinf(t1)) t1 =  kInfiniteParamClamp;
 
+    // 角点を評価点に含め、選択用折れ線が境界の角を丸めず通るようにする
+    // (描画エッジComputeRestrictedSurfaceEdgesと同一のサンプル方針)
     const int n = std::max(1, n_samples);
+    const auto params =
+            entities::BuildCornerAwareSampleParams(uv_boundary, t0, t1, n);
     std::vector<Vector3d> poly;
-    poly.reserve(n + 1);
-    for (int i = 0; i <= n; ++i) {
-        const double t = t0 + (t1 - t0) * static_cast<double>(i) / n;
+    poly.reserve(params.size());
+    for (const double t : params) {
         const auto uv = uv_boundary.TryGetPointAt(t);  // (u, v, 0)
         if (!uv) continue;
         const auto p = base->TryGetPointAt(uv->x(), uv->y());
