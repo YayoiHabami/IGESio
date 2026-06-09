@@ -36,27 +36,43 @@ target_include_directories(igesio_graphics PUBLIC
 )
 
 if (IGESIO_ENABLE_TEXTURE_IO)
-    # Fetch stb (stb_image.h, stb_image_write.h) for image I/O
-    set(STB_LOAD_URL https://raw.githubusercontent.com/nothings/stb/master/stb_image.h)
-    set(STB_LOAD_OUTPUT_PATH "${CMAKE_BINARY_DIR}/_deps/stb/stb_image.h")
-    set(STB_WRITE_URL https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h)
-    set(STB_WRITE_OUTPUT_PATH "${CMAKE_BINARY_DIR}/_deps/stb/stb_image_write.h")
-    # Show download path
-    if (NOT EXISTS ${STB_LOAD_OUTPUT_PATH})
-        file(DOWNLOAD ${STB_LOAD_URL} ${STB_LOAD_OUTPUT_PATH} SHOW_PROGRESS)
-    endif()
-    if (NOT EXISTS ${STB_WRITE_OUTPUT_PATH})
-        file(DOWNLOAD ${STB_WRITE_URL} ${STB_WRITE_OUTPUT_PATH} SHOW_PROGRESS)
-    endif()
+    # Fetch stb (stb_image.h, stb_image_write.h) for image I/O.
+    # 再現性のため、masterではなくコミットを固定して取得する。
+    set(STB_COMMIT 31c1ad37456438565541f4919958214b6e762fb4)
+    set(STB_OUTPUT_DIR "${CMAKE_BINARY_DIR}/_deps/stb")
+    foreach(STB_HEADER stb_image.h stb_image_write.h)
+        set(STB_OUTPUT_PATH "${STB_OUTPUT_DIR}/${STB_HEADER}")
+        if (NOT EXISTS "${STB_OUTPUT_PATH}")
+            file(DOWNLOAD
+                "https://raw.githubusercontent.com/nothings/stb/${STB_COMMIT}/${STB_HEADER}"
+                "${STB_OUTPUT_PATH}"
+                STATUS STB_DOWNLOAD_STATUS
+            )
+            # 失敗時は空ファイルが残り、次回configure時のEXISTSチェックを
+            # すり抜けてしまうため、削除してエラーにする
+            list(GET STB_DOWNLOAD_STATUS 0 STB_DOWNLOAD_CODE)
+            if (NOT STB_DOWNLOAD_CODE EQUAL 0)
+                file(REMOVE "${STB_OUTPUT_PATH}")
+                list(GET STB_DOWNLOAD_STATUS 1 STB_DOWNLOAD_ERROR)
+                message(FATAL_ERROR
+                    "Failed to download ${STB_HEADER}: ${STB_DOWNLOAD_ERROR}")
+            endif()
+        endif()
+    endforeach()
 
-    # Install stb_image.h to the include directory
-    install(FILES ${STB_WRITE_OUTPUT_PATH}
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/stb
-    )
+    # Install stb headers to the include directory (top-level builds only;
+    # FetchContent等で取り込まれた場合に利用側のinstallへ混入させない)
+    if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+        install(FILES
+            "${STB_OUTPUT_DIR}/stb_image.h"
+            "${STB_OUTPUT_DIR}/stb_image_write.h"
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/stb
+        )
+    endif()
 
     target_include_directories(igesio_graphics PUBLIC
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/stb>
-        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/_deps/stb> # Keep this for local builds
+        $<BUILD_INTERFACE:${STB_OUTPUT_DIR}> # Keep this for local builds
     )
 
     # Define macro to enable texture loading

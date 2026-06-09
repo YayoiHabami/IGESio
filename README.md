@@ -184,7 +184,7 @@ This library retrieves third-party dependencies using CMake's FetchContent (sour
 **License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) for full license texts.
 
 **Note**:
-- ※1 Eigen3 is a header-only library and is currently required for building. In the future, we plan to support enabling/disabling via the `IGESIO_ENABLE_EIGEN` option
+- ※1 Eigen3 is a header-only library and is currently required for building. In the future, we plan to support enabling/disabling via the `IGESIO_ENABLE_EIGEN` option. Because Eigen3 is exposed through IGESio's public headers, projects consuming an installed IGESio via `find_package` must also have Eigen3 available.
 - ※2 glad's source code is licensed under MIT license, and the included Khronos XML API Registry is licensed under Apache License 2.0
 - Google Test is only used during development and is not distributed with the library
 

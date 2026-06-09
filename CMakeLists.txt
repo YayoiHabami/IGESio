@@ -58,7 +58,9 @@ else()
     message(WARNING "Git not found, using default version ${PROJECT_VERSION}")
 endif()
 
-project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES C CXX)
+# C is enabled on demand (enable_language) only when building glad
+# (IGESIO_ENABLE_GRAPHICS); everything else is pure C++.
+project(IGESio VERSION ${PROJECT_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -86,8 +88,9 @@ if(IGESIO_ENABLE_COVERAGE)
     endif()
 endif()
 
-# Set the build type if not specified
-if(NOT CMAKE_BUILD_TYPE)
+# Set the build type if not specified (top-level builds only; when consumed
+# via FetchContent/add_subdirectory, follow the consumer's configuration)
+if(NOT CMAKE_BUILD_TYPE AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
@@ -108,30 +111,57 @@ configure_file(
 
 
 
+# Helpers to temporarily force the standard CTest variable BUILD_TESTING to
+# OFF while fetching third-party dependencies, then restore the previous
+# state. Forcing it OFF permanently would also disable the tests of any
+# project that consumes IGESio via FetchContent.
+macro(igesio_disable_build_testing)
+    if(DEFINED CACHE{BUILD_TESTING})
+        set(_igesio_saved_build_testing "$CACHE{BUILD_TESTING}")
+    endif()
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+endmacro()
+macro(igesio_restore_build_testing)
+    if(DEFINED _igesio_saved_build_testing)
+        set(BUILD_TESTING "${_igesio_saved_build_testing}" CACHE BOOL "" FORCE)
+        unset(_igesio_saved_build_testing)
+    else()
+        unset(BUILD_TESTING CACHE)
+    endif()
+endmacro()
+
 # Option to enable Eigen support
 option(IGESIO_ENABLE_EIGEN "Enable Eigen support" ON)
 # Currently, Eigen is required for the project
 if (NOT IGESIO_ENABLE_EIGEN)
     message(FATAL_ERROR "Eigen support is currently required for IGESio. Please enable IGESIO_ENABLE_EIGEN option.")
 else()
-  # Fetch Eigen if enabled
-  include(FetchContent)
+  # Prefer a locally installed Eigen; fetch it only as a fallback.
+  # NOTE: No minimum version is enforced here because Eigen's config version
+  # file rejects different major versions (requiring 3.x would reject 5.x).
+  find_package(Eigen3 QUIET CONFIG)
+  if (Eigen3_FOUND)
+    set(IGESIO_EIGEN_PROVIDER "system")
+    message(STATUS "Eigen found locally: ${Eigen3_DIR}")
+  else()
+    set(IGESIO_EIGEN_PROVIDER "fetched")
+    message(STATUS "Eigen not found locally. Fetching via FetchContent...")
+    include(FetchContent)
 
-  # Disable Eigen's internal testing and documentation to speed up the build process
-  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-  set(EIGEN_BUILD_DOC     OFF CACHE BOOL "" FORCE)
-  set(BUILD_TESTING       OFF CACHE BOOL "" FORCE)
+    # Disable Eigen's internal testing and documentation to speed up the build process
+    set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(EIGEN_BUILD_DOC     OFF CACHE BOOL "" FORCE)
+    igesio_disable_build_testing()
 
-  # Fetch Eigen
-  FetchContent_Declare(
-    Eigen
-    URL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.zip
-    ${DOWNLOAD_EXTRACT_TIMESTAMP_OPTION}
-  )
-  FetchContent_MakeAvailable(Eigen)
-
-  # Define macro for C++ code
-  add_compile_definitions(IGESIO_ENABLE_EIGEN)
+    # Fetch Eigen
+    FetchContent_Declare(
+      Eigen
+      URL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.zip
+      ${DOWNLOAD_EXTRACT_TIMESTAMP_OPTION}
+    )
+    FetchContent_MakeAvailable(Eigen)
+    igesio_restore_build_testing()
+  endif()
 
   message(STATUS "Eigen support enabled")
 endif()
@@ -148,12 +178,14 @@ if (NOT Boost_FOUND)
   set(BOOST_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
 
   include(FetchContent)
+  igesio_disable_build_testing()
   FetchContent_Declare(
     Boost
     URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.gz
     ${DOWNLOAD_EXTRACT_TIMESTAMP_OPTION}
   )
   FetchContent_MakeAvailable(Boost)
+  igesio_restore_build_testing()
   message(STATUS "Boost fetched successfully.")
 else()
   message(STATUS "Boost found locally: ${Boost_INCLUDE_DIRS}")
@@ -179,6 +211,9 @@ message(STATUS "Boost support enabled")
 # Option to enable OpenGL (glad) support
 option(IGESIO_ENABLE_GRAPHICS "Enable OpenGL (glad) support" OFF)
 
+# Option to enable texture I/O support (stb)
+option(IGESIO_ENABLE_TEXTURE_IO "Enable texture I/O support" OFF)
+
 # Option to build GUI (with GLFW and ImGui)
 option(IGESIO_BUILD_GUI "Build GUI (with GLFW and ImGui)" OFF)
 if(IGESIO_BUILD_GUI)
@@ -193,6 +228,9 @@ endif()
 
 # Build the pre-generated glad loader if OpenGL support is enabled
 if(IGESIO_ENABLE_GRAPHICS)
+  # gladはC実装のため、graphics有効時のみC言語を有効化する
+  enable_language(C)
+
   # Find OpenGL
   find_package(OpenGL REQUIRED)
 
@@ -220,6 +258,12 @@ if(IGESIO_ENABLE_GRAPHICS)
 else()
   message(STATUS "OpenGL (glad) support is disabled")
 endif()
+
+# Define CMAKE_INSTALL_* variables before processing the subdirectories:
+# the modules' $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> and the stb
+# install destination expand the variable at configure time, so it must be
+# defined here (otherwise it is empty on the first configure).
+include(GNUInstallDirs)
 
 # Add subdirectory for source files
 add_subdirectory(src)
@@ -316,8 +360,20 @@ endif()
 
 # Install targets and configuration files
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
+
+    # Eigen is exposed through IGESio's public headers (matrix.h does
+    # #include <Eigen/Core>), so it is an unavoidable PUBLIC dependency of the
+    # installed package. A FetchContent-built Eigen is NOT installed alongside
+    # IGESio, so a consumer of this install tree must provide their own
+    # discoverable Eigen3. Warn so this is not discovered silently.
+    if(IGESIO_ENABLE_EIGEN AND IGESIO_EIGEN_PROVIDER STREQUAL "fetched")
+        message(WARNING
+            "Installing IGESio, but Eigen came from FetchContent and will not be "
+            "installed with it. The installed config calls find_dependency(Eigen3) "
+            "and the public headers include <Eigen/Core>, so consumers must have "
+            "their own Eigen3. Install a system Eigen3 and reconfigure to silence.")
+    endif()
 
     install(TARGETS igesio igesio_common igesio_utils igesio_numerics igesio_entities igesio_models
         EXPORT IGESioTargets

@@ -186,7 +186,7 @@ ninja --version
 **ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストは[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md)を参照してください。
 
 **備考**:
-- ※1 Eigen3はヘッダーオンリーライブラリで、現在はビルドに必須です。将来的に`IGESIO_ENABLE_EIGEN`オプションによる有効化/無効化に対応予定です
+- ※1 Eigen3はヘッダーオンリーライブラリで、現在はビルドに必須です。将来的に`IGESIO_ENABLE_EIGEN`オプションによる有効化/無効化に対応予定です。Eigen3はIGESioの公開ヘッダに現れるため、インストール済みIGESioを`find_package`で利用するプロジェクトにもEigen3が必要です。
 - ※2 gladのソースコード自体はMITライセンスですが、同梱のKhronos XML API RegistryはApache License 2.0です
 - Google Testはビルド時のみ使用され、ライブラリと一緒に配布されません
 
