@@ -128,7 +128,7 @@ class EntityRenderer {
     /// @brief 環境光 (アンビエント) の色 (RGB) [0.0 - 1.0]
     /// @note IBLの代替として、面シェーダーが一定の環境光として反射する.
     ///       金属は誘電体と異なり拡散を持たないため、この値が暗部の明るさを決める
-    std::array<float, 3> ambient_color_ = {0.35f, 0.35f, 0.35f};
+    std::array<float, 3> ambient_color_ = {0.1f, 0.1f, 0.1f};
 
     /// @brief カメラクラス
     /// @note mutable: 自動クリップ球はシーンの派生キャッシュであり、

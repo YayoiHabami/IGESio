@@ -24,8 +24,8 @@
 |Section                      | ^ |31~38| ^ |❌|❌
 |Witness Line                 | ^ |  40 | ^ |❌|❌
 |Closed Planar Loop           | ^ |  63 |C&S|✅|⚠️
-|Plane                        |108|  0  | ^ |❌|❌
-| ^                           |108|-1, 1| ^ |❌|❌
+|Plane                        |108|  0  | ^ |✅|✅
+| ^                           |108|-1, 1| ^ |✅|✅
 |Line                         |110|  0  |C&S|✅|✅
 | ^                           | ^ | ‡1~2| ^ |✅|✅
 |Parametric<br>Spline Curve   |112|  0  | ^ |✅|⚠️

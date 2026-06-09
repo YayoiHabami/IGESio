@@ -195,6 +195,26 @@ ent_vec CreateTrimmedSurface() {
     return {nurbs_s, nurbs_cc, closed_curve, closed_cons_bs, trimmed_surf};
 }
 
+/// @brief Example for Plane entity (Type 108)
+/// @note Form 1/-1 is a planar region bounded by a closed curve lying in the
+///       plane; Form 0 is an unbounded plane.
+ent_vec CreatePlane() {
+    // Bounded plane (Form 1): a circular planar face in the plane Z = 8.
+    // The boundary is a full circle lying in that plane (z_t = 8), so it is
+    // co-planar with the surface it trims.
+    auto boundary = i_ent::MakeCircle(Vector2d(-40.0, 0.0), 8.0, 8.0);
+    auto bounded_plane = i_ent::MakeBoundedPlane(
+            0.0, 0.0, 1.0, 8.0,  // plane: 0*X + 0*Y + 1*Z = 8  (Z = 8)
+            boundary);
+    bounded_plane->OverwriteColor(i_ent::ColorNumber::kRed);
+
+    // Unbounded plane (Form 0): the plane Z = -8 (no bounding curve).
+    auto unbounded_plane = i_ent::MakePlane(0.0, 0.0, 1.0, -8.0);
+    unbounded_plane->OverwriteColor(i_ent::ColorNumber::kBlue);
+
+    return {boundary, bounded_plane, unbounded_plane};
+}
+
 
 
 /// @brief Main function (creates IGES data and writes to file)
@@ -214,6 +234,9 @@ int main() {
         iges_data.Root().AddEntity(entity);
     }
     for (const auto& entity : CreateTrimmedSurface()) {
+        iges_data.Root().AddEntity(entity);
+    }
+    for (const auto& entity : CreatePlane()) {
         iges_data.Root().AddEntity(entity);
     }
 

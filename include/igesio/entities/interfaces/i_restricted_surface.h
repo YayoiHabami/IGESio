@@ -150,6 +150,19 @@ class IRestrictedSurface : public virtual ISurface {
     GetInnerDomainPolygons() const;
 };
 
+
+
+/// @brief 制限面のドメイン(外周∪内周の包含多角形)のUVバウンディングボックスを返す
+/// @param surface 対象の制限付き曲面
+/// @param margin_ratio スパンに対し各辺へ加える相対マージン(既定5%)
+/// @return `{u_min, u_max, v_min, v_max}`(マージン込み)。ドメイン多角形が無い/
+///         退化している場合は`std::nullopt`
+/// @note 基底曲面が無限パラメータ範囲を持つ制限面(平面基底など)で、有限な
+///       パラメータ窓(メッシュのグリッド範囲・交差サンプリング範囲)を得るために
+///       用いる。包含多角形はUV空間(x=u, y=v)に構築される。
+std::optional<std::array<double, 4>> GetRestrictedDomainUVBounds(
+        const IRestrictedSurface& surface, double margin_ratio = 0.05);
+
 }  // namespace igesio::entities
 
 #endif  // IGESIO_ENTITIES_INTERFACES_I_RESTRICTED_SURFACE_H_

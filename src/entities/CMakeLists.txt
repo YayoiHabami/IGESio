@@ -42,6 +42,7 @@ add_library(igesio_entities STATIC
     curves/line.cpp                            # 110
     curves/parametric_spline_curve.cpp         # 112
     curves/point.cpp                           # 116
+    surfaces/plane.cpp                         # 108
     surfaces/ruled_surface.cpp                 # 118
     surfaces/surface_of_revolution.cpp         # 120
     surfaces/tabulated_cylinder.cpp            # 122

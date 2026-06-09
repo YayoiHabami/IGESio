@@ -20,7 +20,7 @@ add_library(igesio_graphics STATIC
     surfaces/surface_mesh.cpp                          # general surface mesh
     surfaces/i_surface_graphics.cpp                    # general surfaces
     surfaces/rational_b_spline_surface_graphics.cpp    # 128
-    surfaces/trimmed_surface_graphics.cpp              # 144
+    surfaces/restricted_surface_graphics.cpp           # 143/144/108(bounded)
 
     factory.cpp
 

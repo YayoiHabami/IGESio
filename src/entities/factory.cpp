@@ -17,6 +17,7 @@
 #include "igesio/entities/curves/conic_arc.h"           // type 104
 #include "igesio/entities/curves/copious_data.h"        // type 106, forms  1- 3
 #include "igesio/entities/curves/linear_path.h"         // type 106, forms 11-13
+#include "igesio/entities/surfaces/plane.h"             // type 108, forms -1, 0, 1
 #include "igesio/entities/curves/line.h"                // type 110
 #include "igesio/entities/curves/parametric_spline_curve.h"         // type 112
 #include "igesio/entities/curves/point.h"                           // type 116
@@ -82,6 +83,15 @@ void i_ent::EntityFactory::Initialize() {
         return std::make_shared<i_ent::CopiousDataBase>(de, p, d2i, iid);
     };
 
+    // 108 - Plane (form 0: 無限平面 Plane, form ±1: 有界平面 BoundedPlane)
+    creators_[ET::kPlane] = [](const DE& de, const IVec& p, const p2I& d2i,
+                               const ObjectID& iid)
+            -> std::shared_ptr<i_ent::EntityBase> {
+        if (de.form_number == 0) {
+            return std::make_shared<i_ent::Plane>(de, p, d2i, iid);
+        }
+        return std::make_shared<i_ent::BoundedPlane>(de, p, d2i, iid);
+    };
     // 110 - Line
     creators_[ET::kLine] = [](const DE& de, const IVec& p,
                               const p2I& d2i, const ObjectID& iid) {

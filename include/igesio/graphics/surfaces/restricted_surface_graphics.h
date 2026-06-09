@@ -1,12 +1,12 @@
 /**
- * @file graphics/surfaces/trimmed_surface_graphics.h
- * @brief TrimmedSurfaceの描画用クラス
+ * @file graphics/surfaces/restricted_surface_graphics.h
+ * @brief 制限付き曲面 (IRestrictedSurface: Type 143/144/108有界) の描画用クラス
  * @author Yayoi Habami
- * @date 2026-04-13
+ * @date 2026-06-09
  * @copyright 2026 Yayoi Habami
  */
-#ifndef IGESIO_GRAPHICS_SURFACES_TRIMMED_SURFACE_GRAPHICS_H_
-#define IGESIO_GRAPHICS_SURFACES_TRIMMED_SURFACE_GRAPHICS_H_
+#ifndef IGESIO_GRAPHICS_SURFACES_RESTRICTED_SURFACE_GRAPHICS_H_
+#define IGESIO_GRAPHICS_SURFACES_RESTRICTED_SURFACE_GRAPHICS_H_
 
 #include <memory>
 #include <unordered_set>
@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "igesio/numerics/core/matrix.h"
-#include "igesio/entities/surfaces/trimmed_surface.h"
+#include "igesio/entities/interfaces/i_restricted_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
 
@@ -22,12 +22,13 @@
 
 namespace igesio::graphics {
 
-/// @brief TrimmedSurfaceエンティティの描画情報の管理クラス
-/// @note メッシュ生成は制限付き曲面(143/144)共通のテッセレーション
-///       (entities::TessellateRestrictedSurface) に委譲する。境界駆動の
-///       制限付き四分木により、トリム境界近傍を適応的に細分する。
-class TrimmedSurfaceGraphics
-    : public EntityGraphics<entities::TrimmedSurface, true> {
+/// @brief 制限付き曲面エンティティ (IRestrictedSurface) の描画情報の管理クラス
+/// @note Type 144 (TrimmedSurface)、Type 143 (BoundedSurface)、Type 108の有界平面
+///       (BoundedPlane) を共通に扱う。メッシュ生成は制限付き曲面共通のテッセレーション
+///       (entities::TessellateRestrictedSurface) に委譲する。境界駆動の制限付き
+///       四分木により、トリム境界近傍を適応的に細分する。
+class RestrictedSurfaceGraphics
+    : public EntityGraphics<entities::IRestrictedSurface, true> {
     /// @brief 面のVBO
     gl::Uint vbo_ = 0;
     /// @brief 面のEBO
@@ -45,16 +46,16 @@ class TrimmedSurfaceGraphics
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
-    explicit TrimmedSurfaceGraphics(
-            const std::shared_ptr<const entities::TrimmedSurface>&,
+    explicit RestrictedSurfaceGraphics(
+            const std::shared_ptr<const entities::IRestrictedSurface>&,
             const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
-    ~TrimmedSurfaceGraphics() override;
+    ~RestrictedSurfaceGraphics() override;
 
     // コピーコンストラクタとコピー代入演算子を禁止
-    TrimmedSurfaceGraphics(const TrimmedSurfaceGraphics&) = delete;
-    TrimmedSurfaceGraphics& operator=(const TrimmedSurfaceGraphics&) = delete;
+    RestrictedSurfaceGraphics(const RestrictedSurfaceGraphics&) = delete;
+    RestrictedSurfaceGraphics& operator=(const RestrictedSurfaceGraphics&) = delete;
 
     /// @brief 描画可能な状態かどうかを確認する
     bool IsDrawable() const override {
@@ -97,11 +98,11 @@ class TrimmedSurfaceGraphics
     /// @brief OpenGLリソースを解放する
     void Cleanup() override;
 
-    /// @brief 範囲選択用にトリム面をサンプリングする
+    /// @brief 範囲選択用に制限付き曲面をサンプリングする
     /// @param params サンプリング制御パラメータ
     /// @return トリム境界(外周/内周)の閉ループ折れ線と、トリム領域内の内部グリッド点
     /// @note 汎用の矩形境界では未トリム領域まで含み過剰選択となるため、
-    ///       トリム境界曲線(Type 142)を ICurve としてサンプリングする
+    ///       IRestrictedSurfaceのUV境界曲線を ICurve としてサンプリングする
     SelectionSamples GetSelectionSamples(
             const SelectionSampleParams&) const override;
 
@@ -114,8 +115,19 @@ class TrimmedSurfaceGraphics
  private:
     /// @brief 描画用の頂点/法線データとインデックスデータを生成する
     void GenerateSurfaceData();
+
+    /// @brief UV境界曲線を基底曲面S(u,v)で3D化したワールド折れ線をresultへ追加する
+    /// @param uv_boundary UV空間の境界曲線 (TryGetPointAtが(u,v,0)を返す)
+    /// @param n_samples サンプル分割数
+    /// @param result 追加先 (polylinesへ折れ線を追加)
+    /// @note GetOuterUVBoundary()等はUV空間の曲線を返すため、選択用の3D点を得るには
+    ///       基底曲面で評価する必要がある。トリム境界はドメイン端のため、ドメイン制限を
+    ///       受けない基底S(u,v)で評価し、配置(M_entity込みのワールド変換)を適用する
+    void AppendBoundaryWorldPolyline(
+            const entities::ICurve& uv_boundary, int n_samples,
+            SelectionSamples& result) const;
 };
 
 }  // namespace igesio::graphics
 
-#endif  // IGESIO_GRAPHICS_SURFACES_TRIMMED_SURFACE_GRAPHICS_H_
+#endif  // IGESIO_GRAPHICS_SURFACES_RESTRICTED_SURFACE_GRAPHICS_H_

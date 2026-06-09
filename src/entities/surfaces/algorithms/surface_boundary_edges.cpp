@@ -21,10 +21,6 @@ namespace igesio::entities {
 
 namespace {
 
-/// @brief 無限のパラメータをクランプする量 (mm相当)
-/// @note 無限平面/半直線状の曲面でも有限の境界辺を生成するための保守的な上限
-constexpr double kInfiniteParamClamp = 100.0;
-
 /// @brief 値が無限の場合に代替値へクランプする
 double ClampInfinite(const double x, const double fallback) {
     return std::isinf(x) ? fallback : x;

@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/graphics/core/i_entity_graphics.h"  // kInfiniteParamClamp
+
 
 
 namespace igesio::graphics {
@@ -48,8 +50,9 @@ struct USampleRow {
 /// @param entity 対象の曲面
 /// @param u_div u方向の一様分割数
 /// @return uサンプル行のリスト (u昇順)
-std::vector<USampleRow> BuildUSampleRows(const ISurface& entity, const int u_div) {
-    const auto u_range = entity.GetURange();
+std::vector<USampleRow> BuildUSampleRows(const ISurface& entity,
+                                         const std::array<double, 2>& u_range,
+                                         const int u_div) {
     const double umin = u_range[0], umax = u_range[1];
 
     // 無限・退化範囲は従来通り一様サンプルのみ (折れ目挿入は行わない)
@@ -204,11 +207,17 @@ GeneralSurfaceMesh BuildGeneralSurfaceMesh(
     GeneralSurfaceMesh mesh;
     mesh.v_div = v_div;
 
-    const auto u_range = surface.GetURange();
-    const auto v_range = surface.GetVRange();
+    auto u_range = surface.GetURange();
+    auto v_range = surface.GetVRange();
+    // 無限範囲はエッジ生成 (ComputeParametricSurfaceEdges) と同じ±kInfiniteParamClamp
+    // へクランプし、有限な可視メッシュを生成する (有限範囲はそのまま素通り)
+    if (std::isinf(u_range[0])) u_range[0] = -kInfiniteParamClamp;
+    if (std::isinf(u_range[1])) u_range[1] =  kInfiniteParamClamp;
+    if (std::isinf(v_range[0])) v_range[0] = -kInfiniteParamClamp;
+    if (std::isinf(v_range[1])) v_range[1] =  kInfiniteParamClamp;
 
     // uサンプル行 (折れ目二重化済み) を構築する
-    const auto rows = BuildUSampleRows(surface, u_div);
+    const auto rows = BuildUSampleRows(surface, u_range, u_div);
     const int n_rows = static_cast<int>(rows.size());
     mesh.u_row_count = n_rows;
 

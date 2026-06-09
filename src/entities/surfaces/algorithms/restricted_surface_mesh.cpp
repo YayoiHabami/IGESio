@@ -107,8 +107,21 @@ class QuadtreeMesher {
               nv_(base_div_ * sub_),
               depth_(static_cast<size_t>(base_div_) * base_div_, 0) {
         const auto range = surface.GetParameterRange();
-        u_range_ = {range[0], range[1]};
-        v_range_ = {range[2], range[3]};
+        const bool finite = std::isfinite(range[0]) && std::isfinite(range[1]) &&
+                            std::isfinite(range[2]) && std::isfinite(range[3]);
+        if (finite) {
+            u_range_ = {range[0], range[1]};
+            v_range_ = {range[2], range[3]};
+        } else {
+            // 無限基底 (平面など) の制限面: ドメイン多角形のUV範囲からグリッドを導出する。
+            // 多角形が無い (境界未解決) 場合は退化範囲のままとし、空メッシュとなる。
+            u_range_ = {0.0, 0.0};
+            v_range_ = {0.0, 0.0};
+            if (auto b = GetRestrictedDomainUVBounds(surface)) {
+                u_range_ = {(*b)[0], (*b)[1]};
+                v_range_ = {(*b)[2], (*b)[3]};
+            }
+        }
     }
 
     /// @brief メッシュを構築する

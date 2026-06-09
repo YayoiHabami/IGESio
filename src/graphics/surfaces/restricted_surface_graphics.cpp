@@ -1,14 +1,17 @@
 /**
- * @file graphics/surfaces/trimmed_surface_graphics.cpp
- * @brief TrimmedSurfaceの描画用クラスの実装
+ * @file graphics/surfaces/restricted_surface_graphics.cpp
+ * @brief 制限付き曲面 (IRestrictedSurface) の描画用クラスの実装
  * @author Yayoi Habami
- * @date 2026-04-13
+ * @date 2026-06-09
  * @copyright 2026 Yayoi Habami
  */
-#include "igesio/graphics/surfaces/trimmed_surface_graphics.h"
+#include "igesio/graphics/surfaces/restricted_surface_graphics.h"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "igesio/entities/surfaces/algorithms/restricted_surface_mesh.h"
 #include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
@@ -19,15 +22,15 @@
  * constructor / destructor
  */
 
-igesio::graphics::TrimmedSurfaceGraphics::TrimmedSurfaceGraphics(
-        const std::shared_ptr<const entities::TrimmedSurface>& entity,
+igesio::graphics::RestrictedSurfaceGraphics::RestrictedSurfaceGraphics(
+        const std::shared_ptr<const entities::IRestrictedSurface>& entity,
         const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
           edge_buffer_(gl) {
     Synchronize();
 }
 
-igesio::graphics::TrimmedSurfaceGraphics::~TrimmedSurfaceGraphics() {
+igesio::graphics::RestrictedSurfaceGraphics::~RestrictedSurfaceGraphics() {
     Cleanup();
 }
 
@@ -37,7 +40,7 @@ igesio::graphics::TrimmedSurfaceGraphics::~TrimmedSurfaceGraphics() {
  * protected
  */
 
-void igesio::graphics::TrimmedSurfaceGraphics::DrawImpl(
+void igesio::graphics::RestrictedSurfaceGraphics::DrawImpl(
         gl::Uint /*shader*/,
         const std::pair<float, float>& /*viewport*/) const {
     gl_->BindVertexArray(vao_);
@@ -51,7 +54,7 @@ void igesio::graphics::TrimmedSurfaceGraphics::DrawImpl(
  * public
  */
 
-void igesio::graphics::TrimmedSurfaceGraphics::DoSynchronize() {
+void igesio::graphics::RestrictedSurfaceGraphics::DoSynchronize() {
     Cleanup();
     SyncTexture();
     GenerateSurfaceData();
@@ -89,7 +92,7 @@ void igesio::graphics::TrimmedSurfaceGraphics::DoSynchronize() {
     gl_->BindVertexArray(0);
 }
 
-void igesio::graphics::TrimmedSurfaceGraphics::Cleanup() {
+void igesio::graphics::RestrictedSurfaceGraphics::Cleanup() {
     EntityGraphics::Cleanup();
 
     if (vbo_ != 0) {
@@ -109,36 +112,29 @@ void igesio::graphics::TrimmedSurfaceGraphics::Cleanup() {
 }
 
 igesio::graphics::SelectionSamples
-igesio::graphics::TrimmedSurfaceGraphics::GetSelectionSamples(
+igesio::graphics::RestrictedSurfaceGraphics::GetSelectionSamples(
         const SelectionSampleParams& params) const {
     if (!entity_) return {};
 
     const igesio::Matrix4d& wt = world_transform_;
     SelectionSamples result;
 
-    // 外周ループ: N1=0 ならパラメータ矩形、N1=1 ならトリム境界曲線(142)を使用
+    // 外周ループ: N1=0ならパラメータ矩形、N1=1ならトリム境界曲線をS(B(t))で評価
     if (entity_->IsOuterBoundaryOfD()) {
         SelectionSamples base = SampleSurfaceBoundary(*entity_, params, wt);
         for (auto& pl : base.polylines) {
             result.polylines.push_back(std::move(pl));
         }
-    } else if (auto outer = entity_->GetOuterBoundary()) {
-        // CurveOnAParametricSurface(142) は ICurve
-        SelectionSamples outer_s = SampleCurve(*outer, params, wt);
-        for (auto& pl : outer_s.polylines) {
-            result.polylines.push_back(std::move(pl));
-        }
+    } else if (auto outer = entity_->GetOuterUVBoundary()) {
+        AppendBoundaryWorldPolyline(*outer, params.curve_samples, result);
     }
 
     // 内周 (穴) ループ
     const size_t n_inner = entity_->GetInnerBoundaryCount();
     for (size_t i = 0; i < n_inner; ++i) {
-        auto inner = entity_->GetInnerBoundaryAt(i);
+        auto inner = entity_->GetInnerUVBoundaryAt(i);
         if (!inner) continue;
-        SelectionSamples inner_s = SampleCurve(*inner, params, wt);
-        for (auto& pl : inner_s.polylines) {
-            result.polylines.push_back(std::move(pl));
-        }
+        AppendBoundaryWorldPolyline(*inner, params.curve_samples, result);
     }
 
     // トリム領域内の内部グリッド点を追加する (IsInDomainで穴/外側を除外)
@@ -155,9 +151,38 @@ igesio::graphics::TrimmedSurfaceGraphics::GetSelectionSamples(
  * private
  */
 
-void igesio::graphics::TrimmedSurfaceGraphics::GenerateSurfaceData() {
-    // テッセレーションは制限付き曲面(143/144)共通のアルゴリズムへ委譲する
+void igesio::graphics::RestrictedSurfaceGraphics::GenerateSurfaceData() {
+    // テッセレーションは制限付き曲面(143/144/108有界)共通のアルゴリズムへ委譲する
     auto mesh = entities::TessellateRestrictedSurface(*entity_);
     vertices_ = std::move(mesh.vertices);
     indices_ = std::move(mesh.indices);
+}
+
+void igesio::graphics::RestrictedSurfaceGraphics::AppendBoundaryWorldPolyline(
+        const entities::ICurve& uv_boundary, int n_samples,
+        SelectionSamples& result) const {
+    auto base = entity_->GetBaseSurface();
+    if (!base) return;
+
+    // GetWorldTransformD() = world_transform_ · M_entity。基底S(u,v)はM_entity未適用の
+    // ため、これを掛けるとワールド座標になる (entity_->TryGetPointAtと一致)
+    const igesio::Matrix4d wtd = GetWorldTransformD();
+
+    auto range = uv_boundary.GetParameterRange();
+    double t0 = range[0], t1 = range[1];
+    if (std::isinf(t0)) t0 = -kInfiniteParamClamp;
+    if (std::isinf(t1)) t1 =  kInfiniteParamClamp;
+
+    const int n = std::max(1, n_samples);
+    std::vector<Vector3d> poly;
+    poly.reserve(n + 1);
+    for (int i = 0; i <= n; ++i) {
+        const double t = t0 + (t1 - t0) * static_cast<double>(i) / n;
+        const auto uv = uv_boundary.TryGetPointAt(t);  // (u, v, 0)
+        if (!uv) continue;
+        const auto p = base->TryGetPointAt(uv->x(), uv->y());
+        if (!p) continue;
+        poly.push_back(ToWorld(wtd, *p));
+    }
+    if (poly.size() >= 2) result.polylines.push_back(std::move(poly));
 }

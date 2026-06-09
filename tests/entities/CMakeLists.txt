@@ -45,6 +45,7 @@ set(TEST_SOURCES
 
     # Surfaces
     surfaces/test_i_surface.cpp
+    surfaces/test_plane.cpp
     surfaces/test_rational_b_spline_surface.cpp
     surfaces/test_rational_b_spline_surface_edit.cpp
     surfaces/test_ruled_surface.cpp
