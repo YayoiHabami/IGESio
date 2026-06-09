@@ -70,8 +70,9 @@
   - [x] v0.7.4: graphicsモジュールの再設計（GLADの隠蔽等）
   - [x] v0.7.5: エラークラスの整理・体系化
 - [ ] **v0.8: Manifold Solid B-Rep Objectへの対応** (6)
-  - [ ] v0.8.0: インターフェースの整理（ユーザーがshared_ptrをあまり意識せずに使えるようにするなど）
+  - [x] v0.8.0: インターフェースの整理（ユーザーがshared_ptrをあまり意識せずに使えるようにするなど）
   - [ ] v0.8.1: Plane, Offset Surface, Property等の頻繁に使用されるが比較的実装が簡単なエンティティの実装
+  - [ ] v0.8.2: ユーザー定義エンティティの登録機構の追加（および例としてOBJ/STLを追加）
   - 対応に合わせて、CMakeオプショナルでSTEPのAP242読み込み機能を追加する（STEPcodeを使用予定）
 - [ ] **v0.9: Constructive Solid Geometryへの対応** (8)
 - [ ] **v1.0: 主要なエンティティクラスへの対応** (Untested, Annotation、Property等を除く)
@@ -124,5 +125,5 @@
 
 ### 全体への影響が大きいもの
 
-- [ ] エラークラスの再構成
+- [x] エラークラスの再構成
   - 現在、`igesio::IGESioError`系統のエラークラスと、`std::runtime_error`系統のエラークラスが混在している。これを統一する。(`std::out_of_range`などの標準例外クラスは除く)
