@@ -9,7 +9,7 @@
 #ifndef SRC_ENTITIES_CURVES_ALGORITHMS_POLYGONAL_APPROXIMATION_H_
 #define SRC_ENTITIES_CURVES_ALGORITHMS_POLYGONAL_APPROXIMATION_H_
 
-#include "igesio/numerics/polygon.h"
+#include "igesio/numerics/geometric/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 
 

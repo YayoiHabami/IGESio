@@ -13,7 +13,7 @@
 #include <optional>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 

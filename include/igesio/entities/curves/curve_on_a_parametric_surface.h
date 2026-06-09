@@ -204,6 +204,16 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
     /// @throw igesio::ReferenceError 曲線が未設定の場合、ポインタが未設定の場合
     std::shared_ptr<const ICurve> GetCurve() const;
 
+    /// @brief ベース曲線 B(t) のポインタが解決済みか
+    /// @note GetBaseCurve()と異なり、未設定でも例外を投げない事前確認用
+    bool HasBaseCurve() const noexcept { return base_curve_.IsPointerSet(); }
+    /// @brief ベース曲線 B(t) が省略されているか (BPTR=0)
+    /// @note 一部CAD (CATIA等) はBを省略して出力する. trueの場合、
+    ///       ReconstructOmittedBaseCurve()でB = S^{-1}∘Cを再構築できる
+    bool IsBaseCurveOmitted() const noexcept {
+        return base_curve_.GetID() == IDGenerator::UnsetID();
+    }
+
     /// @brief 曲面 S(u,v) を設定する
     /// @param surface 曲面 S(u,v)
     /// @throw std::invalid_argument surfaceがnullptrの場合
@@ -220,15 +230,19 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
 
     /// @brief 曲面上の曲線 C(t) の作成方法
     CurveCreationType GetCreationType() const { return creation_type_; }
+    /// @brief 曲面上の曲線 C(t) の作成方法 (CRTN) を設定する
+    /// @param type 作成方法 (CurveCreationType)
+    /// @return 設定に成功した場合はtrue、無効な値の場合はfalse
+    bool SetCreationType(const CurveCreationType);
+
     /// @brief 送信システムにおける優先表現
     PreferredRepresentation GetPreferredRepresentation() const {
         return preferred_representation_;
     }
-    /// @brief 送信システムにおける優先表現を設定する
+    /// @brief 送信システムにおける優先表現 (PREF) を設定する
     /// @param pref 送信システムにおける優先表現
-    void SetPreferredRepresentation(const PreferredRepresentation pref) {
-        preferred_representation_ = pref;
-    }
+    /// @return 設定に成功した場合はtrue、無効な値の場合はfalse
+    bool SetPreferredRepresentation(const PreferredRepresentation);
 
     /// @brief 省略されたベース曲線BをC・Sから再構築する
     ///
@@ -269,16 +283,79 @@ class CurveOnAParametricSurface : public EntityBase, public virtual ICurve3D {
 /// @brief CurveOnAParametricSurfaceのエイリアス
 using CurveOnSurface = CurveOnAParametricSurface;
 
-/// @brief CurveOnAParametricSurfaceを作成する
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief アイソパラメトリック曲線の方向
+enum class IsoparametricDirection {
+    /// @brief u = 一定 (vに沿って動く)
+    kUConstant = 0,
+    /// @brief v = 一定 (uに沿って動く)
+    kVConstant = 1
+};
+
+/// @brief Type 142の生成物一式
+/// @note 自動生成されたB・Cは呼び出し側でモデル (IgesData) へ登録すること
+struct CurveOnSurfaceParts {
+    /// @brief 本体 (Type 142)
+    std::shared_ptr<CurveOnAParametricSurface> curve_on_surface;
+    /// @brief 生成されたベース曲線 B(t) (パラメータ空間)
+    std::shared_ptr<ICurve> base_curve;
+    /// @brief 生成された曲線 C(t) = S(B(t))
+    std::shared_ptr<ICurve> curve;
+};
+
+/// @brief CurveOnAParametricSurfaceを作成する (C(t)は自動生成)
 /// @param surface 曲面 S(u,v)
 /// @param base_curve 曲線 B(t)
+/// @param creation_type 曲線の作成方法 (CRTN; default: kUnspecified)
 /// @return 作成されたCurveOnAParametricSurfaceのshared_ptrと
-///         曲線 C(t) のshared_ptrのペア
+///         自動生成された曲線 C(t) のshared_ptrのペア.
+///         C(t)は呼び出し側でモデルへ登録すること
 /// @throw std::invalid_argument surface, base_curveのいずれかがnullptrの場合
+/// @throw igesio::EntityValueError base_curveがS(u,v)の定義領域D外の場合
 /// @throw igesio::ComputationError 曲線 C(t) の自動生成に失敗した場合
+/// @note C(t)をS(B(t))から生成するため、優先表現 (PREF) はkSofBに設定される
 std::pair<std::shared_ptr<CurveOnAParametricSurface>, std::shared_ptr<ICurve>>
-MakeCurveOnAParametricSurface(const std::shared_ptr<ISurface>&,
-                              const std::shared_ptr<ICurve>&);
+MakeCurveOnAParametricSurface(
+        const std::shared_ptr<ISurface>& surface,
+        const std::shared_ptr<ICurve>& base_curve,
+        CurveCreationType creation_type = CurveCreationType::kUnspecified);
+
+/// @brief CurveOnAParametricSurfaceを作成する (C(t)を明示指定)
+/// @param surface 曲面 S(u,v)
+/// @param base_curve 曲線 B(t)
+/// @param curve 曲線 C(t) = S(B(t))
+/// @param creation_type 曲線の作成方法 (CRTN; default: kUnspecified)
+/// @param preferred 優先表現 (PREF; default: kUnspecified)
+/// @return 作成されたCurveOnAParametricSurfaceのshared_ptr
+/// @throw std::invalid_argument surface, base_curve, curveの
+///        いずれかがnullptrの場合
+/// @throw igesio::EntityValueError base_curveがS(u,v)の定義領域D外の場合
+std::shared_ptr<CurveOnAParametricSurface> MakeCurveOnAParametricSurface(
+        const std::shared_ptr<ISurface>& surface,
+        const std::shared_ptr<ICurve>& base_curve,
+        const std::shared_ptr<ICurve>& curve,
+        CurveCreationType creation_type = CurveCreationType::kUnspecified,
+        PreferredRepresentation preferred = PreferredRepresentation::kUnspecified);
+
+/// @brief 曲面のアイソパラメトリック曲線 (CRTN=3) を作成する
+/// @param surface 曲面 S(u,v)
+/// @param direction 固定するパラメータの方向
+/// @param value 固定するパラメータ値 (Sのパラメータ定義域内であること)
+/// @return 生成物一式 (本体・B・C). B, Cは呼び出し側でモデルへ登録すること
+/// @throw std::invalid_argument surfaceがnullptrの場合
+/// @throw igesio::EntityValueError valueがSのパラメータ定義域外の場合、
+///        または定義域が非有界でB(t)の端点を定められない場合
+/// @throw igesio::ComputationError 曲線 C(t) の自動生成に失敗した場合
+/// @note B(t)はパラメータ空間上のLine (Type 110) として生成され、
+///       C(t)は自動生成される. 優先表現 (PREF) はkSofBに設定される
+CurveOnSurfaceParts MakeIsoparametricCurve(
+        const std::shared_ptr<ISurface>& surface,
+        IsoparametricDirection direction, double value);
 
 }  // namespace igesio::entities
 

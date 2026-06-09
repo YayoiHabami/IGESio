@@ -11,7 +11,7 @@
 #include <memory>
 #include <utility>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 #include "igesio/graphics/core/entity_graphics.h"
 
@@ -36,8 +36,8 @@ class RationalBSplineCurveGraphics
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがICurveを継承していない場合
     explicit RationalBSplineCurveGraphics(
-            const std::shared_ptr<const entities::RationalBSplineCurve>,
-                   const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::RationalBSplineCurve>&,
+                   const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~RationalBSplineCurveGraphics();
@@ -56,7 +56,7 @@ class RationalBSplineCurveGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief OpenGLリソースを解放する
     /// @note SSBO等のOpenGLリソースを解放する

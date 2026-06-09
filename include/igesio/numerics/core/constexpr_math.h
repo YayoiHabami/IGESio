@@ -1,5 +1,5 @@
 /**
- * @file numerics/constexpr_math.h
+ * @file numerics/core/constexpr_math.h
  * @brief constexpr対応の数学関数群
  * @author Yayoi Habami
  * @date 2025-10-20
@@ -7,8 +7,8 @@
  * @note 現在使用しているC++17標準では、cmathの多くの関数がconstexprに対応していないため、
  *       ここにconstexpr対応の数学関数を実装する。
  */
-#ifndef IGESIO_NUMERICS_CONSTEXPR_MATH_H_
-#define IGESIO_NUMERICS_CONSTEXPR_MATH_H_
+#ifndef IGESIO_NUMERICS_CORE_CONSTEXPR_MATH_H_
+#define IGESIO_NUMERICS_CORE_CONSTEXPR_MATH_H_
 
 namespace igesio::numerics {
 
@@ -40,4 +40,4 @@ constexpr double sqrt_c(const double x, const double guess = -1.0) {
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_CONSTEXPR_MATH_H_
+#endif  // IGESIO_NUMERICS_CORE_CONSTEXPR_MATH_H_

@@ -128,6 +128,25 @@ SurfaceBoundaryEdges ComputeParametricSurfaceEdges(
     return edges;
 }
 
+SurfaceBoundaryEdges ComputeSurfaceCreaseEdges(
+        const ISurface& surf, const SurfaceBoundaryEdgeParams& params) {
+    const auto range = surf.GetParameterRange();  // {u0, u1, v0, v1}
+    const double u0 = ClampInfinite(range[0], -kInfiniteParamClamp);
+    const double u1 = ClampInfinite(range[1], kInfiniteParamClamp);
+    const double v0 = ClampInfinite(range[2], -kInfiniteParamClamp);
+    const double v1 = ClampInfinite(range[3], kInfiniteParamClamp);
+
+    SurfaceBoundaryEdges edges;
+    // 折り目位置u_cのv方向アイソ曲線 S(u_c, v) を内部稜線として追加する
+    for (const double uc : surf.GetUCreaseParameters()) {
+        // 開区間内のもののみ (端は境界アイソ辺と重複するため除外)
+        if (uc <= u0 || uc >= u1) continue;
+        AppendIsoEdge(surf, /*vary_u=*/false, uc, v0, v1,
+                      params.divisions, edges.loops);
+    }
+    return edges;
+}
+
 SurfaceBoundaryEdges ComputeRestrictedSurfaceEdges(
         const IRestrictedSurface& surface,
         const SurfaceBoundaryEdgeParams& params) {

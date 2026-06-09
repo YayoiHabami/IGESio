@@ -37,8 +37,8 @@ class ICurveGraphics
     /// @param gl OpenGL関数のラッパー
     /// @throw std::invalid_argument entityがnullptrの場合、
     ///       entityがICurveを継承していない場合
-    explicit ICurveGraphics(const std::shared_ptr<const entities::ICurve>,
-                            const std::shared_ptr<IOpenGL>);
+    explicit ICurveGraphics(const std::shared_ptr<const entities::ICurve>&,
+                            const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~ICurveGraphics();
@@ -67,7 +67,7 @@ class ICurveGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
 
 

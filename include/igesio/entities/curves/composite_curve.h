@@ -9,6 +9,7 @@
 #define IGESIO_ENTITIES_CURVES_COMPOSITE_CURVE_H_
 
 #include <memory>
+#include <optional>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -175,15 +176,95 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @throw std::out_of_range indexが範囲外の場合
     std::shared_ptr<const ICurve> GetCurveAt(const size_t) const;
 
-    /// @brief 曲線を追加する
+    /// @brief 曲線を末尾に追加する
     /// @param curve 追加する曲線
     /// @return 追加に成功した場合は`true`、curveがnullptrの場合は`false`
+    /// @throw igesio::EntityValueError 直前の曲線の終点と追加する曲線の始点が
+    ///        連続でない場合 (許容差は座標スケールに対する相対値)
     /// @note curveのSubordinateEntitySwitchはkPhysicallyDependentに設定される
-    /// @note 隣接曲線との連続性 (端点一致) は課さない。隙間があっても追加でき、
-    ///       連続性はValidatePDでkWarningとして報告される (描画はブロックしない)
+    /// @note 端点が取得できない曲線 (未解決参照・無限長) との接合は
+    ///       チェック不能として許容される
     bool AddCurve(const std::shared_ptr<ICurve>&);
 
-    // TODO: 曲線を削除するメソッドを追加する
+    /// @brief 範囲[first, last] (両端を含む) の構成曲線をnew_curvesで置き換える
+    /// @param first 置換範囲の先頭インデックス (0始まり)
+    /// @param last 置換範囲の末尾インデックス (0始まり)
+    /// @param new_curves 置換後の曲線列 (空の場合は範囲削除)
+    /// @return 取り外された曲線のリスト (未解決参照だった要素はnullptr)
+    /// @throw std::invalid_argument first > last、またはnew_curvesに
+    ///        nullptrが含まれる場合
+    /// @throw std::out_of_range lastが範囲外の場合
+    /// @throw igesio::EntityValueError 置換後の隣接接合 (置換列内部、および
+    ///        前後の既存曲線との境界) が連続でない場合
+    /// @note 検証がすべて通るまで構成曲線リストは変更されない (強い例外保証)
+    /// @note new_curvesの各要素のSubordinateEntitySwitchは
+    ///       kPhysicallyDependentに設定される。取り外された曲線のスイッチは
+    ///       変更されない (他エンティティからの参照有無を本クラスは知り得ないため)
+    std::vector<std::shared_ptr<const ICurve>> ReplaceCurves(
+            const size_t first, const size_t last,
+            const std::vector<std::shared_ptr<ICurve>>& new_curves);
+
+    /// @brief 指定インデックスの曲線を置き換える
+    /// @param index 置き換える曲線のインデックス (0始まり)
+    /// @param curve 新しい曲線
+    /// @return 取り外された曲線 (未解決参照だった場合はnullptr)
+    /// @throw std::invalid_argument curveがnullptrの場合
+    /// @throw std::out_of_range indexが範囲外の場合
+    /// @throw igesio::EntityValueError 前後の曲線と連続でない場合
+    /// @note ReplaceCurves(index, index, {curve})と等価
+    std::shared_ptr<const ICurve> SetCurveAt(
+            const size_t index, const std::shared_ptr<ICurve>& curve);
+
+    /// @brief 先頭の曲線を取り外す
+    /// @return 取り外された曲線 (未解決参照だった場合はnullptr)
+    /// @throw std::out_of_range 曲線が1つもない場合
+    /// @note 中間の曲線の単独削除は連続性を破壊するため提供しない。
+    ///       削除後も前後が接続する場合に限り、ReplaceCurvesの範囲削除で
+    ///       中間の曲線を削除できる
+    std::shared_ptr<const ICurve> RemoveFirstCurve();
+
+    /// @brief 末尾の曲線を取り外す
+    /// @return 取り外された曲線 (未解決参照だった場合はnullptr)
+    /// @throw std::out_of_range 曲線が1つもない場合
+    std::shared_ptr<const ICurve> RemoveLastCurve();
+
+    /// @brief すべての曲線を取り外す
+    /// @note 取り外された曲線のSubordinateEntitySwitchは変更されない
+    void ClearCurves();
+
+
+
+    /**
+     * CompositeCurve: パラメータ写像・接合診断
+     */
+
+    /// @brief 各構成曲線の開始グローバルパラメータを取得する
+    /// @return サイズn+1のリスト。i番目 (i < n) は構成曲線iの開始グローバル
+    ///         パラメータ、末尾は全体の終端パラメータ
+    /// @note 未解決参照・無限長の曲線はパラメータ長0として扱われる
+    std::vector<double> GetCurveBreakParameters() const;
+
+    /// @brief グローバルパラメータに対応する構成曲線を特定する
+    /// @param t グローバルパラメータ値
+    /// @return 構成曲線のインデックスと、その曲線上におけるローカルパラメータ
+    ///         の組。tが範囲外の場合はnullopt
+    std::optional<std::pair<size_t, double>>
+    TryGetCurveIndexAtParameter(const double) const;
+
+    /// @brief 構成曲線のローカルパラメータをグローバルパラメータへ変換する
+    /// @param index 構成曲線のインデックス (0始まり)
+    /// @param t_local 当該曲線上のローカルパラメータ
+    /// @return グローバルパラメータ。曲線が未解決参照・無限長の場合、
+    ///         またはt_localが当該曲線のパラメータ範囲外の場合はnullopt
+    /// @throw std::out_of_range indexが範囲外の場合
+    std::optional<double>
+    TryGetGlobalParameter(const size_t index, const double t_local) const;
+
+    /// @brief 各接合点の隙間距離を取得する
+    /// @return サイズn-1のリスト (曲線が2つ未満の場合は空)。i番目は構成曲線iの
+    ///         終点と構成曲線i+1の始点の距離。端点が取得できない接合点はnullopt
+    /// @note ValidatePDが警告する接合不連続を定量的に調べるための診断用
+    std::vector<std::optional<double>> GetJunctionGaps() const;
 
 
 
@@ -210,15 +291,25 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @note パラメータ値が範囲外の場合はnullptrを返す
     std::pair<std::shared_ptr<const ICurve>, double>
     GetCurveAtParameter(const double) const;
-
-    /// @brief 指定されたパラメータ値に対する曲線のインデックスを取得する
-    /// @param t パラメータ値
-    /// @return 指定されたパラメータ値に対応する曲線のインデックス、
-    ///         およびその曲線上におけるパラメータ値
-    /// @note パラメータ値が範囲外の場合はnulloptを返す
-    std::optional<std::pair<size_t, double>>
-    GetCurveIndexAtParameter(const double) const;
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 構成曲線のリストからCompositeCurveを作成する
+/// @param curves 構成曲線のリスト (連結順)
+/// @return 作成されたCompositeCurveのshared_ptr
+/// @throw std::invalid_argument curvesが空、またはnullptrを含む場合
+/// @throw igesio::EntityValueError 隣接する曲線の端点が連続でない場合
+///        (許容差は座標スケールに対する相対値)
+/// @note 各曲線のSubordinateEntitySwitchはkPhysicallyDependentに設定される
+/// @note 端点が取得できない曲線 (未解決参照・無限長) との接合は
+///       チェック不能として許容される
+std::shared_ptr<CompositeCurve> MakeCompositeCurve(
+        const std::vector<std::shared_ptr<ICurve>>& curves);
 
 }  // namespace igesio::entities
 

@@ -8,10 +8,12 @@
 #include "igesio/entities/curves/parametric_spline_curve.h"
 
 #include <limits>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -19,6 +21,70 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::ParametricSplineCurve;
 using Vector3d = igesio::Vector3d;
+
+/// @brief 型付きパラメータからPDパラメータベクトルを構築する
+/// @note 事前検証 (例外送出) もここで行う. 末端のTP値は最終セグメントの
+///       係数から自動計算するため、常に係数と整合する
+igesio::IGESParameterVector BuildPDParameters(
+        const i_ent::ParametricSplineCurveType curve_type,
+        const unsigned int degree,
+        const std::vector<double>& breakpoints,
+        const std::vector<igesio::Matrix34d>& coefficients,
+        const unsigned int n_dim) {
+    if (coefficients.empty()) {
+        throw igesio::EntityValueError(
+                "ParametricSplineCurve requires at least one segment.");
+    }
+    if (breakpoints.size() != coefficients.size() + 1) {
+        throw igesio::EntityValueError(
+                "Number of breakpoints must be N+1 = "
+                + std::to_string(coefficients.size() + 1) + ", but got "
+                + std::to_string(breakpoints.size()) + ".");
+    }
+    for (size_t i = 1; i < breakpoints.size(); ++i) {
+        if (breakpoints[i] <= breakpoints[i - 1]) {
+            throw igesio::EntityValueError(
+                    "Breakpoints must be in strictly increasing order.");
+        }
+    }
+    if (degree > 3) {
+        throw igesio::EntityValueError(
+                "Degree H must be between 0 and 3, but got "
+                + std::to_string(degree) + ".");
+    }
+    if (n_dim != 2 && n_dim != 3) {
+        throw igesio::EntityValueError(
+                "N_DIM must be 2 or 3, but got " + std::to_string(n_dim) + ".");
+    }
+
+    igesio::IGESParameterVector pd{
+            static_cast<int>(curve_type), static_cast<int>(degree),
+            static_cast<int>(n_dim), static_cast<int>(coefficients.size())};
+    pd.reserve(17 + 13 * coefficients.size());
+    for (const auto t_i : breakpoints) {
+        pd.push_back(t_i);
+    }
+    for (const auto& segment : coefficients) {
+        for (int p = 0; p < 3; ++p) {
+            for (int j = 0; j < 4; ++j) {
+                pd.push_back(segment(p, j));
+            }
+        }
+    }
+
+    // 末端 u=T(N+1) (s=T(N+1)-T(N)) における関数値~3次導関数値
+    const auto& last = coefficients.back();
+    const double s = breakpoints[breakpoints.size() - 1]
+                   - breakpoints[breakpoints.size() - 2];
+    for (int p = 0; p < 3; ++p) {
+        const double b = last(p, 1), c = last(p, 2), d = last(p, 3);
+        pd.push_back(last(p, 0) + s * (b + s * (c + s * d)));  // 関数値
+        pd.push_back(b + s * (2.0 * c + 3.0 * d * s));         // 1次導関数
+        pd.push_back(c + 3.0 * d * s);                         // 2次導関数/2!
+        pd.push_back(d);                                       // 3次導関数/3!
+    }
+    return pd;
+}
 
 /// @brief i番目のセグメントにおけるsに対する関数値~3次導関数値を計算する
 /// @param coefficients i番目のセグメントにおける多項式係数 (3x4行列)
@@ -69,6 +135,14 @@ ParametricSplineCurve::ParametricSplineCurve(
             RawEntityDE::ByDefault(i_ent::EntityType::kParametricSplineCurve),
             parameters, {}, IDGenerator::UnsetID()) {}
 
+ParametricSplineCurve::ParametricSplineCurve(
+        const ParametricSplineCurveType curve_type, const unsigned int degree,
+        const std::vector<double>& breakpoints,
+        const std::vector<Matrix34d>& coefficients,
+        const unsigned int n_dim)
+        : ParametricSplineCurve(BuildPDParameters(
+                curve_type, degree, breakpoints, coefficients, n_dim)) {}
+
 i_ent::ParametricSplineCurveType
 ParametricSplineCurve::GetCurveType() const noexcept {
     return curve_type_;
@@ -113,7 +187,7 @@ igesio::IGESParameterVector ParametricSplineCurve::GetMainPDParameters() const {
     // u = T(N+1) における s = T(N+1) - T(N)
     double s = breakpoints_.back() - breakpoints_[breakpoints_.size() - 2];
     auto coefficients = Coefficients(n_segments - 1);
-    // 関数値 ~ 3次導関数値
+    // 関数値 ~ 3次導関数値 (規格に従い、2次以上は階乗で割った値を格納する)
     auto values = ComputeSegmentValue(coefficients, s, 0);
     auto first_derivative = ComputeSegmentValue(coefficients, s, 1);
     auto second_derivative = ComputeSegmentValue(coefficients, s, 2);
@@ -121,8 +195,8 @@ igesio::IGESParameterVector ParametricSplineCurve::GetMainPDParameters() const {
     for (unsigned int j = 0; j < 3; ++j) {
         params.push_back(values(j));
         params.push_back(first_derivative(j));
-        params.push_back(second_derivative(j));
-        params.push_back(third_derivative(j));
+        params.push_back(second_derivative(j) / 2.0);  // 2次導関数/2!
+        params.push_back(third_derivative(j) / 6.0);   // 3次導関数/3!
     }
 
     // サイズが同じ場合に限り、元のフォーマット情報を適用
@@ -259,19 +333,6 @@ igesio::ValidationResult ParametricSplineCurve::ValidatePD() const {
 
             if (b_ij != 0.0 || c_ij != 0.0 || d_ij != 0.0) {
                 is_all_zero = false;
-            }
-
-            // N = 1の場合はC, Dが0であること
-            if (n_segments == 1 && (c_ij != 0.0 || d_ij != 0.0)) {
-                errors.emplace_back("For N=1, C and D coefficients"
-                    " must be zero, but got C=" + std::to_string(c_ij)
-                    + ", D=" + std::to_string(d_ij) + " for segment 1.");
-            }
-            // N == 2の場合はDが0であること
-            if (n_segments == 2 && d_ij != 0.0) {
-                errors.emplace_back("For N=2, D coefficients"
-                    " must be zero, but got D=" + std::to_string(d_ij)
-                    + " for segment 1 or 2.");
             }
         }
 
@@ -512,4 +573,60 @@ ParametricSplineCurve::FindSegmentIndex(const double t) const {
 
     // ここには到達しないはず
     return std::nullopt;
+}
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<ParametricSplineCurve> i_ent::MakeParametricSplineCurve(
+        const ParametricSplineCurveType curve_type, const unsigned int degree,
+        const std::vector<double>& breakpoints,
+        const std::vector<Matrix34d>& coefficients,
+        const unsigned int n_dim) {
+    return std::make_shared<ParametricSplineCurve>(
+            curve_type, degree, breakpoints, coefficients, n_dim);
+}
+
+std::shared_ptr<ParametricSplineCurve> i_ent::MakeCubicSplineCurve(
+        const std::vector<Vector3d>& points,
+        const std::vector<Vector3d>& tangents,
+        const std::vector<double>& breakpoints) {
+    if (points.size() < 2) {
+        throw igesio::EntityValueError(
+                "MakeCubicSplineCurve: At least two points are required.");
+    }
+    if (tangents.size() != points.size() ||
+        breakpoints.size() != points.size()) {
+        throw igesio::EntityValueError(
+                "MakeCubicSplineCurve: points, tangents and breakpoints must"
+                " have the same size.");
+    }
+
+    // 各セグメントでエルミート基底からべき基底へ変換する
+    std::vector<Matrix34d> coefficients;
+    coefficients.reserve(points.size() - 1);
+    for (size_t i = 0; i + 1 < points.size(); ++i) {
+        const double h = breakpoints[i + 1] - breakpoints[i];
+        if (h <= 0.0) {
+            throw igesio::EntityValueError(
+                    "MakeCubicSplineCurve: Breakpoints must be in strictly"
+                    " increasing order.");
+        }
+        const Vector3d dp = points[i + 1] - points[i];
+        Matrix34d segment;
+        segment.col(0) = points[i];    // A: 始点
+        segment.col(1) = tangents[i];  // B: 始点接線
+        // C, D: 終点の位置・接線の一致条件から決まる係数
+        segment.col(2) = 3.0 * dp / (h * h)
+                - (2.0 * tangents[i] + tangents[i + 1]) / h;
+        segment.col(3) = -2.0 * dp / (h * h * h)
+                + (tangents[i] + tangents[i + 1]) / (h * h);
+        coefficients.push_back(segment);
+    }
+
+    // 隣接セグメントが通過点の接線を共有するため、勾配連続 (H=1)
+    return MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 1, breakpoints, coefficients);
 }

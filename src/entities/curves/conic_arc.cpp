@@ -8,11 +8,14 @@
  */
 #include "igesio/entities/curves/conic_arc.h"
 
+#include <array>
+#include <cmath>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -374,6 +377,96 @@ double ConicArc::EllipseStartAngle() const {
 
 double ConicArc::EllipseEndAngle() const {
     return GetParameterRange()[1];
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<ConicArc> i_ent::MakeConicArc(
+        const std::array<double, 6>& coeffs,
+        const Vector2d& start_point, const Vector2d& terminate_point,
+        const double z_t) {
+    return std::make_shared<ConicArc>(
+            coeffs, start_point, terminate_point, z_t);
+}
+
+std::shared_ptr<ConicArc> i_ent::MakeEllipticArc(
+        const double rx, const double ry,
+        const double start_angle, const double end_angle, const double z_t) {
+    return std::make_shared<ConicArc>(
+            std::make_pair(rx, ry), start_angle, end_angle, z_t);
+}
+
+std::shared_ptr<ConicArc> i_ent::MakeEllipse(
+        const double rx, const double ry, const double z_t) {
+    // 同角度を指定すると始終点が厳密に一致し、閉じた楕円となる
+    return MakeEllipticArc(rx, ry, 0.0, 0.0, z_t);
+}
+
+std::shared_ptr<ConicArc> i_ent::MakeParabolicArc(
+        const double focal_distance, const double t_start, const double t_end,
+        const ConicAxis axis, const double z_t) {
+    if (i_num::IsApproxZero(focal_distance, i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeParabolicArc: Focal distance is too small.");
+    }
+    // 始終点が一致すると零長の弧に縮退する
+    if (i_num::IsApproxEqual(t_start, t_end, i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeParabolicArc: Start and end parameters must differ.");
+    }
+
+    const double p4 = 4.0 * focal_distance;
+    if (axis == ConicAxis::kX) {
+        // y^2 = 4px: tはy座標
+        return MakeConicArc({0.0, 0.0, 1.0, -p4, 0.0, 0.0},
+                            {t_start * t_start / p4, t_start},
+                            {t_end * t_end / p4, t_end}, z_t);
+    }
+    // x^2 = 4py: tはx座標
+    return MakeConicArc({1.0, 0.0, 0.0, 0.0, -p4, 0.0},
+                        {t_start, t_start * t_start / p4},
+                        {t_end, t_end * t_end / p4}, z_t);
+}
+
+std::shared_ptr<ConicArc> i_ent::MakeHyperbolicArc(
+        const double a, const double b,
+        const double t_start, const double t_end,
+        const ConicAxis axis, const double z_t) {
+    if (!i_num::IsApproxGreaterThan(a, 0.0, i_num::kGeometryTolerance) ||
+        !i_num::IsApproxGreaterThan(b, 0.0, i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeHyperbolicArc: Semi-axis lengths must be positive.");
+    }
+    // sec(t)が発散するため、パラメータは(-π/2, π/2)の開区間に制限される
+    const double limit = kPi / 2.0;
+    if (!i_num::IsApproxLessThan(std::abs(t_start), limit,
+                                 i_num::kAngleTolerance) ||
+        !i_num::IsApproxLessThan(std::abs(t_end), limit,
+                                 i_num::kAngleTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeHyperbolicArc: Parameters must lie in (-pi/2, pi/2).");
+    }
+    // 始終点が一致すると零長の弧に縮退する
+    if (i_num::IsApproxEqual(t_start, t_end, i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeHyperbolicArc: Start and end parameters must differ.");
+    }
+
+    const double a2 = a * a, b2 = b * b;
+    if (axis == ConicAxis::kX) {
+        // x^2/a^2 - y^2/b^2 = 1 (+X枝): C(t) = (a*sec(t), b*tan(t))
+        return MakeConicArc({b2, 0.0, -a2, 0.0, 0.0, -a2 * b2},
+                            {a / std::cos(t_start), b * std::tan(t_start)},
+                            {a / std::cos(t_end), b * std::tan(t_end)}, z_t);
+    }
+    // y^2/b^2 - x^2/a^2 = 1 (+Y枝): C(t) = (a*tan(t), b*sec(t))
+    return MakeConicArc({-b2, 0.0, a2, 0.0, 0.0, -a2 * b2},
+                        {a * std::tan(t_start), b / std::cos(t_start)},
+                        {a * std::tan(t_end), b / std::cos(t_end)}, z_t);
 }
 
 

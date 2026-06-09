@@ -20,7 +20,7 @@
 #include <memory>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/transformations/transformation_matrix.h"
@@ -36,7 +36,6 @@ using i_ent::IntersectCurveWithLine;
 using i_ent::IntersectPointWithLine;
 using igesio::Vector2d;
 using igesio::Vector3d;
-using igesio::Matrix3d;
 using LineType = i_num::BoundingBox::DirectionType;
 
 /// @brief 位置比較の許容誤差
@@ -53,7 +52,7 @@ void ExpectPositionNear(const Vector3d& actual, const Vector3d& expected,
 /// @brief z軸方向の線分 (0,0,-5)→(0,0,5) (定義空間=ワールド空間)
 /// @note C(t) = (0, 0, -5 + 10t), t∈[0,1]. z=0 で t=0.5
 std::shared_ptr<i_ent::Line> MakeZSegment() {
-    return std::make_shared<i_ent::Line>(
+    return i_ent::MakeLine(
         Vector3d{0., 0., -5.}, Vector3d{0., 0., 5.},
         i_ent::LineType::kSegment);
 }
@@ -61,7 +60,7 @@ std::shared_ptr<i_ent::Line> MakeZSegment() {
 /// @brief 原点中心・半径2・z=0平面上の単位円 (CircularArc, 閉曲線)
 /// @note C(θ) = (2cosθ, 2sinθ, 0), θ∈[0, 2π]
 std::shared_ptr<i_ent::CircularArc> MakeCircleR2() {
-    return std::make_shared<i_ent::CircularArc>(Vector2d{0., 0.}, 2.0, 0.0);
+    return i_ent::MakeCircle(Vector2d{0., 0.}, 2.0, 0.0);
 }
 
 /// @brief テスト用の探索パラメータ (hit_toleranceを指定)
@@ -202,8 +201,7 @@ TEST(IntersectCurveWithLineTest, Circle_LineDetectsBothSides) {
 /// @brief z=0の円に並進T=(0,0,5)を適用すると z=5 でレイが交差する
 TEST(IntersectCurveWithLineTest, WithTransform_HitsInWorldSpace) {
     auto circle = MakeCircleR2();
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(
-        Matrix3d::Identity(), Vector3d{0., 0., 5.});
+    auto trans = i_ent::MakeTranslation(Vector3d{0., 0., 5.});
     circle->OverwriteTransformationMatrix(trans);
 
     // z=5 を通る x方向レイ → ワールド空間 z=5 の円と交差
@@ -219,8 +217,7 @@ TEST(IntersectCurveWithLineTest, WithTransform_HitsInWorldSpace) {
 /// @brief 並進後はz=0平面のレイは円に届かず空リスト
 TEST(IntersectCurveWithLineTest, WithTransform_MissesAtDefinedSpace) {
     auto circle = MakeCircleR2();
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(
-        Matrix3d::Identity(), Vector3d{0., 0., 5.});
+    auto trans = i_ent::MakeTranslation(Vector3d{0., 0., 5.});
     circle->OverwriteTransformationMatrix(trans);
 
     // z=0 のレイ: ワールド円は z=5 にあるため最近接距離5で空

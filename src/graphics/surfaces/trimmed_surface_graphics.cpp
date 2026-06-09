@@ -20,8 +20,8 @@
  */
 
 igesio::graphics::TrimmedSurfaceGraphics::TrimmedSurfaceGraphics(
-        const std::shared_ptr<const entities::TrimmedSurface> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::TrimmedSurface>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
           edge_buffer_(gl) {
     Synchronize();
@@ -51,7 +51,7 @@ void igesio::graphics::TrimmedSurfaceGraphics::DrawImpl(
  * public
  */
 
-void igesio::graphics::TrimmedSurfaceGraphics::Synchronize() {
+void igesio::graphics::TrimmedSurfaceGraphics::DoSynchronize() {
     Cleanup();
     SyncTexture();
     GenerateSurfaceData();
@@ -113,7 +113,7 @@ igesio::graphics::TrimmedSurfaceGraphics::GetSelectionSamples(
         const SelectionSampleParams& params) const {
     if (!entity_) return {};
 
-    const igesio::Matrix4d wt = world_transform_.cast<double>();
+    const igesio::Matrix4d& wt = world_transform_;
     SelectionSamples result;
 
     // 外周ループ: N1=0 ならパラメータ矩形、N1=1 ならトリム境界曲線(142)を使用

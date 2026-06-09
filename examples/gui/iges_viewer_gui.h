@@ -78,6 +78,8 @@ class IgesViewerGUI {
 
     /// @brief 削除系操作のポリシー (0:Reject, 1:Cascade, 2:Orphan; ImGui用)
     int removal_policy_ = 0;
+    /// @brief 選択中の色の系統(物体色＋材質プリセット)のインデックス
+    int color_scheme_index_ = 0;
     /// @brief Outlinerで操作対象としてフォーカス中のAssemblyノードID
     std::optional<ObjectID> focused_assembly_id_;
     /// @brief 直近の編集操作の結果メッセージ (ステータスバー表示用)
@@ -143,17 +145,25 @@ class IgesViewerGUI {
     /// @brief IGESファイルを読み込み、シーン・描画・キャッシュを再構築する
     void LoadIgesFile(const std::string& filename);
 
-    /// @brief エンティティをレンダラと型別キャッシュへ追加する (表示対象のみ)
-    void AddEntity(std::shared_ptr<entities::EntityBase> entity);
+    /// @brief 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
+    /// @note 描画オブジェクト自体はレンダラがSceneツリーとの突き合わせで
+    ///       遅延生成するため、ここではUI状態のみを構築する
+    void CacheEntityType(const std::shared_ptr<entities::EntityBase>& entity);
 
-    /// @brief 型別表示フラグ(show_entity_)に従って描画への追加/除去を更新する
-    void UpdateEntities();
+    /// @brief 型別表示フラグ(show_entity_)をレンダラの表示フィルタへ反映する
+    void ApplyDisplayFilter();
+
+    /// @brief 選択中の色の系統(物体色＋材質プリセット)をモデル全体へ適用する
+    /// @note 物体色はrootのColorOverrideとして設定し(個別ノード色は最近接優先で温存)、
+    ///       材質は表示対象の面エンティティへ個別にSetMaterialPropertyする
+    void ApplyColorScheme();
 
     /// @brief 描画対象のシーンをモデルのrootへ束ね直す (選択はリセットされる)
     void BindSceneRoot(std::shared_ptr<models::Assembly> root);
 
     /// @brief モデル(Assemblyツリー)編集後の同期処理
-    /// @note 消えたIDを選択/hit座標とレンダラ・型別キャッシュから除去し、再走査を予約する.
+    /// @note 消えたIDを選択/hit座標と型別キャッシュ (UI用) から除去する.
+    ///       描画オブジェクトの破棄はレンダラのSweepが自動で行う.
     void OnModelEdited();
 
     /**

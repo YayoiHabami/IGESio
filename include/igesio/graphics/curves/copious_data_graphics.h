@@ -33,8 +33,8 @@ class CopiousDataGraphics
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
     /// @throw std::invalid_argument entityがnullptrの場合
-    explicit CopiousDataGraphics(const std::shared_ptr<const entities::CopiousDataBase>,
-                                 const std::shared_ptr<IOpenGL>);
+    explicit CopiousDataGraphics(const std::shared_ptr<const entities::CopiousDataBase>&,
+                                 const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~CopiousDataGraphics();
@@ -59,7 +59,7 @@ class CopiousDataGraphics
     bool IsDrawable() const override;
 
     /// @brief エンティティをセットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief レイと各頂点の近接判定を行う
     /// @param ray ワールド空間のレイ (kRayとして扱う)

@@ -14,6 +14,7 @@
 //   - lightAttenuations (uniform vec3[MAX_LIGHTS]) - C, L, Q (zero => directional)
 //   - lightColors (uniform vec4[MAX_LIGHTS])
 //   - viewPos_WorldSpace (uniform vec3)
+//   - ambientColor (uniform vec3) - constant environment color for ambient
 //
 // THIS SHADER REQUIRES THE FOLLOWING INPUTS FROM THE PREVIOUS STAGE:
 // - fragPos_WorldSpace (in vec3)
@@ -44,9 +45,10 @@ uniform vec4 lightColors[MAX_LIGHTS];
 // Camera properties
 uniform vec3 viewPos_WorldSpace;
 
+// Constant environment color reflected by the ambient term (cheap IBL stand-in)
+uniform vec3 ambientColor;
+
 const float PI = 3.14159265359;
-// Constant ambient factor (placeholder until IBL is introduced)
-const float kAmbient = 0.1;
 
 // ACES filmic tone mapping (Narkowicz approximation): HDR -> LDR
 vec3 ACESFilm(vec3 x) {
@@ -77,6 +79,12 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float rough) {
 // Fresnel reflectance (Schlick approximation)
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Fresnel reflectance with roughness (for the ambient/IBL specular term)
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float rough) {
+    return F0 + (max(vec3(1.0 - rough), F0) - F0)
+              * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 // Cook-Torrance outgoing radiance contributed by a single light
@@ -140,8 +148,12 @@ void main() {
         Lo += CalcLight(i, N, V, albedo, rough, F0);
     }
 
-    // Constant ambient term (placeholder for IBL), modulated by AO
-    vec3 ambient = kAmbient * albedo * ao;
+    // Ambient from a constant environment color (cheap IBL stand-in):
+    // dielectric diffuse + metallic specular reflection (grazing-aware Fresnel)
+    float NdotV = max(dot(N, V), 0.0);
+    vec3 Fa  = FresnelSchlickRoughness(NdotV, F0, rough);
+    vec3 kDa = (1.0 - Fa) * (1.0 - metallic);
+    vec3 ambient = (kDa * albedo + Fa) * ambientColor * ao;
     vec3 color = ambient + Lo;
 
     // Tone mapping (HDR -> LDR) and gamma correction (linear -> sRGB)

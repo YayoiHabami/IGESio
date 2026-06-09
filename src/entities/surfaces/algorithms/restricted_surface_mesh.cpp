@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/polygon.h"
+#include "igesio/numerics/geometric/polygon.h"
 
 namespace igesio::entities {
 

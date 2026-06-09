@@ -7,14 +7,18 @@
  */
 #include "igesio/entities/surfaces/tabulated_cylinder.h"
 
+#include <cmath>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/common/errors.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -22,6 +26,21 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::TabulatedCylinder;
 using igesio::Vector3d;
+
+/// @brief nullptrチェックを行った上で準線のIDを取得する
+/// @param directrix 準線エンティティ
+/// @return 準線のObjectID
+/// @throw std::invalid_argument directrixがnullptrの場合
+/// @note 委譲コンストラクタの引数リスト内で逆参照する前に
+///       nullptrを検出するためのヘルパー
+igesio::ObjectID GetDirectrixID(
+        const std::shared_ptr<i_ent::ICurve>& directrix) {
+    if (directrix == nullptr) {
+        throw std::invalid_argument(
+            "Directrix curve of TabulatedCylinder cannot be nullptr.");
+    }
+    return directrix->GetID();
+}
 
 }  // namespace
 
@@ -48,12 +67,8 @@ TabulatedCylinder::TabulatedCylinder(
 
 TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
                                      const Vector3d& location_vector)
-        : TabulatedCylinder({directrix->GetID(), location_vector(0),
+        : TabulatedCylinder({GetDirectrixID(directrix), location_vector(0),
                              location_vector(1), location_vector(2)}) {
-    if (directrix == nullptr) {
-        throw std::invalid_argument(
-            "Directrix curve of TabulatedCylinder cannot be nullptr.");
-    }
     // 曲線の始点とlocation_vectorが一致する場合はエラー
     auto start_pt_opt = directrix->TryGetDefinedStartPoint();
     if (start_pt_opt.has_value()) {
@@ -70,11 +85,7 @@ TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
 TabulatedCylinder::TabulatedCylinder(const std::shared_ptr<ICurve>& directrix,
                                      const Vector3d& direction,
                                      const double length)
-        : TabulatedCylinder({directrix->GetID(), 0.0, 0.0, 0.0}) {
-    if (directrix == nullptr) {
-        throw std::invalid_argument(
-            "Directrix curve of TabulatedCylinder cannot be nullptr.");
-    }
+        : TabulatedCylinder({GetDirectrixID(directrix), 0.0, 0.0, 0.0}) {
     auto start_pt_opt = directrix->TryGetDefinedStartPoint();
     if (!start_pt_opt.has_value()) {
         throw std::invalid_argument(
@@ -251,20 +262,36 @@ std::array<double, 4> TabulatedCylinder::GetParameterRange() const {
     return {u_start, u_end, 0.0, 1.0};
 }
 
+std::vector<double> TabulatedCylinder::GetUCreaseParameters() const {
+    auto directrix_curve = directrix_.TryGetEntity<ICurve>();
+    if (!directrix_curve) return {};
+
+    // u = (t - t_start)/(t_end - t_start) で準線の角点tをuへ写像する
+    auto [t_start, t_end] = directrix_curve.value()->GetParameterRange();
+    const double dt = t_end - t_start;
+    if (!std::isfinite(dt) || i_num::IsApproxZero(dt)) return {};
+
+    std::vector<double> result;
+    for (const double t_c : directrix_curve.value()->GetCornerParams()) {
+        result.push_back((t_c - t_start) / dt);
+    }
+    return result;
+}
+
 std::optional<i_ent::SurfaceDerivatives>
 TabulatedCylinder::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
     // ポインタの確認
     if (!directrix_.IsPointerSet()) return std::nullopt;
 
-    // パラメータ範囲の確認
+    // パラメータ範囲の確認 (境界の浮動小数点誤差を許容し域内へ丸める)
     auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (u < umin || u > umax || v < vmin || v > vmax) {
-        return std::nullopt;
-    }
+    auto uc = i_num::TryClampToRange(u, umin, umax);
+    auto vc = i_num::TryClampToRange(v, vmin, vmax);
+    if (!uc || !vc) return std::nullopt;
 
     // 準線の導関数を計算
-    double t = GetDirectrixParameterAtU(u);
+    double t = GetDirectrixParameterAtU(*uc);
     auto deriv_opt = GetDirectrix()->TryGetDerivatives(t, order);
     if (!deriv_opt.has_value()) return std::nullopt;
     const auto& c_deriv = deriv_opt.value();
@@ -277,7 +304,7 @@ TabulatedCylinder::TryGetDefinedDerivatives(
     SurfaceDerivatives s_deriv(order);
 
     // S^(0, 0) = C(t) + v * D
-    s_deriv(0, 0) = c_deriv[0] + v * GetDirection();
+    s_deriv(0, 0) = c_deriv[0] + *vc * GetDirection();
 
     // S^(n_u, 0) = C^(n_u)(t) * (dt/du)^(n_u)
     for (unsigned int n_u = 1; n_u <= order; ++n_u) {
@@ -331,6 +358,7 @@ void TabulatedCylinder::SetDirectrix(const std::shared_ptr<ICurve>& directrix) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::ICurve> TabulatedCylinder::GetDirectrix() const {
@@ -352,6 +380,7 @@ void TabulatedCylinder::SetLocationVector(const Vector3d& location_vector) {
     }
 
     location_vector_ = location_vector;
+    MarkGeometryModified();
 }
 
 Vector3d TabulatedCylinder::GetLocationVector() const {
@@ -373,6 +402,7 @@ void TabulatedCylinder::SetDirection(const Vector3d& direction, const double len
                 "location vector of TabulatedCylinder cannot be the same.");
         }
         location_vector_ = new_location_vector;
+        MarkGeometryModified();
     } else {
         // 曲線の始点が不明な場合は、位置ベクトルを更新しない
         throw igesio::ReferenceError(
@@ -388,6 +418,19 @@ Vector3d TabulatedCylinder::GetDirection() const {
         throw igesio::ReferenceError(
             "Cannot get direction because directrix start point is invalid.");
     }
+}
+
+std::optional<Vector3d> TabulatedCylinder::TryGetDefinedDirection() const {
+    auto directrix = directrix_.TryGetEntity<ICurve>();
+    if (!directrix) return std::nullopt;
+    auto start_pt_opt = directrix.value()->TryGetDefinedStartPoint();
+    if (!start_pt_opt.has_value()) return std::nullopt;
+    return location_vector_ - start_pt_opt.value();
+}
+
+std::optional<Vector3d> TabulatedCylinder::TryGetDirection() const {
+    // 方向ベクトルはベクトルとして変換する (v' = Rv)
+    return Transform(TryGetDefinedDirection(), false);
 }
 
 
@@ -412,4 +455,37 @@ double TabulatedCylinder::GetDirectrixParameterAtU(const double u) const {
     }
 
     return t_start + u * (t_end - t_start);  // tの範囲が有限の場合
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<TabulatedCylinder> i_ent::MakeTabulatedCylinder(
+        const std::shared_ptr<ICurve>& directrix,
+        const Vector3d& location_vector) {
+    if (directrix == nullptr) {
+        throw std::invalid_argument(
+            "MakeTabulatedCylinder: directrix must not be nullptr.");
+    }
+    return std::make_shared<TabulatedCylinder>(directrix, location_vector);
+}
+
+std::shared_ptr<TabulatedCylinder> i_ent::MakeExtrudedSurface(
+        const std::shared_ptr<ICurve>& directrix,
+        const Vector3d& extrusion) {
+    if (directrix == nullptr) {
+        throw std::invalid_argument(
+            "MakeExtrudedSurface: directrix must not be nullptr.");
+    }
+    if (i_num::IsApproxZero(extrusion.norm())) {
+        throw igesio::EntityValueError(
+            "MakeExtrudedSurface: extrusion vector must not be zero.");
+    }
+    // コンストラクタは始点 + direction.normalized()*length を終点とするため、
+    // (extrusion, |extrusion|) を渡すと終点はC(0) + extrusionとなる
+    return std::make_shared<TabulatedCylinder>(
+            directrix, extrusion, extrusion.norm());
 }

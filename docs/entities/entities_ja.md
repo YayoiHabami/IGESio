@@ -184,21 +184,19 @@ if (entity->IsSupported()) {
 >                     └─ IColorDefinition <─┘
 > ```
 
-　`ColorDefinition`クラスは、エンティティの色を定義するためのエンティティクラスです。IGESファイル内で定義された色を表現し、他のエンティティに適用することができます。以下のコード例は、RGB値 (30, 50, 100) を持つColorDefinitionエンティティを生成し、`CircularArc`エンティティに適用しています（図参照）。
+　`ColorDefinition`クラスは、エンティティの色を定義するためのエンティティクラスです。IGESファイル内で定義された色を表現し、他のエンティティに適用することができます。以下のコード例は、カラーコード#4C7FFFを持つColorDefinitionエンティティを生成し、`CircularArc`エンティティに適用しています（図参照）。
 
-　注意点として、通常のRGB値は (0-255) の範囲で指定されますが、`ColorDefinition`クラスでは (0.0-100.0) の範囲で指定します。例えば、RGB値 (76, 127, 255) は (30.0, 50.0, 100.0) として指定します。
+　なお、IGESの色定義はRGB各成分を (0.0-100.0) の範囲で保持し、`MakeColorDefinition`はこのスケールでRGB値を直接指定します。0〜255スケールの値や16進カラーコードから作成する場合は、換算不要の`MakeColorDefinitionFromRGB255`・`MakeColorDefinitionFromHex`を使用できます。
 
 ```cpp
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{0.0, 0.0}, 1.0);
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{0.0, 0.0}, 1.0);
 
-auto blue_circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{3.0, 0.0}, 1.0);
+auto blue_circle = igesio::entities::MakeCircle(igesio::Vector2d{3.0, 0.0}, 1.0);
 
-// Create a Color Definition entity (≈ #4C7FFF)
+// Create a Color Definition entity (#4C7FFF)
 // and overwrite the color of the blue_circle entity.
-auto color_def = std::make_shared<igesio::entities::ColorDefinition>(
-        std::array<double, 3>{30.0, 50.0, 100.0}, "Bright Blue");
+auto color_def = igesio::entities::MakeColorDefinitionFromHex(
+        "#4C7FFF", "Bright Blue");
 blue_circle->OverwriteColor(color_def);
 ```
 
@@ -224,17 +222,12 @@ blue_circle->OverwriteColor(color_def);
 
 ```cpp
 // 1. circle: center (-1.25, 0), radius 1
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{-1.25, 0.0}, 1.0);
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{-1.25, 0.0}, 1.0);
 
 // 2. arc: center (1.25, 0), radius 1, start angle 4π/3, end angle 5π/2
-double start_angle = 4.0 * igesio::kPi / 3.0;
-double end_angle = 5.0 * igesio::kPi / 2.0;
-auto arc_start = igesio::Vector2d{1.25 + cos(start_angle), sin(start_angle)};
-auto arc_end   = igesio::Vector2d{1.25 + cos(end_angle),   sin(end_angle)};
-
-auto arc = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{1.25, 0.0}, arc_start, arc_end);
+auto arc = igesio::entities::MakeCircularArc(
+        igesio::Vector2d{1.25, 0.0}, 1.0,
+        4.0 * igesio::kPi / 3.0, 5.0 * igesio::kPi / 2.0);
 ```
 
 <img src="./images/circular_arc.png" width=600px alt="CircularArc Example" />
@@ -259,26 +252,24 @@ using igesio::Vector3d;
 
 // 1. arc: center (0.5, -1), radius 1.5, start (-1, -1), end (2, -1) (CCW)
 // -> CircularArc is defined clockwise, so use transformation matrix to flip and translate
-auto comp_1_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::AngleAxisd(igesio::kPi, Vector3d::UnitY()), Vector3d{0.5, -1.0, 0.0});
-auto comp_1 = std::make_shared<igesio::entities::CircularArc>(
+auto comp_1_trans = igesio::entities::MakeTransformationMatrix(
+        igesio::AngleAxisd(igesio::kPi, Vector3d::UnitY()).toRotationMatrix(),
+        Vector3d{0.5, -1.0, 0.0});
+auto comp_1 = igesio::entities::MakeCircularArc(
         Vector2d{0.0, 0.0}, Vector2d{-1.5, 0.0}, Vector2d{1.5, 0.0});
 comp_1->OverwriteTransformationMatrix(comp_1_trans);
 
 // 2. line: start (-1, -1), end (1, 1)
-auto comp_2 = std::make_shared<igesio::entities::Line>(
+auto comp_2 = igesio::entities::MakeLine(
         Vector3d{-1.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
 // 3. arc: center (-0.5, 1), radius 1.5, start (1, 1), end (-2, 1) (CW)
-auto comp_3 = std::make_shared<igesio::entities::CircularArc>(
+auto comp_3 = igesio::entities::MakeCircularArc(
         Vector2d{-0.5, 1.0}, Vector2d{1.0, 1.0}, Vector2d{-2.0, 1.0});
 
 // Composite curve
 // arc1 --> line --> arc2
-auto comp_curve = std::make_shared<igesio::entities::CompositeCurve>();
-comp_curve->AddCurve(comp_1);
-comp_curve->AddCurve(comp_2);
-comp_curve->AddCurve(comp_3);
+auto comp_curve = igesio::entities::MakeCompositeCurve({comp_1, comp_2, comp_3});
 ```
 
 <img src="./images/composite_curve.png" width=300px alt="CompositeCurve Example" />
@@ -302,15 +293,15 @@ comp_curve->AddCurve(comp_3);
 ```cpp
 // 1. ellipse arc: center (0, 3), axis (x, y) = (3, 2),
 //    start angle 7π/4, end angle 17π/6
-auto ellipse_arc = std::make_shared<igesio::entities::ConicArc>(
-        std::pair<double, double>{-3.0, 2.0},  // radii (rx, ry)
+auto ellipse_arc = igesio::entities::MakeEllipticArc(
+        -3.0, 2.0,          // radii (rx, ry)
         7.0 * kPi / 4.0,    // start angle
         17.0 * kPi / 6.0);  // end angle
 
 // Note: Since elliptical arc entities are defined with the origin
 // as their center, use a transformation matrix entity to move the origin.
-auto ellipse_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::Matrix3d::Identity(), igesio::Vector3d{0.0, 3.0, 0.0});
+auto ellipse_trans =
+        igesio::entities::MakeTranslation(igesio::Vector3d{0.0, 3.0, 0.0});
 ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 ```
 
@@ -350,12 +341,10 @@ ellipse_arc->OverwriteTransformationMatrix(ellipse_trans);
 　`CopiousData`は、フォーム1～3 (座標2つ組、座標3つ組、座標6つ組) の点群データを表現するためのクラスです。以下のコード例は、5つの3次元座標点からなる点群を生成します（[CopiousDataBaseの図参照](#copiousdatabase-type-106)）。
 
 ```cpp
-igesio::Matrix3Xd copious_coords(3, 5);
-copious_coords << 3.0,  2.0, 2.0, 0.0, -1.0,
-                  0.0,  1.0, 2.0, 3.0,  2.0,
-                  1.0, -1.0, 0.0, 1.0,  0.0;
-auto copious = std::make_shared<igesio::entities::CopiousData>(
-        igesio::entities::CopiousDataType::kPoints3D, copious_coords);
+const std::vector<igesio::Vector3d> copious_points{
+        {3.0, 0.0, 1.0}, {2.0, 1.0, -1.0}, {2.0, 2.0, 0.0},
+        {0.0, 3.0, 1.0}, {-1.0, 2.0, 0.0}};
+auto copious = igesio::entities::MakeCopiousData(copious_points);
 ```
 
 #### `LinearPath` (type 106, forms 11-13)
@@ -371,10 +360,9 @@ auto copious = std::make_shared<igesio::entities::CopiousData>(
 　`LinearPath`は、フォーム11～13 (座標2つ組、座標3つ組、座標6つ組) の折れ線データを表現するためのクラスです。以下のコード例は、5つの3次元座標点からなる折れ線を生成します（[CopiousDataBaseの図参照](#copiousdatabase-type-106)）。与える点群は[CopiousData](#copiousdata-type-106-forms-1-3)と同じですが、右方向に $5$ だけシフトしています。
 
 ```cpp
-auto copious_trans = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::Matrix3d::Identity(), igesio::Vector3d{5.0, 0.0, 0.0});
-auto linear_path = std::make_shared<igesio::entities::LinearPath>(
-        igesio::entities::CopiousDataType::kPolyline3D, copious_coords);
+auto copious_trans =
+        igesio::entities::MakeTranslation(igesio::Vector3d{5.0, 0.0, 0.0});
+auto linear_path = igesio::entities::MakeLinearPath(copious_points);
 linear_path->OverwriteTransformationMatrix(copious_trans);
 ```
 
@@ -394,22 +382,16 @@ linear_path->OverwriteTransformationMatrix(copious_trans);
 using igesio::Vector3d;
 
 // 1. segment: start (0, -1, 0), end (1, 1, 0)
-auto start = Vector3d{0.0, -1.0, 0.0};
-auto end = Vector3d{1.0, 1.0, 0.0};
-auto line_segment = std::make_shared<igesio::entities::Line>(
-        start, end, igesio::entities::LineType::kSegment);
+auto line_segment = igesio::entities::MakeLine(
+        Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
 // 2. semi-infinite line: start (2, -1, 0), direction (1, 2, 0)
-start = Vector3d{2.0, -1.0, 0.0};
-end = start + Vector3d{1.0, 2.0, 0.0};
-auto ray = std::make_shared<igesio::entities::Line>(
-        start, end, igesio::entities::LineType::kRay);
+auto ray = igesio::entities::MakeRay(
+        Vector3d{2.0, -1.0, 0.0}, Vector3d{1.0, 2.0, 0.0});
 
 // 3. infinite line: point (4, -1, 0), direction (1, 2, 0)
-start = Vector3d{4.0, -1.0, 0.0};
-end = start + Vector3d{1.0, 2.0, 0.0};
-auto line = std::make_shared<igesio::entities::Line>(
-        start, end, igesio::entities::LineType::kLine);
+auto line = igesio::entities::MakeUnboundedLine(
+        Vector3d{4.0, -1.0, 0.0}, Vector3d{1.0, 2.0, 0.0});
 ```
 
 <img src="./images/line.png" width=400px alt="Line Example" />
@@ -441,26 +423,21 @@ $$\begin{aligned}
     &s = u - T(i)
 \end{aligned}$$
 
-　以下のコード例は、4つの区間に分割された3次のパラメトリックスプライン曲線を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。コード例で使用したパラメータの詳細な値については、[examples/sample_curves.cpp](../../examples/sample_curves.cpp)の`CreateParametricSplineCurve`関数を参照してください。
+　以下のコード例は、4つの区間に分割された3次のパラメトリックスプライン曲線を生成します（図参照）。以下に示すように、ブレークポイントとセグメントごとの多項式係数を`MakeParametricSplineCurve`ファクトリ関数に渡してインスタンスを生成します（末端のTP値は自動計算されます）。コード例で使用したパラメータの詳細な値については、[examples/sample_curves.cpp](../../examples/sample_curves.cpp)の`CreateParametricSplineCurve`関数を参照してください。
 
 ```cpp
-auto param = igesio::IGESParameterVector{
-    6,     // CTYPE: B-Spline
-    3, 3,  // degree, NDIM (3D)
-    4,     // number of segments
-    0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
-     1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
-     0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
-     5.,     0.,    3.,   -2.,  // Az(1) ~ Dz(1)
-     // ...
-    -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
-     8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
-    11.5,    6.0,   0.0,   0.,  // Az(4) ~ Dz(4),
-    -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
-     8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
-    13.0,     6.0,  0.,   0.    // TPZ0 ~ TPZ3
-};
-auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
+const std::vector<double> breakpoints{0.0, 0.5, 1.0, 2.0, 2.25};
+std::vector<igesio::Matrix34d> coefficients(4);
+coefficients[0] <<  1.,     2.,   -5.,    1.,   // x: A(1) ~ D(1)
+                    0.,     2.,    3.,   -1.,   // y
+                    5.,     0.,    3.,   -2.;   // z
+// ... (coefficients[1], coefficients[2])
+coefficients[3] << -4.625, -2.25,  2.5,   8.,
+                    8.0,    2.0,  -3.0,   0.,
+                   11.5,    6.0,   0.0,   0.;
+
+auto spline_c = i_ent::MakeParametricSplineCurve(
+    i_ent::ParametricSplineCurveType::kBSpline, 3, breakpoints, coefficients);
 ```
 
 <img src="./images/parametric_spline_curve.png" width=400px alt="ParametricSplineCurve Example" />
@@ -481,7 +458,7 @@ auto spline_c = std::make_shared<i_ent::ParametricSplineCurve>(param);
 > Note: 現在、Subfigure Definitionエンティティは未実装です。
 
 ```cpp
-auto point = std::make_shared<i_ent::Point>(Vector3d{1.0, 2.0, 3.0});
+auto point = i_ent::MakePoint(Vector3d{1.0, 2.0, 3.0});
 point->OverwriteColor(i_ent::ColorNumber::kMagenta);
 ```
 
@@ -499,25 +476,18 @@ point->OverwriteColor(i_ent::ColorNumber::kMagenta);
 >                     └─ IGeometry <──  ICurve  <── ICurve3D <─┘
 > ```
 
-　`RationalBSplineCurve`は、3次元空間内の有理Bスプライン曲線を表現するためのクラスです。以下のコード例は、4つの制御点、3次の非周期的開放NURBS曲線を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。
-
-　この際の注意点として、`IGESParameterVector`には、intとdoubleを明確に区別して渡してください。例えば以下の7つ目のパラメータ (1つ目のノットベクトル値; `0.0`) を、`0` (int) として渡すと、エラーが発生します。
+　`RationalBSplineCurve`は、3次元空間内の有理Bスプライン曲線を表現するためのクラスです。以下のコード例は、ファクトリ関数`MakeRationalBSplineCurve`を用いて、4つの制御点、3次の非周期的開放NURBS曲線を生成します（図参照）。重み（すべて`1.0`）とパラメータ範囲（ノット定義域）は省略でき、平面性 (PROP1) などのフラグは与えたデータから自動的に導出されます。
 
 ```cpp
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    -4.0, -4.0,  0.0,    // control point P(0)
-    -1.5,  7.0,  3.5,    // control point P(1)
-     4.0, -3.0,  1.0,    // control point P(2)
-     4.0,  4.0,  0.0,    // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto nurbs_c = std::make_shared<igesio::entities::RationalBSplineCurve>(param);
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = igesio::Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+cps.col(1) = igesio::Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+cps.col(2) = igesio::Vector3d( 4.0, -3.0, 1.0);  // control point P(2)
+cps.col(3) = igesio::Vector3d( 4.0,  4.0, 0.0);  // control point P(3)
+auto nurbs_c = igesio::entities::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 ```
 
 <img src="./images/rational_b_spline_curve.png" width=400px alt="RationalBSplineCurve Example" />
@@ -553,35 +523,27 @@ $$\begin{aligned}
 　`MakeCurveOnAParametricSurface`関数は、`CurveOnAParametricSurface`エンティティと、3次元空間上での曲線表現である`ICurve`エンティティのペアを返します。これは、`CurveOnAParametricSurface`クラスはパラメトリック曲線として定義されますが、IGES 5.3の仕様上、3次元空間上での曲線表現（エンティティ）も必要となるためです。
 
 ```cpp
-// Create NURBS surface
-auto param_s = igesio::IGESParameterVector{
-        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-        3, 3,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,         // PROP1-5
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-        // ... (Weights and Control Points are omitted for brevity)
-        0., 3., 0., 3.     // Parameter range in U and V
-};
-auto nurbs_s = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
+// Create NURBS surface (6x6 control points, degree 3 in U and V)
+// cp_grid[i][j] = P(i,j); weights (all 1.0) and the parameter range are defaulted
+std::vector<std::vector<igesio::Vector3d>> cp_grid = /* ... (see sample_curves.cpp) */;
+auto nurbs_s = i_ent::MakeRationalBSplineSurface(
+    {3, 3},                                    // degrees {M1, M2}
+    cp_grid,
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 nurbs_s->OverwriteColor(i_ent::ColorNumber::kGreen);
 
 // Create a curve in the parameter space (u,v) of the surface
-auto param_c = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         0.0,  0.0,  0.0,    // control point P(0)
-         0.0,  4.0,  0.0,    // control point P(1)
-         2.0, -2.0,  0.0,    // control point P(2)
-         1.5,  2.0,  0.0,    // control point P(3)
-         3.0,  3.0,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto nurbs_c = std::make_shared<i_ent::RationalBSplineCurve>(param_c);
+igesio::Matrix3Xd cps(3, 5);
+cps.col(0) = igesio::Vector3d(0.0,  0.0, 0.0);   // control point P(0)
+cps.col(1) = igesio::Vector3d(0.0,  4.0, 0.0);   // control point P(1)
+cps.col(2) = igesio::Vector3d(2.0, -2.0, 0.0);   // control point P(2)
+cps.col(3) = igesio::Vector3d(1.5,  2.0, 0.0);   // control point P(3)
+cps.col(4) = igesio::Vector3d(3.0,  3.0, 0.0);   // control point P(4)
+auto nurbs_c = i_ent::MakeRationalBSplineCurve(
+    3,                                               // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // Create CurveOnAParametricSurface entity
 // This returns a pair of entities:
@@ -627,27 +589,21 @@ $$\begin{aligned}
 
 ```cpp
 // curve1: Line
-auto curve1 = std::make_shared<i_ent::Line>(
-    Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
+auto curve1 = i_ent::MakeLine(Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
 
-// curve2: Rational B-Spline Curve
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    -5.0, 0.0, -6.0,     // control point P(0)
-    -3.0, 4.0, -6.0,     // control point P(1)
-     3.0, 4.0, -6.0,     // control point P(2)
-     5.0, 0.0, -6.0,     // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto curve2 = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// curve2: Rational B-Spline Curve (4 control points, degree 3)
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(-5.0, 0.0, -6.0);  // control point P(0)
+cps.col(1) = Vector3d(-3.0, 4.0, -6.0);  // control point P(1)
+cps.col(2) = Vector3d( 3.0, 4.0, -6.0);  // control point P(2)
+cps.col(3) = Vector3d( 5.0, 0.0, -6.0);  // control point P(3)
+auto curve2 = i_ent::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // Ruled surface
-auto ruled_surf = std::make_shared<i_ent::RuledSurface>(curve1, curve2);
+auto ruled_surf = i_ent::MakeRuledSurface(curve1, curve2);
 ruled_surf->OverwriteColor(i_ent::ColorNumber::kGreen);
 ```
 
@@ -678,28 +634,21 @@ using igesio::Vector3d;
 namespace i_ent = igesio::entities;
 
 // Axis line
-auto axis_line = std::make_shared<i_ent::Line>(
-    Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
+auto axis_line = i_ent::MakeLine(Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
 
-// Generatrix curve (Rational B-Spline Curve)
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    1.0, -4.0,  0.0,    // control point P(0)
-    1.0, -5.0,  1.5,    // control point P(1)
-    1.0, -3.0,  2.0,    // control point P(2)
-    1.0,  0.0,  4.0,    // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto generatrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// Generatrix curve (Rational B-Spline Curve; 4 control points, degree 3)
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(1.0, -4.0, 0.0);  // control point P(0)
+cps.col(1) = Vector3d(1.0, -5.0, 1.5);  // control point P(1)
+cps.col(2) = Vector3d(1.0, -3.0, 2.0);  // control point P(2)
+cps.col(3) = Vector3d(1.0,  0.0, 4.0);  // control point P(3)
+auto generatrix = i_ent::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // Surface of revolution
-auto surf_rev = std::make_shared<i_ent::SurfaceOfRevolution>(
-    axis_line, generatrix, 0.0, kPi);
+auto surf_rev = i_ent::MakeSurfaceOfRevolution(axis_line, generatrix, 0.0, kPi);
 surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
 ```
 
@@ -721,36 +670,31 @@ surf_rev->OverwriteColor(i_ent::ColorNumber::kYellow);
 
 $$S(u, v) = C(t) + v(L - C(0)) = C(t) + vD$$
 
-ここで、$D$ は方向ベクトルであり、$C(0)$ は曲線 $C(t)$ の始点です。また、$t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$、$u,v \in [0, 1]$ です。IGES 5.3では、押し出し開始位置 $L$ をパラメータとして指定します。本ライブラリでは、以下のコード例に示すように、押し出し方向ベクトル $D$ を直接指定することも可能です。
+ここで、$D$ は方向ベクトルであり、$C(0)$ は曲線 $C(t)$ の始点です。また、$t = t_{\text{start}} + u(t_{\text{end}} - t_{\text{start}})$、$u,v \in [0, 1]$ です。IGES 5.3では、母線の終点 $L$ をパラメータとして指定します（`MakeTabulatedCylinder(directrix, location)`が対応）。本ライブラリでは、以下のコード例に示すように、`MakeExtrudedSurface(directrix, extrusion)`により押し出しベクトル $D$ を直接指定することも可能です。
 
-　以下のコード例は、[RationalBSplineCurve](#rationalbsplinecurve-type-126)を準線とし、方向ベクトル $D = 3 * [1, -1, 0]^\top$ に沿って押しだした平行曲面を生成します（図参照）。
+　以下のコード例は、[RationalBSplineCurve](#rationalbsplinecurve-type-126)を準線とし、押し出しベクトル $D = 3 \cdot [1, -1, 0]^\top / \|[1, -1, 0]\|$（方向 $[1, -1, 0]^\top$、長さ3）に沿って押し出した平行曲面を生成します（図参照）。
 
 ```cpp
-// Directrix curve
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    2,  // degree
-    false, false, false, false,   // non-periodic open NURBS curve
-    0., 0., 0., 0.5, 1., 1., 1.,  // knot vector
-    1., 1., 1., 1.,               // weights
-    0.0, -4.0, -4.0,              // control points P(0)
-    0.0,  0.2, -1.1,              // control points P(1)
-    0.0, -1.0,  4.5,              // control points P(2)
-    0.0,  4.0,  4.0,              // control points P(3)
-    0.0, 1.0,                     // parameter range V(0), V(1)
-    1., 0., 0.                    // normal vector of the defining plane
-};
-auto directrix = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// Directrix curve (4 control points, degree 2)
+igesio::Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(0.0, -4.0, -4.0);  // control point P(0)
+cps.col(1) = Vector3d(0.0,  0.2, -1.1);  // control point P(1)
+cps.col(2) = Vector3d(0.0, -1.0,  4.5);  // control point P(2)
+cps.col(3) = Vector3d(0.0,  4.0,  4.0);  // control point P(3)
+auto directrix = i_ent::MakeRationalBSplineCurve(
+    2,                               // degree
+    cps,
+    {0., 0., 0., 0.5, 1., 1., 1.});  // knot vector
 
 // Axis direction
 Vector3d axis_dir{1., -1., 0.};
 double axis_length = 3.0;
 
 // Tabulated cylinder
-// 押し出し方向ベクトル D = axis_length * axis_dirを指定する場合
-// -> 押し出し位置Lを指定する場合は、directrixとVector3d型のlocationの2つを引数に与える
-auto tab_cyl = std::make_shared<i_ent::TabulatedCylinder>(
-        directrix, axis_dir, axis_length);
+// 押し出しベクトル D = axis_length * axis_dir.normalized() で準線を押し出す
+// -> 母線の終点Lを直接指定する場合はMakeTabulatedCylinder(directrix, location)を使用する
+auto tab_cyl = i_ent::MakeExtrudedSurface(
+        directrix, axis_dir.normalized() * axis_length);
 tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 ```
 
@@ -768,29 +712,22 @@ tab_cyl->OverwriteColor(i_ent::ColorNumber::kCyan);
 >                     └─ IGeometry <── ISurface <───┘
 > ```
 
-　`RationalBSplineSurface`は、3次元空間内の有理Bスプライン曲面を表現するためのクラスです。以下のコード例は、6x6個の制御点、3次の非周期的開放NURBS曲面を生成します（図参照）。以下に示すように、`IGESParameterVector`構造体を用いてパラメータをまとめて渡し、インスタンスを生成します。コード例で使用したパラメータの詳細な値については、[examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)の`CreateRationalBSplineSurface`関数を参照してください。
-
-　この際の注意点として、`IGESParameterVector`には、intとdoubleを明確に区別して渡してください。例えば以下の8つ目のパラメータ (1つ目のUノットベクトル値; `0.0`) を、`0` (int) として渡すと、エラーが発生します。
+　`RationalBSplineSurface`は、3次元空間内の有理Bスプライン曲面を表現するためのクラスです。以下のコード例は、ファクトリ関数`MakeRationalBSplineSurface`を用いて、6x6個の制御点、3次の非周期的開放NURBS曲面を生成します（図参照）。制御点は`cp_grid[i][j]`が$P(i,j)$（$i$: U方向、$j$: V方向）に対応するグリッドとして与えます。重み（すべて`1.0`）とパラメータ範囲（ノット定義域）は省略でき、閉フラグ (PROP1/PROP2) などは与えたデータから自動的に導出されます。コード例で使用したパラメータの詳細な値については、[examples/sample_surfaces.cpp](../../examples/sample_surfaces.cpp)の`CreateRationalBSplineSurface`関数を参照してください。
 
 ```cpp
-// Freeform surface
-auto param = igesio::IGESParameterVector{
-    5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-    3, 3,  // M1, M2 (Degree in U and V)
-    false, false, true, false, false,         // PROP1-5
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(5,1)
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,2) to W(5,3)
-    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,4) to W(5,5)
-    // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
-    -25., -25., -10.,  // Control point (0,0)
-    -15., -25., -8.,   // Control point (1,0)
+// Freeform surface (6x6 control points, degree 3 in U and V)
+// cp_grid[i][j] = P(i,j)
+std::vector<std::vector<igesio::Vector3d>> cp_grid{
+    {igesio::Vector3d(-25., -25., -10.), igesio::Vector3d(-25., -15., -5.),
+     /* ... */ igesio::Vector3d(-25., 25., -10.)},  // P(0,j)
     // ...
-    25., 25., -10.,    // Control point (5,5)
-    0., 3., 0., 3.     // Parameter range in U and V
-};
-auto nurbs_freeform = std::make_shared<igesio::entities::RationalBSplineSurface>(param);
+    {igesio::Vector3d(25., -25., -10.), igesio::Vector3d(25., -15., -5.),
+     /* ... */ igesio::Vector3d(25., 25., -10.)}};  // P(5,j)
+auto nurbs_freeform = igesio::entities::MakeRationalBSplineSurface(
+    {3, 3},                                    // degrees {M1, M2}
+    cp_grid,
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 nurbs_freeform->OverwriteColor(igesio::entities::ColorNumber::kCyan);
 ```
 
@@ -823,21 +760,20 @@ $$\Omega = \overline{\mathrm{int}(\partial\Omega_{\text{out}})} \cap \bigcap_{i=
 ```cpp
 namespace i_ent = igesio::entities;
 
-// 1. ベース曲面の作成 (NURBS Surface)
-auto base_surface = std::make_shared<i_ent::RationalBSplineSurface>(param_s);
+// 1. ベース曲面の作成 (NURBS Surface; RationalBSplineSurfaceの節を参照)
+auto base_surface = i_ent::MakeRationalBSplineSurface(
+        degrees, cp_grid, u_knots, v_knots);
 
 // 2. 内側境界（穴）の作成
 // パラメータ空間(u, v)上での円弧を定義
-auto circle_u_v = std::make_shared<i_ent::CircularArc>(
-        igesio::Vector2d{1.5, 1.5}, 0.5);
+auto circle_u_v = i_ent::MakeCircle(igesio::Vector2d{1.5, 1.5}, 0.5);
 // Type 142として構成
 auto [inner_boundary, inner_cons] = i_ent::MakeCurveOnAParametricSurface(
         base_surface, circle_u_v);
 
 // 3. トリム済み曲面の構成
-// 外側境界にベース曲面のパラメータ矩形 D を使用する場合 (N1=0)
-auto trimmed_surf = std::make_shared<i_ent::TrimmedSurface>(base_surface);
-trimmed_surf->AddInnerBoundary(inner_boundary);
+// 外側境界にベース曲面のパラメータ矩形Dを使用する場合 (N1=0; nullptrを渡す)
+auto trimmed_surf = i_ent::MakeTrimmedSurface(base_surface, nullptr, {inner_boundary});
 
 // 有効定義域内であれば、ベース曲面の値を返す
 auto derivs = trimmed_surf->TryGetDerivatives(0.0, 0.0, 1); // 有効
@@ -874,13 +810,12 @@ $$T = \begin{bmatrix} R & P \\ 0 & 1 \end{bmatrix} \in \mathbb{R}^{4\times 4}$$
 
 ```cpp
 // (0,0,0) から (1,1,1) までの線分を定義
-auto segment = std::make_shared<igesio::entities::Line>(
-        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 1.0},
-        igesio::entities::LineType::kSegment);
+auto segment = igesio::entities::MakeLine(
+        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 1.0});
 
 // 変換行列を定義: 回転なし、平行移動ベクトル = (1,2,3)
-auto transform = std::make_shared<igesio::entities::TransformationMatrix>(
-        igesio::Matrix3d::Identity(), igesio::Vector3d{1.0, 2.0, 3.0});
+auto transform =
+        igesio::entities::MakeTranslation(igesio::Vector3d{1.0, 2.0, 3.0});
 
 // 変換行列を線分に適用: segmentは (1,2,3) から (2,3,4) を結ぶ線分となる
 segment->OverwriteTransformationMatrix(transform);

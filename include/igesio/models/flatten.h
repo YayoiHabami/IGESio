@@ -12,7 +12,7 @@
 
 #include <memory>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/entity_base.h"
 #include "igesio/entities/transformations/transformation_matrix.h"
 #include "igesio/models/iges_data.h"

@@ -1,11 +1,11 @@
 /**
- * @file numerics/combinatorics.cpp
+ * @file numerics/core/combinatorics.cpp
  * @brief 組み合わせ数学に関するユーティリティ関数群
  * @author Yayoi Habami
  * @date 2025-10-23
  * @copyright 2025 Yayoi Habami
  */
-#include "igesio/numerics/combinatorics.h"
+#include "igesio/numerics/core/combinatorics.h"
 
 #include <stdexcept>
 

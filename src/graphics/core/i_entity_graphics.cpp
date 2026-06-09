@@ -26,7 +26,7 @@ using ShaderType = igesio::graphics::ShaderType;
  * コンストラクタ
  */
 
-IEntityGraphics::IEntityGraphics(const std::shared_ptr<i_graph::IOpenGL> gl,
+IEntityGraphics::IEntityGraphics(const std::shared_ptr<i_graph::IOpenGL>& gl,
                                  bool use_entity_transform)
         : gl_(gl), use_entity_transform_(use_entity_transform) {}
 
@@ -35,7 +35,8 @@ IEntityGraphics::IEntityGraphics(IEntityGraphics&& other) noexcept
           is_color_overridden_(other.is_color_overridden_),
           world_transform_(std::move(other.world_transform_)),
           use_entity_transform_(other.use_entity_transform_),
-          gl_(std::move(other.gl_)) {
+          gl_(std::move(other.gl_)),
+          synced_geometry_key_(other.synced_geometry_key_) {
     other.is_color_overridden_ = false;
 }
 
@@ -47,6 +48,7 @@ IEntityGraphics& IEntityGraphics::operator=(IEntityGraphics&& other) noexcept {
         world_transform_ = std::move(other.world_transform_);
         use_entity_transform_ = other.use_entity_transform_;
         gl_ = std::move(other.gl_);
+        synced_geometry_key_ = other.synced_geometry_key_;
 
         // ムーブ元のフラグをリセット
         other.is_color_overridden_ = false;
@@ -62,9 +64,9 @@ IEntityGraphics& IEntityGraphics::operator=(IEntityGraphics&& other) noexcept {
  */
 
 void IEntityGraphics::SetGlobalParam(
-        const std::shared_ptr<const models::GraphicsGlobalParam> global_param) {
+        const models::GraphicsGlobalParam& global_param) {
     // 編集のためにコピーを作成
-    auto copy = std::make_shared<models::GraphicsGlobalParam>(*global_param);
+    auto copy = std::make_shared<models::GraphicsGlobalParam>(global_param);
 
     if (copy->max_line_weight <= 1) {
         // 線の最大太さが1(多くのデフォルト)の場合、本ライブラリの仕様に合わせて拡張する
@@ -78,7 +80,7 @@ void IEntityGraphics::SetGlobalParam(
     global_param_ = copy;
 }
 
-void IEntityGraphics::SetWorldTransform(const igesio::Matrix4f& matrix) {
+void IEntityGraphics::SetWorldTransform(const igesio::Matrix4d& matrix) {
     world_transform_ = matrix;
 }
 

@@ -10,6 +10,7 @@
 #ifndef IGESIO_ENTITIES_CURVES_LINEAR_PATH_H_
 #define IGESIO_ENTITIES_CURVES_LINEAR_PATH_H_
 
+#include <memory>
 #include <vector>
 
 #include "igesio/entities/interfaces/i_curve.h"
@@ -126,6 +127,40 @@ class LinearPath : public CopiousDataBase,
         return TransformImpl(input, is_point);
     }
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 平面折れ線 (Form 11) または閉じた平面曲線 (Form 63) を作成する
+/// @param vertices 頂点列 (x, y)
+/// @param is_closed trueの場合はkPlanarLoop (Form 63)、
+///        falseの場合はkPlanarPolyline (Form 11) として作成する
+/// @param z_t 定義座標系におけるz座標 (全頂点で共通)
+/// @return 作成されたLinearPathのshared_ptr
+/// @throw igesio::EntityValueError 頂点が2点未満の場合
+std::shared_ptr<LinearPath> MakeLinearPath(
+        const std::vector<Vector2d>& vertices,
+        bool is_closed = false, double z_t = 0.0);
+
+/// @brief 3次元折れ線 (Form 12) を作成する
+/// @param vertices 頂点列 (x, y, z)
+/// @return 作成されたLinearPathのshared_ptr
+/// @throw igesio::EntityValueError 頂点が2点未満の場合
+std::shared_ptr<LinearPath> MakeLinearPath(
+        const std::vector<Vector3d>& vertices);
+
+/// @brief ベクトル付き折れ線 (Form 13) を作成する
+/// @param vertices 頂点列 (x, y, z)
+/// @param vectors 各頂点に対応するベクトル (i番目はvertices[i]に対応)
+/// @return 作成されたLinearPathのshared_ptr
+/// @throw igesio::EntityValueError 頂点が2点未満の場合、
+///        またはverticesとvectorsの数が異なる場合
+std::shared_ptr<LinearPath> MakeLinearPath(
+        const std::vector<Vector3d>& vertices,
+        const std::vector<Vector3d>& vectors);
 
 }  // namespace igesio::entities
 

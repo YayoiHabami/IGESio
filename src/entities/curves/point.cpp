@@ -186,6 +186,7 @@ void Point::SetSubfigure(const std::shared_ptr<ISubfigureDefinition>& subfigure)
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::ISubfigureDefinition> Point::GetSubfigure() const {
@@ -195,4 +196,13 @@ std::shared_ptr<const i_ent::ISubfigureDefinition> Point::GetSubfigure() const {
                                      "is not set or invalid.");
     }
     return ptr.value();
+}
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<Point> i_ent::MakePoint(const Vector3d& position) {
+    return std::make_shared<Point>(position);
 }

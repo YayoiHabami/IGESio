@@ -71,23 +71,20 @@ The function `TryGetPointAt` retrieves the point on the curve at the specified p
 #include <igesio/entities/curves/rational_b_spline_curve.h>
 
 namespace i_ent = igesio::entities;
+using igesio::Matrix3Xd;
 using igesio::Vector3d;
 
-// Create a Rational B-Spline Curve instance
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    -4.0, -4.0,  0.0,    // control point P(0)
-    -1.5,  7.0,  3.5,    // control point P(1)
-     4.0, -3.0,  1.0,    // control point P(2)
-     4.0,  4.0,  0.0,    // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto curve = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// Create a Rational B-Spline Curve instance (4 control points, degree 3)
+// weights (all 1.0) and the parameter range are defaulted
+Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+cps.col(1) = Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+cps.col(2) = Vector3d( 4.0, -3.0, 1.0);  // control point P(2)
+cps.col(3) = Vector3d( 4.0,  4.0, 0.0);  // control point P(3)
+auto curve = i_ent::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // Get the parameter range of the curve
 auto [u_start, u_end] = curve->GetParameterRange();
@@ -374,28 +371,24 @@ The function `TryGetPointAt` retrieves the point on the surface at the specified
 ```cpp
 #include <iostream>
 #include <memory>
-#include <igesio/entities/curves/rational_b_spline_surface.h>
+#include <igesio/entities/surfaces/rational_b_spline_surface.h>
 
 namespace i_ent = igesio::entities;
 using igesio::Vector3d;
 
-// Create a Rational B-Spline Surface instance
-auto param = igesio::IGESParameterVector{
-    5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-    3, 3,  // M1, M2 (Degree in U and V)
-    false, false, true, false, false,         // PROP1-5
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-    1., 1., 1., 1., 1., 1.,                   // Weights W(0,0) to W(5,0)
+// Create a Rational B-Spline Surface instance (6x6 control points, degree 3)
+// cp_grid[i][j] = P(i,j); weights (all 1.0) and the parameter range are defaulted
+std::vector<std::vector<Vector3d>> cp_grid{
+    {Vector3d(-25., -25., -10.), Vector3d(-25., -15., -5.),
+     /* ... */ Vector3d(-25., 25., -10.)},  // P(0,j)
     // ...
-    1., 1., 1., 1., 1., 1.,                   // Weights W(0,5) to W(5,5)
-    // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
-    -25., -25., -10.,  // Control point (0,0)
-    // ...
-    25., 25., -10.,    // Control point (5,5)
-    0., 3., 0., 3.     // Parameter range in U and V
-};
-auto surface = std::make_shared<i_ent::RationalBSplineSurface>(param);
+    {Vector3d(25., -25., -10.), Vector3d(25., -15., -5.),
+     /* ... */ Vector3d(25., 25., -10.)}};  // P(5,j)
+auto surface = i_ent::MakeRationalBSplineSurface(
+    {3, 3},                                    // degrees {M1, M2}
+    cp_grid,
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 
 // Get the parameter ranges of the surface
 auto [u_start, u_end] = surface->GetURange();
@@ -565,7 +558,7 @@ $$\begin{aligned}
         &= \int_{v_{\text{min}}}^{v_{\text{max}}} \int_{u_{\text{min}}}^{u_{\text{max}}} \sqrt{E(u,v)G(u,v) - F(u,v)^2} \, du \, dv
 \end{aligned}$$
 
-Here, $\sqrt{EG - F^2}$ represents the area element and means the area of a minute region on the surface. This equation is based on the idea of ​​considering the surface as a collection of minute parallelograms and finding the total area by adding up those areas. In this library, this double integral is approximately calculated using a function that performs numerical integration, such as the `Integrate` function in `igesio/numerics/integration.h`.
+Here, $\sqrt{EG - F^2}$ represents the area element and means the area of a minute region on the surface. This equation is based on the idea of ​​considering the surface as a collection of minute parallelograms and finding the total area by adding up those areas. In this library, this double integral is approximately calculated using a function that performs numerical integration, such as the `Integrate` function in `igesio/numerics/analysis/integration.h`.
 
 **Code Example**
 

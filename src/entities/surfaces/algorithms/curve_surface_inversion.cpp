@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "entities/curves/algorithms/polygonal_approximation.h"
 
 namespace {

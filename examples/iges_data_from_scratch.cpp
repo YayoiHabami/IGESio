@@ -18,20 +18,12 @@
 #include <memory>
 #include <string>
 
-#include <igesio/entities/curves/circular_arc.h>
-#include <igesio/entities/curves/composite_curve.h>
-#include <igesio/entities/transformations/transformation_matrix.h>
-#include <igesio/entities/structures/color_definition.h>
-#include <igesio/models/iges_data.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 namespace {
 
 using IgesData = igesio::models::IgesData;
-using Vector2d = igesio::Vector2d;
-using CircularArc = igesio::entities::CircularArc;
-using CompositeCurve = igesio::entities::CompositeCurve;
-using TransMatrix = igesio::entities::TransformationMatrix;
+namespace i_ent = igesio::entities;
 
 }  // namespace
 
@@ -42,16 +34,16 @@ int main() {
     // - Arc with center (0, 0), start point (1, 0), and end point (0, 1)
     // - Arc with center (0, 1.5), start point (0, 1), and end point (-0.5, 1.5)
     // - Arc with center (1.5, 1.5), start point (-0.5, 1.5), and end point (3.5, 1.5)
-    auto curve1 = std::make_shared<CircularArc>(
-            Vector2d{0.0, 0.0}, Vector2d{1.0, 0.0}, Vector2d{0.0, 1.0});
-    auto curve2 = std::make_shared<CircularArc>(
-            Vector2d{0.0, 1.5}, Vector2d{0.0, 1.0}, Vector2d{-0.5, 1.5});
-    auto curve3 = std::make_shared<CircularArc>(
-            Vector2d{1.5, 1.5}, Vector2d{-0.5, 1.5}, Vector2d{3.5, 1.5});
-    auto composite_curve = std::make_shared<CompositeCurve>();
-    composite_curve->AddCurve(curve1);
-    composite_curve->AddCurve(curve2);
-    composite_curve->AddCurve(curve3);
+    auto curve1 = i_ent::MakeCircularArc(
+            igesio::Vector2d{0.0, 0.0}, igesio::Vector2d{1.0, 0.0},
+            igesio::Vector2d{0.0, 1.0});
+    auto curve2 = i_ent::MakeCircularArc(
+            igesio::Vector2d{0.0, 1.5}, igesio::Vector2d{0.0, 1.0},
+            igesio::Vector2d{-0.5, 1.5});
+    auto curve3 = i_ent::MakeCircularArc(
+            igesio::Vector2d{1.5, 1.5}, igesio::Vector2d{-0.5, 1.5},
+            igesio::Vector2d{3.5, 1.5});
+    auto composite_curve = i_ent::MakeCompositeCurve({curve1, curve2, curve3});
     auto [start_1, end_1] = curve1->GetParameterRange();
     auto [start_2, end_2] = curve2->GetParameterRange();
     auto [start_3, end_3] = curve3->GetParameterRange();
@@ -63,10 +55,9 @@ int main() {
               << "    CompositeCurve range: [" << start_comp << ", " << end_comp
                                                << "]" << std::endl;
 
-    // Create a Color Definition entity (≈ #7FFF4C)
+    // Create a Color Definition entity (#7FFF4C)
     // and overwrite the color of the Composite Curve
-    auto color_def = std::make_shared<igesio::entities::ColorDefinition>(
-            std::array<double, 3>{50.0, 100.0, 30.0}, "Light Green");
+    auto color_def = i_ent::MakeColorDefinitionFromHex("#7FFF4C", "Light Green");
     composite_curve->OverwriteColor(color_def);
     std::cout << "  The 2nd curve ID (from TryGet): "
               << composite_curve->GetChildEntity(curve2->GetID())->GetID() << std::endl;
@@ -76,10 +67,10 @@ int main() {
     // Create Circular Arc entities and demonstrate their normal and tangent calculations
     // - Arc with center (0, 0), start point (2, 0), end point (0, 2)
     // - Circle with center (1, 0) and radius 1 (z = -1)
-    auto arc = std::make_shared<CircularArc>(
-            Vector2d{0.0, 0.0}, Vector2d{2.0, 0.0}, Vector2d{0.0, 2.0}, 0.0);
-    auto circle = std::make_shared<CircularArc>(
-            Vector2d{1.0, 0.0}, 1.0, -1.0);
+    auto arc = i_ent::MakeCircularArc(
+            igesio::Vector2d{0.0, 0.0}, igesio::Vector2d{2.0, 0.0},
+            igesio::Vector2d{0.0, 2.0}, 0.0);
+    auto circle = i_ent::MakeCircle(igesio::Vector2d{1.0, 0.0}, 1.0, -1.0);
     auto arc_norm = arc->GetNormalAt(1.5);
     auto arc_tangent = arc->GetTangentAt(1.5);
     auto dot = arc_norm.dot(arc_tangent);
@@ -91,7 +82,7 @@ int main() {
     // Create a Transformation Matrix entity
     // (90-degree rotation around Y-axis and translation (0, 0, 1))
     auto rotation = igesio::AngleAxisd(igesio::kPi/2, igesio::Vector3d::UnitY());
-    auto transformation = std::make_shared<TransMatrix>(
+    auto transformation = i_ent::MakeTransformationMatrix(
             rotation.toRotationMatrix(), igesio::Vector3d{0, 0, 1});
     auto trans_params = transformation->GetParameters();
     std::cout << std::endl << "TransformationMatrix parameters: " << trans_params << std::endl;
@@ -100,7 +91,7 @@ int main() {
 
 
     // Create an IgesData object and add all entities
-    IgesData iges_data;
+    igesio::IgesData iges_data;
     iges_data.Root().AddEntity(transformation);
     iges_data.Root().AddEntity(arc);
     iges_data.Root().AddEntity(circle);

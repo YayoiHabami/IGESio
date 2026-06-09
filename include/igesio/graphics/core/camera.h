@@ -12,8 +12,8 @@
 #include <optional>
 #include <utility>
 
-#include "igesio/numerics/bounding_box.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
+#include "igesio/numerics/core/matrix.h"
 
 
 

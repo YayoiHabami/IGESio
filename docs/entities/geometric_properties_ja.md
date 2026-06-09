@@ -72,23 +72,20 @@ $$C(u) \in \mathbb{R}^3 \quad (u \in [u_{\text{min}}, u_{\text{max}}])$$
 #include <igesio/entities/curves/rational_b_spline_curve.h>
 
 namespace i_ent = igesio::entities;
+using igesio::Matrix3Xd;
 using igesio::Vector3d;
 
-// NURBS曲線の定義例
-auto param = igesio::IGESParameterVector{
-    3,  // number of control points - 1
-    3,  // degree
-    false, false, false, false,  // non-periodic open NURBS curve
-    0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-    1.0, 1.0, 1.0, 1.0,  // weights
-    -4.0, -4.0,  0.0,    // control point P(0)
-    -1.5,  7.0,  3.5,    // control point P(1)
-     4.0, -3.0,  1.0,    // control point P(2)
-     4.0,  4.0,  0.0,    // control point P(3)
-    0.0, 1.0,            // parameter range V(0), V(1)
-    0.0, 0.0, 1.0        // normal vector of the defining plane
-};
-auto curve = std::make_shared<i_ent::RationalBSplineCurve>(param);
+// NURBS曲線の定義例 (制御点4個、3次)
+// 重み (すべて1.0) とパラメータ範囲は省略 (デフォルト値を使用)
+Matrix3Xd cps(3, 4);
+cps.col(0) = Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+cps.col(1) = Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+cps.col(2) = Vector3d( 4.0, -3.0, 1.0);  // control point P(2)
+cps.col(3) = Vector3d( 4.0,  4.0, 0.0);  // control point P(3)
+auto curve = i_ent::MakeRationalBSplineCurve(
+    3,                                          // degree
+    cps,
+    {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0});  // knot vector
 
 // 媒介変数uの範囲を取得
 auto [u_start, u_end] = curve->GetParameterRange();
@@ -376,28 +373,24 @@ $$S(u,v) \in \mathbb{R}^3 \quad (u \in [u_{\text{min}}, u_{\text{max}}], v \in [
 ```cpp
 #include <iostream>
 #include <memory>
-#include <igesio/entities/curves/rational_b_spline_surface.h>
+#include <igesio/entities/surfaces/rational_b_spline_surface.h>
 
 namespace i_ent = igesio::entities;
 using igesio::Vector3d;
 
-// NURBS曲線の定義例
-auto param = igesio::IGESParameterVector{
-    5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-    3, 3,  // M1, M2 (Degree in U and V)
-    false, false, true, false, false,         // PROP1-5
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-    0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-    1., 1., 1., 1., 1., 1.,                   // Weights W(0,0) to W(5,0)
+// NURBS曲面の定義例 (制御点6x6個、3次)
+// cp_grid[i][j]がP(i,j)に対応。重み (すべて1.0) とパラメータ範囲は省略
+std::vector<std::vector<Vector3d>> cp_grid{
+    {Vector3d(-25., -25., -10.), Vector3d(-25., -15., -5.),
+     /* ... (中略) ... */ Vector3d(-25., 25., -10.)},  // P(0,j)
     // ... (中略) ...
-    1., 1., 1., 1., 1., 1.,                   // Weights W(0,5) to W(5,5)
-    // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
-    -25., -25., -10.,  // Control point (0,0)
-    // ... (中略) ...
-    25., 25., -10.,    // Control point (5,5)
-    0., 3., 0., 3.     // Parameter range in U and V
-};
-auto surface = std::make_shared<i_ent::RationalBSplineSurface>(param);
+    {Vector3d(25., -25., -10.), Vector3d(25., -15., -5.),
+     /* ... (中略) ... */ Vector3d(25., 25., -10.)}};  // P(5,j)
+auto surface = i_ent::MakeRationalBSplineSurface(
+    {3, 3},                                    // degrees {M1, M2}
+    cp_grid,
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+    {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 
 // 媒介変数u,vの範囲を取得
 auto [u_start, u_end] = surface->GetURange();
@@ -568,7 +561,7 @@ $$\begin{aligned}
     &= \int_{v_{\text{min}}}^{v_{\text{max}}} \int_{u_{\text{min}}}^{u_{\text{max}}} \sqrt{E(u,v)G(u,v) - F(u,v)^2} \, du \, dv
 \end{aligned}$$
 
-ここで、$\sqrt{EG - F^2}$ は面積要素を表し、曲面上の微小な領域の面積を意味します。この式は、曲面を微小な平行四辺形の集まりとみなし、それらの面積を足し合わせることで全体の面積を求めるという考えに基づいています。本ライブラリでは、`igesio/numerics/integration.h`の`Integrate`関数のような、数値積分を行う関数を用いて、この二重積分を近似的に計算します。
+ここで、$\sqrt{EG - F^2}$ は面積要素を表し、曲面上の微小な領域の面積を意味します。この式は、曲面を微小な平行四辺形の集まりとみなし、それらの面積を足し合わせることで全体の面積を求めるという考えに基づいています。本ライブラリでは、`igesio/numerics/analysis/integration.h`の`Integrate`関数のような、数値積分を行う関数を用いて、この二重積分を近似的に計算します。
 
 **コード例**
 

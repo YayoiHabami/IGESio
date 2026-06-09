@@ -31,8 +31,8 @@ namespace i_graph = igesio::graphics;
 
 /// @brief CompositeCurveの描画オブジェクトを作成する
 std::unique_ptr<i_graph::IEntityGraphics> CreateCompositeCurveGraphics(
-        const std::shared_ptr<const i_ent::CompositeCurve> entity,
-        const std::shared_ptr<i_graph::IOpenGL> gl) {
+        const std::shared_ptr<const i_ent::CompositeCurve>& entity,
+        const std::shared_ptr<i_graph::IOpenGL>& gl) {
     // entityがnullptrの場合は無効なポインタを返す
     if (!entity) return nullptr;
 
@@ -63,8 +63,8 @@ std::unique_ptr<i_graph::IEntityGraphics> CreateCompositeCurveGraphics(
 
 
 std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
-        const std::shared_ptr<const i_ent::ICurve> entity,
-        const std::shared_ptr<i_graph::IOpenGL> gl) {
+        const std::shared_ptr<const i_ent::ICurve>& entity,
+        const std::shared_ptr<i_graph::IOpenGL>& gl) {
     // entityがnullptrの場合は無効なポインタを返す
     if (!entity) return nullptr;
 
@@ -106,8 +106,8 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
 }
 
 std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
-        const std::shared_ptr<const i_ent::ISurface> entity,
-        const std::shared_ptr<IOpenGL> gl) {
+        const std::shared_ptr<const i_ent::ISurface>& entity,
+        const std::shared_ptr<IOpenGL>& gl) {
     // entityがnullptrの場合は無効なポインタを返す
     if (!entity) return nullptr;
 
@@ -126,8 +126,8 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
 }
 
 std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(
-        const std::shared_ptr<const i_ent::IEntityIdentifier> entity,
-        const std::shared_ptr<i_graph::IOpenGL> gl) {
+        const std::shared_ptr<const i_ent::IEntityIdentifier>& entity,
+        const std::shared_ptr<i_graph::IOpenGL>& gl) {
     // entityがnullptrの場合は無効なポインタを返す
     if (!entity) return nullptr;
     // UnsupportedEntityの場合は無効なポインタを返す

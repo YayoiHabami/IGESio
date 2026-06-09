@@ -26,8 +26,8 @@ class CircularArcGraphics
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがICurveを継承していない場合
     explicit CircularArcGraphics(
-            const std::shared_ptr<const entities::CircularArc>,
-            const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::CircularArc>&,
+            const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~CircularArcGraphics();
@@ -39,7 +39,7 @@ class CircularArcGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
 
 

@@ -1,11 +1,11 @@
 /**
- * @file numerics/polygon.cpp
+ * @file numerics/geometric/polygon.cpp
  * @brief 多角形データ構造の実装
  * @author Yayoi Habami
  * @date 2026-04-10
  * @copyright 2026 Yayoi Habami
  */
-#include "igesio/numerics/polygon.h"
+#include "igesio/numerics/geometric/polygon.h"
 
 #include <algorithm>
 #include <cmath>

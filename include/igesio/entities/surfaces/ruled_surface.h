@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/entities/entity_base.h"
@@ -29,6 +29,16 @@
 
 namespace igesio::entities {
 
+/// @brief ルールド曲面のフォーム番号 (パラメータ化の種別)
+enum class RuledSurfaceForm {
+    /// @brief Form 0: 等相対弧長 (equal relative arc length)
+    /// @note 参照曲線を弧長で再パラメータ化したものをC1, C2として用いる
+    kEqualArcLength = 0,
+    /// @brief Form 1: 等相対パラメータ (equal relative parametric values)
+    /// @note 参照曲線の与えられたパラメータ化をそのままC1, C2として用いる
+    kEqualParameters = 1,
+};
+
 /// @brief ルールド曲面エンティティ (Entity Type 118)
 /// @note 2つの曲線エンティティ（ICurveを継承したクラス）C1(t), C2(s)を
 ///       直線で結んで生成される曲面を表す。S(u,v) = (1-v)C1(t) + vC2(s),
@@ -36,6 +46,9 @@ namespace igesio::entities {
 ///       それぞれC1, C2のパラメータ範囲である。t = tmin + u(tmax - tmin) であり、
 ///       sはDIRFLGが0の場合は s = smin + u(smax - smin)、1の場合は
 ///       s = smax - u(smax - smin) である。
+/// @todo 規格上は参照曲線としてPoint (Type 116) も指定可能だが (錐面等の
+///       縮退ケース)、PointはIGeometryのみを継承しICurveを継承していない
+///       ため未対応
 class RuledSurface : public EntityBase, public virtual ISurface {
  private:
     /// @brief 1つ目の曲線 C1(t) (ICurveを継承したエンティティへのポインタ)
@@ -147,7 +160,10 @@ class RuledSurface : public EntityBase, public virtual ISurface {
     /// @param is_reversed falseの場合、s = smin + u(smax - smin)、trueの場合、
     ///                    s = smax - u(smax - smin) である. tについては常に
     ///                    t = tmin + u(tmax - tmin) である.
-    void SetIsReversed(const bool is_reversed) noexcept { is_reversed_ = is_reversed; }
+    void SetIsReversed(const bool is_reversed) noexcept {
+        is_reversed_ = is_reversed;
+        MarkGeometryModified();
+    }
 
     /// @brief 可展面（developable surface）かどうか (DEVFLG) を取得する
     /// @return 可展面の場合はtrue、そうでない場合はfalse
@@ -156,7 +172,18 @@ class RuledSurface : public EntityBase, public virtual ISurface {
     /// @param is_developable 可展面の場合はtrue、そうでない場合はfalse
     void SetIsDevelopable(const bool is_developable) noexcept {
         is_developable_ = is_developable;
+        MarkGeometryModified();
     }
+
+    /// @brief フォーム番号 (パラメータ化の種別) を取得する
+    /// @return フォーム番号に対応するRuledSurfaceForm
+    /// @note 本実装の評価 (TryGetDefinedDerivatives等) は常に等相対パラメータ
+    ///       (Form 1) として行われるため、Form 0の曲面は弧長再パラメータ化を
+    ///       考慮しない近似的な評価となる
+    RuledSurfaceForm GetSurfaceForm() const noexcept;
+    /// @brief フォーム番号 (パラメータ化の種別) を設定する
+    /// @param form フォーム番号に対応するRuledSurfaceForm
+    void SetSurfaceForm(const RuledSurfaceForm) noexcept;
 
 
 
@@ -200,6 +227,11 @@ class RuledSurface : public EntityBase, public virtual ISurface {
         return {0.0, 1.0, 0.0, 1.0};
     }
 
+    /// @brief u方向に折れ目があるパラメータuの一覧を返す
+    /// @return C1・C2(参照曲線)の角点をu∈[0,1]へ写像した和集合. 参照曲線が
+    ///         未設定やパラメータ範囲が無限・退化の場合は該当分を除外する
+    std::vector<double> GetUCreaseParameters() const override;
+
     /// @brief 定義空間におけるサーフェスの偏導関数 S^(i,j)(u, v) を計算する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v
@@ -236,6 +268,31 @@ class RuledSurface : public EntityBase, public virtual ISurface {
     /// @note 正しい値が取得できない場合は{0.0, 0.0}を返す
     std::pair<double, double> GetParametersTS(const double) const;
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 2つの曲線からルールド曲面を作成する
+/// @param curve1 1つ目の曲線 C1(t)
+/// @param curve2 2つ目の曲線 C2(s)
+/// @param is_reversed 2つ目の曲線のパラメータ範囲を反転させるか (DIRFLG);
+///        falseの場合は両曲線の始点同士・終点同士を結び、
+///        trueの場合は一方の始点と他方の終点を結ぶ
+/// @param is_developable 可展面 (developable surface) かどうか (DEVFLG)
+/// @return 作成されたRuledSurfaceのshared_ptr
+/// @throw std::invalid_argument curve1またはcurve2がnullptrの場合
+/// @throw igesio::EntityValueError curve1とcurve2が同一エンティティの場合
+/// @note 与えられた曲線のパラメータ化をそのまま用いるため、フォーム番号は
+///       1 (等相対パラメータ) に設定される
+/// @note 各曲線のSubordinateEntitySwitchはkPhysicallyDependentに設定される
+std::shared_ptr<RuledSurface> MakeRuledSurface(
+        const std::shared_ptr<ICurve>& curve1,
+        const std::shared_ptr<ICurve>& curve2,
+        bool is_reversed = false,
+        bool is_developable = false);
 
 }  // namespace igesio::entities
 

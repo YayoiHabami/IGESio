@@ -58,15 +58,14 @@ IGESioは、IGES (Initial Graphics Exchange Specification) ファイルフォー
 
 ### IGESファイルの入出力
 
-　本ライブラリでは、`igesio::ReadIges`および`igesio::WriteIges`関数を使用して、IGESファイルの読み込みと書き出しを行います。以下は、基本的な使用例です。両関数ともに戻り値/引数は`igesio::models::IgesData`型であり、IGESファイルの全データを保持します。
+　本ライブラリでは、`igesio::ReadIges`および`igesio::WriteIges`関数を使用して、IGESファイルの読み込みと書き出しを行います。以下は、基本的な使用例です。両関数ともに戻り値/引数は`igesio::IgesData`型であり、IGESファイルの全データを保持します。
 
 　本ライブラリで未対応（未実装）のエンティティは`igesio::entities::UnsupportedEntity`クラスとして読み込まれます。このクラスでは、各パラメータはパースされて読み込まれますが、エンティティ固有の機能は提供されません。このクラスの詳細については、[entities/UnsupportedEntity](docs/entities/entities_ja.md#UnsupportedEntity)を参照してください。
 
 ```cpp
 #include <iostream>
 #include <unordered_map>
-#include <igesio/reader.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 // IGESファイルの読み込み
 auto data = igesio::ReadIges("path/to/file.igs");
@@ -75,7 +74,7 @@ auto data = igesio::ReadIges("path/to/file.igs");
 // また、本ライブラリがサポート（実装）しているかどうかも確認
 std::unordered_map<igesio::entities::EntityType, int> type_counts;
 std::unordered_map<igesio::entities::EntityType, bool> is_supported;
-for (const auto& [id, entity] : data.GetEntities()) {
+for (const auto& [id, entity] : data.Root().GetEntities()) {
     type_counts[entity->GetType()]++;
     is_supported[entity->GetType()] = entity->IsSupported();
 }
@@ -101,26 +100,22 @@ try {
 
 ```cpp
 #include <memory>
-#include <array>
 #include <iostream>
-#include <igesio/entities/curves/circular_arc.h>
-#include <igesio/entities/structures/color_definition.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 // Circular Arcエンティティを作成
-// 中心点 (3.0, 0.0)、半径 1.0 の円
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-        igesio::Vector2d{3.0, 0.0}, 1.0);
+// 中心点 (3.0, 0.0)、半径1.0の円
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{3.0, 0.0}, 1.0);
 
-// Color Definitionエンティティを使用して色を設定 (≈ #4C7FFF)
-auto color_def = std::make_shared<igesio::entities::ColorDefinition>(
-        std::array<double, 3>{30.0, 50.0, 100.0}, "Bright Blue");
+// Color Definitionエンティティを使用して色を設定 (#4C7FFF)
+auto color_def = igesio::entities::MakeColorDefinitionFromHex(
+        "#4C7FFF", "Bright Blue");
 circle->OverwriteColor(color_def);
 
 // IgesDataクラスを作成してエンティティを追加
-igesio::models::IgesData iges_data;
-iges_data.AddEntity(color_def);
-iges_data.AddEntity(circle);
+igesio::IgesData iges_data;
+iges_data.Root().AddEntity(color_def);
+iges_data.Root().AddEntity(circle);
 
 // IGESファイルに書き出し
 auto success = igesio::WriteIges(iges_data, "created_circle.igs");
@@ -191,7 +186,7 @@ ninja --version
 **ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストは[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md)を参照してください。
 
 **備考**:
-- ※1 Eigen3はヘッダーオンリーライブラリで、現在はビルドに必須です。将来的に`IGESIO_ENABLE_EIGEN`オプションによる有効化/無効化に対応予定です
+- ※1 Eigen3はヘッダーオンリーライブラリで、現在はビルドに必須です。将来的に`IGESIO_ENABLE_EIGEN`オプションによる有効化/無効化に対応予定です。Eigen3はIGESioの公開ヘッダに現れるため、インストール済みIGESioを`find_package`で利用するプロジェクトにもEigen3が必要です。
 - ※2 gladのソースコード自体はMITライセンスですが、同梱のKhronos XML API RegistryはApache License 2.0です
 - Google Testはビルド時のみ使用され、ライブラリと一緒に配布されません
 

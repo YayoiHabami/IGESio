@@ -31,7 +31,7 @@ using CurveOnSurfaceGraphics = i_graph::CurveOnAParametricSurfaceGraphics;
 
 CurveOnSurfaceGraphics::CurveOnAParametricSurfaceGraphics(
         const std::shared_ptr<const i_ent::CurveOnAParametricSurface>& entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kComposite, true) {
     Synchronize();
 }
@@ -42,7 +42,7 @@ CurveOnSurfaceGraphics::~CurveOnAParametricSurfaceGraphics() {
 
 
 
-void CurveOnSurfaceGraphics::Synchronize() {
+void CurveOnSurfaceGraphics::DoSynchronize() {
     std::shared_ptr<const i_ent::ICurve> curve;
     try {
         // 曲線を取得

@@ -162,7 +162,7 @@ std::array<double, 3> color;
 // Create a circle entity with a radius of 5.0 and centered at the origin
 // Each DE field is initialized with the default value
 auto center = Vector2d(0.0, 0.0);
-auto circle = std::make_shared<ent::CircularArc>(center, 5.0);
+auto circle = ent::MakeCircle(center, 5.0);
 
 // Get the default color
 circle->GetColor().GetValueType();    // DEFieldValueType::kDefault
@@ -174,8 +174,7 @@ circle->GetColor().GetValueType();    // DEFieldValueType::kPositive
 color = circle->GetColor().GetRGB();  // {0, 100, 100}
 
 // Create and set a color entity (pointer value)
-auto color_def = std::make_shared<ent::ColorDefinition>(
-         std::array<double, 3>{50.0, 100.0, 30.0}, "Light Green");
+auto color_def = ent::MakeColorDefinition({50.0, 100.0, 30.0}, "Light Green");
 circle->OverwriteColor(color_def);
 circle->GetColor().GetValueType();    // DEFieldValueType::kPointer
 color = circle->GetColor().GetRGB();  // {50, 100, 30}
@@ -238,8 +237,7 @@ The following is a continuation of the code created in [Example: Color Field Man
 circle->GetColor().HasValidPointer();  // true - Light Green's ColorDefinition is set
 
 // Create a new color definition entity
-auto new_color_def = std::make_shared<ent::ColorDefinition>(
-         std::array<double, 3>{100.0, 50.0, 0.0}, "Orange");
+auto new_color_def = ent::MakeColorDefinition({100.0, 50.0, 0.0}, "Orange");
 
 // Overwrite with a pointer to the new color definition entity
 // Inside `OverwritePointer`, `DEColor::OverwriteID` and `DEColor::SetPointer` are called

@@ -9,11 +9,14 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
+#include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
-#include "igesio/numerics/combinatorics.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/numerics/core/combinatorics.h"
 #include "./nurbs_basis_function.h"
 
 namespace {
@@ -131,6 +134,81 @@ igesio::IGESParameterVector BuildNurbsParamVector(
         params.push_back(0.0);
     }
     return params;
+}
+
+/// @brief NURBS構造パラメータの整合性を検証し、重みを補完する
+/// @param degree 曲線の次数M
+/// @param knots ノットベクトル (サイズK+M+2)
+/// @param weights 重み (サイズK+1); 空の場合は全て1.0として補完する
+/// @param cp 制御点行列 (3 × (K+1))
+/// @return 補完後の重み (サイズK+1)
+/// @throw igesio::EntityValueError 整合性が取れない場合
+std::vector<double> ValidateNurbsData(
+        const unsigned int degree,
+        const std::vector<double>& knots,
+        const std::vector<double>& weights,
+        const Matrix3Xd& cp) {
+    if (degree == 0) {
+        throw igesio::EntityValueError("Degree M cannot be zero.");
+    }
+    const auto num_cp = static_cast<size_t>(cp.cols());
+    if (num_cp < degree + 1) {
+        throw igesio::EntityValueError(
+                "Number of control points (" + std::to_string(num_cp) +
+                ") must be at least degree + 1 (" +
+                std::to_string(degree + 1) + ").");
+    }
+    // ノット数はK+M+2 (= 制御点数 + 次数 + 1)
+    const size_t expected_knots = num_cp + degree + 1;
+    if (knots.size() != expected_knots) {
+        throw igesio::EntityValueError(
+                "Invalid number of knots: expected " +
+                std::to_string(expected_knots) + ", but got " +
+                std::to_string(knots.size()) + ".");
+    }
+    if (!std::is_sorted(knots.begin(), knots.end())) {
+        throw igesio::EntityValueError("Knot vector must be non-decreasing.");
+    }
+    // 重みが空の場合は全て1.0 (polynomial形式) として補完する
+    if (weights.empty()) {
+        return std::vector<double>(num_cp, 1.0);
+    }
+    if (weights.size() != num_cp) {
+        throw igesio::EntityValueError(
+                "Invalid number of weights: expected " +
+                std::to_string(num_cp) + ", but got " +
+                std::to_string(weights.size()) + ".");
+    }
+    for (const auto& w : weights) {
+        if (w <= 0.0) {
+            throw igesio::EntityValueError(
+                    "Weights must be positive real numbers, but got " +
+                    std::to_string(w) + ".");
+        }
+    }
+    return weights;
+}
+
+/// @brief パラメータ範囲を補完・検証する
+/// @param range パラメータ範囲; 省略時はノット定義域 [T(0), T(N)] 全体
+/// @param knots ノットベクトル (検証済みであること)
+/// @param degree 曲線の次数M
+/// @return 補完後のパラメータ範囲 { V(0), V(1) }
+/// @throw igesio::EntityValueError V(0) >= V(1) の場合
+std::array<double, 2> ResolveParameterRange(
+        const std::optional<std::array<double, 2>>& range,
+        const std::vector<double>& knots,
+        const unsigned int degree) {
+    // T(0)は配列インデックスM、T(N)は配列インデックスK+1 (= サイズ-M-1)
+    const auto resolved = range.value_or(std::array<double, 2>{
+            knots[degree], knots[knots.size() - degree - 1]});
+    if (resolved[0] >= resolved[1]) {
+        throw igesio::EntityValueError(
+                "Invalid parameter range: V(0) must be less than V(1)."
+                " Got V(0) = " + std::to_string(resolved[0]) +
+                ", V(1) = " + std::to_string(resolved[1]) + ".");
+    }
+    return resolved;
 }
 
 }  // namespace
@@ -527,4 +605,238 @@ bool RationalBSplineCurve::IsPolynomial() const {
         }
     }
     return true;
+}
+
+
+
+/**
+ * データ取得
+ */
+
+Vector3d RationalBSplineCurve::GetControlPointAt(const size_t i) const {
+    if (i >= static_cast<size_t>(control_points_.cols())) {
+        throw std::out_of_range(
+                "Control point index " + std::to_string(i) +
+                " is out of range: the number of control points is " +
+                std::to_string(control_points_.cols()) + ".");
+    }
+    return control_points_.col(static_cast<int>(i));
+}
+
+double RationalBSplineCurve::GetWeightAt(const size_t i) const {
+    if (i >= weights_.size()) {
+        throw std::out_of_range(
+                "Weight index " + std::to_string(i) +
+                " is out of range: the number of weights is " +
+                std::to_string(weights_.size()) + ".");
+    }
+    return weights_[i];
+}
+
+std::optional<Vector3d> RationalBSplineCurve::TryGetPlaneNormal() const {
+    // 平面法線はベクトルとして変換する (v' = Rv)
+    return Transform(normal_vector_, false);
+}
+
+
+
+/**
+ * データ変更
+ */
+
+void RationalBSplineCurve::SetControlPointAt(
+        const size_t i, const Vector3d& point) {
+    if (i >= static_cast<size_t>(control_points_.cols())) {
+        throw std::out_of_range(
+                "Control point index " + std::to_string(i) +
+                " is out of range: the number of control points is " +
+                std::to_string(control_points_.cols()) + ".");
+    }
+    control_points_.col(static_cast<int>(i)) = point;
+    UpdatePlanarity();
+    MarkGeometryModified();
+}
+
+void RationalBSplineCurve::SetControlPoints(const Matrix3Xd& control_points) {
+    if (control_points.cols() != control_points_.cols()) {
+        throw igesio::EntityValueError(
+                "Number of control points must remain " +
+                std::to_string(control_points_.cols()) + ", but got " +
+                std::to_string(control_points.cols()) +
+                ". Use SetData to change the structure.");
+    }
+    control_points_ = control_points;
+    UpdatePlanarity();
+    MarkGeometryModified();
+}
+
+void RationalBSplineCurve::SetWeightAt(const size_t i, const double weight) {
+    if (i >= weights_.size()) {
+        throw std::out_of_range(
+                "Weight index " + std::to_string(i) +
+                " is out of range: the number of weights is " +
+                std::to_string(weights_.size()) + ".");
+    }
+    if (weight <= 0.0) {
+        throw igesio::EntityValueError(
+                "Weights must be positive real numbers, but got " +
+                std::to_string(weight) + ".");
+    }
+    weights_[i] = weight;
+    MarkGeometryModified();
+}
+
+void RationalBSplineCurve::SetWeights(const std::vector<double>& weights) {
+    if (weights.size() != weights_.size()) {
+        throw igesio::EntityValueError(
+                "Number of weights must remain " +
+                std::to_string(weights_.size()) + ", but got " +
+                std::to_string(weights.size()) +
+                ". Use SetData to change the structure.");
+    }
+    for (const auto& w : weights) {
+        if (w <= 0.0) {
+            throw igesio::EntityValueError(
+                    "Weights must be positive real numbers, but got " +
+                    std::to_string(w) + ".");
+        }
+    }
+    weights_ = weights;
+    MarkGeometryModified();
+}
+
+void RationalBSplineCurve::SetKnots(const std::vector<double>& knots) {
+    if (knots.size() != knots_.size()) {
+        throw igesio::EntityValueError(
+                "Number of knots must remain " +
+                std::to_string(knots_.size()) + ", but got " +
+                std::to_string(knots.size()) +
+                ". Use SetData to change the structure.");
+    }
+    if (!std::is_sorted(knots.begin(), knots.end())) {
+        throw igesio::EntityValueError("Knot vector must be non-decreasing.");
+    }
+    knots_ = knots;
+    MarkGeometryModified();
+}
+
+void RationalBSplineCurve::SetParameterRange(
+        const std::array<double, 2>& range) {
+    if (range[0] >= range[1]) {
+        throw igesio::EntityValueError(
+                "Invalid parameter range: V(0) must be less than V(1)."
+                " Got V(0) = " + std::to_string(range[0]) +
+                ", V(1) = " + std::to_string(range[1]) + ".");
+    }
+    parameter_range_ = range;
+    MarkGeometryModified();
+}
+
+bool RationalBSplineCurve::SetCurveType(const RationalBSplineCurveType type) {
+    // フォーム番号は規格上informationalであり、幾何形状との一致は検証しない
+    if (type == RationalBSplineCurveType::kUndetermined ||
+        type == RationalBSplineCurveType::kLine ||
+        type == RationalBSplineCurveType::kCircularArc ||
+        type == RationalBSplineCurveType::kEllipticArc ||
+        type == RationalBSplineCurveType::kParabolicArc ||
+        type == RationalBSplineCurveType::kHyperbolicArc) {
+        form_number_ = static_cast<int>(type);
+        MarkGeometryModified();
+        return true;
+    }
+    return false;  // 無効なタイプ
+}
+
+void RationalBSplineCurve::SetData(
+        const unsigned int degree,
+        const std::vector<double>& knots,
+        const std::vector<double>& weights,
+        const Matrix3Xd& control_points,
+        const std::optional<std::array<double, 2>>& parameter_range,
+        const bool is_periodic) {
+    // 検証をすべて先に行い、失敗時にメンバ変数を変更しない
+    const auto filled_weights =
+            ValidateNurbsData(degree, knots, weights, control_points);
+    const auto range = ResolveParameterRange(parameter_range, knots, degree);
+
+    degree_ = degree;
+    knots_ = knots;
+    weights_ = filled_weights;
+    control_points_ = control_points;
+    parameter_range_ = range;
+    is_periodic_ = is_periodic;
+    UpdatePlanarity();
+    MarkGeometryModified();
+}
+
+void RationalBSplineCurve::UpdatePlanarity() {
+    // 出力時 (GetMainPDParameters) と同じ基準で幾何から平面性を再判定し、
+    // 不変条件 is_planar_ ⟺ normal_vector_.has_value() を維持する
+    normal_vector_ = ComputePlaneNormal(
+            control_points_, static_cast<int>(control_points_.cols()) - 1);
+    is_planar_ = normal_vector_.has_value();
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<RationalBSplineCurve> i_ent::MakeRationalBSplineCurve(
+        const unsigned int degree,
+        const Matrix3Xd& control_points,
+        const std::vector<double>& knots,
+        const std::vector<double>& weights,
+        std::optional<std::array<double, 2>> parameter_range,
+        const bool is_periodic) {
+    const auto filled_weights =
+            ValidateNurbsData(degree, knots, weights, control_points);
+    const auto range = ResolveParameterRange(parameter_range, knots, degree);
+    const auto k = static_cast<unsigned int>(control_points.cols()) - 1;
+    return std::make_shared<RationalBSplineCurve>(
+            k, degree, knots, filled_weights, control_points, range,
+            is_periodic);
+}
+
+std::shared_ptr<RationalBSplineCurve> i_ent::MakeClampedBSplineCurve(
+        const unsigned int degree,
+        const Matrix3Xd& control_points,
+        const std::vector<double>& weights) {
+    // 内部ノット数の計算 (num_cp - degree - 1) がアンダーフローしないよう、
+    // 制御点数の不足のみ先に検証する (他の検証は一般形ファクトリに委ねる)
+    const auto num_cp = static_cast<size_t>(control_points.cols());
+    if (num_cp < degree + 1) {
+        throw igesio::EntityValueError(
+                "Number of control points (" + std::to_string(num_cp) +
+                ") must be at least degree + 1 (" +
+                std::to_string(degree + 1) + ").");
+    }
+    // クランプ一様ノット: 両端を重複度M+1とし、内部ノットを等間隔に配置
+    const size_t num_interior = num_cp - degree - 1;
+    std::vector<double> knots;
+    knots.reserve(num_cp + degree + 1);
+    knots.insert(knots.end(), degree + 1, 0.0);
+    for (size_t i = 1; i <= num_interior; ++i) {
+        knots.push_back(static_cast<double>(i) / (num_interior + 1));
+    }
+    knots.insert(knots.end(), degree + 1, 1.0);
+    return MakeRationalBSplineCurve(degree, control_points, knots, weights);
+}
+
+std::shared_ptr<RationalBSplineCurve> i_ent::MakeBezierCurve(
+        const Matrix3Xd& control_points,
+        const std::vector<double>& weights) {
+    const auto num_cp = static_cast<size_t>(control_points.cols());
+    if (num_cp < 2) {
+        throw igesio::EntityValueError(
+                "Bezier curve requires at least 2 control points, but got " +
+                std::to_string(num_cp) + ".");
+    }
+    // K = M = 制御点数-1: ノットは {0, ..., 0, 1, ..., 1} (各num_cp個)
+    std::vector<double> knots(num_cp, 0.0);
+    knots.insert(knots.end(), num_cp, 1.0);
+    return MakeRationalBSplineCurve(
+            static_cast<unsigned int>(num_cp - 1), control_points, knots,
+            weights);
 }

@@ -13,6 +13,7 @@
 #define IGESIO_MODELS_ASSEMBLY_H_
 
 #include <array>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -23,8 +24,8 @@
 #include <vector>
 
 #include "igesio/common/id_generator.h"
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/entity_base.h"
 
 
@@ -98,11 +99,21 @@ struct LockState {
     bool editable = true;
 };
 
-/// @brief Assemblyのメタ情報
-/// @note 描画・編集の際に参照される付随情報をまとめた構造体.
+/// @brief Assemblyのメタ情報 (注釈・対話ロック)
+/// @note 参照時にlive読みされる情報のみを持つ. 描画の派生キャッシュへ影響しないため、
+///       mutable参照経由で自由に編集してよい (変更通知は不要).
 struct AssemblyMetadata {
     /// @brief アセンブリの名前
     std::string name;
+    /// @brief 役割を示すタグ (任意の分類用文字列)
+    std::string role_tag;
+    /// @brief ロック状態 (選択・編集の可否)
+    LockState lock;
+};
+
+/// @brief 表示状態 (描画の派生キャッシュに影響する状態)
+/// @note 変更はAssemblyのsetter経由でのみ行う (モデルリビジョンのバンプを内蔵).
+struct DisplayState {
     /// @brief 可視性 (描画対象とするか)
     /// @note 表示トグル. 非表示でも論理的には存在する(BBox/検証/出力/クエリには含まれる).
     bool visible = true;
@@ -110,10 +121,6 @@ struct AssemblyMetadata {
     /// @note visibleとは別概念. 抑制時は描画されず、BBox/検証/出力/クエリからも除外される
     ///       (子孫も連鎖). 描画条件は visible かつ !suppressed.
     bool suppressed = false;
-    /// @brief 役割を示すタグ (任意の分類用文字列)
-    std::string role_tag;
-    /// @brief ロック状態 (選択・編集の可否)
-    LockState lock;
     /// @brief 色のオーバーライド (RGB; [0, 1]). 未設定の場合はメンバの色を使用する
     std::optional<std::array<float, 3>> color_override;
     /// @brief 不透明度のオーバーライド ([0, 1]). 未設定の場合はメンバの値を使用する
@@ -155,8 +162,16 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @brief このノードの大域変換 (Solid Assembly Type 184相当の配置)
     igesio::Matrix4d global_transform_ = igesio::Matrix4d::Identity();
 
-    /// @brief メタ情報
+    /// @brief メタ情報 (注釈・対話ロック)
     AssemblyMetadata metadata_;
+
+    /// @brief 表示状態 (描画の派生キャッシュに影響する状態)
+    DisplayState display_;
+
+    /// @brief モデルリビジョン (ルートAssemblyのみが有効な値を保持する)
+    /// @note 構造・変換・表示状態の変更毎にインクリメントされる.
+    ///       レンダラはこの値の変化で再同期 (Reconcile) の要否を判定する.
+    uint64_t revision_ = 0;
 
     /// @brief 全子孫エンティティから所有Assemblyへの逆引き
     /// @note ルートAssemblyのみが有効な内容を保持する. 非ルートのノードでは参照されない.
@@ -168,6 +183,10 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @brief ルートノードの生ポインタを取得する (const版)
     const Assembly* RootRaw() const;
 
+    /// @brief ルートのモデルリビジョンをインクリメントする
+    /// @note 逆引きインデックスと同様にRootRaw()経由でルートへ集約する.
+    void BumpRevision() { ++RootRaw()->revision_; }
+
     /// @brief 逆引きインデックスにエンティティを登録する
     /// @param id 登録するエンティティのID
     /// @param owner そのエンティティを所有するAssembly
@@ -175,13 +194,16 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
 
     /// @brief 自身と全子孫のエンティティを、指定ルートの逆引きインデックスへ再登録する
     /// @param root 登録先となるルートAssembly
+    /// @note 呼出元は編入先rootのモデルリビジョンをバンプすること. サブツリーを
+    ///       別rootへ移す場合は離脱元rootをデタッチ前にバンプすること (デタッチ後は
+    ///       BumpRevision()が新rootへ集約され、離脱元を観察するレンダラが同期されない).
     void ReindexInto(Assembly*);
 
     /// @brief ポインタを設定する
     /// @param[out] entity ポインタを設定するエンティティ
     /// @note entityが未登録のポインタを持ち、かつentities_がそれを持つ場合、
     ///       entityにそのポインタを設定する. 対象はこのノードのentities_のみ.
-    void SetPointerIfUnset(std::shared_ptr<entities::EntityBase>);
+    void SetPointerIfUnset(const std::shared_ptr<entities::EntityBase>&);
 
     /// @brief nodeが自身(this)のサブツリーに属すか (自身を含む)
     /// @param node 判定対象のノード
@@ -221,7 +243,7 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @throw std::invalid_argument entityがnullptrの場合
     template<typename T>
     std::enable_if_t<std::is_base_of_v<entities::EntityBase, T>, ObjectID>
-    AddEntity(const std::shared_ptr<T> entity) {
+    AddEntity(const std::shared_ptr<T>& entity) {
         // nullptrチェック
         if (!entity) {
             throw std::invalid_argument("Entity pointer is null");
@@ -233,6 +255,8 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
         entities_[id] = entity;
         // ルートの逆引きインデックスへ登録
         RegisterInIndex(id, this);
+        // 構造変更としてモデルリビジョンをバンプする
+        BumpRevision();
 
         return id;
     }
@@ -323,14 +347,64 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @param transform 設定する大域変換行列
     void SetGlobalTransform(const igesio::Matrix4d& transform) {
         global_transform_ = transform;
+        BumpRevision();
     }
 
-    /// @brief メタ情報を取得する (変更可)
+    /// @brief メタ情報 (注釈・対話ロック) を取得する (変更可)
     /// @return メタ情報への参照
+    /// @note live読みされる情報のみのため自由に編集してよい (変更通知は不要).
     AssemblyMetadata& Metadata() { return metadata_; }
-    /// @brief メタ情報を取得する (変更不可)
+    /// @brief メタ情報 (注釈・対話ロック) を取得する (変更不可)
     /// @return メタ情報への参照
     const AssemblyMetadata& Metadata() const { return metadata_; }
+
+    /// @brief 表示状態を取得する (変更不可)
+    /// @return 表示状態への参照
+    /// @note 変更はSetVisible等のsetter経由でのみ行う (モデルリビジョンのバンプを内蔵).
+    const DisplayState& Display() const { return display_; }
+
+    /// @brief 可視性を設定する
+    /// @param visible 設定する可視性
+    /// @note 値が変化したときのみモデルリビジョンをバンプする.
+    void SetVisible(const bool visible) {
+        if (display_.visible == visible) return;
+        display_.visible = visible;
+        BumpRevision();
+    }
+
+    /// @brief 抑制状態を設定する
+    /// @param suppressed 設定する抑制状態
+    /// @note 値が変化したときのみモデルリビジョンをバンプする.
+    void SetSuppressed(const bool suppressed) {
+        if (display_.suppressed == suppressed) return;
+        display_.suppressed = suppressed;
+        BumpRevision();
+    }
+
+    /// @brief 色のオーバーライドを設定する
+    /// @param color 設定する色 (RGB; [0,1]). std::nulloptでオーバーライドを解除する
+    /// @note 値が変化したときのみモデルリビジョンをバンプする.
+    void SetColorOverride(const std::optional<std::array<float, 3>>& color) {
+        if (display_.color_override == color) return;
+        display_.color_override = color;
+        BumpRevision();
+    }
+
+    /// @brief 不透明度のオーバーライドを設定する
+    /// @param opacity 設定する不透明度 ([0,1]). std::nulloptで解除する
+    /// @note 値が変化したときのみモデルリビジョンをバンプする.
+    void SetOpacityOverride(const std::optional<float>& opacity) {
+        if (display_.opacity_override == opacity) return;
+        display_.opacity_override = opacity;
+        BumpRevision();
+    }
+
+    /// @brief モデルリビジョンを取得する (ルートの値を返す)
+    /// @return モデルリビジョン
+    /// @note 構造・変換・表示状態の変更毎に単調増加する. レンダラはこの値の変化で
+    ///       再同期 (Reconcile) の要否を判定する. リビジョン値は同一rootに対して
+    ///       のみ比較可能.
+    uint64_t Revision() const { return RootRaw()->revision_; }
 
 
 
@@ -406,8 +480,8 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @return 削除した場合はtrue. 未存在/このサブツリー外/編集不可、または
     ///         kRejectで参照が残る場合はfalse(無変更)
     /// @note 所有ノードを逆引きで特定し、このノードのサブツリー内のみを対象とする.
-    ///       削除後はルートの逆引きインデックスからも除去する. 構造編集後は呼び出し側で
-    ///       描画の再走査(MarkSceneDirty)を行うこと(Assemblyはレンダラを知らない).
+    ///       削除後はルートの逆引きインデックスからも除去する. 描画への反映は
+    ///       モデルリビジョン経由で自動検知されるため、呼び出し側の通知は不要.
     bool RemoveEntity(const ObjectID& id,
                       RemovalPolicy policy = RemovalPolicy::kReject);
 
@@ -527,6 +601,19 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     ///       本メソッドは内部で全ワーカーを待ち合わせてから返る.
     void PrepareGeometryCaches(bool recursive = true) const;
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief Assemblyを作成する
+/// @param name アセンブリ名 (Metadata().nameに設定する。省略時は空のまま)
+/// @return 作成されたAssemblyのshared_ptr
+/// @note Assemblyはenable_shared_from_thisを継承するため、必ずshared_ptrとして
+///       生成する必要がある。本ファクトリはその規約を構造的に保証する
+std::shared_ptr<Assembly> MakeAssembly(const std::string& name = "");
 
 }  // namespace igesio::models
 

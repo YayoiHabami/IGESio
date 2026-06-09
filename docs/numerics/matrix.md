@@ -6,7 +6,7 @@
 
 > Target File:
 >
-> - `igesio/numerics/matrix.h`
+> - `igesio/numerics/core/matrix.h`
 
 ## Table of Contents
 
@@ -358,7 +358,7 @@ std::cout << "Original * Inverse:\n" << dyn_mat * inv_dyn_mat << std::endl;
 　The `AngleAxis` function can be used to generate a rotation matrix from a rotation angle and a rotation axis.
 
 ```cpp
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 // Generate a rotation matrix from a rotation angle and a rotation axis
 auto axis = igesio::Vector3d::UnitY();  // Use the Y-axis as the rotation axis
@@ -384,7 +384,7 @@ Matrix<T, 3, 3> AngleAxis(const T angle, const Vector<T, 3>& axis);
 
 ```cpp
 #include <iostream>
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 int main() {
         using namespace igesio;
@@ -610,7 +610,7 @@ g++ -DIGESIO_ENABLE_EIGEN your_code.cpp
 In this case, the following Eigen classes are used:
 
 ```cpp
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 // These are actually aliases to Eigen classes
 igesio::Matrix2d    // Eigen::Matrix2d
@@ -622,7 +622,7 @@ igesio::Matrix3Xd   // Eigen::Matrix3Xd
 
 ```cpp
 // When IGESIO_ENABLE_EIGEN is not defined, custom implementation is automatically used
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 // Custom Matrix class is used
 igesio::Matrix2d    // igesio::Matrix<double, 2, 2>

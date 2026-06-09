@@ -1,19 +1,19 @@
 /**
- * @file numerics/polygon.h
+ * @file numerics/geometric/polygon.h
  * @brief 多角形データ構造の定義
  * @author Yayoi Habami
  * @date 2026-04-10
  * @copyright 2026 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_POLYGON_H_
-#define IGESIO_NUMERICS_POLYGON_H_
+#ifndef IGESIO_NUMERICS_GEOMETRIC_POLYGON_H_
+#define IGESIO_NUMERICS_GEOMETRIC_POLYGON_H_
 
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 
 
@@ -77,4 +77,4 @@ bool IsPointInPolygon(
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_POLYGON_H_
+#endif  // IGESIO_NUMERICS_GEOMETRIC_POLYGON_H_

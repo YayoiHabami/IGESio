@@ -8,10 +8,12 @@
 #include "igesio/entities/transformations/transformation_matrix.h"
 
 #include <memory>
+#include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -235,16 +237,18 @@ bool TransMatrix::SetReference(
     if (!transformation) {
         // 参照を解除
         de_transformation_matrix_.Reset();
+        MarkGeometryModified();
         return true;
     }
     // 自身(this)からtransformationへの参照が循環を生む場合は設定しない
-    if (i_ent::CreatesTransformationCycle(GetID(), transformation)) {
+    if (i_ent::CreatesTransformationCycle(GetID(), *transformation)) {
         return false;
     }
     // 新規エンティティではde_transformation_matrix_のid_がUnsetIDであり、
     // SetPointerはID不一致のため何も設定しない (黙って無視される). 参照先IDを
     // 設定したうえでポインタを保持するため、OverwritePointerを使用する.
     de_transformation_matrix_.OverwritePointer(transformation);
+    MarkGeometryModified();
     return true;
 }
 
@@ -268,7 +272,66 @@ bool TransMatrix::SetMatrixType(const MatrixType type) {
         type == MatrixType::kCartesianOffset || type == MatrixType::kCylindricalCoordinates ||
         type == MatrixType::kSphericalCoordinates) {
         form_number_ = static_cast<int>(type);
+        MarkGeometryModified();
         return true;
     }
     return false;  // 無効なタイプ
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<TransMatrix>
+i_ent::MakeTransformationMatrix(const Matrix3d& rotation,
+                                const Vector3d& translation,
+                                std::optional<MatrixType> type) {
+    // 種類が未指定の場合、行列式の符号からフォーム0/1を自動判定する
+    const auto resolved = type.has_value() ? *type
+            : (rotation.determinant() < 0.0 ? MatrixType::kLeftHanded
+                                            : MatrixType::kDefault);
+    return std::make_shared<TransformationMatrix>(
+            rotation, translation, static_cast<int>(resolved));
+}
+
+std::shared_ptr<TransMatrix>
+i_ent::MakeTransformationMatrix(const Matrix4d& transformation,
+                                std::optional<MatrixType> type) {
+    // 最下行が[0, 0, 0, 1]でない同次変換 (透視成分等) はType 124で表現できない
+    if (!i_num::IsApproxZero(transformation(3, 0)) ||
+        !i_num::IsApproxZero(transformation(3, 1)) ||
+        !i_num::IsApproxZero(transformation(3, 2)) ||
+        !i_num::IsApproxOne(transformation(3, 3))) {
+        throw igesio::EntityValueError(
+                "Bottom row of the homogeneous transformation matrix"
+                " must be [0, 0, 0, 1].");
+    }
+    return MakeTransformationMatrix(
+            Matrix3d(transformation.block<3, 3>(0, 0)),
+            Vector3d(transformation.block<3, 1>(0, 3)), type);
+}
+
+std::shared_ptr<TransMatrix> i_ent::MakeTranslation(const Vector3d& offset) {
+    return MakeTransformationMatrix(Matrix3d::Identity(), offset);
+}
+
+std::shared_ptr<TransMatrix> i_ent::MakeRotation(
+        const double angle, const Vector3d& axis) {
+    return MakeRotation(angle, axis, Vector3d::Zero());
+}
+
+std::shared_ptr<TransMatrix> i_ent::MakeRotation(
+        const double angle, const Vector3d& axis, const Vector3d& center) {
+    const double norm = axis.norm();
+    if (i_num::IsApproxZero(norm)) {
+        throw std::invalid_argument(
+                "MakeRotation: Rotation axis must not be a zero vector.");
+    }
+    const Vector3d unit_axis = axis / norm;
+    const Matrix3d rotation = Matrix3d(igesio::AngleAxisd(angle, unit_axis));
+    // 点centerを不動点とする回転: t = center - R·center
+    const Vector3d translation = center - rotation * center;
+    return MakeTransformationMatrix(rotation, translation);
 }

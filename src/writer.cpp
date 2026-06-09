@@ -258,10 +258,9 @@ std::string SerializeTerminateSection(int start_lines, int global_lines,
 
 /// @brief 指定されたファイルパスの親ディレクトリが存在するか確認し、
 ///        存在しない場合は再帰的に作成する
-/// @param filePath ファイルパス (絶対パス)
+/// @param path ファイルパス (絶対パス)
 /// @throw igesio::FileOpenError 親ディレクトリの作成に失敗した場合
-void EnsureParentDirectoryExists(const std::string& filePath) {
-    std::filesystem::path path(filePath);
+void EnsureParentDirectoryExists(const std::filesystem::path& path) {
     std::filesystem::path parentDir = path.parent_path();
 
     // 親フォルダが存在するかチェック
@@ -273,7 +272,7 @@ void EnsureParentDirectoryExists(const std::string& filePath) {
 
     if (ec) {
         throw igesio::FileOpenError("Error creating directory: "
-                + ec.message() + " for path: " + parentDir.string());
+                + ec.message() + " for path: " + parentDir.u8string());
     }
 }
 
@@ -299,11 +298,13 @@ bool igesio::WriteIgesIntermediate(
     auto start_lines = SerializeStartSection(data.start_section);
 
     // ファイル名を取得
-    auto absolute_path = std::filesystem::absolute(file_path).string();
+    // file_pathはUTF-8として扱う. Windowsではpath(std::string)がANSIコード
+    // ページ解釈となり全角パスを開けないため、u8pathでpathを構築する
+    auto absolute_path = std::filesystem::absolute(std::filesystem::u8path(file_path));
     if (absolute_path.empty()) {
         throw igesio::FileOpenError("File path is empty.");
     }
-    std::string file_name = std::filesystem::path(absolute_path).filename().string();
+    std::string file_name = absolute_path.filename().u8string();
 
     // グローバルセクションの文字列化
     auto global_lines = SerializeGlobalSection(
@@ -318,7 +319,7 @@ bool igesio::WriteIgesIntermediate(
     // 親ディレクトリの存在確認・作成
     EnsureParentDirectoryExists(absolute_path);
 
-    // ファイルに書き込む
+    // ファイルに書き込む (pathオーバーロードでUTF-8パスを正しく開く)
     std::ofstream ofs(absolute_path);
     if (!ofs) {
         throw igesio::FileOpenError("Failed to open file for writing: " + file_path);

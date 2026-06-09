@@ -10,7 +10,7 @@
 #include <limits>
 #include <utility>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -104,6 +104,11 @@ bool ISurface::IsFinite() const {
 bool ISurface::IsInDomain(const double u, const double v) const {
     const auto range = GetParameterRange();
     return u >= range[0] && u <= range[1] && v >= range[2] && v <= range[3];
+}
+
+std::vector<double> ISurface::GetUCreaseParameters() const {
+    // 既定は滑らかな曲面とみなし折れ目なし. 掃引系曲面でオーバーライドする
+    return {};
 }
 
 

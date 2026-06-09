@@ -16,7 +16,7 @@
 
 #include <utility>
 
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/entity_base.h"
 
 

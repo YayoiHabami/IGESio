@@ -17,8 +17,8 @@
 #include <memory>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 #include "igesio/entities/surfaces/surface_of_revolution.h"
@@ -50,50 +50,33 @@ void ExpectPositionNear(const Vector3d& actual, const Vector3d& expected,
 /// @brief y=5 の平面 (RationalBSplineSurface, u/v ∈ [0,1], x/z ∈ [-5,5])
 /// @note 変換なし（定義空間 = ワールド空間）
 std::shared_ptr<i_ent::RationalBSplineSurface> MakeYFivePlane() {
-    igesio::IGESParameterVector param{
-        1, 1,
-        1, 1,
-        false, false, true, false, false,
-        0., 0., 1., 1.,
-        0., 0., 1., 1.,
-        1., 1., 1., 1.,
-        -5., 5.,  5.,
-        -5., 5., -5.,
-         5., 5.,  5.,
-         5., 5., -5.,
-        0., 1., 0., 1.
-    };
-    return std::make_shared<i_ent::RationalBSplineSurface>(param);
+    return i_ent::MakeRationalBSplineSurface(
+        {1, 1},                                              // 次数 {M1, M2}
+        {{Vector3d(-5., 5.,  5.), Vector3d( 5., 5.,  5.)},   // P(0,j)
+         {Vector3d(-5., 5., -5.), Vector3d( 5., 5., -5.)}},  // P(1,j)
+        {0., 0., 1., 1.},                                    // Uノット
+        {0., 0., 1., 1.});                                   // Vノット
 }
 
 /// @brief y=0 の平面 (RationalBSplineSurface, u/v ∈ [0,1], x/z ∈ [-5,5])
 /// @note 変換行列で移動・回転するための基底として使用する
 std::shared_ptr<i_ent::RationalBSplineSurface> MakeYZeroPlane() {
-    igesio::IGESParameterVector param{
-        1, 1,
-        1, 1,
-        false, false, true, false, false,
-        0., 0., 1., 1.,
-        0., 0., 1., 1.,
-        1., 1., 1., 1.,
-        -5., 0.,  5.,
-        -5., 0., -5.,
-         5., 0.,  5.,
-         5., 0., -5.,
-        0., 1., 0., 1.
-    };
-    return std::make_shared<i_ent::RationalBSplineSurface>(param);
+    return i_ent::MakeRationalBSplineSurface(
+        {1, 1},                                              // 次数 {M1, M2}
+        {{Vector3d(-5., 0.,  5.), Vector3d( 5., 0.,  5.)},   // P(0,j)
+         {Vector3d(-5., 0., -5.), Vector3d( 5., 0., -5.)}},  // P(1,j)
+        {0., 0., 1., 1.},                                    // Uノット
+        {0., 0., 1., 1.});                                   // Vノット
 }
 
 /// @brief z軸を回転軸とする半径2・高さ4の円柱面 (SurfaceOfRevolution)
 /// @note S(u,v) = (2*cos(v), 2*sin(v), 4*u), u∈[0,1], v∈[0,2π]
 std::shared_ptr<i_ent::SurfaceOfRevolution> MakeCylinder() {
-    auto axis      = std::make_shared<i_ent::Line>(
+    auto axis      = i_ent::MakeLine(
         Vector3d{0., 0., 0.}, Vector3d{0., 0., 1.});
-    auto generatrix = std::make_shared<i_ent::Line>(
+    auto generatrix = i_ent::MakeLine(
         Vector3d{2., 0., 0.}, Vector3d{2., 0., 4.});
-    return std::make_shared<i_ent::SurfaceOfRevolution>(
-        axis, generatrix, 0.0, 2.0 * igesio::kPi);
+    return i_ent::MakeSurfaceOfRevolution(axis, generatrix, 0.0, 2.0 * igesio::kPi);
 }
 
 /// @brief デフォルトの探索パラメータ (テスト用・サンプル数を増やしてある)
@@ -249,8 +232,7 @@ TEST(IntersectSurfaceWithLineTest, WithTransform_Translation) {
     auto plane = MakeYZeroPlane();
 
     // 並進 T=(0,5,0): 定義空間の y=0 がワールド空間の y=5 になる
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(
-        Matrix3d::Identity(), Vector3d{0., 5., 0.});
+    auto trans = i_ent::MakeTranslation(Vector3d{0., 5., 0.});
     plane->OverwriteTransformationMatrix(trans);
 
     // +y方向のレイ: ワールド空間 y=5 で交差するはず
@@ -272,7 +254,7 @@ TEST(IntersectSurfaceWithLineTest, WithTransform_Rotation) {
     rz90 <<  0., -1., 0.,
              1.,  0., 0.,
              0.,  0., 1.;
-    auto trans = std::make_shared<i_ent::TransformationMatrix>(rz90);
+    auto trans = i_ent::MakeTransformationMatrix(rz90);
     plane->OverwriteTransformationMatrix(trans);
 
     // +x → -x方向のレイ: ワールド空間 x=0 で交差するはず

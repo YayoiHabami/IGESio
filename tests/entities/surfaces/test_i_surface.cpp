@@ -14,7 +14,7 @@
 #include <string>
 #include <tuple>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/line.h"
@@ -398,11 +398,11 @@ TEST(ISurfaceTest, Area) {
     {
         // Y軸周りに原点中心の1/4円弧を回転させてできる曲面
         // 半径2の球の1/8面の面積 = 4πr^2 / 8 = 2π
-        auto axis = std::make_shared<i_ent::Line>(
+        auto axis = i_ent::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{0.0, 1.0, 0.0});
-        auto cir_arc = std::make_shared<i_ent::CircularArc>(
+        auto cir_arc = i_ent::MakeCircularArc(
             Vector2d{0.0, 0.0}, Vector2d{2.0, 0.0}, Vector2d{0.0, 2.0});
-        auto surface = std::make_shared<i_ent::SurfaceOfRevolution>(
+        auto surface = i_ent::MakeSurfaceOfRevolution(
             axis, cir_arc, 0.0, igesio::kPi / 2.0);
 
         auto area = surface->Area();
@@ -496,5 +496,23 @@ TEST(ISurfaceTest, GetBoundingBox) {
         // すべての点がボックス内に収まることを確認
         EXPECT_EQ(failures, 0) << "Some points are outside the bounding box. "
                 << "Max distance to box: " << max_distance;
+    }
+}
+
+
+
+/**
+ * GetUCreaseParameters() の基底デフォルト
+ *
+ * オーバーライドしない曲面 (滑らかなNURBS等) は既定の空リストを返すこと.
+ * 掃引系曲面 (118/120/122) のオーバーライド検証は各エンティティの
+ * テストファイルが担う.
+ */
+
+// NURBS曲面 (Type 128; 非オーバーライド) は折れ目なし (空) を返す
+TEST(ISurfaceCreaseDefaultTest, GetUCreaseParameters_EmptyForNurbsSurface) {
+    for (const auto& s : i_test::CreateRationalBSplineSurfaces()) {
+        EXPECT_TRUE(s.surface->GetUCreaseParameters().empty())
+            << "surface: " << s.name;
     }
 }

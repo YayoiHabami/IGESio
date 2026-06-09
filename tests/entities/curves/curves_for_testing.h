@@ -9,6 +9,7 @@
 #ifndef IGESIO_TESTS_ENTITIES_CURVES_CURVES_FOR_TESTING_H_
 #define IGESIO_TESTS_ENTITIES_CURVES_CURVES_FOR_TESTING_H_
 
+#include <array>
 #include <limits>
 #include <memory>
 #include <string>
@@ -72,16 +73,12 @@ using curve_vec = std::vector<TestCurve>;
 /// @brief Circular Arcエンティティの作成
 inline curve_vec CreateCircularArcs() {
     TestCurve circle("R1.5 circle with center(-0.75,0)");
-    circle.curve = std::make_shared<entities::CircularArc>(
-            Vector2d{-0.75, 0.0}, 1.5);
+    circle.curve = entities::MakeCircle(Vector2d{-0.75, 0.0}, 1.5);
     circle.Set2DInfo(true, true);
 
     TestCurve arc("R2 arc with center(1,-1), start angle 4π/3, end angle 5π/2");
-    auto center = Vector2d{1.0, -1.0};
-    auto arc_start = Vector2d{cos(4.0 * kPi / 3.0), sin(4.0 * kPi / 3.0)};
-    auto arc_end   = Vector2d{cos(5.0 * kPi / 2.0), sin(5.0 * kPi / 2.0)};
-    arc.curve = std::make_shared<entities::CircularArc>(
-            center, 2.0 * arc_start + center, 2.0 * arc_end + center);
+    arc.curve = entities::MakeCircularArc(
+            Vector2d{1.0, -1.0}, 2.0, 4.0 * kPi / 3.0, 5.0 * kPi / 2.0);
     arc.Set2DInfo(true, true);
 
     return {circle, arc};
@@ -90,34 +87,30 @@ inline curve_vec CreateCircularArcs() {
 /// @brief Composite Curveエンティティの作成
 inline curve_vec CreateCompositeCurves() {
     // 1. circular arc
-    auto comp_1 = std::make_shared<entities::CircularArc>(
+    auto comp_1 = entities::MakeCircularArc(
             Vector2d{0.5, -1.0}, Vector2d{-1.0, -1.0}, Vector2d{2.0, -1.0});
 
     // 2. line
-    auto comp_2 = std::make_shared<entities::Line>(
+    auto comp_2 = entities::MakeLine(
             Vector3d{2.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0});
 
     // 3. polyline
-    auto comp_3 = std::make_shared<entities::LinearPath>(
+    auto comp_3 = entities::MakeLinearPath(
             std::vector<Vector2d>{{1.0, 1.0}, {1.0, 0.0}, {-2.0, 1.0}}, false);
 
     // Composite curve
-    auto comp_curve = std::make_shared<entities::CompositeCurve>();
-    comp_curve->AddCurve(comp_1);
-    comp_curve->AddCurve(comp_2);
-    comp_curve->AddCurve(comp_3);
+    auto comp_curve = entities::MakeCompositeCurve({comp_1, comp_2, comp_3});
 
     TestCurve composite_curve("composite curve (arc + line + polyline)", comp_curve, 0);
     composite_curve.Set2DInfo(true, true);
 
     TestCurve composite_curve_3d("3D composite curve (line + polyline)", 0);
-    auto line_3d = std::make_shared<entities::Line>(
+    auto line_3d = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0});
-    auto polyline_3d = std::make_shared<entities::LinearPath>(
+    auto polyline_3d = entities::MakeLinearPath(
             std::vector<Vector3d>{{1.0, 1.0, 1.0}, {2.0, 0.0, -1.0}, {3.0, 1.0, 0.0}});
-    auto composite_curve_3d_ptr = std::make_shared<entities::CompositeCurve>();
-    composite_curve_3d_ptr->AddCurve(line_3d);
-    composite_curve_3d_ptr->AddCurve(polyline_3d);
+    auto composite_curve_3d_ptr =
+            entities::MakeCompositeCurve({line_3d, polyline_3d});
     composite_curve_3d.curve = composite_curve_3d_ptr;
 
     return {composite_curve};
@@ -127,13 +120,12 @@ inline curve_vec CreateCompositeCurves() {
 inline curve_vec CreateConicArcs() {
     TestCurve ellipse_arc("ellipse arc with center(0, 0), (rx, ry) = (2, 1), "
                           "angle ∈ [7π/4, 17π/6]");
-    ellipse_arc.curve = std::make_shared<entities::ConicArc>(
-            std::pair<double, double>{2.0, 1.0}, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
+    ellipse_arc.curve = entities::MakeEllipticArc(
+            2.0, 1.0, 7.0 * kPi / 4.0, 17.0 * kPi / 6.0);
     ellipse_arc.Set2DInfo(true, true);
 
     TestCurve ellipse("full ellipse with rx 2, ry 1");
-    ellipse.curve = std::make_shared<entities::ConicArc>(
-            std::pair<double, double>{2.0, 1.0}, 0.0, 2.0 * kPi);
+    ellipse.curve = entities::MakeEllipse(2.0, 1.0);
     ellipse.Set2DInfo(true, true);
 
     return {ellipse_arc, ellipse};
@@ -142,34 +134,26 @@ inline curve_vec CreateConicArcs() {
 /// @brief Copious Dataエンティティの作成
 inline curve_vec CreateCopiousData() {
     TestCurve points("3D copious points (5 points)", -1);
-    igesio::Matrix3Xd copious_coords(3, 5);
-    copious_coords << 3.0,  2.0, 2.0, 0.0, -1.0,
-                      0.0,  1.0, 2.0, 3.0,  2.0,
-                      1.0, -1.0, 0.0, 1.0,  0.0;
-    points.curve = std::make_shared<entities::CopiousData>(
-        entities::CopiousDataType::kPoints3D, copious_coords);
+    const std::vector<Vector3d> copious_points{
+        {3.0, 0.0, 1.0}, {2.0, 1.0, -1.0}, {2.0, 2.0, 0.0},
+        {0.0, 3.0, 1.0}, {-1.0, 2.0, 0.0}};
+    points.curve = entities::MakeCopiousData(copious_points);
 
     TestCurve polyline("3D polyline (5 points)", 0);
-    polyline.curve = std::make_shared<entities::LinearPath>(
-        entities::CopiousDataType::kPolyline3D, copious_coords);
+    polyline.curve = entities::MakeLinearPath(copious_points);
 
     TestCurve points_2d("2D copious points (5 points)", -1);
-    igesio::Matrix3Xd copious_coords_2d(3, 5);
-    copious_coords_2d << 3.0,  2.0, 2.0, 0.0, -1.0,
-                         0.0,  1.0, 2.0, 3.0,  2.0,
-                         0.0,  0.0, 0.0, 0.0,  0.0;
-    points_2d.curve = std::make_shared<entities::CopiousData>(
-        entities::CopiousDataType::kPlanarPoints, copious_coords_2d);
+    const std::vector<Vector2d> copious_points_2d{
+        {3.0, 0.0}, {2.0, 1.0}, {2.0, 2.0}, {0.0, 3.0}, {-1.0, 2.0}};
+    points_2d.curve = entities::MakeCopiousData(copious_points_2d);
     points_2d.Set2DInfo(true, true);
 
     TestCurve polyline_2d("2D polyline (5 points)", 0);
-    polyline_2d.curve = std::make_shared<entities::LinearPath>(
-        entities::CopiousDataType::kPlanarPolyline, copious_coords_2d);
+    polyline_2d.curve = entities::MakeLinearPath(copious_points_2d);
     polyline_2d.Set2DInfo(true, true);
 
     TestCurve closed_2d_loop("2D closed loop (5 points)", 0);
-    closed_2d_loop.curve = std::make_shared<entities::LinearPath>(
-        entities::CopiousDataType::kPlanarLoop, copious_coords_2d);
+    closed_2d_loop.curve = entities::MakeLinearPath(copious_points_2d, true);
     closed_2d_loop.Set2DInfo(true, true);
 
     return {points, polyline, points_2d, polyline_2d, closed_2d_loop};
@@ -180,30 +164,30 @@ inline curve_vec CreateLines() {
     using LT = entities::LineType;
 
     TestCurve segment("segment from (0,-1,0) to (1,1,0)", 1);
-    segment.curve = std::make_shared<entities::Line>(
+    segment.curve = entities::MakeLine(
             Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0}, LT::kSegment);
     segment.Set2DInfo(true, true);
 
     TestCurve ray("ray from (0,-1,0) through (1,1,0)", 1);
-    ray.curve = std::make_shared<entities::Line>(
+    ray.curve = entities::MakeLine(
             Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0}, LT::kRay);
     ray.Set2DInfo(true, true);
 
     TestCurve line("line through (0,-1,0) and (1,1,0)", 1);
-    line.curve = std::make_shared<entities::Line>(
+    line.curve = entities::MakeLine(
             Vector3d{0.0, -1.0, 0.0}, Vector3d{1.0, 1.0, 0.0}, LT::kLine);
     line.Set2DInfo(true, true);
 
     TestCurve segment_3d("3D segment from (0,0,0) to (1,1,1)", 1);
-    segment_3d.curve = std::make_shared<entities::Line>(
+    segment_3d.curve = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0}, LT::kSegment);
 
     TestCurve ray_3d("3D ray from (0,0,0) through (1,1,1)", 1);
-    ray_3d.curve = std::make_shared<entities::Line>(
+    ray_3d.curve = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0}, LT::kRay);
 
     TestCurve line_3d("3D line through (0,0,0) and (1,1,1)", 1);
-    line_3d.curve = std::make_shared<entities::Line>(
+    line_3d.curve = entities::MakeLine(
             Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 1.0}, LT::kLine);
 
     return {segment, ray, line, segment_3d, ray_3d, line_3d};
@@ -212,52 +196,33 @@ inline curve_vec CreateLines() {
 /// @brief Parametric Spline Curveエンティティの作成
 inline curve_vec CreateParametricSplineCurve() {
     TestCurve spline_c("3D parametric spline curve", 3);
-    auto param = igesio::IGESParameterVector{
-        6,     // CTYPE: B-Spline
-        3, 3,  // degree, NDIM (3D)
-        4,     // number of segments
-        0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
-         1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
-         0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
-         5.,     0.,    3.,   -2.,  // Az(1) ~ Dz(1)
-         0.875, -2.25, -3.5,   2.,  // Ax(2) ~ Dx(2)
-         1.625,  4.25,  1.5,  -1.,  // Ay(2) ~ Dy(2)
-         5.5,    1.5,   0.0,   2.,  // Az(2) ~ Dz(2)
-        -0.875, -4.25, -0.5,   1.,  // Ax(3) ~ Dx(3)
-         4.0,    5.0,   0.0,  -1.,  // Ay(3) ~ Dy(3)
-         6.5,    3.0,   3.0,  -1.,  // Az(3) ~ Dz(3)
-        -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
-         8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
-        11.5,    6.0,   0.0,   0.,  // Az(4) ~ Dz(4),
-        -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
-         8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
-        13.0,     6.0,  0.,   0.    // TPZ0 ~ TPZ3
-    };
-    spline_c.curve = std::make_shared<entities::ParametricSplineCurve>(param);
+    const std::vector<double> breakpoints{0.0, 0.5, 1.0, 2.0, 2.25};
+    std::vector<Matrix34d> coefficients(4);
+    coefficients[0] <<  1.,     2.,   -5.,    1.,   // x: A(1) ~ D(1)
+                        0.,     2.,    3.,   -1.,   // y
+                        5.,     0.,    3.,   -2.;   // z
+    coefficients[1] <<  0.875, -2.25, -3.5,   2.,
+                        1.625,  4.25,  1.5,  -1.,
+                        5.5,    1.5,   0.0,   2.;
+    coefficients[2] << -0.875, -4.25, -0.5,   1.,
+                        4.0,    5.0,   0.0,  -1.,
+                        6.5,    3.0,   3.0,  -1.;
+    coefficients[3] << -4.625, -2.25,  2.5,   8.,
+                        8.0,    2.0,  -3.0,   0.,
+                       11.5,    6.0,   0.0,   0.;
+    spline_c.curve = entities::MakeParametricSplineCurve(
+        entities::ParametricSplineCurveType::kBSpline, 3,
+        breakpoints, coefficients);
 
     TestCurve spline_c_2d("2D parametric spline curve", 3);
-    param = igesio::IGESParameterVector{
-        6,     // CTYPE: B-Spline
-        3, 2,  // degree, NDIM (2D)
-        4,     // number of segments
-        0., .5, 1., 2., 2.25,  // Break Points T(1), ..., T(5)
-         1.,     2.,   -5.,    1.,  // Ax(1) ~ Dx(1)
-         0.,     2.,    3.,   -1.,  // Ay(1) ~ Dy(1)
-         0.,     0.,    0.,    0.,  // Az(1) ~ Dz(1)
-         0.875, -2.25, -3.5,   2.,  // Ax(2) ~ Dx(2)
-         1.625,  4.25,  1.5,  -1.,  // Ay(2) ~ Dy(2)
-         0.0,    0.0,   0.0,   0.,  // Az(2) ~ Dz(2)
-        -0.875, -4.25, -0.5,   1.,  // Ax(3) ~ Dx(3)
-         4.0,    5.0,   0.0,  -1.,  // Ay(3) ~ Dy(3)
-         0.0,    0.0,   0.0,   0.,  // Az(3) ~ Dz(3)
-        -4.625, -2.25,  2.5,   8.,  // Ax(4) ~ Dx(4)
-         8.0,    2.0,  -3.0,   0.,  // Ay(4) ~ Dy(4)
-         0.0,    0.0,   0.0,   0.,  // Az(4) ~ Dz(4),
-        -4.90625, 0.5, 17.,  48.,   // TPX0 ~ TPX3
-         8.3125,  0.5, -6.,   0.,   // TPY0 ~ TPY3
-         0.0,     0.0,  0.,   0.    // TPZ0 ~ TPZ3
-    };
-    spline_c_2d.curve = std::make_shared<entities::ParametricSplineCurve>(param);
+    // x, y係数は3D版と同一で、z行をゼロにした平面 (NDIM=2) 版
+    auto coefficients_2d = coefficients;
+    for (auto& segment : coefficients_2d) {
+        segment.row(2).setZero();
+    }
+    spline_c_2d.curve = entities::MakeParametricSplineCurve(
+        entities::ParametricSplineCurveType::kBSpline, 3,
+        breakpoints, coefficients_2d, 2);
     spline_c_2d.Set2DInfo(true, true);
 
     return {spline_c, spline_c_2d};
@@ -266,146 +231,105 @@ inline curve_vec CreateParametricSplineCurve() {
 /// @brief Rational B-Spline Curveエンティティの作成
 inline curve_vec CreateRationalBSplineCurve() {
     TestCurve nurbs_c_2d("2D rational B-spline curve", 3);
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -2.5, -5.5,  0.0,    // control point P(0)
-        -2.0,  4.0,  0.0,    // control point P(1)
-         8.5,  2.5,  0.0,    // control point P(2)
-         5.5, -2.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    nurbs_c_2d.curve = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(-2.5, -5.5, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-2.0,  4.0, 0.0);  // control point P(1)
+    cps.col(2) = Vector3d(8.5,   2.5, 0.0);  // control point P(2)
+    cps.col(3) = Vector3d(5.5,  -2.0, 0.0);  // control point P(3)
+    nurbs_c_2d.curve = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
     nurbs_c_2d.Set2DInfo(true, true);
 
     TestCurve nurbs_closed_2d("2D closed rational B-spline curve", 0);
-    param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-         0.0,  5.0,  0.0,    // control point P(0)
-        -4.0,  0.0,  0.0,    // control point P(1)
-         4.0,  0.0,  0.0,    // control point P(2)
-         0.0,  5.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    nurbs_closed_2d.curve = std::make_shared<entities::RationalBSplineCurve>(param);
+    cps.col(0) = Vector3d(0.0,   5.0, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-4.0,  0.0, 0.0);  // control point P(1)
+    cps.col(2) = Vector3d(4.0,   0.0, 0.0);  // control point P(2)
+    cps.col(3) = Vector3d(0.0,   5.0, 0.0);  // control point P(3)
+    nurbs_closed_2d.curve = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
     nurbs_closed_2d.Set2DInfo(true, true);
 
     TestCurve nurbs_c("3D rational B-spline curve", 3);
-    param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -4.0, -4.0,  0.0,    // control point P(0)
-        -1.5,  7.0,  3.5,    // control point P(1)
-         4.0, -3.0,  1.0,    // control point P(2)
-         4.0,  4.0,  0.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    nurbs_c.curve = std::make_shared<entities::RationalBSplineCurve>(param);
+    cps.col(0) = Vector3d(-4.0, -4.0, 0.0);  // control point P(0)
+    cps.col(1) = Vector3d(-1.5,  7.0, 3.5);  // control point P(1)
+    cps.col(2) = Vector3d(4.0,  -3.0, 1.0);  // control point P(2)
+    cps.col(3) = Vector3d(4.0,   4.0, 0.0);  // control point P(3)
+    nurbs_c.curve = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     return {nurbs_c_2d, nurbs_closed_2d, nurbs_c};
 }
 
 inline curve_vec CreateCurveOnAParametricSurface() {
-    // Create NURBS surface
-    auto param = igesio::IGESParameterVector{
-        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-        3, 3,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,         // PROP1-5
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(1,5)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(2,0) to W(3,5)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(4,0) to W(5,5)
-        // Control points (36 points, each with x, y, z)
-        -25., -25., -10.,  // Control point (0,0)
-        -25., -15., -5.,   // Control point (0,1)
-        -25., -5., 0.,     // Control point (0,2)
-        -25., 5., 0.,      // Control point (0,3)
-        -25., 15., -5.,    // Control point (0,4)
-        -25., 25., -10.,   // Control point (0,5)
-        -15., -25., -8.,   // Control point (1,0)
-        -15., -15., -4.,   // Control point (1,1)
-        -15., -5., -4.,    // Control point (1,2)
-        -15., 5., -4.,     // Control point (1,3)
-        -15., 15., -4.,    // Control point (1,4)
-        -15., 25., -8.,    // Control point (1,5)
-        -5., -25., -5.,    // Control point (2,0)
-        -5., -15., -3.,    // Control point (2,1)
-        -5., -5., -8.,     // Control point (2,2)
-        -5., 5., -8.,      // Control point (2,3)
-        -5., 15., -3.,     // Control point (2,4)
-        -5., 25., -5.,     // Control point (2,5)
-        5., -25., -3.,     // Control point (3,0)
-        5., -15., -2.,     // Control point (3,1)
-        5., -5., -8.,      // Control point (3,2)
-        5., 5., -8.,       // Control point (3,3)
-        5., 15., -2.,      // Control point (3,4)
-        5., 25., -3.,      // Control point (3,5)
-        15., -25., -8.,    // Control point (4,0)
-        15., -15., -4.,    // Control point (4,1)
-        15., -5., -4.,     // Control point (4,2)
-        15., 5., -4.,      // Control point (4,3)
-        15., 15., -4.,     // Control point (4,4)
-        15., 25., -8.,     // Control point (4,5)
-        25., -25., -10.,   // Control point (5,0)
-        25., -15., -5.,    // Control point (5,1)
-        25., -5., 2.,      // Control point (5,2)
-        25., 5., 2.,       // Control point (5,3)
-        25., 15., -5.,     // Control point (5,4)
-        25., 25., -10.,    // Control point (5,5)
-        0., 3., 0., 3.     // Parameter range in U and V
-    };
-    auto nurbs_s = std::make_shared<entities::RationalBSplineSurface>(param);
+    // Create NURBS surface (6x6 control points, degree 3 in U and V)
+    // grid[i][j] = P(i,j) = (-25+10i, -25+10j, z_ij)
+    const std::vector<std::vector<Vector3d>> cp_grid{
+        {Vector3d(-25., -25., -10.), Vector3d(-25., -15., -5.),
+         Vector3d(-25., -5., 0.), Vector3d(-25., 5., 0.),
+         Vector3d(-25., 15., -5.), Vector3d(-25., 25., -10.)},  // P(0,j)
+        {Vector3d(-15., -25., -8.), Vector3d(-15., -15., -4.),
+         Vector3d(-15., -5., -4.), Vector3d(-15., 5., -4.),
+         Vector3d(-15., 15., -4.), Vector3d(-15., 25., -8.)},   // P(1,j)
+        {Vector3d(-5., -25., -5.), Vector3d(-5., -15., -3.),
+         Vector3d(-5., -5., -8.), Vector3d(-5., 5., -8.),
+         Vector3d(-5., 15., -3.), Vector3d(-5., 25., -5.)},     // P(2,j)
+        {Vector3d(5., -25., -3.), Vector3d(5., -15., -2.),
+         Vector3d(5., -5., -8.), Vector3d(5., 5., -8.),
+         Vector3d(5., 15., -2.), Vector3d(5., 25., -3.)},       // P(3,j)
+        {Vector3d(15., -25., -8.), Vector3d(15., -15., -4.),
+         Vector3d(15., -5., -4.), Vector3d(15., 5., -4.),
+         Vector3d(15., 15., -4.), Vector3d(15., 25., -8.)},     // P(4,j)
+        {Vector3d(25., -25., -10.), Vector3d(25., -15., -5.),
+         Vector3d(25., -5., 2.), Vector3d(25., 5., 2.),
+         Vector3d(25., 15., -5.), Vector3d(25., 25., -10.)}};   // P(5,j)
+    // weights (all 1.0) and parameter range ([0,3]x[0,3]) are defaulted
+    auto nurbs_s = entities::MakeRationalBSplineSurface(
+        {3, 3},                                    // degrees {M1, M2}
+        cp_grid,
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 
     // Create curve on the surface
     TestCurve curve_on_surface("open curve on a parametric surface", 2);
-    param = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         0.0,  0.0,  0.0,    // control point P(0)
-         0.0,  4.0,  0.0,    // control point P(1)
-         2.0, -2.0,  0.0,    // control point P(2)
-         1.5,  2.0,  0.0,    // control point P(3)
-         3.0,  3.0,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto nurbs_c = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 5);
+    cps.col(0) = Vector3d(0.0,  0.0, 0.0);   // control point P(0)
+    cps.col(1) = Vector3d(0.0,  4.0, 0.0);   // control point P(1)
+    cps.col(2) = Vector3d(2.0, -2.0, 0.0);   // control point P(2)
+    cps.col(3) = Vector3d(1.5,  2.0, 0.0);   // control point P(3)
+    cps.col(4) = Vector3d(3.0,  3.0, 0.0);   // control point P(4)
+    auto nurbs_c = entities::MakeRationalBSplineCurve(
+        3,                                              // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                             // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});               // parameter range V(0), V(1)
     auto [open_curve, _] = entities::MakeCurveOnAParametricSurface(nurbs_s, nurbs_c);
     curve_on_surface.curve = open_curve;
 
     TestCurve closed_curve_on_surface("closed curve on a parametric surface", 2);
-    param = igesio::IGESParameterVector{
-        4,  // number of control points - 1
-        3,  // degree
-        false, false, true, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1., 1., 1., 1., 1.,  // weights
-         1.5,  0.5,  0.0,    // control point P(0)
-         0.0,  0.5,  0.0,    // control point P(1)
-         2.0,  4.0,  0.0,    // control point P(2)
-         3.0,  0.5,  0.0,    // control point P(3)
-         1.5,  0.5,  0.0,    // control point P(4)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto nurbs_cc = std::make_shared<entities::RationalBSplineCurve>(param);
+    cps.col(0) = Vector3d(1.5, 0.5, 0.0);    // control point P(0)
+    cps.col(1) = Vector3d(0.0, 0.5, 0.0);    // control point P(1)
+    cps.col(2) = Vector3d(2.0, 4.0, 0.0);    // control point P(2)
+    cps.col(3) = Vector3d(3.0, 0.5, 0.0);    // control point P(3)
+    cps.col(4) = Vector3d(1.5, 0.5, 0.0);    // control point P(4)
+    auto nurbs_cc = entities::MakeRationalBSplineCurve(
+        3,                                              // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                             // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});               // parameter range V(0), V(1)
     auto [closed_curve, __] = entities::MakeCurveOnAParametricSurface(nurbs_s, nurbs_cc);
     closed_curve_on_surface.curve = closed_curve;
 

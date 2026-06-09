@@ -12,6 +12,7 @@
 #define IGESIO_TESTS_ENTITIES_CURVES_ALGORITHMS_EXTREMAL_POLYGON_TEST_CURVES_H_
 
 #include <memory>
+#include <vector>
 
 #include "igesio/common/iges_parameter_vector.h"
 #include "igesio/entities/curves/composite_curve.h"
@@ -22,13 +23,15 @@
 namespace igesio::tests {
 
 using igesio::entities::CompositeCurve;
+using igesio::entities::ICurve;
+using igesio::entities::MakeCompositeCurve;
 using igesio::entities::RationalBSplineCurve;
 
 /// @brief 曲線アーチの帯ループ1 (2次NURBS×2 + 1次NURBS×2)。z=0平面上の非凸閉ループ。
 ///        102,4,5,11,15,19 (DE 23) のパラメータ空間トリミングループ。
 inline std::shared_ptr<CompositeCurve> MakeLoopArchBand1() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    std::vector<std::shared_ptr<ICurve>> curves;
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             16, 2,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -60,7 +63,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand1() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -74,7 +77,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand1() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             16, 2,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -106,7 +109,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand1() {
             0., 1.,  // V(0), V(1)
             0., 0., -1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -120,14 +123,14 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand1() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    return cc;
+    return MakeCompositeCurve(curves);
 }
 
 /// @brief 曲線アーチの帯ループ2 (2次NURBS×2 + 1次NURBS×2)。ループ1とほぼ鏡像。
 ///        102,4,33,39,43,47 (DE 51) のパラメータ空間トリミングループ。
 inline std::shared_ptr<CompositeCurve> MakeLoopArchBand2() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    std::vector<std::shared_ptr<ICurve>> curves;
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             16, 2,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -159,7 +162,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand2() {
             0., 1.,  // V(0), V(1)
             0., 0., -1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -173,7 +176,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand2() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             16, 2,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -205,7 +208,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand2() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -219,14 +222,14 @@ inline std::shared_ptr<CompositeCurve> MakeLoopArchBand2() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    return cc;
+    return MakeCompositeCurve(curves);
 }
 
 /// @brief 矩形ループ1 (1次NURBS×4)。全辺直線・角4つの退化ケース。
 ///        102,4,61,65,69,73 (DE 77) のパラメータ空間トリミングループ。
 inline std::shared_ptr<CompositeCurve> MakeLoopRect1() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    std::vector<std::shared_ptr<ICurve>> curves;
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -240,7 +243,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect1() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -254,7 +257,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect1() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -268,7 +271,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect1() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -282,14 +285,14 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect1() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    return cc;
+    return MakeCompositeCurve(curves);
 }
 
 /// @brief 矩形ループ2 (1次NURBS×4, 単位矩形)。全辺直線・角4つの退化ケース。
 ///        102,4,87,93,97,101 (DE 105) のパラメータ空間トリミングループ。
 inline std::shared_ptr<CompositeCurve> MakeLoopRect2() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    std::vector<std::shared_ptr<ICurve>> curves;
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -303,7 +306,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect2() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -317,7 +320,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect2() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -331,7 +334,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect2() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(
+    curves.push_back(std::make_shared<RationalBSplineCurve>(
         igesio::IGESParameterVector{
             1, 1,  // K (制御点数-1), M (次数)
             true, false, true, false,  // PROP1-4 (平面/閉/多項式/周期)
@@ -345,7 +348,7 @@ inline std::shared_ptr<CompositeCurve> MakeLoopRect2() {
             0., 1.,  // V(0), V(1)
             0., 0., 1.  // 定義平面の法線
         }));
-    return cc;
+    return MakeCompositeCurve(curves);
 }
 
 }  // namespace igesio::tests

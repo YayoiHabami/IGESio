@@ -134,7 +134,7 @@ The $n$-th derivative of the Rational B-spline curve $C(t)$ is then computed usi
 
 $$C^{(n)}(t) = \frac{1}{w(t)} \left( A^{(n)}(t) - \sum_{k=0}^{n-1} \binom{n}{k} w^{(n-k)}(t) C^{(k)}(t) \right)$$
 
-Here, $\binom{n}{k}$ is the binomial coefficient, computed by the `BinomialCoefficient` function in `igesio/numerics/combinatorics.h`.
+Here, $\binom{n}{k}$ is the binomial coefficient, computed by the `BinomialCoefficient` function in `igesio/numerics/core/combinatorics.h`.
 
 **Example Calculations**
 

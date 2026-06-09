@@ -9,11 +9,13 @@
 
 #include <algorithm>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/algorithms.h"
 
 namespace {
@@ -22,6 +24,54 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::SurfaceOfRevolution;
 using igesio::Vector3d;
+
+/// @brief 回転角度の制約 0 < TA-SA <= 2π を満たすか
+/// @param start_angle 回転の開始角度SA [rad]
+/// @param end_angle 回転の終了角度TA [rad]
+/// @note 規格はSA・TAの絶対値ではなく差のみを制約する。上限は厳密比較では
+///       なく許容誤差付き比較とする。全周回転(360°)ではCADが終了角を2πの
+///       十進近似で出力し、double化で差が真の2πをわずかに超える
+///       (例: 6.28318530717959 ≈ 2π+4e-15)ことがあるため(値はクランプせず
+///       原値を保持)。
+bool IsValidAngleRange(const double start_angle, const double end_angle) {
+    return start_angle < end_angle
+           && i_num::IsApproxLEQ(end_angle - start_angle, 2.0 * igesio::kPi);
+}
+
+/// @brief 回転角度の制約 0 < TA-SA <= 2π を検証する
+/// @param start_angle 回転の開始角度SA [rad]
+/// @param end_angle 回転の終了角度TA [rad]
+/// @throw igesio::EntityValueError 制約を満たさない場合
+void ValidateAngleRange(const double start_angle, const double end_angle) {
+    if (!IsValidAngleRange(start_angle, end_angle)) {
+        throw igesio::EntityValueError(
+            "Invalid angles: Require 0 < θend - θstart <= 2*pi, but got "
+            "θstart = " + std::to_string(start_angle) + "[rad] and "
+            "θend = " + std::to_string(end_angle) + "[rad].");
+    }
+}
+
+/// @brief 値コンストラクタ用のPDパラメータを構築する
+/// @param axis 回転軸 (Lineエンティティへのポインタ)
+/// @param generatrix 母線 (ICurveを継承したエンティティへのポインタ)
+/// @return 構築されたIGESParameterVector
+/// @throw std::invalid_argument axisまたはgeneratrixがnullptrの場合
+/// @note 委譲コンストラクタの初期化式でnullptrを参照しないよう、
+///       GetID()の呼び出し前にここでnull検証を行う
+igesio::IGESParameterVector BuildSorParameters(
+        const std::shared_ptr<i_ent::Line>& axis,
+        const std::shared_ptr<i_ent::ICurve>& generatrix,
+        const double start_angle, const double end_angle) {
+    if (!axis) {
+        throw std::invalid_argument(
+            "axis of SurfaceOfRevolution must not be nullptr");
+    }
+    if (!generatrix) {
+        throw std::invalid_argument(
+            "generatrix of SurfaceOfRevolution must not be nullptr");
+    }
+    return {axis->GetID(), generatrix->GetID(), start_angle, end_angle};
+}
 
 }  // namespace
 
@@ -49,17 +99,8 @@ SurfaceOfRevolution::SurfaceOfRevolution(
         const std::shared_ptr<Line>& axis,
         const std::shared_ptr<ICurve>& generatrix,
         const double start_angle, const double end_angle)
-        : SurfaceOfRevolution({axis->GetID(), generatrix->GetID(),
-                               start_angle, end_angle}) {
-    if (axis == nullptr) {
-        throw std::invalid_argument(
-            "axis of SurfaceOfRevolution must not be nullptr");
-    }
-    if (generatrix == nullptr) {
-        throw std::invalid_argument(
-            "generatrix of SurfaceOfRevolution must not be nullptr");
-    }
-
+        : SurfaceOfRevolution(BuildSorParameters(
+              axis, generatrix, start_angle, end_angle)) {
     // 参照の解決
     SetAxis(axis);
     SetGeneratrix(generatrix);
@@ -202,16 +243,11 @@ igesio::ValidationResult SurfaceOfRevolution::ValidatePD() const {
         }
     }
 
-    // 回転角度
-    // 0 <= start_angle < end_angle <= 2*pi
-    // 上限は厳密比較ではなく許容誤差付き比較とする。全周回転(360°)では
-    // CADが終了角を2πの十進近似で出力し、double化で真の2πをわずかに超える
-    // (例: 6.28318530717959 ≈ 2π+4e-15)ことがあるため(値はクランプせず原値を保持)。
-    if (!(0.0 <= start_angle_ && start_angle_ < end_angle_
-          && i_num::IsApproxLEQ(end_angle_, 2.0 * kPi))) {
+    // 回転角度: 0 < θend - θstart <= 2*pi (許容誤差等はIsValidAngleRange参照)
+    if (!IsValidAngleRange(start_angle_, end_angle_)) {
         // 角度は幾何的品質の指摘 (kWarning) とし描画はブロックしない
         // (過回転でも周期的に評価でき、退化(start>=end)は何も描かないだけ)。
-        errors.emplace_back("Invalid angles: Require 0 <= θstart < θend <= 2*pi, "
+        errors.emplace_back("Invalid angles: Require 0 < θend - θstart <= 2*pi, "
                             "but got θstart = " + std::to_string(start_angle_) + "[rad] and "
                             "θend = " + std::to_string(end_angle_) + "[rad].",
                             igesio::ValidationSeverity::kWarning);
@@ -234,9 +270,8 @@ bool SurfaceOfRevolution::IsUClosed() const {
 }
 
 bool SurfaceOfRevolution::IsVClosed() const {
-    // v方向は回転角度に依存する
-    return i_num::IsApproxEqual(start_angle_, 0.0)
-           && i_num::IsApproxEqual(end_angle_, 2.0 * kPi);
+    // v方向は回転角度がちょうど全周 (θend - θstart = 2π) の場合に閉じる
+    return i_num::IsApproxEqual(end_angle_ - start_angle_, 2.0 * kPi);
 }
 
 std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
@@ -251,6 +286,13 @@ std::array<double, 4> SurfaceOfRevolution::GetParameterRange() const {
     return {umin, umax, start_angle_, end_angle_};
 }
 
+std::vector<double> SurfaceOfRevolution::GetUCreaseParameters() const {
+    // u方向は母線のパラメータに一致するため、母線の角点をそのまま返す
+    auto generatrix_curve = generatrix_.TryGetEntity<ICurve>();
+    if (!generatrix_curve) return {};
+    return generatrix_curve.value()->GetCornerParams();
+}
+
 std::optional<i_ent::SurfaceDerivatives>
 SurfaceOfRevolution::TryGetDefinedDerivatives(
         const double u, const double v, const unsigned int order) const {
@@ -259,26 +301,26 @@ SurfaceOfRevolution::TryGetDefinedDerivatives(
         return std::nullopt;
     }
 
-    // パラメータ範囲のチェック
+    // パラメータ範囲のチェック (境界の浮動小数点誤差を許容し域内へ丸める)
     auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
-        return std::nullopt;
-    }
+    auto uc = i_num::TryClampToRange(u, umin, umax);
+    auto vc = i_num::TryClampToRange(v, vmin, vmax);
+    if (!uc || !vc) return std::nullopt;
 
     // 回転軸の始点P0と方向ベクトルDを取得
     const auto& [P0, end_point] = GetAxis()->GetAnchorPoints();
     auto D = (end_point - P0).normalized();
 
     // 母線の偏導関数を取得
-    auto curve_deriv_opt = GetGeneratrix()->TryGetDerivatives(u, order);
+    auto curve_deriv_opt = GetGeneratrix()->TryGetDerivatives(*uc, order);
     if (!curve_deriv_opt) return std::nullopt;
     auto c_deriv = curve_deriv_opt.value();
 
     // サーフェスの偏導関数を計算
     // 計算式の詳細については[docs/entities/surfaces/120_surface_of_revolution_ja.md]を参照
     SurfaceDerivatives s_deriv(order);
-    const double cos_v = std::cos(v);
-    const double sin_v = std::sin(v);
+    const double cos_v = std::cos(*vc);
+    const double sin_v = std::sin(*vc);
     for (unsigned int nu = 0; nu <= order; ++nu) {
         // C(u) - P0 または C^(nu)(u) を計算
         const auto& c_n = c_deriv[nu];
@@ -299,7 +341,7 @@ SurfaceOfRevolution::TryGetDefinedDerivatives(
                                + D * dot_d_cp_n * (1.0 - cos_v);
             } else {
                 // S^(nu, nv)(u, v)
-                const double angle = v + nv * kPi / 2.0;
+                const double angle = *vc + nv * kPi / 2.0;
                 const auto term1 = cp_n - D * dot_d_cp_n;
                 s_deriv(nu, nv) = term1 * std::cos(angle) + cross_d_cp_n * std::sin(angle);
             }
@@ -412,6 +454,7 @@ void SurfaceOfRevolution::SetAxis(const std::shared_ptr<Line>& axis) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatrix) {
@@ -430,14 +473,14 @@ void SurfaceOfRevolution::SetGeneratrix(const std::shared_ptr<ICurve>& generatri
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 void SurfaceOfRevolution::SetAngleRange(const double start_angle, const double end_angle) {
-    if (!(0.0 <= start_angle && start_angle < end_angle && end_angle <= 2.0 * kPi)) {
-        throw igesio::EntityValueError("Invalid angles: Require 0 <= θstart < θend <= 2*pi");
-    }
+    ValidateAngleRange(start_angle, end_angle);
     start_angle_ = start_angle;
     end_angle_ = end_angle;
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::Line> SurfaceOfRevolution::GetAxis() const {
@@ -454,4 +497,44 @@ std::shared_ptr<const i_ent::ICurve> SurfaceOfRevolution::GetGeneratrix() const 
         throw igesio::ReferenceError("Generatrix (ICurve) pointer is not set or invalid.");
     }
     return ptr.value();
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<SurfaceOfRevolution> i_ent::MakeSurfaceOfRevolution(
+        const std::shared_ptr<Line>& axis,
+        const std::shared_ptr<ICurve>& generatrix,
+        const double start_angle, const double end_angle) {
+    // 角度は値コンストラクタでは検証されないため、構築前に検証する
+    ValidateAngleRange(start_angle, end_angle);
+    return std::make_shared<SurfaceOfRevolution>(
+        axis, generatrix, start_angle, end_angle);
+}
+
+std::pair<std::shared_ptr<SurfaceOfRevolution>, std::shared_ptr<i_ent::Line>>
+i_ent::MakeSurfaceOfRevolution(
+        const Vector3d& axis_point, const Vector3d& axis_direction,
+        const std::shared_ptr<ICurve>& generatrix,
+        const double start_angle, const double end_angle) {
+    ValidateAngleRange(start_angle, end_angle);
+
+    // 軸の方向が定まらないため、ゼロベクトルは不可
+    if (i_num::IsApproxZero(axis_direction.norm(), i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+            "MakeSurfaceOfRevolution: Axis direction must not be a zero vector.");
+    }
+    // 孤立した軸Lineが生成されるのを防ぐため、軸の生成前に検証する
+    if (!generatrix) {
+        throw std::invalid_argument(
+            "generatrix of SurfaceOfRevolution must not be nullptr");
+    }
+
+    auto axis = MakeLine(axis_point, axis_point + axis_direction);
+    auto surface = std::make_shared<SurfaceOfRevolution>(
+        axis, generatrix, start_angle, end_angle);
+    return {surface, axis};
 }

@@ -1,18 +1,18 @@
 /**
- * @file numerics/bounding_box.h
+ * @file numerics/geometric/bounding_box.h
  * @brief ジオメトリエンティティ用のバウンディングボックス計算
  * @author Yayoi Habami
  * @date 2025-10-29
  * @copyright 2025 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_BOUNDING_BOX_H_
-#define IGESIO_NUMERICS_BOUNDING_BOX_H_
+#ifndef IGESIO_NUMERICS_GEOMETRIC_BOUNDING_BOX_H_
+#define IGESIO_NUMERICS_GEOMETRIC_BOUNDING_BOX_H_
 
 #include <array>
 #include <limits>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 
 
@@ -308,4 +308,4 @@ class BoundingBox {
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_BOUNDING_BOX_H_
+#endif  // IGESIO_NUMERICS_GEOMETRIC_BOUNDING_BOX_H_

@@ -7,13 +7,16 @@
  */
 #include "igesio/entities/surfaces/ruled_surface.h"
 
+#include <cmath>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/common/errors.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -21,6 +24,22 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::RuledSurface;
 using igesio::Vector3d;
+
+/// @brief nullptrチェックを行った上で曲線のIDを取得する
+/// @param curve 曲線エンティティ
+/// @param name エラーメッセージに使用する引数名
+/// @return 曲線のObjectID
+/// @throw std::invalid_argument curveがnullptrの場合
+/// @note 委譲コンストラクタの引数リスト内で逆参照する前に
+///       nullptrを検出するためのヘルパー
+igesio::ObjectID GetCurveID(const std::shared_ptr<i_ent::ICurve>& curve,
+                            const std::string& name) {
+    if (curve == nullptr) {
+        throw std::invalid_argument(
+            name + " of RuledSurface must not be nullptr.");
+    }
+    return curve->GetID();
+}
 
 }  // namespace
 
@@ -47,14 +66,9 @@ RuledSurface::RuledSurface(
 RuledSurface::RuledSurface(const std::shared_ptr<ICurve>& curve1,
                            const std::shared_ptr<ICurve>& curve2,
                            const bool is_reversed, const bool is_developable)
-        : RuledSurface({curve1->GetID(), curve2->GetID(),
+        : RuledSurface({GetCurveID(curve1, "curve1"),
+                        GetCurveID(curve2, "curve2"),
                         is_reversed, is_developable}) {
-    // nullptrの確認
-    if (curve1 == nullptr || curve2 == nullptr) {
-        throw std::invalid_argument("curve1 and curve2 of RuledSurface "
-                                    "must not be nullptr.");
-    }
-
     // 参照の解決
     SetCurve1(curve1);
     SetCurve2(curve2);
@@ -221,14 +235,14 @@ RuledSurface::TryGetDefinedDerivatives(
         return std::nullopt;
     }
 
-    // パラメータの範囲チェック
+    // パラメータの範囲チェック (境界の浮動小数点誤差を許容し域内へ丸める)
     auto [umin, umax, vmin, vmax] = GetParameterRange();
-    if (!(umin <= u && u <= umax && vmin <= v && v <= vmax)) {
-        return std::nullopt;
-    }
+    auto uc = i_num::TryClampToRange(u, umin, umax);
+    auto vc = i_num::TryClampToRange(v, vmin, vmax);
+    if (!uc || !vc) return std::nullopt;
 
     // 曲線の導関数を取得
-    auto [t, s] = GetParametersTS(u);
+    auto [t, s] = GetParametersTS(*uc);
     auto deriv1_opt = GetCurve1()->TryGetDerivatives(t, order);
     auto deriv2_opt = GetCurve2()->TryGetDerivatives(s, order);
     if (!deriv1_opt || !deriv2_opt)  return std::nullopt;
@@ -250,8 +264,8 @@ RuledSurface::TryGetDefinedDerivatives(
     for (unsigned int n_u = 0; n_u <= order; ++n_u) {
         auto max_n_v = order - n_u;
         if (max_n_v >= 0) {
-            s_deriv(n_u, 0) = (1 - v) * deriv1[n_u] * std::pow(dt, n_u)
-                            + v * deriv2[n_u] * std::pow(sigma * ds, n_u);
+            s_deriv(n_u, 0) = (1 - *vc) * deriv1[n_u] * std::pow(dt, n_u)
+                            + *vc * deriv2[n_u] * std::pow(sigma * ds, n_u);
         }
         if (max_n_v >= 1) {
             s_deriv(n_u, 1) = -1.0 * deriv1[n_u] * std::pow(dt, n_u)
@@ -261,6 +275,34 @@ RuledSurface::TryGetDefinedDerivatives(
     }
 
     return s_deriv;
+}
+
+std::vector<double> RuledSurface::GetUCreaseParameters() const {
+    std::vector<double> result;
+
+    // C1: t = t_min + u(t_max - t_min) より u = (t - t_min)/(t_max - t_min)
+    if (auto c1 = curve1_.TryGetEntity<ICurve>()) {
+        auto r1 = c1.value()->GetParameterRange();
+        const double d1 = r1[1] - r1[0];
+        if (std::isfinite(d1) && !i_num::IsApproxZero(d1)) {
+            for (const double t_c : c1.value()->GetCornerParams()) {
+                result.push_back((t_c - r1[0]) / d1);
+            }
+        }
+    }
+
+    // C2: DIRFLG (is_reversed_) に応じて s -> u を写像する
+    if (auto c2 = curve2_.TryGetEntity<ICurve>()) {
+        auto r2 = c2.value()->GetParameterRange();
+        const double d2 = r2[1] - r2[0];
+        if (std::isfinite(d2) && !i_num::IsApproxZero(d2)) {
+            for (const double s_c : c2.value()->GetCornerParams()) {
+                result.push_back(is_reversed_ ? (r2[1] - s_c) / d2
+                                              : (s_c - r2[0]) / d2);
+            }
+        }
+    }
+    return result;
 }
 
 i_num::BoundingBox RuledSurface::GetDefinedBoundingBox() const {
@@ -305,6 +347,7 @@ void RuledSurface::SetCurve1(const std::shared_ptr<ICurve>& curve) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<const i_ent::ICurve> RuledSurface::GetCurve2() const {
@@ -330,6 +373,18 @@ void RuledSurface::SetCurve2(const std::shared_ptr<ICurve>& curve) {
         entity_base->SetSubordinateEntitySwitch(
             SubordinateEntitySwitch::kPhysicallyDependent);
     }
+    MarkGeometryModified();
+}
+
+i_ent::RuledSurfaceForm RuledSurface::GetSurfaceForm() const noexcept {
+    return (GetFormNumber() == 0) ? RuledSurfaceForm::kEqualArcLength
+                                  : RuledSurfaceForm::kEqualParameters;
+}
+
+void RuledSurface::SetSurfaceForm(const RuledSurfaceForm form) noexcept {
+    form_number_ = static_cast<int>(form);
+    // Form 0/1はパラメータ対応 (弧長/等パラメータ) を変えるため形状に影響する
+    MarkGeometryModified();
 }
 
 
@@ -355,4 +410,33 @@ std::pair<double, double> RuledSurface::GetParametersTS(const double u) const {
     }
     return {range1[0] + u * (range1[1] - range1[0]),
             range2[0] + u * (range2[1] - range2[0])};
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<RuledSurface> i_ent::MakeRuledSurface(
+        const std::shared_ptr<ICurve>& curve1,
+        const std::shared_ptr<ICurve>& curve2,
+        const bool is_reversed, const bool is_developable) {
+    if (curve1 == nullptr || curve2 == nullptr) {
+        throw std::invalid_argument(
+            "MakeRuledSurface: curve1 and curve2 must not be nullptr.");
+    }
+    // 同一エンティティを両側に指定するとValidatePDがエラーとなるため、
+    // 構築時点で検出する
+    if (curve1->GetID() == curve2->GetID()) {
+        throw igesio::EntityValueError(
+            "MakeRuledSurface: curve1 and curve2 must be different entities.");
+    }
+
+    auto surface = std::make_shared<RuledSurface>(
+            curve1, curve2, is_reversed, is_developable);
+    // 本実装の評価は与えられたパラメータ化をそのまま用いるため、
+    // 等相対パラメータ (Form 1) を明示する
+    surface->SetSurfaceForm(RuledSurfaceForm::kEqualParameters);
+    return surface;
 }

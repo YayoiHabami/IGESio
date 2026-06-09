@@ -314,13 +314,12 @@ bool EntityBase::OverwriteView(
 
 bool igesio::entities::CreatesTransformationCycle(
         const ObjectID& self_id,
-        const std::shared_ptr<const ITransformation>& transformation) {
-    if (!transformation) return false;
+        const ITransformation& transformation) {
     // 自己参照
-    if (transformation->GetID() == self_id) return true;
+    if (transformation.GetID() == self_id) return true;
     // transformationの参照チェーンを辿り、self_idに戻れば循環
     std::vector<ObjectID> visited;
-    auto current = transformation->GetRefTransformation();
+    auto current = transformation.GetRefTransformation();
     while (current) {
         const ObjectID& cur_id = current->GetID();
         if (cur_id == self_id) return true;
@@ -338,7 +337,7 @@ bool EntityBase::OverwriteTransformationMatrix(
         const std::shared_ptr<const ITransformation>& transformation_matrix) {
     if (!transformation_matrix) return false;
     // 循環参照となる場合は設定しない (非変換エンティティでは発火しない)
-    if (CreatesTransformationCycle(GetID(), transformation_matrix)) return false;
+    if (CreatesTransformationCycle(GetID(), *transformation_matrix)) return false;
     de_transformation_matrix_.OverwriteID(transformation_matrix->GetID());
     de_transformation_matrix_.SetPointer(transformation_matrix);
     return true;

@@ -20,8 +20,8 @@
 #include <memory>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 #include "igesio/entities/surfaces/surface_of_revolution.h"
@@ -40,31 +40,22 @@ constexpr double kUVTol = 1e-5;
 /// @brief y=5 の平面 (RationalBSplineSurface, u/v ∈ [0,1], x/z ∈ [-5,5])
 /// @note 変換なし (定義空間 = ワールド空間). 矩形パッチのため (u,v)→(x,z) は線形
 std::shared_ptr<i_ent::RationalBSplineSurface> MakeYFivePlane() {
-    igesio::IGESParameterVector param{
-        1, 1,
-        1, 1,
-        false, false, true, false, false,
-        0., 0., 1., 1.,
-        0., 0., 1., 1.,
-        1., 1., 1., 1.,
-        -5., 5.,  5.,
-        -5., 5., -5.,
-         5., 5.,  5.,
-         5., 5., -5.,
-        0., 1., 0., 1.
-    };
-    return std::make_shared<i_ent::RationalBSplineSurface>(param);
+    return i_ent::MakeRationalBSplineSurface(
+        {1, 1},                                              // 次数 {M1, M2}
+        {{Vector3d(-5., 5.,  5.), Vector3d( 5., 5.,  5.)},   // P(0,j)
+         {Vector3d(-5., 5., -5.), Vector3d( 5., 5., -5.)}},  // P(1,j)
+        {0., 0., 1., 1.},                                    // Uノット
+        {0., 0., 1., 1.});                                   // Vノット
 }
 
 /// @brief z軸を回転軸とする半径2・高さ4の円柱面 (SurfaceOfRevolution)
 /// @note S(u,v) = (2*cos(v), 2*sin(v), 4*u), u∈[0,1], v∈[0,2π]
 std::shared_ptr<i_ent::SurfaceOfRevolution> MakeCylinder() {
-    auto axis = std::make_shared<i_ent::Line>(
+    auto axis = i_ent::MakeLine(
         Vector3d{0., 0., 0.}, Vector3d{0., 0., 1.});
-    auto generatrix = std::make_shared<i_ent::Line>(
+    auto generatrix = i_ent::MakeLine(
         Vector3d{2., 0., 0.}, Vector3d{2., 0., 4.});
-    return std::make_shared<i_ent::SurfaceOfRevolution>(
-        axis, generatrix, 0.0, 2.0 * igesio::kPi);
+    return i_ent::MakeSurfaceOfRevolution(axis, generatrix, 0.0, 2.0 * igesio::kPi);
 }
 
 }  // namespace
@@ -120,7 +111,7 @@ TEST(CurveSurfaceInversion, InvertCurve_RecoversEndpointUV_OnPlane) {
     auto surface = MakeYFivePlane();
     const Vector3d p0 = surface->GetPointAt(0.2, 0.3);
     const Vector3d p1 = surface->GetPointAt(0.7, 0.6);
-    const auto curve = std::make_shared<i_ent::Line>(p0, p1);
+    const auto curve = i_ent::MakeLine(p0, p1);
 
     const auto arcs = InvertCurveOntoSurface(*surface, *curve);
     // split 既定 off のため弧は1本

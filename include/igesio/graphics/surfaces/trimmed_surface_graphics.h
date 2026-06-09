@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/surfaces/trimmed_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
@@ -46,8 +46,8 @@ class TrimmedSurfaceGraphics
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
     explicit TrimmedSurfaceGraphics(
-            const std::shared_ptr<const entities::TrimmedSurface>,
-            const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::TrimmedSurface>&,
+            const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~TrimmedSurfaceGraphics() override;
@@ -92,7 +92,7 @@ class TrimmedSurfaceGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief OpenGLリソースを解放する
     void Cleanup() override;

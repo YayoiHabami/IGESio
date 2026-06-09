@@ -1,6 +1,6 @@
 # Bounding Box
 
-Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bounding_box.h)
+Defined in [`igesio/numerics/geometric/bounding_box.h`](./../../include/igesio/numerics/geometric/bounding_box.h)
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ Defined in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bo
 
 This document describes the Bounding Box class used in numerical computations. A bounding box defines the minimal boundary of an object or dataset, enabling various applications such as spatial relationship queries, collision detection, and rendering optimization.
 
-In this library, the `BoundingBox` class and related functions are implemented in [`igesio/numerics/bounding_box.h`](./../../include/igesio/numerics/bounding_box.h). The `BoundingBox` class supports creating, manipulating, and querying bounding boxes in both 2D and 3D space.
+In this library, the `BoundingBox` class and related functions are implemented in [`igesio/numerics/geometric/bounding_box.h`](./../../include/igesio/numerics/geometric/bounding_box.h). The `BoundingBox` class supports creating, manipulating, and querying bounding boxes in both 2D and 3D space.
 
 The class defines a bounding box using the following four types of parameters:
 

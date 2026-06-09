@@ -8,6 +8,7 @@
 #ifndef IGESIO_ENTITIES_ENTITY_BASE_H_
 #define IGESIO_ENTITIES_ENTITY_BASE_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -48,6 +49,11 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @throw igesio::DataFormatError 4, 5, 13番目以外のフィールドで
     ///        正の値を指定した場合
     void SetDERecord(const RawEntityDE&, const pointer2ID& = {});
+
+    /// @brief ジオメトリリビジョン (形状定義の変更毎にインクリメント)
+    /// @note 描画層が再テッセレーションの要否判定に用いる. 初期値1は
+    ///       「形状を持たない」を意味する既定実装の0と区別するため.
+    uint64_t geometry_revision_ = 1;
 
  protected:
     /// @brief Structure (3rd field of DE)
@@ -167,6 +173,12 @@ class EntityBase : public virtual IEntityIdentifier {
         : EntityBase(RawEntityDE::ByDefault(entity_type),
                      parameters, de2id) {}
 
+    /// @brief ジオメトリリビジョンをインクリメントする
+    /// @note 形状・DE変換参照に影響するmutatorの末尾 (成功経路のみ) で呼ぶこと (規約).
+    ///       呼び忘れは「編集が描画へ反映されない」として顕在化する.
+    ///       色 (ColorDefinition) は描画時にlive読みされるため対象外.
+    void MarkGeometryModified() { ++geometry_revision_; }
+
  public:
     /// @brief プログラム上でエンティティを一意に識別するためのID
     /// @note IDはIDGeneratorクラスを使用して生成される.
@@ -223,6 +235,10 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @brief エンティティのフォーム番号を取得する
     /// @return エンティティのフォーム番号
     int GetFormNumber() const override { return form_number_; }
+
+    /// @brief ジオメトリリビジョンを取得する
+    /// @return 形状定義の変更毎に単調増加する値
+    uint64_t GeometryRevision() const override { return geometry_revision_; }
 
     /// @brief DEセクションのパラメータを取得する
     /// @param id2de IDとDEポインターのマッピング
@@ -504,13 +520,13 @@ class EntityBase : public virtual IEntityIdentifier {
 /// @brief self_idのエンティティからtransformationへ参照を張ると、変換行列の
 ///        参照チェーン (ITransformation::GetRefTransformation) が循環するかを判定する
 /// @param self_id 参照元エンティティのID (新たに張る辺の始点)
-/// @param transformation 参照先の変換行列 (nullの場合は循環なしとみなす)
+/// @param transformation 参照先の変換行列
 /// @return 循環する場合はtrue
 /// @note DEフィールド7は単一ポインタのため参照構造は連結リストとなる.
 ///       transformationのチェーンを辿りself_idに戻れば循環と判定する.
 bool CreatesTransformationCycle(
         const ObjectID& self_id,
-        const std::shared_ptr<const ITransformation>& transformation);
+        const ITransformation& transformation);
 
 }  // namespace igesio::entities
 
