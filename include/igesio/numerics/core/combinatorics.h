@@ -1,12 +1,12 @@
 /**
- * @file numerics/combinatorics.h
+ * @file numerics/core/combinatorics.h
  * @brief 組み合わせ数学に関するユーティリティ関数群
  * @author Yayoi Habami
  * @date 2025-10-23
  * @copyright 2025 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_COMBINATORICS_H_
-#define IGESIO_NUMERICS_COMBINATORICS_H_
+#ifndef IGESIO_NUMERICS_CORE_COMBINATORICS_H_
+#define IGESIO_NUMERICS_CORE_COMBINATORICS_H_
 
 #include <cmath>
 #include <cstdint>
@@ -15,7 +15,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 
 
@@ -105,4 +105,4 @@ T BinomialCoefficient(const T n, const T r) {
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_COMBINATORICS_H_
+#endif  // IGESIO_NUMERICS_CORE_COMBINATORICS_H_

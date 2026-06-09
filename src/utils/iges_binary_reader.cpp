@@ -8,6 +8,7 @@
 #include "igesio/utils/iges_binary_reader.h"
 
 #include <array>
+#include <filesystem>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -172,7 +173,9 @@ bool i_util::detail::IsValidSectionOrder(
 IBReader::IgesBinaryReader(const std::string& file_path)
         : file_path_(file_path) {
     // バイナリモードでファイルを開く
-    file_.open(file_path, std::ios::binary);
+    // file_pathはUTF-8として扱う. Windowsではナロー版openがパスを
+    // ANSIコードページ解釈するため、u8pathでパスを構築しpathオーバーロードで開く
+    file_.open(std::filesystem::u8path(file_path), std::ios::binary);
     if (!file_.is_open()) {
         throw iio::FileOpenError(file_path);
     }

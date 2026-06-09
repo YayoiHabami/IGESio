@@ -8,6 +8,7 @@
 #ifndef IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 #define IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -15,8 +16,8 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/entity_type.h"
 #include "igesio/models/global_param.h"
 #include "igesio/graphics/core/i_open_gl.h"
@@ -163,7 +164,9 @@ class IEntityGraphics {
     ///       `ICurveGraphics`等の、離散化をCPU上で行うグラフィックスクラスでは、
     ///       エンティティがDEレコード7で指定する変換行列を含まない.
     /// @note 頂点シェーダーの`model`変数に対応する.
-    igesio::Matrix4f world_transform_ = igesio::Matrix4f::Identity();
+    /// @note CPU側の正準値として倍精度で保持する. GPUへ渡す際にのみ単精度へ
+    ///       変換することで、BB計算・ピッキング等の幾何計算での精度損失を防ぐ.
+    igesio::Matrix4d world_transform_ = igesio::Matrix4d::Identity();
     /// @brief model変数にentity_が参照する変換行列を使用するか
     /// @note 通常、model変数には、エンティティよりも上位の変換行列
     ///       (親 -> ... -> モデル空間)　を使用する. 各個別エンティティの
@@ -178,11 +181,20 @@ class IEntityGraphics {
     /// @brief 描画に関するグローバルパラメータ
     std::shared_ptr<const models::GraphicsGlobalParam> global_param_;
 
+    /// @brief Synchronize()実行時に記録した同期キー
+    /// @note CurrentGeometryKey()との不一致が再テッセレーションの要否を表す
+    uint64_t synced_geometry_key_ = 0;
+
+    /// @brief 再同期の実体 (エンティティのジオメトリからGPUリソースを再構築する)
+    /// @note 呼び出しはSynchronize() (NVI) 経由でのみ行うこと.
+    ///       キー記録を基底で一元化するための分離
+    virtual void DoSynchronize() = 0;
+
     /// @brief コンストラクタ
     /// @param gl OpenGL関数のラッパー
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
-    explicit IEntityGraphics(const std::shared_ptr<IOpenGL>, bool);
+    explicit IEntityGraphics(const std::shared_ptr<IOpenGL>&, bool);
 
 
 
@@ -229,10 +241,29 @@ class IEntityGraphics {
     virtual void Draw(gl::Uint, const std::pair<float, float>&,
                       const DrawContext&) const = 0;
 
-    /// @brief エンティティをセットアップする
-    /// @note 内部で参照するエンティティの状態に基づいて、
-    ///       描画用のリソースを再セットアップする
-    virtual void Synchronize() = 0;
+    /// @brief エンティティをセットアップする (NVI; 非virtual)
+    /// @note 内部で参照するエンティティの状態に基づいて、描画用のリソースを
+    ///       再セットアップ (DoSynchronize) し、末尾で同期キーを記録する.
+    ///       キー記録を基底で一元化し、各実装の記録漏れを構造的に排除する
+    void Synchronize() {
+        DoSynchronize();
+        synced_geometry_key_ = CurrentGeometryKey();
+    }
+
+    /// @brief 現在の同期キーを計算する
+    /// @return テッセレーションが読む全エンティティの (ObjectID, GeometryRevision)
+    ///         を順序通りにハッシュ結合した値
+    /// @note 既定実装はEntityGraphics<T>にあり、自エンティティ+DE変換チェーン+
+    ///       物理従属子 (GetChildIDs) を再帰的に結合する. 同一性(ID)を含めることで、
+    ///       参照集合の変化とカウンタの変化の両方が必ずキーに現れる
+    ///       (リビジョン総和では参照先交換時に相殺しうるため不可)
+    virtual uint64_t CurrentGeometryKey() const = 0;
+
+    /// @brief 再Synchronizeが必要か
+    /// @return 最後のSynchronize以降に同期キーが変化した場合はtrue
+    bool NeedsResync() const {
+        return synced_geometry_key_ != CurrentGeometryKey();
+    }
 
     /// @brief テクスチャ用の描画リソースを同期する
     virtual void SyncTexture() = 0;
@@ -245,7 +276,8 @@ class IEntityGraphics {
 
     /// @brief 描画用のグローバルパラメータを設定する
     /// @param global_param 描画用のグローバルパラメータ
-    void SetGlobalParam(const std::shared_ptr<const models::GraphicsGlobalParam>);
+    /// @note 内部で調整済みのコピーを保持するため、引数の寿命には依存しない
+    void SetGlobalParam(const models::GraphicsGlobalParam&);
 
     /// @brief グローバル座標系への変換行列を設定する
     /// @param matrix グローバル座標系への変換行列
@@ -256,13 +288,18 @@ class IEntityGraphics {
     ///       モデル空間までの各親の変換行列をすべて掛け合わせたもの) を指定する.
     ///       `ICurveGraphics`等の、離散化をCPU上で行うグラフィックスクラスでは、
     ///       エンティティがDEレコード7で指定する変換行列を含まない.
-    virtual void SetWorldTransform(const igesio::Matrix4f&);
-    /// @brief グローバル座標系への変換行列を取得する
-    /// @return グローバル座標系への変換行列.
+    virtual void SetWorldTransform(const igesio::Matrix4d&);
+    /// @brief グローバル座標系への変換行列をGPU用の単精度で取得する
+    /// @return グローバル座標系への変換行列 (float).
     ///         use_entity_transform_がtrueの場合は、
     ///         `SetWorldTransform`で設定された変換行列に
     ///         entity_が参照する変換行列を掛け合わせたものを返す.
+    /// @note CPU側の幾何計算では精度を失わないようGetWorldTransformD()を使うこと.
     virtual igesio::Matrix4f GetWorldTransform() const = 0;
+    /// @brief グローバル座標系への変換行列を倍精度で取得する (CPU幾何の正準値)
+    /// @return グローバル座標系への変換行列 (double).
+    ///         use_entity_transform_がtrueの場合の扱いはGetWorldTransform()と同じ.
+    virtual igesio::Matrix4d GetWorldTransformD() const = 0;
 
     /// @brief 現在のメインの色を取得する
     /// @return メインの色 (RGBA; [0, 1]の範囲)

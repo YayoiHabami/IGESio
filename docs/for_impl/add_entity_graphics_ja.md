@@ -102,13 +102,15 @@ class MyNewEntityGraphics
     MyNewEntityGraphics(const MyNewEntityGraphics&) = delete;
     MyNewEntityGraphics& operator=(const MyNewEntityGraphics&) = delete;
 
-    /// @brief 描画用リソースをエンティティの状態に同期する
-    void Synchronize() override;
-
     // VAO以外のリソース (VBO, SSBO等) がある場合はCleanup()もオーバーライドする
     // void Cleanup() override;
 
  protected:
+    /// @brief 描画用リソースをエンティティの状態に同期する (再同期の実体)
+    /// @note 呼び出しは基底の非virtualなSynchronize()経由で行われ、
+    ///       実行後に同期キーが自動で記録される
+    void DoSynchronize() override;
+
     /// @brief 実際の描画処理
     void DrawImpl(GLuint, const std::pair<float, float>&) const override;
 };
@@ -153,6 +155,7 @@ MyNewEntityGraphics::MyNewEntityGraphics(
         const std::shared_ptr<IOpenGL> gl)
         // 第3引数=このクラスのShaderType、第4引数=エンティティ変換行列を含むか
         : EntityGraphics(entity, gl, ShaderType::kMyNewCurve, false) {
+    // 基底の非virtualなSynchronize()を呼ぶ (DoSynchronize実行+同期キー記録)
     Synchronize();
 }
 
@@ -160,7 +163,7 @@ MyNewEntityGraphics::~MyNewEntityGraphics() {
     Cleanup();
 }
 
-void MyNewEntityGraphics::Synchronize() {
+void MyNewEntityGraphics::DoSynchronize() {
     Cleanup();  // 既存リソースを解放
 
     // 頂点データをCPU上で生成する
@@ -224,7 +227,7 @@ MyNewEntityGraphics::~MyNewEntityGraphics() {
     Cleanup();
 }
 
-void MyNewEntityGraphics::Synchronize() {
+void MyNewEntityGraphics::DoSynchronize() {
     Cleanup();
 
     // テッセレーションシェーダー使用: 空のVAOを1つ生成するだけでよい
@@ -358,7 +361,7 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
 複数の子エンティティをそれぞれ独立して描画するエンティティの場合。専用基底はなく、統合された`EntityGraphics`をそのまま使う。
 
 1. `EntityGraphics<T>`を継承したクラスを作成し、コンストラクタで基底へ`ShaderType::kComposite`を渡す。
-2. `Synchronize()`の中で各子要素のGraphicsオブジェクトを生成し、`AddChildGraphics()`で登録する。
+2. `DoSynchronize()`の中で各子要素のGraphicsオブジェクトを再同期する(子の生成と`AddChildGraphics()`での登録は`factory.cpp`が行う)。
 3. `factory.cpp`で子要素のGraphicsを追加する処理を実装する(既存の`CreateCompositeCurveGraphics()`を参照)。
 4. `ShaderType::kComposite`を使うため、新しいShaderTypeの追加は不要。`DrawImpl()`は空でよく、描画は型が一致する子へ自動的に委譲される。
 
@@ -391,10 +394,15 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
 - [ ] `ShaderType`列挙体に値を追加 (`i_entity_graphics.h`)
 - [ ] `XxxGraphics`クラスのヘッダー作成 (`include/igesio/graphics/curves/` または `surfaces/`)
 - [ ] `XxxGraphics`クラスのCPP作成 (`src/graphics/curves/`または`surfaces/`)
-  - [ ] `Synchronize()`の実装 (VAO/VBOの生成)
+  - [ ] `DoSynchronize()`の実装 (VAO/VBOの生成。コンストラクタ末尾で`Synchronize()`を呼ぶ)
   - [ ] `DrawImpl()`の実装 (uniform変数設定 + 描画コマンド)
   - [ ] VAO以外のリソースがある場合は`Cleanup()`もオーバーライド
+  - [ ] テッセレーションが`GetChildIDs()`に現れない参照を読む場合のみ`CurrentGeometryKey()`をオーバーライド (既定実装は自エンティティ+DE変換チェーン+物理従属子を再帰結合する)
 - [ ] GLSLシェーダーファイルの作成 (`src/graphics/shaders/glsl/`)
 - [ ] `curves.h`または`surfaces.h`にシェーダーパス定数と`GetXxxShaderCode()`のcase を追加
 - [ ] `factory.cpp`に`dynamic_cast`分岐を追加
 - [ ] CMakeLists.txt にCPPファイルを追加
+
+エンティティ側に形状を変更するsetterを追加する場合は、その末尾(成功経路のみ)で
+`MarkGeometryModified()`を呼ぶこと(`entity_base.h`の規約)。これによりジオメトリリビジョンが進み、
+描画オブジェクトが次回描画時に自動で再同期される。

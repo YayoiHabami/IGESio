@@ -11,16 +11,18 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <iomanip>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/polygon.h"
-#include "igesio/numerics/optimization.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/polygon.h"
+#include "igesio/numerics/analysis/optimization.h"
 #include "igesio/entities/interfaces/i_curve.h"
 
 
@@ -94,6 +96,26 @@ double Cross2D(double ax, double ay, double bx, double by) {
     return ax * by - ay * bx;
 }
 
+/// @brief 相対許容を加味した2次元向き符号を返す
+///
+/// 行列式値を、それを構成する2ベクトルの長さ(の二乗)を基準に評価する。
+/// |value| <= rel_tol * |u| * |v| のとき共線とみなし0を返す。これにより
+/// おそらくFMA縮約等の浮動小数点評価差(ARM64とx86-64の差)で符号が揺れる微小行列式を
+/// 共線側へ一貫して倒し、プラットフォーム間で結果を一致させる。sqrtを避けるため
+/// 二乗値で比較する。
+///
+/// @param value Cross2Dで得た行列式値
+/// @param u_len_sq 基準ベクトルの長さの二乗
+/// @param w_len_sq もう一方のベクトルの長さの二乗
+/// @param rel_tol 相対許容 (sinθに対する閾値)
+/// @return +1 / -1 / 0 (共線)
+int OrientationSign(double value, double u_len_sq, double w_len_sq,
+                    double rel_tol) {
+    const double eps_sq = rel_tol * rel_tol * u_len_sq * w_len_sq;
+    if (value * value <= eps_sq) return 0;
+    return (value > 0.0) ? 1 : -1;
+}
+
 /// @brief 2次元多角形の符号付き面積を返す (shoelace formula)
 ///
 /// @param pts_2d 頂点の2次元座標列 (std::array<double, 2> のベクトル)
@@ -120,11 +142,35 @@ bool SegmentsIntersect2D(const std::array<double, 2>& a,
                          const std::array<double, 2>& b,
                          const std::array<double, 2>& c,
                          const std::array<double, 2>& d) {
-    const double d1 = Cross2D(d[0]-c[0], d[1]-c[1], a[0]-c[0], a[1]-c[1]);
-    const double d2 = Cross2D(d[0]-c[0], d[1]-c[1], b[0]-c[0], b[1]-c[1]);
-    const double d3 = Cross2D(b[0]-a[0], b[1]-a[1], c[0]-a[0], c[1]-a[1]);
-    const double d4 = Cross2D(b[0]-a[0], b[1]-a[1], d[0]-a[0], d[1]-a[1]);
-    return (d1 * d2 < 0.0) && (d3 * d4 < 0.0);
+    // 行列式を構成するベクトル長の積に対する相対許容。おそらくFMA縮約の有無
+    // (ARM64とx86-64の差) で符号が反転し得る微小(≒共線)行列式を共線と
+    // みなす閾値。真の交差(交差角がこの値より大)は影響を受けない。
+    constexpr double kCrossRelTol = 1e-9;
+
+    const double cdx = d[0] - c[0], cdy = d[1] - c[1];
+    const double abx = b[0] - a[0], aby = b[1] - a[1];
+    const double cd_sq = cdx * cdx + cdy * cdy;
+    const double ab_sq = abx * abx + aby * aby;
+
+    // a, b が線分cdの支持直線をまたぐか
+    const double acx = a[0] - c[0], acy = a[1] - c[1];
+    const double bcx = b[0] - c[0], bcy = b[1] - c[1];
+    const int s1 = OrientationSign(Cross2D(cdx, cdy, acx, acy),
+                                   cd_sq, acx * acx + acy * acy, kCrossRelTol);
+    const int s2 = OrientationSign(Cross2D(cdx, cdy, bcx, bcy),
+                                   cd_sq, bcx * bcx + bcy * bcy, kCrossRelTol);
+    // c, d が線分abの支持直線をまたぐか
+    const double cax = c[0] - a[0], cay = c[1] - a[1];
+    const double dax = d[0] - a[0], day = d[1] - a[1];
+    const int s3 = OrientationSign(Cross2D(abx, aby, cax, cay),
+                                   ab_sq, cax * cax + cay * cay, kCrossRelTol);
+    const int s4 = OrientationSign(Cross2D(abx, aby, dax, day),
+                                   ab_sq, dax * dax + day * day, kCrossRelTol);
+
+    // 端点共有・共線(縮退)は交差とみなさない。両線分が互いの支持直線を
+    // 厳密にまたぐ場合のみ真の交差とする。
+    return (s1 != 0 && s2 != 0 && s1 != s2)
+        && (s3 != 0 && s4 != 0 && s3 != s4);
 }
 
 /// @brief 点が2次元単純多角形の内部または境界(eps以内)にあるかを判定する
@@ -505,25 +551,84 @@ std::vector<double> InsertLinearEndpoints(
 // 曲線の基本性質の検証
 // ===========================================================================
 
+/// @brief 実効閉性の判定結果
+struct ClosureCheckResult {
+    /// @brief 実効的に閉曲線とみなせるか
+    bool closed = false;
+    /// @brief 始終点間のギャップ (端点が取得できない場合はNaN)
+    double gap = std::numeric_limits<double>::quiet_NaN();
+    /// @brief 適用した絶対許容値 (= closure_rel_tol×サンプル点のAABB対角長)
+    double tol_abs = 0.0;
+};
+
+/// @brief 曲線が実効的に閉じているかを判定する
+///
+/// `IsClosed()`による厳密判定に加え、始終点ギャップが
+/// closure_rel_tol×曲線の広がり (サンプル点のAABB対角長) 以下の場合も
+/// 閉曲線とみなす。実CADが出力する境界ループの継ぎ目には微小ギャップが
+/// 存在しうるため、トリム領域構築等ではこの相対判定を併用する。
+/// 多角形構築は最終サンプル点から先頭点への辺を暗黙に張るため、
+/// 許容内のギャップは追加処理なしで自動的に閉じられる。
+///
+/// @param curve 対象曲線
+/// @param sample_pts 均等サンプリングの3次元点列
+/// @param closure_rel_tol 閉性判定の相対許容 (0なら厳密判定のみ)
+/// @return 判定結果 (実効閉性・ギャップ・適用許容値)
+ClosureCheckResult CheckEffectiveClosure(
+        const i_ent::ICurve& curve,
+        const std::vector<Vector3d>& sample_pts,
+        const double closure_rel_tol) {
+    ClosureCheckResult result;
+    result.closed = curve.IsClosed();
+
+    // 始終点ギャップ (相対判定のほか、非閉時の診断メッセージにも用いる)
+    const auto start = curve.TryGetStartPoint();
+    const auto end = curve.TryGetEndPoint();
+    if (start && end) result.gap = (*end - *start).norm();
+
+    if (result.closed || closure_rel_tol <= 0.0) return result;
+    // 端点が取得できない場合は相対判定をスキップ (厳密判定の結果に従う)
+    if (!start || !end) return result;
+
+    // 曲線の広がり: サンプル点のAABB対角長 (退化時は相対判定をスキップ)
+    Vector3d lo = Vector3d::Constant(std::numeric_limits<double>::infinity());
+    Vector3d hi = -lo;
+    for (const auto& p : sample_pts) {
+        lo = lo.cwiseMin(p);
+        hi = hi.cwiseMax(p);
+    }
+    if (!lo.allFinite() || !hi.allFinite()) return result;
+    const double extent = (hi - lo).norm();
+    if (!(extent > 0.0)) return result;
+
+    result.tol_abs = closure_rel_tol * extent;
+    result.closed = result.gap <= result.tol_abs;
+    return result;
+}
+
 /// @brief 均等サンプリング点列を用いて曲線の向きと自己交差を検証する
 ///
 /// 以下の検証を行う:
-///   1. IsClosed() による閉曲線チェック
+///   1. 実効閉性 (CheckEffectiveClosureの結果) のチェック
 ///   2. 符号付き面積 (shoelace) から向き符号を計算
 ///   3. 近似多角形の自己交差チェック (O(N²))
 ///
-/// @param curve 対象曲線
+/// @param closure 実効閉性の判定結果
 /// @param sample_pts 均等サンプリングの3次元点列 (n_init 個)
 /// @param normal 平面の参照法線ベクトル
 /// @return orientation_sign: +1.0 (reference_normal から見て CCW) / -1.0 (CW)
 /// @throws std::invalid_argument 閉曲線でない場合, 自己交差が検出された場合
-double CheckCurveProperties(const i_ent::ICurve& curve,
+double CheckCurveProperties(const ClosureCheckResult& closure,
                              const std::vector<Vector3d>& sample_pts,
                              const Vector3d& normal) {
-    // 閉曲線チェック
-    if (!curve.IsClosed()) {
-        throw std::invalid_argument(
-            "曲線が閉じていません。閉曲線にのみ対応しています。");
+    // 閉曲線チェック (微小な継ぎ目ギャップは許容値以内なら閉とみなす)
+    if (!closure.closed) {
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision(3)
+            << "曲線が閉じていません (始終点ギャップ=" << closure.gap
+            << ", 許容=" << closure.tol_abs
+            << ")。閉曲線にのみ対応しています。";
+        throw std::invalid_argument(oss.str());
     }
 
     // 平面基底を構築して全点を2次元に射影する
@@ -1017,6 +1122,8 @@ struct ExtremalPolygonSharedData {
     double period = 0.0;
     /// @brief 均等分割されたパラメータ値列
     std::vector<double> t_uniform;
+    /// @brief 実効的に閉曲線とみなすか (許容内の継ぎ目ギャップを含む)
+    bool is_closed = false;
     /// @brief 向き符号 (符号付き面積の符号)
     double orient_sign = 1.0;
     /// @brief 含有検証用の平面基底 (u 軸)
@@ -1034,12 +1141,14 @@ struct ExtremalPolygonSharedData {
 /// @param curve 対象の閉曲線 (自己交差なし)
 /// @param n_vert 初期分割数
 /// @param normal 平面の参照法線ベクトル
+/// @param closure_rel_tol 閉性判定の相対許容 (0なら厳密判定のみ)
 /// @return 共有前段データ
 /// @throws std::invalid_argument n_vert が 3 未満の場合
 ExtremalPolygonSharedData PrepareExtremalPolygonData(
         const i_ent::ICurve& curve,
         int n_vert,
-        const Vector3d& normal) {
+        const Vector3d& normal,
+        double closure_rel_tol) {
     if (n_vert < 3) {
         throw std::invalid_argument(
             "n_vert は 3 以上でなければなりません。n_vert: "
@@ -1061,8 +1170,13 @@ ExtremalPolygonSharedData PrepareExtremalPolygonData(
         pts_uniform[i] = curve.GetPointAt(s.t_uniform[i]);
     }
 
+    // 実効閉性 (許容内の継ぎ目ギャップは閉とみなす) を判定する
+    const auto closure =
+        CheckEffectiveClosure(curve, pts_uniform, closure_rel_tol);
+    s.is_closed = closure.closed;
+
     // 閉曲線チェック・向き符号計算・自己交差チェック
-    s.orient_sign = CheckCurveProperties(curve, pts_uniform, normal);
+    s.orient_sign = CheckCurveProperties(closure, pts_uniform, normal);
 
     // 含有検証用の平面基底と曲線領域(均等点の射影)を用意する
     const auto [u, v] = BuildPlaneBasis(normal);
@@ -1124,7 +1238,7 @@ i_num::PolygonData RefineExtremalPolygon(
         if (extra.empty()) break;
 
         ts.insert(ts.end(), extra.begin(), extra.end());
-        ts = Dedup(ts, curve.IsClosed(), s.period, 1e-6);
+        ts = Dedup(ts, s.is_closed, s.period, 1e-6);
     }
 
     return polygon;
@@ -1137,15 +1251,17 @@ i_num::PolygonData RefineExtremalPolygon(
 /// @param circumscribed 外包なら true, 内包なら false
 /// @param normal 平面の参照法線ベクトル
 /// @param eps 曲率判定の閾値
+/// @param closure_rel_tol 閉性判定の相対許容 (0なら厳密判定のみ)
 /// @return 多角形データ
 i_num::PolygonData ComputeExtremalPolygon(
         const i_ent::ICurve& curve,
         int n_vert,
         bool circumscribed,
         const Vector3d& normal,
-        double eps) {
+        double eps,
+        double closure_rel_tol) {
     const ExtremalPolygonSharedData s =
-        PrepareExtremalPolygonData(curve, n_vert, normal);
+        PrepareExtremalPolygonData(curve, n_vert, normal, closure_rel_tol);
     return RefineExtremalPolygon(curve, circumscribed, normal, eps, s);
 }
 
@@ -1159,18 +1275,22 @@ i_num::PolygonData ComputeCircumscribedPolygon(
         const ICurve& curve,
         int n_vert,
         const Vector3d& reference_normal,
-        double eps) {
+        double eps,
+        double closure_rel_tol) {
     return ComputeExtremalPolygon(
-        curve, n_vert, /*circumscribed=*/true, reference_normal, eps);
+        curve, n_vert, /*circumscribed=*/true, reference_normal, eps,
+        closure_rel_tol);
 }
 
 i_num::PolygonData ComputeInscribedPolygon(
         const ICurve& curve,
         int n_vert,
         const Vector3d& reference_normal,
-        double eps) {
+        double eps,
+        double closure_rel_tol) {
     return ComputeExtremalPolygon(
-        curve, n_vert, /*circumscribed=*/false, reference_normal, eps);
+        curve, n_vert, /*circumscribed=*/false, reference_normal, eps,
+        closure_rel_tol);
 }
 
 std::pair<i_num::PolygonData, i_num::PolygonData>
@@ -1178,10 +1298,11 @@ ComputeExtremalPolygonPair(
         const ICurve& curve,
         int n_vert,
         const Vector3d& reference_normal,
-        double eps) {
+        double eps,
+        double closure_rel_tol) {
     // 外包/内包に依存しない前段を一度だけ計算して共有する
-    const ExtremalPolygonSharedData s =
-        PrepareExtremalPolygonData(curve, n_vert, reference_normal);
+    const ExtremalPolygonSharedData s = PrepareExtremalPolygonData(
+        curve, n_vert, reference_normal, closure_rel_tol);
     i_num::PolygonData circumscribed = RefineExtremalPolygon(
         curve, /*circumscribed=*/true, reference_normal, eps, s);
     i_num::PolygonData inscribed = RefineExtremalPolygon(

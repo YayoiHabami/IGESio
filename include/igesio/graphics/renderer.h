@@ -9,10 +9,12 @@
 #define IGESIO_GRAPHICS_RENDERER_H_
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -77,6 +79,23 @@ struct GraphicsSettings {
     DisplayMode display_mode = DisplayMode::kShaded;
 };
 
+/// @brief 表示フィルタ (レンダラ単位のビュー状態)
+/// @note 除外された型は描画リスト/可視リストに収集されず、描画もピックもされない.
+///       キャッシュ済み描画オブジェクトは温存される (再表示が安価).
+///       Scene (セッション状態) ではなくレンダラ毎に保持し、複数ビューで
+///       異なる種別表示を可能にする
+struct DisplayFilter {
+    /// @brief 非表示にするエンティティ型の集合
+    std::unordered_set<entities::EntityType> hidden_types;
+
+    /// @brief 指定型を描画対象とするか
+    /// @param type エンティティ型
+    /// @return 描画対象とする場合はtrue
+    bool ShouldRender(const entities::EntityType type) const {
+        return hidden_types.count(type) == 0;
+    }
+};
+
 /// @brief エンティティの描画を担当するクラス
 /// @note OpenGLを使用してエンティティの曲線を描画する
 class EntityRenderer {
@@ -89,12 +108,13 @@ class EntityRenderer {
     ///       シェーダープログラムを保持する
     std::unordered_map<ShaderType, gl::Uint> shader_programs_;
 
-    /// @brief 描画オブジェクト
-    /// @note 1階層目のキーはShaderType、2階層目のキーはエンティティのID
-    ///       値はIEntityGraphicsオブジェクト
-    /// @note 基本的に描画オブジェクトは外側には公開しない
-    std::unordered_map<ShaderType, std::unordered_map<
-            ObjectID, std::unique_ptr<IEntityGraphics>>> draw_objects_;
+    /// @brief 描画オブジェクトのキャッシュ (Sceneツリーの派生キャッシュ)
+    /// @note EnsureSyncedの遅延生成で作られ、ツリーから削除されたエントリは
+    ///       Sweepで破棄される. 値がnullptrのエントリは「生成失敗 (型起因)」の
+    ///       負キャッシュで、再試行を抑止する (factory.hの不変条件を参照).
+    ///       描画オブジェクトは外側には公開しない
+    mutable std::unordered_map<ObjectID, std::unique_ptr<IEntityGraphics>>
+            graphics_cache_;
 
     /// @brief 描画対象のサイズ [px]
     /// @note 次回の描画時に反映される (すなわち、glGetIntegrevで取得できるサイズ
@@ -105,8 +125,15 @@ class EntityRenderer {
     /// @brief 背景色
     std::array<float, 4> background_color_ = {1.0f, 1.0f, 1.0f, 1.0f};  // 白色
 
+    /// @brief 環境光 (アンビエント) の色 (RGB) [0.0 - 1.0]
+    /// @note IBLの代替として、面シェーダーが一定の環境光として反射する.
+    ///       金属は誘電体と異なり拡散を持たないため、この値が暗部の明るさを決める
+    std::array<float, 3> ambient_color_ = {0.35f, 0.35f, 0.35f};
+
     /// @brief カメラクラス
-    graphics::Camera camera_;
+    /// @note mutable: 自動クリップ球はシーンの派生キャッシュであり、
+    ///       constな同期経路 (EnsureSynced/ResyncGeometries) から更新される
+    mutable graphics::Camera camera_;
 
     /// @brief 光源リスト
     /// @note 既定では方向光を1個保持する. 描画時はkMaxLightsまで送信される.
@@ -124,14 +151,39 @@ class EntityRenderer {
     ///       ワールド変換と色/不透明度オーバーライドをリフレッシュしつつ、可視/抑制
     ///       サブツリーをスキップする. sceneは本クラスより長く生存する必要がある.
     const models::Scene* scene_ = nullptr;
-    /// @brief 描画リストの再構築 (ツリー走査) が必要か
-    /// @note ツリー編集・エンティティ追加削除で立てる. カメラ操作・選択変更だけの
-    ///       再描画ではキャッシュした描画リストを再利用し、走査しない
-    mutable bool scene_dirty_ = true;
+    /// @brief 最後に同期したSceneのモデルリビジョン
+    /// @note リビジョン値は同一rootに対してのみ比較可能 (synced_root_とペアで
+    ///       初めて意味を持つ)
+    mutable uint64_t synced_revision_ = 0;
+    /// @brief 最後に同期したルートAssemblyの同一性 (ObjectID)
+    /// @note root差し替え時の等値衝突 (別rootが偶然同じリビジョン値を持つ) を
+    ///       構造的に防ぐ. EnsureSyncedはリビジョンと同一性の両方を比較する
+    mutable ObjectID synced_root_;
+    /// @brief レンダラ内部要因による再同期要求
+    /// @note SetScene/SetDisplayFilter等、ツリー側のリビジョンに現れない
+    ///       レンダラ自身の状態変更で立てる
+    mutable bool local_dirty_ = true;
     /// @brief キャッシュした描画リスト (シェーダー別の描画オブジェクト. 非所有ポインタ)
-    /// @note scene_設定時にツリー走査で構築し、フレームを越えて再利用する.
-    ///       draw_objects_の要素を指すため、追加/削除時はdirty化して再構築する
+    /// @note EnsureSyncedのツリー走査で構築し、フレームを越えて再利用する.
+    ///       graphics_cache_の要素を指す
     mutable std::unordered_map<ShaderType, std::vector<IEntityGraphics*>> draw_list_;
+    /// @brief 可視エンティティの平坦リスト (ピック用. エンティティ毎に一意)
+    /// @note draw_list_は複合エンティティを複数シェーダーへ重複登録するため、
+    ///       ピックはこちらを走査して二重判定を避ける. 削除済み・非表示・抑制中・
+    ///       フィルタ除外のエンティティは構造的に含まれない
+    mutable std::vector<std::pair<ObjectID, IEntityGraphics*>> visible_list_;
+    /// @brief 表示フィルタ (ビュー状態)
+    DisplayFilter display_filter_;
+    /// @brief エンティティ毎の描画プロパティのオーバーライド
+    /// @note 生成時に適用するほか、設定変更はEnsureSyncedの走査で遅延適用する
+    ///       (setterはGLを触らない). Sweepで所有者を失ったエントリは破棄する
+    mutable std::unordered_map<ObjectID, graphics::MaterialProperty>
+            material_overrides_;
+    /// @brief マテリアル適用待ちのID集合
+    /// @note SetMaterialProperty/ClearMaterialPropertyで追加され、走査で適用
+    ///       (SyncTexture含む) して除去される遅延キュー. SyncTexture (GL操作) を
+    ///       setter内で行わないための機構
+    mutable std::unordered_set<ObjectID> pending_material_ids_;
 
  public:
     /// @brief コンストラクタ
@@ -176,92 +228,48 @@ class EntityRenderer {
 
 
     /**
-     * エンティティの取得/設定
+     * シーン・表示状態の設定
      */
-
-    /// @brief エンティティの描画オブジェクトを作成する
-    /// @param entity 描画するエンティティのポインタ (const)
-    /// @param global_param 描画に関するグローバルパラメータ
-    /// @param material_property 描画プロパティ (IGESが保持しないデータ)
-    /// @return エンティティの描画オブジェクトを作成できた場合はtrue
-    /// @note すでに同じIDのエンティティが存在する場合は何もしない
-    template<typename T, typename = std::enable_if_t<std::is_base_of_v<
-            entities::IEntityIdentifier, T>>>
-    bool AddEntity(std::shared_ptr<const T> entity,
-                   const std::shared_ptr<const models::GraphicsGlobalParam>
-                   global_param = nullptr,
-                   const MaterialProperty& material_property = MaterialProperty()) {
-        if (!entity) return false;
-        if (!gl_) return false;
-
-        if (HasEntity(entity->GetID())) return false;
-
-        // 新しいエンティティを追加
-        auto ptr = std::static_pointer_cast<const entities::IEntityIdentifier>(entity);
-        if (auto graphics = CreateEntityGraphics(ptr, gl_)) {
-            // グローバルパラメータを設定
-            if (global_param) {
-                graphics->SetGlobalParam(global_param);
-            } else {
-                graphics->SetGlobalParam(default_global_param_);
-            }
-
-            // 描画プロパティを設定
-            graphics->MaterialProperty() = material_property;
-            graphics->SyncTexture();
-
-            AddGraphicsObject(std::move(graphics));
-            return true;
-        }
-        return false;
-    }
-
-    /// @brief エンティティの描画オブジェクトを作成する
-    /// @param entity 描画するエンティティのポインタ (非const)
-    /// @param global_param 描画に関するグローバルパラメータ
-    /// @param material_property 描画プロパティ (IGESが保持しないデータ)
-    /// @return エンティティの描画オブジェクトを作成できた場合はtrue
-    template<typename T, typename = std::enable_if_t<std::is_base_of_v<
-            entities::IEntityIdentifier, T>>>
-    bool AddEntity(std::shared_ptr<T> entity,
-                   const std::shared_ptr<const models::GraphicsGlobalParam>
-                   global_param = nullptr,
-                   const MaterialProperty& material_property = MaterialProperty()) {
-        if (!entity) return false;
-
-        // constポインタに変換してAddEntityを呼び出す
-        return AddEntity(std::const_pointer_cast<const T>(entity),
-                         global_param, material_property);
-    }
-
-    /// @brief 指定されたIDのエンティティの描画オブジェクトを削除する
-    /// @param id エンティティのID
-    /// @note 存在しない場合は何もしない
-    void RemoveEntity(const ObjectID&);
-
-    /// @brief 指定されたIDのエンティティが登録済みか
-    /// @param id エンティティのID
-    /// @return 登録済みの場合は`true`, そうでない場合は`false`
-    bool HasEntity(const ObjectID&) const;
-
-    /// @brief 指定されたIDのエンティティの描画オブジェクトの型の取得
-    /// @param id エンティティのID
-    /// @return 描画オブジェクトを保持している場合はそのエンティティのShaderTypeを、
-    ///         存在しない場合はShaderType::kNoneを返す
-    ShaderType GetEntityShaderType(const ObjectID&) const;
 
     /// @brief 描画対象のシーンを設定する
     /// @param scene シーン (非所有). nullptrで描画を停止する
-    /// @note 設定後の描画では、scene->Root()のツリーを走査して各エンティティのワールド
-    ///       変換と色/不透明度オーバーライドをリフレッシュし、可視/抑制サブツリーを
-    ///       スキップする. 呼び出しで再走査を予約する. 選択ハイライトは
+    /// @note 描画オブジェクトはscene->Root()のツリーとの突き合わせ (Reconcile) で
+    ///       遅延生成・破棄される. ツリーの編集はAssembly側のモデルリビジョンで
+    ///       自動検知されるため、編集後の手動通知は不要. 選択ハイライトは
     ///       scene->ActiveSelection()からPULLする. sceneは本クラスより長く生存すること.
     void SetScene(const models::Scene* scene);
 
-    /// @brief シーン(ツリー)が変化したことを通知し、次回描画で再走査を予約する
-    /// @note 可視性・抑制・大域変換・構造を編集した後に呼ぶ.
-    ///       カメラ操作・選択変更だけの再描画では呼ぶ必要はない.
-    void MarkSceneDirty();
+    /// @brief 表示フィルタを設定する
+    /// @param filter 表示フィルタ (非表示にするエンティティ型の集合)
+    /// @note 除外された型の描画オブジェクトは温存され、解除時に再利用される
+    void SetDisplayFilter(const DisplayFilter& filter) {
+        display_filter_ = filter;
+        local_dirty_ = true;
+    }
+    /// @brief 表示フィルタを取得する
+    /// @return 現在の表示フィルタ
+    const DisplayFilter& GetDisplayFilter() const { return display_filter_; }
+
+    /// @brief エンティティの描画プロパティのオーバーライドを設定する
+    /// @param id エンティティのID
+    /// @param material 描画プロパティ (IGESが保持しないデータ)
+    /// @note 適用は次回の描画/ピック時に遅延して行われる (本メソッドはGL
+    ///       コンテキスト前提を持たない). ツリーから削除されたIDの設定は
+    ///       Sweepで自動破棄される
+    void SetMaterialProperty(const ObjectID& id,
+                             const graphics::MaterialProperty& material) {
+        material_overrides_[id] = material;
+        pending_material_ids_.insert(id);
+        local_dirty_ = true;
+    }
+    /// @brief エンティティの描画プロパティのオーバーライドを解除する
+    /// @param id エンティティのID
+    /// @note 次回の描画/ピック時にデフォルトの描画プロパティへ戻す
+    void ClearMaterialProperty(const ObjectID& id) {
+        material_overrides_.erase(id);
+        pending_material_ids_.insert(id);
+        local_dirty_ = true;
+    }
 
 
 
@@ -298,6 +306,18 @@ class EntityRenderer {
     /// @param alpha 不透明度 [0.0 - 1.0] (デフォルト: 1.0f)
     void SetBackgroundColor(const float, const float,
                             const float, const float = 1.0f);
+
+    /// @brief 環境光 (アンビエント) の色を取得する
+    /// @return 環境光の色 (RGB) [0.0 - 1.0]
+    std::array<float, 3> GetAmbientColor() const;
+
+    /// @brief 環境光 (アンビエント) の色を設定する
+    /// @param red 赤成分 [0.0 - 1.0]
+    /// @param green 緑成分 [0.0 - 1.0]
+    /// @param blue 青成分 [0.0 - 1.0]
+    /// @note IBLの代替として面シェーダーが反射する一定の環境光. 値を上げると
+    ///       暗部 (特に金属) が明るくなる. 反映には`Draw()`の呼び出しが必要
+    void SetAmbientColor(const float, const float, const float);
 
     /// @brief カメラの参照を取得する (const)
     /// @return カメラの参照
@@ -461,28 +481,50 @@ class EntityRenderer {
     gl::Uint CreateShaderProgram(gl::Uint, gl::Uint,
                                  gl::Uint = 0, gl::Uint = 0, gl::Uint = 0);
 
-    /// @brief エンティティが設定されているか
-    bool IsEmpty() const;
+    /// @brief 描画キャッシュ・描画/可視リストをSceneツリーと突き合わせる (Reconcile)
+    /// @note Draw/PickEntities/PickEntitiesInRectの冒頭で呼ぶ. モデルリビジョン
+    ///       (synced_root_とのペア比較) とlocal_dirty_が一致する間は何もしない.
+    ///       不一致時はSweep→ツリー走査 (遅延生成+リスト再構築)→自動クリップ球更新を
+    ///       行う. 描画オブジェクトの生成/Cleanup()を行うため、GLコンテキストが
+    ///       カレントなスレッドから呼ぶこと. scene_またはgl_が未設定なら何もしない
+    void EnsureSynced() const;
 
-    /// @brief 描画オブジェクトを追加する
-    /// @param graphics 描画オブジェクト
-    /// @note すでに同じIDのエンティティが存在する場合は何もしない
-    void AddGraphicsObject(std::unique_ptr<IEntityGraphics>&&);
+    /// @brief ツリーから削除されたエンティティの描画キャッシュを破棄する (Sweep)
+    /// @param root 所属判定に用いるルートAssembly
+    /// @note FindOwner(id)==nullptrのエントリをCleanup()して除去する (O(1)/件).
+    ///       material_overrides_/pending_material_ids_も同条件で掃除する
+    void SweepStaleGraphics(const models::Assembly& root) const;
+
+    /// @brief 可視エンティティのジオメトリ再同期を遅延実行する
+    /// @note Drawの冒頭 (EnsureSynced後) で呼ぶ. visible_list_の各要素について
+    ///       同期キーの不一致 (NeedsResync) を検査し、Synchronize()を再実行する.
+    ///       形状変更はBBoxも変えるため、再同期があれば自動クリップ球も更新する.
+    ///       ピッキングはエンティティを解析的に読むため再同期不要
+    void ResyncGeometries() const;
+
+    /// @brief 指定IDの描画オブジェクトを取得し、未在席なら遅延生成する
+    /// @param id エンティティのID
+    /// @param entity 生成に用いるエンティティ
+    /// @return 描画オブジェクトのポインタ. 生成失敗 (型起因) はnullptr
+    /// @note 生成失敗はnullptrを負キャッシュし、再試行しない. 生成時は
+    ///       default_global_param_とmaterial_overrides_を適用する
+    IEntityGraphics* FindOrCreateGraphics(
+            const ObjectID& id,
+            const std::shared_ptr<entities::EntityBase>& entity) const;
 
     /// @brief 指定IDの描画オブジェクトを取得する
     /// @param id エンティティのID
     /// @return 描画オブジェクトのポインタ. 存在しない場合はnullptr
-    /// @note 所有権は移譲しない (draw_objects_が保持し続ける)
+    /// @note 所有権は移譲しない (graphics_cache_が保持し続ける)
     IEntityGraphics* FindGraphics(const ObjectID&) const;
 
     /// @brief シーンのワールドBBoxから外接球を計算し、カメラの自動クリップ球を更新する
-    /// @note カメラ操作でシーンがクリップされないよう、SetScene/MarkSceneDirty時に呼ぶ.
+    /// @note カメラ操作でシーンがクリップされないよう、同期経路から呼ぶ.
     ///       シーン未設定またはBBoxが空の場合は自動クリッピングを解除する
-    void UpdateAutoClipSphere();
+    void UpdateAutoClipSphere() const;
 
-    /// @brief scene_を走査して描画リストを再構築し、ワールド変換と色をリフレッシュする
-    /// @note dirty時のみ呼ぶ. ShouldRenderEntityは呼ばず、キャッシュ在席を描画対象条件
-    ///       とする (フィルタは投入時に適用済み).
+    /// @brief scene_を走査して描画/可視リストを再構築し、ワールド変換と色を
+    ///        リフレッシュする (EnsureSyncedのWalkステップ)
     void RebuildDrawList() const;
 
     /// @brief Assemblyツリーを再帰走査する (RebuildDrawListの実体)
@@ -490,10 +532,12 @@ class EntityRenderer {
     /// @param parent_accum 親までの累積変換 (G_root·…·G_{n-1})
     /// @param inherited_color 親までの最近接の色オーバーライド (無ければnullopt)
     /// @param inherited_opacity 親までの最近接の不透明度オーバーライド (無ければnullopt)
-    /// @note 可視/抑制サブツリーはスキップ. node大域変換を掛けた累積をworld_transform_へ
-    ///       流し (M_entityは含めない)、graphicsをシェーダー別にdraw_list_へ収集する.
-    ///       色/不透明度の最近接オーバーライドを解決し、各描画オブジェクトへ
-    ///       フレーム毎にPUSHする (world_transform_と同じく派生キャッシュ扱い).
+    /// @note 可視/抑制サブツリー (node.Display()で判定) と表示フィルタ除外型は
+    ///       スキップする (キャッシュは温存). 未在席の描画オブジェクトは遅延生成し、
+    ///       適用待ちマテリアルを適用する. node大域変換を掛けた累積をworld_transform_へ
+    ///       流し (M_entityは含めない)、graphicsをシェーダー別にdraw_list_へ、
+    ///       エンティティ毎に一意にvisible_list_へ収集する. 色/不透明度の最近接
+    ///       オーバーライドを解決し、各描画オブジェクトへフレーム毎にPUSHする.
     void WalkAssembly(const models::Assembly& node,
                       const igesio::Matrix4d& parent_accum,
                       const std::optional<std::array<float, 3>>& inherited_color,

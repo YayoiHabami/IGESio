@@ -19,7 +19,7 @@
 #include "mock_open_gl.h"
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/models/assembly.h"
 #include "igesio/models/scene.h"
@@ -39,7 +39,7 @@ constexpr float kTol = 1e-5f;
 
 /// @brief スモーク用の単純な円弧 (M_entity=単位)
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
 }
@@ -65,15 +65,14 @@ TEST(SceneWalkTest, NestedTransform_AccumulatedIntoModel) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     root->SetGlobalTransform(Translate(1.0, 0.0, 0.0));
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto child = i_mod::MakeAssembly();
     child->SetGlobalTransform(Translate(0.0, 2.0, 0.0));
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -97,14 +96,13 @@ TEST(SceneWalkTest, InvisibleSubtree_NotDrawn) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
-    child->Metadata().visible = false;  // 非表示
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
+    child->SetVisible(false);  // 非表示
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -123,14 +121,13 @@ TEST(SceneWalkTest, SuppressedSubtree_NotDrawn) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
-    auto child = std::make_shared<i_mod::Assembly>();
-    child->Metadata().suppressed = true;  // 抑制
+    auto root = i_mod::MakeAssembly();
+    auto child = i_mod::MakeAssembly();
+    child->SetSuppressed(true);  // 抑制
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 

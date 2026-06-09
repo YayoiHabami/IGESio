@@ -19,9 +19,7 @@ namespace {
 
 namespace i_ent = igesio::entities;
 namespace i_models = igesio::models;
-using igesio::Matrix3d;
 using igesio::Matrix4d;
-using igesio::Vector3d;
 using igesio::ObjectID;
 using i_models::Assembly;
 using EntityPtr = std::shared_ptr<i_ent::EntityBase>;
@@ -133,9 +131,7 @@ i_models::MaterializeResult i_models::Materialize(
     // 新124 = placement · M_entity を生成し、複製の変換を差し替える
     const Matrix4d folded =
             placement * entity.GetTransformationMatrix().GetTransformation();
-    const Matrix3d r = folded.topLeftCorner<3, 3>();
-    const Vector3d t = folded.topRightCorner<3, 1>();
-    auto transform = std::make_shared<i_ent::TransformationMatrix>(r, t);
+    auto transform = i_ent::MakeTransformationMatrix(folded);
     clone->OverwriteTransformationMatrix(transform);
     return {clone, transform};
 }

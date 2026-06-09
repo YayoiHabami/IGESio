@@ -14,16 +14,24 @@ set(TEST_SOURCES
     # Entity Base
     test_entity_base.cpp
     test_pointer_container.cpp
+    test_geometry_revision.cpp
 
     # Curves
     curves/test_i_curve.cpp
     curves/test_circular_arc.cpp
+    curves/test_conic_arc.cpp
+    curves/test_copious_data.cpp
+    curves/test_curve_on_a_parametric_surface.cpp
+    curves/test_line.cpp
+    curves/test_point.cpp
     curves/test_algorithms.cpp
     curves/test_nurbs_approximation_algorithms.cpp
     curves/test_composite_curve.cpp
+    curves/test_composite_curve_edit.cpp
     curves/test_linear_path.cpp
     curves/test_parametric_spline_curve.cpp
     curves/test_rational_b_spline_curve.cpp
+    curves/test_rational_b_spline_curve_edit.cpp
     curves/test_signed_curvature.cpp
     curves/test_curve_line_intersection.cpp
     curves/algorithms/test_extremal_polygon.cpp
@@ -38,7 +46,12 @@ set(TEST_SOURCES
     # Surfaces
     surfaces/test_i_surface.cpp
     surfaces/test_rational_b_spline_surface.cpp
+    surfaces/test_rational_b_spline_surface_edit.cpp
+    surfaces/test_ruled_surface.cpp
+    surfaces/test_surface_of_revolution.cpp
+    surfaces/test_tabulated_cylinder.cpp
     surfaces/test_trimmed_surface.cpp
+    surfaces/test_trimmed_surface_edit.cpp
     surfaces/test_surface_line_intersection.cpp
     surfaces/test_curve_surface_inversion.cpp
     surfaces/test_restricted_surface_mesh.cpp

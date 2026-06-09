@@ -35,7 +35,7 @@ class CurveOnAParametricSurfaceGraphics
     ////       entityがICurveを継承していない場合
     CurveOnAParametricSurfaceGraphics(
             const std::shared_ptr<const entities::CurveOnAParametricSurface>&,
-            const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~CurveOnAParametricSurfaceGraphics();
@@ -49,7 +49,7 @@ class CurveOnAParametricSurfaceGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief OpenGLリソースを解放する
     void Cleanup() override;

@@ -8,8 +8,8 @@
 #ifndef IGESIO_ENTITIES_INTERFACES_I_GEOMETRY_H_
 #define IGESIO_ENTITIES_INTERFACES_I_GEOMETRY_H_
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 
 

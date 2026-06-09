@@ -6,7 +6,7 @@
 
 > 対象ファイル:
 >
-> - `igesio/numerics/matrix.h`
+> - `igesio/numerics/core/matrix.h`
 
 ## 目次
 
@@ -359,7 +359,7 @@ std::cout << "元の行列 * 逆行列:\n" << dyn_mat * inv_dyn_mat << std::endl
 　`AngleAxis`関数を使用すると、回転角度と回転軸から回転行列を生成できます。
 
 ```cpp
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 // 回転角度と回転軸から回転行列を生成
 auto axis = igesio::Vector3d::UnitY();  // Y軸を回転軸とする
@@ -385,7 +385,7 @@ Matrix<T, 3, 3> AngleAxis(const T angle, const Vector<T, 3>& axis);
 
 ```cpp
 #include <iostream>
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 int main() {
     using namespace igesio;
@@ -613,7 +613,7 @@ g++ -DIGESIO_ENABLE_EIGEN your_code.cpp
 この場合、以下のEigenクラスが使用されます：
 
 ```cpp
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 // これらは実際にはEigenクラスのエイリアス
 igesio::Matrix2d    // Eigen::Matrix2d
@@ -625,7 +625,7 @@ igesio::Matrix3Xd   // Eigen::Matrix3Xd
 
 ```cpp
 // IGESIO_ENABLE_EIGENを定義しない場合、自動的に独自実装が使用されます
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 // 独自のMatrixクラスが使用される
 igesio::Matrix2d    // igesio::Matrix<double, 2, 2>

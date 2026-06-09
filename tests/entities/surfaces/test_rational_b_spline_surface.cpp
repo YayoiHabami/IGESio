@@ -7,12 +7,14 @@
  */
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 
 namespace {
@@ -93,6 +95,27 @@ TEST(RationalBSplineSurface, TryGetDefinedPointAt) {
     }
 }
 
+// TryGetDefinedPointAtのテスト (境界の浮動小数点丸めに対する頑健性)
+// - パラメータ上端/下端を1 ULP超えた点でも評価できることを確認する.
+//   旧実装は厳密比較で弾き例外を送出していた (報告事例の回帰防止).
+//   一方、許容誤差を明確に超える域外値は従来どおり拒否されること.
+TEST(RationalBSplineSurface, TryGetDefinedPointAt_BoundaryOvershootIsTolerated) {
+    auto plane = CreatePlane();
+    ASSERT_TRUE(plane->Validate().is_valid);
+
+    const double v_over = std::nextafter(1.0, 2.0);    // 上端 + 1 ULP
+    const double u_under = std::nextafter(0.0, -1.0);  // 下端 - 1 ULP
+
+    auto pt = plane->TryGetDefinedPointAt(u_under, v_over);
+    ASSERT_TRUE(pt.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(pt->y(), 25.0));
+    EXPECT_NO_THROW(plane->GetPointAt(u_under, v_over));
+
+    // 許容誤差を明確に超える域外は従来どおり拒否 (nullopt / 例外)
+    EXPECT_FALSE(plane->TryGetDefinedPointAt(1.0 + 1e-6, 0.5).has_value());
+    EXPECT_THROW(plane->GetPointAt(1.0 + 1e-6, 0.5), std::out_of_range);
+}
+
 // TryGetDefinedPointAtのテスト (u/v方向の取り違え検出)
 // - 非対称な双線形パッチについて、S(1,0)がu方向の制御点P(1,0)=(10,0,0)に、
 //   S(0,1)がv方向の制御点P(0,1)=(0,20,0)に一致することを確認する.
@@ -159,6 +182,75 @@ TEST(RationalBSplineSurface, KnotRangeOutside_IsValidWithWarning) {
         if (e.severity == igesio::ValidationSeverity::kWarning) has_warning = true;
     }
     EXPECT_TRUE(has_warning);
+}
+
+namespace {
+
+/// @brief ValidatePDの結果に警告 (kWarning) が含まれるかを判定する
+bool HasWarning(const NSurface& surf) {
+    for (const auto& e : surf.ValidatePD().errors) {
+        if (e.severity == igesio::ValidationSeverity::kWarning) return true;
+    }
+    return false;
+}
+
+}  // namespace
+
+// 回帰: U(1)の上限はS(N1) (= u_knots[size-M1-1]) と比較される。
+// 以前はS(N1+1)を参照しており (off-by-one)、S(N1) < U(1) <= S(N1+1)
+// の範囲外れが警告されなかった。
+TEST(RationalBSplineSurface, KnotRangeUpperBound_WarnsWhenUEndExceedsSN1) {
+    // M1=1, K1=2: u_knots=[0,0,1,2,3] → S(0)=0, S(N1)=2, S(N1+1)=3
+    const auto build = [](const double u_end) {
+        return igesio::IGESParameterVector{
+            2, 1, 1, 1,                        // K1, K2, M1, M2
+            false, false, true, false, false,  // PROP1-5
+            0., 0., 1., 2., 3.,                // u knots
+            0., 0., 1., 1.,                    // v knots
+            1., 1., 1., 1., 1., 1.,            // weights
+            0., 0., 0.,  1., 0., 0.,  2., 0., 0.,  // P(0,0)〜P(2,0)
+            0., 1., 0.,  1., 1., 0.,  2., 1., 0.,  // P(0,1)〜P(2,1)
+            0., u_end, 0., 1.                  // U=[0,u_end], V=[0,1]
+        };
+    };
+
+    // U(1)=2.5はS(N1)=2を超えるため警告 (修正前はS(N1+1)=3と比較し素通り)
+    const NSurface outside(build(2.5));
+    EXPECT_TRUE(outside.ValidatePD().is_valid);
+    EXPECT_TRUE(HasWarning(outside));
+
+    // 境界ちょうど (U(1)=S(N1)=2) は警告なし
+    const NSurface boundary(build(2.0));
+    EXPECT_TRUE(boundary.ValidatePD().is_valid);
+    EXPECT_FALSE(HasWarning(boundary));
+}
+
+// 回帰: V(1)の上限もT(N2) (= v_knots[size-M2-1]) と比較される (u側と同様)
+TEST(RationalBSplineSurface, KnotRangeUpperBound_WarnsWhenVEndExceedsTN2) {
+    // M2=1, K2=2: v_knots=[0,0,1,2,3] → T(0)=0, T(N2)=2, T(N2+1)=3
+    const auto build = [](const double v_end) {
+        return igesio::IGESParameterVector{
+            1, 2, 1, 1,                        // K1, K2, M1, M2
+            false, false, true, false, false,  // PROP1-5
+            0., 0., 1., 1.,                    // u knots
+            0., 0., 1., 2., 3.,                // v knots
+            1., 1., 1., 1., 1., 1.,            // weights
+            0., 0., 0.,  1., 0., 0.,           // P(0,0), P(1,0)
+            0., 1., 0.,  1., 1., 0.,           // P(0,1), P(1,1)
+            0., 2., 0.,  1., 2., 0.,           // P(0,2), P(1,2)
+            0., 1., 0., v_end                  // U=[0,1], V=[0,v_end]
+        };
+    };
+
+    // V(1)=2.5はT(N2)=2を超えるため警告
+    const NSurface outside(build(2.5));
+    EXPECT_TRUE(outside.ValidatePD().is_valid);
+    EXPECT_TRUE(HasWarning(outside));
+
+    // 境界ちょうど (V(1)=T(N2)=2) は警告なし
+    const NSurface boundary(build(2.0));
+    EXPECT_TRUE(boundary.ValidatePD().is_valid);
+    EXPECT_FALSE(HasWarning(boundary));
 }
 
 

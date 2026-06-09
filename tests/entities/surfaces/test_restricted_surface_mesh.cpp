@@ -35,7 +35,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"
@@ -79,7 +79,7 @@ std::shared_ptr<i_ent::ISurface> MakeClosedBaseSurface() {
 std::shared_ptr<i_ent::ICurve> MakeUvRectLoop(
         const double umin, const double vmin,
         const double umax, const double vmax) {
-    return std::make_shared<i_ent::LinearPath>(
+    return i_ent::MakeLinearPath(
         std::vector<Vector2d>{
             {umin, vmin}, {umax, vmin}, {umax, vmax}, {umin, vmax}},
         true);
@@ -88,7 +88,7 @@ std::shared_ptr<i_ent::ICurve> MakeUvRectLoop(
 /// @brief z=0平面上の全円ループ (UV境界曲線) を作成する
 std::shared_ptr<i_ent::ICurve> MakeUvCircle(
         const Vector2d& center, const double radius) {
-    return std::make_shared<i_ent::CircularArc>(center, radius);
+    return i_ent::MakeCircle(center, radius);
 }
 
 /// @brief UV曲線をトリム境界 (Type142) に変換する

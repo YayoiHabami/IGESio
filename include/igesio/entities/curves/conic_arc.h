@@ -9,6 +9,8 @@
 #ifndef IGESIO_ENTITIES_CURVES_CONIC_ARC_H_
 #define IGESIO_ENTITIES_CURVES_CONIC_ARC_H_
 
+#include <array>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -200,6 +202,85 @@ class ConicArc : public EntityBase, public virtual ICurve2D {
     std::optional<CurveDerivatives>
     TryGetHyperbolaDerivatives(const double, const unsigned int) const;
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 円錐曲線ファクトリで使用する、定義空間における軸の指定
+enum class ConicAxis {
+    /// @brief X軸 (放物線: 対称軸 / 双曲線: 横断軸)
+    kX,
+    /// @brief Y軸 (放物線: 対称軸 / 双曲線: 横断軸)
+    kY
+};
+
+/// @brief 2次方程式の係数と始終点から円錐曲線弧を作成する
+/// @param coeffs 2次方程式の係数 {A, B, C, D, E, F}
+/// @param start_point 始点の座標 (x, y)
+/// @param terminate_point 終点の座標 (x, y)
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたConicArcのshared_ptr
+/// @throw igesio::EntityValueError 係数から曲線種別を判別できない場合
+std::shared_ptr<ConicArc> MakeConicArc(
+        const std::array<double, 6>& coeffs,
+        const Vector2d& start_point, const Vector2d& terminate_point,
+        double z_t = 0.0);
+
+/// @brief 原点中心の楕円弧を作成する
+/// @param rx X軸方向の半径
+/// @param ry Y軸方向の半径
+/// @param start_angle 始点の角度 [rad]
+/// @param end_angle 終点の角度 [rad]
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたConicArcのshared_ptr
+/// @note 弧は始角の点から終角の点まで反時計回りに進む。
+///       同角度を指定した場合は閉じた楕円となる
+/// @throw igesio::EntityValueError rxまたはryが0に近い場合
+std::shared_ptr<ConicArc> MakeEllipticArc(
+        double rx, double ry,
+        double start_angle, double end_angle, double z_t = 0.0);
+
+/// @brief 原点中心の閉じた楕円を作成する
+/// @param rx X軸方向の半径
+/// @param ry Y軸方向の半径
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたConicArcのshared_ptr
+/// @throw igesio::EntityValueError rxまたはryが0に近い場合
+std::shared_ptr<ConicArc> MakeEllipse(double rx, double ry, double z_t = 0.0);
+
+/// @brief 頂点を原点とする標準形の放物線弧を作成する
+/// @param focal_distance 焦点距離p. 符号が開口方向を決める
+///        (axis=kXではy^2=4pxとなり、p>0で+X方向に開く)
+/// @param t_start 始点のパラメータ (対称軸に垂直な方向の座標値;
+///        axis=kXならy座標、kYならx座標)
+/// @param t_end 終点のパラメータ (同上)
+/// @param axis 対称軸
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたConicArcのshared_ptr
+/// @throw igesio::EntityValueError focal_distanceが0に近い場合、
+///        またはt_startとt_endがほぼ等しい場合
+std::shared_ptr<ConicArc> MakeParabolicArc(
+        double focal_distance, double t_start, double t_end,
+        ConicAxis axis = ConicAxis::kX, double z_t = 0.0);
+
+/// @brief 原点中心・標準形の双曲線弧を作成する
+/// @param a X軸方向の半軸長 (a > 0)
+/// @param b Y軸方向の半軸長 (b > 0)
+/// @param t_start 始点のパラメータ (sec/tanパラメータ; |t| < π/2)
+/// @param t_end 終点のパラメータ (同上)
+/// @param axis 横断軸 (kX: x^2/a^2-y^2/b^2=1, kY: y^2/b^2-x^2/a^2=1)
+/// @param z_t 定義座標系におけるz座標
+/// @return 作成されたConicArcのshared_ptr
+/// @note 表現できるのは横断軸正側の枝のみ
+/// @throw igesio::EntityValueError aまたはbが正でない場合、
+///        |t_start|または|t_end|がπ/2以上の場合、
+///        またはt_startとt_endがほぼ等しい場合
+std::shared_ptr<ConicArc> MakeHyperbolicArc(
+        double a, double b, double t_start, double t_end,
+        ConicAxis axis = ConicAxis::kX, double z_t = 0.0);
 
 }  // namespace igesio::entities
 

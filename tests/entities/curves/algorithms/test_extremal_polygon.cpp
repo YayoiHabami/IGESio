@@ -35,10 +35,11 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/polygon.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/polygon.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/curves/composite_curve.h"
 #include "igesio/entities/curves/line.h"
@@ -418,28 +419,36 @@ namespace {
 /// @brief 2本のLineからなる開いた (閉じていない) CompositeCurve
 /// (0,0,0)→(1,0,0)→(1,1,0)
 std::shared_ptr<CompositeCurve> MakeOpenChain() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}),
+        i_ent::MakeLine(Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0})});
 }
 
 /// @brief 自己交差する閉じたCompositeCurve (8の字: 対角線が交差)
 /// (0,0,0)→(2,2,0)→(2,0,0)→(0,2,0)→(0,0,0)
 std::shared_ptr<CompositeCurve> MakeSelfIntersecting() {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{2.0, 2.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{2.0, 2.0, 0.0}, Vector3d{2.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{2.0, 0.0, 0.0}, Vector3d{0.0, 2.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{0.0, 2.0, 0.0}, Vector3d{0.0, 0.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(Vector3d{0.0, 0.0, 0.0}, Vector3d{2.0, 2.0, 0.0}),
+        i_ent::MakeLine(Vector3d{2.0, 2.0, 0.0}, Vector3d{2.0, 0.0, 0.0}),
+        i_ent::MakeLine(Vector3d{2.0, 0.0, 0.0}, Vector3d{0.0, 2.0, 0.0}),
+        i_ent::MakeLine(Vector3d{0.0, 2.0, 0.0}, Vector3d{0.0, 0.0, 0.0})});
 }
+
+/// @brief 継ぎ目に微小ギャップを持つほぼ閉じた単位正方形ループ
+/// (0,0)→(1,0)→(1,1)→(0,1)→(gap,0): 始終点が gap だけ離れる
+/// (実CADが出力するトリム境界ループの継ぎ目ギャップを模す)
+std::shared_ptr<CompositeCurve> MakeNearlyClosedSquare(double gap) {
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}),
+        i_ent::MakeLine(Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0}),
+        i_ent::MakeLine(Vector3d{1.0, 1.0, 0.0}, Vector3d{0.0, 1.0, 0.0}),
+        i_ent::MakeLine(Vector3d{0.0, 1.0, 0.0}, Vector3d{gap, 0.0, 0.0})});
+}
+
+/// @brief 実CAD出力で観測される継ぎ目ギャップ相当の値
+constexpr double kSeamGap = 1e-6;
+/// @brief 閉性判定の相対許容 (kCurveClosureRelTolerance相当の値)
+constexpr double kClosureRelTol = 1e-4;
 
 }  // namespace
 
@@ -487,4 +496,61 @@ TEST(ExtremalPolygonErrorTest, ThrowsInvalidArgumentWhenNVertLessThan3) {
     // 境界値 3 は許容
     EXPECT_NO_THROW(i_ent::ComputeCircumscribedPolygon(*curve, 3, kNormalZ));
     EXPECT_NO_THROW(i_ent::ComputeInscribedPolygon(*curve, 3, kNormalZ));
+}
+
+
+
+/**
+ * 閉性判定の相対許容 (closure_rel_tol)
+ */
+
+// ほぼ閉じた曲線はデフォルト (closure_rel_tol=0; 厳密判定) では非閉として拒否
+TEST(ExtremalPolygonClosureTolTest,
+     NearlyClosed_ThrowsInvalidArgumentWhenStrict) {
+    auto curve = MakeNearlyClosedSquare(kSeamGap);
+    EXPECT_THROW(i_ent::ComputeCircumscribedPolygon(*curve, 16, kNormalZ),
+                 std::invalid_argument);
+    EXPECT_THROW(i_ent::ComputeInscribedPolygon(*curve, 16, kNormalZ),
+                 std::invalid_argument);
+    EXPECT_THROW(i_ent::ComputeExtremalPolygonPair(*curve, 16, kNormalZ),
+                 std::invalid_argument);
+}
+
+// 相対許容を与えれば、許容内の継ぎ目ギャップは閉曲線として受理される
+TEST(ExtremalPolygonClosureTolTest, NearlyClosed_AcceptedWithinRelTol) {
+    auto curve = MakeNearlyClosedSquare(kSeamGap);
+    std::pair<PolygonData, PolygonData> polys;
+    ASSERT_NO_THROW(polys = i_ent::ComputeExtremalPolygonPair(
+        *curve, 16, kNormalZ, 1e-9, kClosureRelTol));
+    // 外包・内包とも妥当な多角形が得られる (面積順序: 内包 <= 外包)
+    EXPECT_GE(polys.first.Count(), 3);
+    EXPECT_GE(polys.second.Count(), 3);
+    EXPECT_LE(PolygonArea(PolyXY(polys.second)),
+              PolygonArea(PolyXY(polys.first)));
+}
+
+// 境界精度: 許容値 = rel_tol×AABB対角長 (単位正方形では1e-4×√2≈1.414e-4) の
+// すぐ内側は受理、すぐ外側は拒否
+TEST(ExtremalPolygonClosureTolTest,
+     NearlyClosed_ThrowsInvalidArgumentWhenGapExceedsRelTol) {
+    // 許容のすぐ内側 (1.35e-4 < 1.414e-4) → 受理
+    auto inside = MakeNearlyClosedSquare(1.35e-4);
+    EXPECT_NO_THROW(i_ent::ComputeExtremalPolygonPair(
+        *inside, 16, kNormalZ, 1e-9, kClosureRelTol));
+    // 許容のすぐ外側 (1.5e-4 > 1.414e-4) → 拒否
+    auto outside = MakeNearlyClosedSquare(1.5e-4);
+    EXPECT_THROW(
+        i_ent::ComputeExtremalPolygonPair(
+            *outside, 16, kNormalZ, 1e-9, kClosureRelTol),
+        std::invalid_argument);
+}
+
+// 完全に開いた曲線 (ギャップが曲線の広がりと同程度) は相対許容下でも拒否
+TEST(ExtremalPolygonClosureTolTest,
+     OpenChain_ThrowsInvalidArgumentEvenWithRelTol) {
+    auto open_curve = MakeOpenChain();
+    EXPECT_THROW(
+        i_ent::ComputeExtremalPolygonPair(
+            *open_curve, 16, kNormalZ, 1e-9, kClosureRelTol),
+        std::invalid_argument);
 }

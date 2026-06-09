@@ -42,7 +42,7 @@ constexpr float kTol = 1e-4f;
 
 /// @brief スモーク用の単純な円弧 (M_entity=単位)
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
 }
@@ -73,14 +73,13 @@ TEST(OverridePullTest, ParentColorOverride_AppliesToDescendant) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
-    root->Metadata().color_override = std::array<float, 3>{1.0f, 0.0f, 0.0f};
-    auto child = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
+    root->SetColorOverride(std::array<float, 3>{1.0f, 0.0f, 0.0f});
+    auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -104,15 +103,14 @@ TEST(OverridePullTest, NearestColorOverrideWins) {
         GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
     }
 
-    auto root = std::make_shared<i_mod::Assembly>();
-    root->Metadata().color_override = std::array<float, 3>{1.0f, 0.0f, 0.0f};
-    auto child = std::make_shared<i_mod::Assembly>();
-    child->Metadata().color_override = std::array<float, 3>{0.0f, 1.0f, 0.0f};
+    auto root = i_mod::MakeAssembly();
+    root->SetColorOverride(std::array<float, 3>{1.0f, 0.0f, 0.0f});
+    auto child = i_mod::MakeAssembly();
+    child->SetColorOverride(std::array<float, 3>{0.0f, 1.0f, 0.0f});
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();
     child->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -139,10 +137,9 @@ TEST(OverridePullTest, OpacityOverride_ChangesAlphaKeepsRgb) {
     auto arc = MakeArc();
     const auto natural = NaturalColor(arc, gl);
 
-    auto root = std::make_shared<i_mod::Assembly>();
-    root->Metadata().opacity_override = 0.5f;
+    auto root = i_mod::MakeAssembly();
+    root->SetOpacityOverride(0.5f);
     root->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 
@@ -170,9 +167,8 @@ TEST(OverridePullTest, NoOverride_UsesEntityColor) {
     auto arc = MakeArc();
     const auto natural = NaturalColor(arc, gl);
 
-    auto root = std::make_shared<i_mod::Assembly>();
+    auto root = i_mod::MakeAssembly();
     root->AddEntity(arc);
-    ASSERT_TRUE(renderer.AddEntity(arc));
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);
 

@@ -1,22 +1,30 @@
 /**
  * @file entities/curves/test_parametric_spline_curve.cpp
- * @brief ParametricSplineCurve の GetLinearSegments / GetCornerParams のテスト
+ * @brief ParametricSplineCurve の GetLinearSegments / GetCornerParams、
+ *        およびファクトリ関数 (MakeParametricSplineCurve /
+ *        MakeCubicSplineCurve) のテスト
  * @author Yayoi Habami
  * @date 2026-04-10
  * @copyright 2025 Yayoi Habami
  */
 #include <gtest/gtest.h>
 
+#include <array>
 #include <memory>
 #include <vector>
 
 #include "igesio/common/errors.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/parametric_spline_curve.h"
 
 namespace {
 
+namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using i_ent::ParametricSplineCurve;
+using i_ent::ParametricSplineCurveType;
+using igesio::Matrix34d;
+using igesio::Vector3d;
 
 /// @brief テストの許容誤差
 constexpr double kTol = 1e-9;
@@ -88,6 +96,19 @@ std::shared_ptr<ParametricSplineCurve> MakeDegree0Spline() {
         0.0, 0.0, 0.0, 0.0
     };
     return std::make_shared<ParametricSplineCurve>(param);
+}
+
+/// @brief MakeLinearSplineと同データのセグメント係数 (kLinear, N=2)
+/// @return セグメント1: C(s)=(s,0,0)、セグメント2: C(s)=(1,s,0)
+std::vector<Matrix34d> LinearSplineSegments() {
+    Matrix34d seg1, seg2;
+    seg1 << 0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0;
+    seg2 << 1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0;
+    return {seg1, seg2};
 }
 
 }  // namespace
@@ -264,4 +285,270 @@ TEST(ParametricSplineCurveErrorTest,
     };
     const ParametricSplineCurve spline(param);
     EXPECT_THROW(spline.ValidatePD(), igesio::EntityValueError);
+}
+
+
+/**
+ * ファクトリ関数: MakeParametricSplineCurve (型付きコンストラクタ込み)
+ */
+
+// 代表値: 型付きパラメータが各アクセサに格納される
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_StoresTypedParameters) {
+    const std::vector<double> breakpoints{0.0, 1.0, 2.0};
+    const auto segments = LinearSplineSegments();
+    const auto spline = i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kLinear, 1, breakpoints, segments);
+
+    ASSERT_NE(spline, nullptr);
+    EXPECT_EQ(spline->GetCurveType(), ParametricSplineCurveType::kLinear);
+    EXPECT_EQ(spline->Degree(), 1u);
+    EXPECT_EQ(spline->NumberOfSegments(), 2u);
+    ASSERT_EQ(spline->Breakpoints().size(), breakpoints.size());
+    for (size_t i = 0; i < breakpoints.size(); ++i) {
+        EXPECT_DOUBLE_EQ(spline->Breakpoints()[i], breakpoints[i]);
+    }
+    for (unsigned int i = 0; i < 2u; ++i) {
+        EXPECT_TRUE(i_num::IsApproxEqual(
+                spline->Coefficients(i), Matrix34d(segments[i]), kTol));
+    }
+    EXPECT_TRUE(spline->IsValid());
+}
+
+// 代表値: 末端のTP値が最終セグメントの係数から自動計算される。
+// s=T(2)-T(1)=2 (≠1) のデータを使い、sの掛け忘れを検出できるようにする
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_ComputesEndDerivatives) {
+    Matrix34d seg;
+    seg << 1.0,  2.0,  3.0,  4.0,    // x: A, B, C, D
+          -1.0,  0.5, -2.0,  1.0,    // y
+           0.0,  1.0,  0.0, -0.5;    // z
+    const auto spline = i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 3, {1.0, 3.0}, {seg});
+
+    // s=2における解析値 (TP0=A+Bs+Cs^2+Ds^3, TP1=B+2Cs+3Ds^2,
+    //                    TP2=C+3Ds, TP3=D)
+    const std::array<double, 12> expected{
+            49.0, 62.0, 27.0,  4.0,   // TPX0..TPX3
+             0.0,  4.5,  4.0,  1.0,   // TPY0..TPY3
+            -2.0, -5.0, -3.0, -0.5};  // TPZ0..TPZ3
+    auto params = spline->GetParameters();
+    ASSERT_EQ(params.size(), 30u);  // 17 + 13*1
+    for (size_t k = 0; k < expected.size(); ++k) {
+        // TP値はPDパラメータの末尾12個 (インデックス18~29)
+        EXPECT_DOUBLE_EQ(params.access_as<double>(18 + k), expected[k]);
+    }
+}
+
+// 等価性: 生PDを手組みした場合 (MakeLinearSpline) と同じ曲線になる
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_MatchesHandBuiltPDEntity) {
+    const auto by_factory = i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kLinear, 1,
+            {0.0, 1.0, 2.0}, LinearSplineSegments());
+    const auto by_pd = MakeLinearSpline();
+
+    const auto range_f = by_factory->GetParameterRange();
+    const auto range_p = by_pd->GetParameterRange();
+    EXPECT_DOUBLE_EQ(range_f[0], range_p[0]);
+    EXPECT_DOUBLE_EQ(range_f[1], range_p[1]);
+
+    for (const double t : {0.0, 0.5, 1.0, 1.5, 2.0}) {
+        const auto d_f = by_factory->TryGetDefinedDerivatives(t, 1);
+        const auto d_p = by_pd->TryGetDefinedDerivatives(t, 1);
+        ASSERT_TRUE(d_f.has_value() && d_p.has_value());
+        EXPECT_TRUE(i_num::IsApproxEqual((*d_f)[0], (*d_p)[0], kTol));
+        EXPECT_TRUE(i_num::IsApproxEqual((*d_f)[1], (*d_p)[1], kTol));
+    }
+}
+
+// 代表値: n_dim=2 (平面上の曲線) が受理され、PDのNDIMに反映される
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_AcceptsPlanarDimension) {
+    const auto spline = i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kLinear, 1,
+            {0.0, 1.0, 2.0}, LinearSplineSegments(), 2);
+
+    auto params = spline->GetParameters();
+    EXPECT_EQ(params.access_as<int>(2), 2);  // NDIM
+    EXPECT_TRUE(spline->IsValid());
+}
+
+// エラー+境界: セグメント0個→throw、1個 (最小) →受理
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_ThrowsEntityValueErrorWhenNoSegments) {
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 0, {0.0, 1.0}, {}),
+            igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 0, {0.0, 1.0},
+            {Matrix34d::Zero()}));
+}
+
+// エラー: ブレークポイント数がN+1でない場合は棄却される
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_ThrowsEntityValueErrorWhenBreakpointCountMismatch) {
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 0, {0.0, 1.0, 2.0},
+            {Matrix34d::Zero()}),
+            igesio::EntityValueError);
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 0, {0.0},
+            {Matrix34d::Zero()}),
+            igesio::EntityValueError);
+}
+
+// エラー+境界精度: 単調性チェックは厳密比較 (同値→棄却、わずかでも増加→受理)
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_ThrowsEntityValueErrorWhenBreakpointsNotIncreasing) {
+    const auto segments = LinearSplineSegments();
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kLinear, 1, {0.0, 1.0, 1.0}, segments),
+            igesio::EntityValueError);
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kLinear, 1, {0.0, 1.0, 0.5}, segments),
+            igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kLinear, 1,
+            {0.0, 1.0, 1.0 + 1e-12}, segments));
+}
+
+// エラー+境界: degree=4→throw、degree=3 (最大) →受理
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_ThrowsEntityValueErrorWhenDegreeExceedsThree) {
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 4, {0.0, 1.0},
+            {Matrix34d::Zero()}),
+            igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 3, {0.0, 1.0},
+            {Matrix34d::Zero()}));
+}
+
+// エラー: n_dimが2でも3でもない場合は棄却される
+TEST(ParametricSplineCurveFactoryTest,
+     MakeParametricSplineCurve_ThrowsEntityValueErrorWhenDimensionInvalid) {
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 0, {0.0, 1.0},
+            {Matrix34d::Zero()}, 1),
+            igesio::EntityValueError);
+    EXPECT_THROW(i_ent::MakeParametricSplineCurve(
+            ParametricSplineCurveType::kCubic, 0, {0.0, 1.0},
+            {Matrix34d::Zero()}, 4),
+            igesio::EntityValueError);
+}
+
+
+
+/**
+ * ファクトリ関数: MakeCubicSplineCurve
+ */
+
+// 代表値: 非一様ブレークポイントで通過点と接線が補間される
+// (内部ブレークポイントでの位置・勾配の連続性確認を含む)
+TEST(ParametricSplineCurveFactoryTest,
+     MakeCubicSplineCurve_InterpolatesPointsAndTangents) {
+    const std::vector<Vector3d> points{
+            {0.0, 0.0, 0.0}, {1.0, 2.0, 0.0}, {4.0, 2.0, -2.0}};
+    const std::vector<Vector3d> tangents{
+            {1.0, 0.0, 0.0}, {1.0, 1.0, 0.0}, {2.0, 0.0, -1.0}};
+    const std::vector<double> breakpoints{0.0, 1.0, 3.0};
+    const auto spline = i_ent::MakeCubicSplineCurve(
+            points, tangents, breakpoints);
+
+    ASSERT_NE(spline, nullptr);
+    EXPECT_EQ(spline->GetCurveType(), ParametricSplineCurveType::kCubic);
+    EXPECT_EQ(spline->Degree(), 1u);
+    EXPECT_EQ(spline->NumberOfSegments(), 2u);
+    EXPECT_TRUE(spline->IsValid());
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        const auto derivs =
+                spline->TryGetDefinedDerivatives(breakpoints[i], 1);
+        ASSERT_TRUE(derivs.has_value()) << "at T(" << i << ")";
+        EXPECT_TRUE(i_num::IsApproxEqual((*derivs)[0], points[i], kTol))
+                << "point at T(" << i << ")";
+        EXPECT_TRUE(i_num::IsApproxEqual((*derivs)[1], tangents[i], kTol))
+                << "tangent at T(" << i << ")";
+    }
+}
+
+// 精度: 1セグメント (最小構成、h=2) の係数がエルミート変換の解析値と一致する
+TEST(ParametricSplineCurveFactoryTest,
+     MakeCubicSplineCurve_SingleSegmentMatchesHermiteFormula) {
+    // P0=(0,0,0), P1=(2,2,0), M0=(1,0,1), M1=(3,2,0), h=2
+    const auto spline = i_ent::MakeCubicSplineCurve(
+            {{0.0, 0.0, 0.0}, {2.0, 2.0, 0.0}},
+            {{1.0, 0.0, 1.0}, {3.0, 2.0, 0.0}},
+            {0.0, 2.0});
+
+    // A=P0, B=M0, C=3dP/h^2-(2M0+M1)/h, D=-2dP/h^3+(M0+M1)/h^2
+    Matrix34d expected;
+    expected << 0.0, 1.0, -1.0,  0.5,
+                0.0, 0.0,  0.5,  0.0,
+                0.0, 1.0, -1.0,  0.25;
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            spline->Coefficients(0), expected, kTol));
+
+    // 終端 u=h での位置・接線が P1, M1 に一致する (エンドツーエンド確認)
+    const auto derivs = spline->TryGetDefinedDerivatives(2.0, 1);
+    ASSERT_TRUE(derivs.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            (*derivs)[0], Vector3d(2.0, 2.0, 0.0), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            (*derivs)[1], Vector3d(3.0, 2.0, 0.0), kTol));
+}
+
+// 縮退: 全接線をコード方向に揃えると3次が直線に退化する (C=D=0)
+TEST(ParametricSplineCurveFactoryTest,
+     MakeCubicSplineCurve_StraightLineWhenTangentsMatchChord) {
+    // コード (2,4,6)、h=2 → 接線 M = dP/h = (1,2,3)
+    const auto spline = i_ent::MakeCubicSplineCurve(
+            {{0.0, 0.0, 0.0}, {2.0, 4.0, 6.0}},
+            {{1.0, 2.0, 3.0}, {1.0, 2.0, 3.0}},
+            {0.0, 2.0});
+
+    const auto coeffs = spline->Coefficients(0);
+    EXPECT_NEAR(coeffs.col(2).norm(), 0.0, kTol);  // C
+    EXPECT_NEAR(coeffs.col(3).norm(), 0.0, kTol);  // D
+}
+
+// エラー+境界: 1点→throw、2点 (最小) →受理
+TEST(ParametricSplineCurveFactoryTest,
+     MakeCubicSplineCurve_ThrowsEntityValueErrorWhenFewerThanTwoPoints) {
+    EXPECT_THROW(i_ent::MakeCubicSplineCurve(
+            {{0.0, 0.0, 0.0}}, {{1.0, 0.0, 0.0}}, {0.0}),
+            igesio::EntityValueError);
+    EXPECT_NO_THROW(i_ent::MakeCubicSplineCurve(
+            {{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}},
+            {{1.0, 0.0, 0.0}, {1.0, 0.0, 0.0}},
+            {0.0, 1.0}));
+}
+
+// エラー: points/tangents/breakpointsのサイズ不一致は棄却される
+TEST(ParametricSplineCurveFactoryTest,
+     MakeCubicSplineCurve_ThrowsEntityValueErrorWhenSizesMismatch) {
+    const std::vector<Vector3d> points{
+            {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {2.0, 1.0, 0.0}};
+    // tangentsが2個
+    EXPECT_THROW(i_ent::MakeCubicSplineCurve(
+            points, {{1.0, 0.0, 0.0}, {1.0, 0.0, 0.0}}, {0.0, 1.0, 2.0}),
+            igesio::EntityValueError);
+    // breakpointsが2個
+    EXPECT_THROW(i_ent::MakeCubicSplineCurve(
+            points,
+            {{1.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {1.0, 0.0, 0.0}},
+            {0.0, 1.0}),
+            igesio::EntityValueError);
+}
+
+// エラー: ブレークポイントが狭義単調増加でない場合は棄却される
+TEST(ParametricSplineCurveFactoryTest,
+     MakeCubicSplineCurve_ThrowsEntityValueErrorWhenBreakpointsNotIncreasing) {
+    const std::vector<Vector3d> points{{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}};
+    const std::vector<Vector3d> tangents{{1.0, 0.0, 0.0}, {1.0, 0.0, 0.0}};
+    EXPECT_THROW(i_ent::MakeCubicSplineCurve(points, tangents, {0.0, 0.0}),
+                 igesio::EntityValueError);
+    EXPECT_THROW(i_ent::MakeCubicSplineCurve(points, tangents, {1.0, 0.0}),
+                 igesio::EntityValueError);
 }

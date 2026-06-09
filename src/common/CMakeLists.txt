@@ -16,12 +16,20 @@ target_include_directories(igesio_common PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
+# 公開ヘッダがC++17を要求するため、コンパイル要求として利用側へ伝播させる
+# (CMAKE_CXX_STANDARDはIGESio自身のビルドにしか効かない)
+target_compile_features(igesio_common PUBLIC cxx_std_17)
+
 # Link Threads (std::async/std::thread backend for common/parallel.h).
 # PUBLIC so every library that depends on IGESio::common transitively links it.
 target_link_libraries(igesio_common PUBLIC Threads::Threads)
 
 # Handle Eigen dependency if enabled
 if(IGESIO_ENABLE_EIGEN)
+    # BUILD_INTERFACEのみとする: FetchContent由来のEigenはALIAS先の実ターゲット
+    # eigenがエクスポートセットに含まれないため、install(EXPORT)に乗せられない。
+    # インストール先の利用側へは、IGESioConfig.cmakeがfind_dependency(Eigen3)の
+    # 後にIGESio::commonへEigen3::Eigenを追記することで伝播させる。
     target_link_libraries(igesio_common PUBLIC
         $<BUILD_INTERFACE:Eigen3::Eigen>
     )

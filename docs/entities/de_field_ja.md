@@ -162,7 +162,7 @@ std::array<double, 3> color;
 // 半径5.0、原点中心の円エンティティを作成
 // 各DEフィールドはデフォルト値で初期化される
 auto center = Vector2d(0.0, 0.0);
-auto circle = std::make_shared<ent::CircularArc>(center, 5.0);
+auto circle = ent::MakeCircle(center, 5.0);
 
 // デフォルトの色を取得
 circle->GetColor().GetValueType();    // DEFieldValueType::kDefault
@@ -174,8 +174,7 @@ circle->GetColor().GetValueType();    // DEFieldValueType::kPositive
 color = circle->GetColor().GetRGB();  // {0, 100, 100}
 
 // 色エンティティを作成して設定（ポインタ値）
-auto color_def = std::make_shared<ent::ColorDefinition>(
-     std::array<double, 3>{50.0, 100.0, 30.0}, "Light Green");
+auto color_def = ent::MakeColorDefinition({50.0, 100.0, 30.0}, "Light Green");
 circle->OverwriteColor(color_def);
 circle->GetColor().GetValueType();    // DEFieldValueType::kPointer
 color = circle->GetColor().GetRGB();  // {50, 100, 30}
@@ -238,8 +237,7 @@ class DEFieldWrapper { ... };
 circle->GetColor().HasValidPointer();  // true - Light GreenのColorDefinitionが設定されている
 
 // 新しい色定義エンティティを作成
-auto new_color_def = std::make_shared<ent::ColorDefinition>(
-     std::array<double, 3>{100.0, 50.0, 0.0}, "Orange");
+auto new_color_def = ent::MakeColorDefinition({100.0, 50.0, 0.0}, "Orange");
 
 // 新しい色定義エンティティのポインタで上書き
 // `OverwritePointer`の内部では、`DEColor::OverwriteID`と`DEColor::SetPointer`が呼ばれる

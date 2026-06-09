@@ -19,8 +19,8 @@ using igesio::graphics::CircularArcGraphics;
 
 
 CircularArcGraphics::CircularArcGraphics(
-        const std::shared_ptr<const entities::CircularArc> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::CircularArc>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kCircularArc, true) {
     Synchronize();
 }
@@ -61,7 +61,7 @@ void CircularArcGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void CircularArcGraphics::Synchronize() {
+void CircularArcGraphics::DoSynchronize() {
     // 既存のリソースを解放
     Cleanup();
 

@@ -19,11 +19,11 @@ using igesio::graphics::CompositeCurveGraphics;
 
 
 CompositeCurveGraphics::CompositeCurveGraphics(
-        const std::shared_ptr<const entities::CompositeCurve> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::CompositeCurve>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kComposite, true) {}
 
-void CompositeCurveGraphics::Synchronize() {
+void CompositeCurveGraphics::DoSynchronize() {
     for (auto& [shader, graphics] : child_graphics_) {
         for (auto& graphic : graphics) {
             graphic->Synchronize();

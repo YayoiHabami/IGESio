@@ -1,11 +1,11 @@
 /**
- * @file numerics/optimization.cpp
+ * @file numerics/analysis/optimization.cpp
  * @brief 最適化・求根関数の実装
  * @author Yayoi Habami
  * @date 2026-04-10
  * @copyright 2026 Yayoi Habami
  */
-#include "igesio/numerics/optimization.h"
+#include "igesio/numerics/analysis/optimization.h"
 
 #include "./optimization_impl.h"
 

@@ -13,8 +13,8 @@
 #include <tuple>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
-#include "igesio/numerics/bounding_box.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 
 namespace igesio::numerics {
 
@@ -652,6 +652,30 @@ TEST(BoundingBoxTest, Rotate) {
     // 非直交行列で例外
     Matrix3d non_ortho = Matrix3d::Identity() * 2.0;
     EXPECT_THROW(box.Rotate(non_ortho), std::invalid_argument);
+}
+
+TEST(BoundingBoxTest, Rotate_FloatRoundTrippedRotationDoesNotThrow) {
+    // 回帰テスト: 単精度を経由した非軸平行回転(描画系のworld_transformと同じ往復)で
+    // Rotateが例外を投げず、方向ベクトルが正しく回転すること.
+    // (旧実装ではfloat由来の~1e-7残差をdouble機械ε尺度で検証し、正当な回転でも
+    //  std::invalid_argumentを投げていた)
+    // NOTE: Layer3のworld_transform_(Matrix4d化)やGetWorldBoundingBoxのガードは
+    //       graphics層の統合テスト範囲のため、ここでは数値核心のみを対象とする.
+    Vector3d p0(1.0, 2.0, 3.0);
+    std::array<double, 3> sizes = {10.0, 20.0, 30.0};
+    BoundingBox box(p0, sizes);  // AABB (方向はUnitX/Y/Z)
+
+    const Matrix3d r = igesio::AngleAxisd(
+            0.9, Vector3d(1.0, 2.0, 3.0).normalized()).toRotationMatrix();
+    const Matrix3d rot_f2d = r.cast<float>().cast<double>();
+
+    EXPECT_NO_THROW(box.Rotate(rot_f2d));
+
+    // 回転後の方向は元の回転行列の各列(float往復誤差の範囲で一致)
+    std::array<Vector3d, 3> expected_dirs = {
+        Vector3d(r.col(0)), Vector3d(r.col(1)), Vector3d(r.col(2))
+    };
+    ExpectArray3ApproxEqual(box.GetDirections(), expected_dirs, 1e-5);
 }
 
 TEST(BoundingBoxTest, Transform) {

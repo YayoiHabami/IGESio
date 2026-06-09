@@ -46,21 +46,29 @@
 - 子`Assembly`のリスト（物理的な所有。入れ子＝論理ツリー）
 - 親`Assembly`への弱参照（`std::weak_ptr`。ルートでは空。経路探索用）
 - 大域変換行列`Matrix4d`（Solid Assembly Type 184相当の配置。既定は単位行列）
-- メタ情報`AssemblyMetadata`
+- メタ情報`AssemblyMetadata`と表示状態`DisplayState`
+- モデルリビジョン（ルートに集約される変更カウンタ）
 
-メタ情報`AssemblyMetadata`は、描画・編集の際に参照される付随情報である。
+メタ情報`AssemblyMetadata`は、参照時にlive読みされる注釈・対話ロックである。描画の派生キャッシュへ影響しないため、`Metadata()`のmutable参照経由で自由に編集してよい（変更通知は不要）。
 
 | メンバ | 意味 |
 | --- | --- |
 | `name` | アセンブリの名前 |
-| `visible` | 可視性（表示トグル）。非表示でも論理的には存在し、BBox・検証・出力・クエリには含まれる |
-| `suppressed` | 抑制。論理的にモデルから除外する（子孫も連鎖）。抑制時は描画されず、BBox・検証・出力・クエリからも除外される |
 | `role_tag` | 役割を示す任意の分類用文字列 |
 | `lock` | ロック状態（`selectable`・`editable`） |
+
+表示状態`DisplayState`は、描画の派生キャッシュに影響する状態である。`Display()`のconst参照で読み、変更は`SetVisible`・`SetSuppressed`・`SetColorOverride`・`SetOpacityOverride`の各setter経由でのみ行う（値が変化したときのみモデルリビジョンが進む）。
+
+| メンバ | 意味 |
+| --- | --- |
+| `visible` | 可視性（表示トグル）。非表示でも論理的には存在し、BBox・検証・出力・クエリには含まれる |
+| `suppressed` | 抑制。論理的にモデルから除外する（子孫も連鎖）。抑制時は描画されず、BBox・検証・出力・クエリからも除外される |
 | `color_override` | 色のオーバーライド（RGB; $[0, 1]$ ）。未設定ならメンバの色を使用 |
 | `opacity_override` | 不透明度のオーバーライド（ $[0, 1]$ ）。未設定ならメンバの値を使用 |
 
 描画条件は`visible`かつ`!suppressed`である。
+
+モデルリビジョンは、構造（エンティティ・子`Assembly`の追加/削除/移動）・大域変換・表示状態の変更毎にルートへ集約されて単調増加するカウンタであり、`Revision()`で取得する（非ルートノードでもルートの値を返す）。描画層はこの値の変化で再同期の要否を判定するため、編集後の手動通知は不要である。
 
 ## 所有と参照の二層
 
@@ -121,11 +129,13 @@ igesio::models::Assembly* owner = root.FindOwner(picked_id);
 | `MoveEntityTo(id, dest)` | エンティティを別ノードへ移動する（同一ルートであること） |
 | `MoveChildAssemblyTo(child_id, dest)` | 直接の子`Assembly`を別ノードへ移動する |
 | `AddChildAssembly(child)` | 子`Assembly`を追加する |
+| `SetVisible(visible)`等の表示状態setter | 自ノードの表示状態（`DisplayState`）を設定する |
 | `SetVisibleRecursive(visible)` | 自ノードと全子孫の可視性を一括設定する |
 | `SetSuppressedRecursive(suppressed)` | 自ノードと全子孫の抑制状態を一括設定する |
 | `SetColorOverrideRecursive(color)` | 自ノードと全子孫の色オーバーライドを一括設定する |
 | `SetOpacityOverrideRecursive(opacity)` | 自ノードと全子孫の不透明度オーバーライドを一括設定する |
 | `ComposeGlobalTransform(transform)` | このノードの大域変換へ追加変換を合成する（非再帰） |
+| `Revision()` | ルートに集約されたモデルリビジョンを取得する |
 | `ValidateSelfContainedRecursive()` | 各ノードが参照を自己完結的に解決できるかを再帰検証する |
 
 `ComposeGlobalTransform`は`global_transform_ = transform * global_transform_`（親フレームでの後付け）とし、再帰しない。子孫へは描画時の累積変換で自然に波及するためである。変換はスケールなし（124相当）を前提とする。
@@ -134,7 +144,7 @@ igesio::models::Assembly* owner = root.FindOwner(picked_id);
 
 ロックの強制は`IsEffectivelySelectable(id)`・`IsEffectivelyEditable(id)`が担う。これらは所有ノードからルートまでの`lock.selectable`・`lock.editable`を祖先方向へANDで畳む。ツリーに属さないIDは制限なし（`true`）とみなす。
 
-なお、構造編集後の描画再走査は呼び出し側の責務である（`Assembly`はレンダラを知らない。[Sceneとの関係](#sceneとの関係)を参照）。
+なお、構造・変換・表示状態の変更はモデルリビジョン（`Revision()`）へ集約され、描画層が次回描画時に自動検知する。`Assembly`はレンダラを知らず、編集側からレンダラへの通知も不要である（[Sceneとの関係](#sceneとの関係)を参照）。
 
 ## 空間検索
 

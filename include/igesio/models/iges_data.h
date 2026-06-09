@@ -37,7 +37,7 @@ class IgesData {
 
     /// @brief エンティティの集合を保持するルートAssembly
     /// @note Assemblyのツリー機構(`weak_from_this`等)のためshared_ptrで保持する
-    std::shared_ptr<Assembly> root_ = std::make_shared<Assembly>();
+    std::shared_ptr<Assembly> root_ = MakeAssembly();
 
  public:
     /// @brief このIGESデータの説明

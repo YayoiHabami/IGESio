@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <optional>
 #include <unordered_set>
+#include <vector>
 
 #include "igesio/common/id_generator.h"
 
@@ -24,13 +25,15 @@ namespace igesio::models {
 
 /// @brief 選択状態を管理する (GUI非依存・ヘッドレス可)
 /// @note エンティティIDとAssembly IDのいずれも保持できる. 描画ハイライトや操作対象の
-///       入力として用いる. 変更のたびにversionを増やし、GUIは前回値との比較で再描画を
+///       入力として用いる. 選択順序を保持し、Items()は選択した順にIDを返す.
+///       変更のたびにversionを増やし、GUIは前回値との比較で再描画を
 ///       判断する (versionは正しさには不要).
 class SelectionSet {
  public:
     /// @brief 指定IDを選択に加える
     /// @param id 選択するID
-    /// @note 主選択(active)を当該IDへ更新する. 既に選択済みの場合もactiveを更新する.
+    /// @note 主選択(active)を当該IDへ更新する. 既に選択済みの場合もactiveを更新するが、
+    ///       選択順序上の位置は維持する (末尾へは移動しない).
     void Select(const ObjectID& id);
 
     /// @brief 指定IDの選択を解除する
@@ -55,15 +58,15 @@ class SelectionSet {
     /// @return 選択中の場合はtrue
     bool Contains(const ObjectID& id) const;
 
-    /// @brief 選択中のID集合を取得する
-    /// @return 選択中のIDの集合
-    const std::unordered_set<ObjectID>& Items() const { return selected_; }
+    /// @brief 選択中のID一覧を取得する
+    /// @return 選択中のIDの一覧 (選択順)
+    const std::vector<ObjectID>& Items() const { return items_; }
 
     /// @brief 選択数を取得する
-    std::size_t Size() const { return selected_.size(); }
+    std::size_t Size() const { return items_.size(); }
 
     /// @brief 選択が空か
-    bool Empty() const { return selected_.empty(); }
+    bool Empty() const { return items_.empty(); }
 
     /// @brief 主選択(操作の基準. 最後に選んだ要素)を取得する
     /// @return 主選択のID. 無い場合はstd::nullopt
@@ -74,8 +77,10 @@ class SelectionSet {
     std::uint64_t Version() const { return version_; }
 
  private:
-    /// @brief 選択中のID集合
-    std::unordered_set<ObjectID> selected_;
+    /// @brief 選択中のID一覧 (選択順)
+    std::vector<ObjectID> items_;
+    /// @brief 選択中のID集合 (Contains()のO(1)判定用. items_と常に同内容)
+    std::unordered_set<ObjectID> lookup_;
     /// @brief 主選択 (最後に選んだ要素. 操作の基準)
     std::optional<ObjectID> active_;
     /// @brief 変更検知用のバージョン

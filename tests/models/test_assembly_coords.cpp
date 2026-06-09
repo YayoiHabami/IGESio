@@ -34,9 +34,9 @@
 #include <vector>
 
 #include "igesio/reader.h"
-#include "igesio/numerics/matrix.h"
-#include "igesio/numerics/bounding_box.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/entity_base.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/entities/curves/point.h"
@@ -58,6 +58,7 @@ using igesio::Matrix4d;
 using igesio::Vector3d;
 using i_mdl::Assembly;
 using i_mdl::CoordFrame;
+using i_mdl::MakeAssembly;
 using i_ent::Line;
 using i_ent::Point;
 
@@ -97,7 +98,7 @@ igesio::Matrix4d MakeTransform(const double angle, const Vector3d& axis,
 
 /// @brief 始点・終点を持つ線分エンティティ (M_entityは単位) を生成する
 std::shared_ptr<Line> MakeLine(const Vector3d& start, const Vector3d& end) {
-    return std::make_shared<Line>(start, end, i_ent::LineType::kSegment);
+    return i_ent::MakeLine(start, end);
 }
 
 /// @brief root→a→b の3段ツリーと、bへ追加した線分を束ねる
@@ -116,9 +117,9 @@ struct Chain {
 Chain BuildChain(const Matrix4d& g_root, const Matrix4d& g_a,
                  const Matrix4d& g_b) {
     Chain c;
-    c.root = std::make_shared<Assembly>();
-    c.a = std::make_shared<Assembly>();
-    c.b = std::make_shared<Assembly>();
+    c.root = MakeAssembly();
+    c.a = MakeAssembly();
+    c.b = MakeAssembly();
     c.root->SetGlobalTransform(g_root);
     c.a->SetGlobalTransform(g_a);
     c.b->SetGlobalTransform(g_b);
@@ -321,7 +322,7 @@ TEST_F(AssemblyCoordsTest, ResolvePlacement_ThrowsWhenRelativeBaseNotAncestor) {
     auto c = BuildChain(Matrix4d::Identity(), Matrix4d::Identity(),
                         Matrix4d::Identity());
     // ツリーに属さない別Assemblyを基準に指定する
-    auto outsider = std::make_shared<Assembly>();
+    auto outsider = MakeAssembly();
     EXPECT_THROW(
         c.root->ResolvePlacement(c.line_id,
                                  CoordFrame::RelativeTo(outsider->GetID())),
@@ -362,7 +363,7 @@ TEST_F(AssemblyCoordsTest, GetCurveView_PointMatchesResolvedPlacement) {
 // 接線は回転のみ適用され並進は乗らない (点・ベクトルの区別)
 TEST_F(AssemblyCoordsTest,
        GetCurveView_DerivativeAppliesRotationToVectorNotTranslation) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     const Matrix4d p = MakeTransform(kPiHalf, {0, 0, 1}, {10, 20, 30});
     root->SetGlobalTransform(p);
     auto line = MakeLine({0, 0, 0}, {1, 0, 0});
@@ -384,7 +385,7 @@ TEST_F(AssemblyCoordsTest,
 
 // 未登録IDはnullptr
 TEST_F(AssemblyCoordsTest, GetCurveView_UnknownIDReturnsNull) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     auto orphan = MakeLine({0, 0, 0}, {1, 1, 1});
     EXPECT_EQ(root->GetCurveView(orphan->GetID(), CoordFrame::World()), nullptr);
 }
@@ -393,14 +394,14 @@ TEST_F(AssemblyCoordsTest, GetCurveView_UnknownIDReturnsNull) {
 TEST_F(AssemblyCoordsTest, GetCurveView_SurfaceIDReturnsNull) {
     auto surface = LoadedSurface();
     ASSERT_NE(surface, nullptr);
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     const auto id = root->AddEntity(surface);
     EXPECT_EQ(root->GetCurveView(id, CoordFrame::World()), nullptr);
 }
 
 // kDefinitionでのビュー生成は例外 (ビューはM_entity適用が前提)
 TEST_F(AssemblyCoordsTest, GetCurveView_ThrowsWhenDefinitionFrame) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     auto line = MakeLine({0, 0, 0}, {1, 1, 1});
     const auto id = root->AddEntity(line);
     EXPECT_THROW(root->GetCurveView(id, CoordFrame::Definition()),
@@ -411,7 +412,7 @@ TEST_F(AssemblyCoordsTest, GetCurveView_ThrowsWhenDefinitionFrame) {
 TEST_F(AssemblyCoordsTest, GetCurveView_ThrowsWhenRelativeBaseNotAncestor) {
     auto c = BuildChain(Matrix4d::Identity(), Matrix4d::Identity(),
                         Matrix4d::Identity());
-    auto outsider = std::make_shared<Assembly>();
+    auto outsider = MakeAssembly();
     EXPECT_THROW(
         c.root->GetCurveView(c.line_id,
                              CoordFrame::RelativeTo(outsider->GetID())),
@@ -428,7 +429,7 @@ TEST_F(AssemblyCoordsTest, GetCurveView_ThrowsWhenRelativeBaseNotAncestor) {
 TEST_F(AssemblyCoordsTest, GetSurfaceView_ReturnsViewForSurface) {
     auto surface = LoadedSurface();
     ASSERT_NE(surface, nullptr);
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     const auto id = root->AddEntity(surface);
 
     auto view = root->GetSurfaceView(id, CoordFrame::World());
@@ -447,7 +448,7 @@ TEST_F(AssemblyCoordsTest, GetSurfaceView_PointMatchesResolvedPlacement) {
     auto surf = std::dynamic_pointer_cast<const i_ent::ISurface>(surface);
     ASSERT_NE(surf, nullptr);
 
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     root->SetGlobalTransform(MakeTransform(kPiHalf, {0, 0, 1}, {1, 2, 3}));
     const auto id = root->AddEntity(surface);
 
@@ -470,7 +471,7 @@ TEST_F(AssemblyCoordsTest, GetSurfaceView_PointMatchesResolvedPlacement) {
 
 // 曲線IDをGetSurfaceViewへ渡すとnullptr (型不一致)
 TEST_F(AssemblyCoordsTest, GetSurfaceView_CurveIDReturnsNull) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     auto line = MakeLine({0, 0, 0}, {1, 1, 1});
     const auto id = root->AddEntity(line);
     EXPECT_EQ(root->GetSurfaceView(id, CoordFrame::World()), nullptr);
@@ -478,7 +479,7 @@ TEST_F(AssemblyCoordsTest, GetSurfaceView_CurveIDReturnsNull) {
 
 // 未登録IDはnullptr
 TEST_F(AssemblyCoordsTest, GetSurfaceView_UnknownIDReturnsNull) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     const ObjectID unknown = igesio::IDGenerator::Generate(
             igesio::ObjectType::kAssembly);
     EXPECT_EQ(root->GetSurfaceView(unknown, CoordFrame::World()), nullptr);
@@ -489,7 +490,7 @@ TEST_F(AssemblyCoordsTest, GetSurfaceView_UnknownIDReturnsNull) {
 TEST_F(AssemblyCoordsTest, GetSurfaceView_ThrowsWhenDefinitionFrame) {
     auto surface = LoadedSurface();
     ASSERT_NE(surface, nullptr);
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     const auto id = root->AddEntity(surface);
     EXPECT_THROW(root->GetSurfaceView(id, CoordFrame::Definition()),
                  std::invalid_argument);
@@ -510,7 +511,7 @@ TEST_F(AssemblyCoordsTest, GetWorldBoundingBox_EmptyAssemblyReturnsNullopt) {
 // 3D線分1本のみ: その世界AABBと一致する
 TEST_F(AssemblyCoordsTest,
        GetWorldBoundingBox_SingleSpatialMemberMatchesMemberBox) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     root->AddEntity(MakeLine({0, 0, 0}, {1, 2, 3}));
 
     const auto bb = root->GetWorldBoundingBox();
@@ -521,8 +522,8 @@ TEST_F(AssemblyCoordsTest,
 // 子Assemblyの大域変換が世界AABBへ反映される
 TEST_F(AssemblyCoordsTest,
        GetWorldBoundingBox_NestedChildAppliesGlobalTransform) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     child->SetGlobalTransform(MakeTranslation({10, 0, 0}));
     child->AddEntity(MakeLine({0, 0, 0}, {1, 1, 1}));
     root->AddChildAssembly(child);
@@ -534,7 +535,7 @@ TEST_F(AssemblyCoordsTest,
 
 // 平面状 (1軸退化) のメンバでも扁平なboxを返す (nulloptにしない)
 TEST_F(AssemblyCoordsTest, GetWorldBoundingBox_PlanarMemberReturnsFlatBox) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     root->AddEntity(MakeLine({0, 0, 0}, {1, 1, 0}));  // z一定の対角線 (2次元)
 
     const auto bb = root->GetWorldBoundingBox();
@@ -545,8 +546,8 @@ TEST_F(AssemblyCoordsTest, GetWorldBoundingBox_PlanarMemberReturnsFlatBox) {
 // 0D点・1D軸平行線のみ (全て退化) はnullopt
 TEST_F(AssemblyCoordsTest,
        GetWorldBoundingBox_AllDegenerateMembersReturnNullopt) {
-    auto root = std::make_shared<Assembly>();
-    root->AddEntity(std::make_shared<Point>(Vector3d(2, 2, 2)));  // 0次元
+    auto root = MakeAssembly();
+    root->AddEntity(i_ent::MakePoint(Vector3d(2, 2, 2)));  // 0次元
     root->AddEntity(MakeLine({0, 0, 0}, {1, 0, 0}));  // x軸平行 = 1次元
 
     EXPECT_FALSE(root->GetWorldBoundingBox().has_value());
@@ -560,12 +561,12 @@ TEST_F(AssemblyCoordsTest,
         << "物理従属かつ幾何を持つメンバが見つからない";
 
     // 物理従属メンバ単独 → 除外されてnullopt
-    auto only_dep = std::make_shared<Assembly>();
+    auto only_dep = MakeAssembly();
     only_dep->AddEntity(dependent);
     EXPECT_FALSE(only_dep->GetWorldBoundingBox().has_value());
 
     // 独立な3D線 + 物理従属メンバ → 線のBBのみが反映される
-    auto mixed = std::make_shared<Assembly>();
+    auto mixed = MakeAssembly();
     mixed->AddEntity(MakeLine({0, 0, 0}, {1, 2, 3}));
     mixed->AddEntity(dependent);
     const auto bb = mixed->GetWorldBoundingBox();

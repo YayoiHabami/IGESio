@@ -134,7 +134,7 @@ struct ObjectID {
 
     /// @brief コンストラクタ
     /// @param id 保持するIdentifierの共有ポインタ (IDGeneratorで生成されたもの)
-    explicit ObjectID(const std::shared_ptr<const Identifier> id)
+    explicit ObjectID(const std::shared_ptr<const Identifier>& id)
             : identifier(id) {}
 
     /// @brief Identifierの共有ポインタを取得する

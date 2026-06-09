@@ -9,6 +9,7 @@
 #ifndef IGESIO_TESTS_ENTITIES_SURFACES_SURFACES_FOR_TESTING_H_
 #define IGESIO_TESTS_ENTITIES_SURFACES_SURFACES_FOR_TESTING_H_
 
+#include <array>
 #include <limits>
 #include <memory>
 #include <string>
@@ -51,32 +52,29 @@ using surface_vec = std::vector<TestSurface>;
 /// @brief Ruled Surfaceエンティティの作成
 inline surface_vec CreateRuledSurfaces() {
     // curve1: Line
-    auto curve1 = std::make_shared<entities::Line>(
+    auto curve1 = entities::MakeLine(
             Vector3d{-5., 0., 0.}, Vector3d{5., 0., 0.});
     // curve2: Rational B-Spline Curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        -5.0, 0.0, -6.0,     // control point P(0)
-        -3.0, 4.0, -6.0,     // control point P(1)
-         3.0, 4.0, -6.0,     // control point P(2)
-         5.0, 0.0, -6.0,     // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        0.0, 0.0, 1.0        // normal vector of the defining plane
-    };
-    auto curve2 = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(-5.0, 0.0, -6.0);  // control point P(0)
+    cps.col(1) = Vector3d(-3.0, 4.0, -6.0);  // control point P(1)
+    cps.col(2) = Vector3d(3.0,  4.0, -6.0);  // control point P(2)
+    cps.col(3) = Vector3d(5.0,  0.0, -6.0);  // control point P(3)
+    auto curve2 = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     // Ruled surface
     TestSurface ruled_surface("Ruled Surface");
-    ruled_surface.surface = std::make_shared<entities::RuledSurface>(curve1, curve2);
+    ruled_surface.surface = entities::MakeRuledSurface(curve1, curve2);
 
     // Ruled surface (reversed)
     TestSurface ruled_surface_reversed("Ruled Surface (reversed)");
     ruled_surface_reversed.surface =
-        std::make_shared<entities::RuledSurface>(curve1, curve2, true);
+        entities::MakeRuledSurface(curve1, curve2, true);
 
     return {ruled_surface, ruled_surface_reversed};
 }
@@ -84,32 +82,29 @@ inline surface_vec CreateRuledSurfaces() {
 /// @brief Surface of Revolutionエンティティの作成
 inline surface_vec CreateSurfaceOfRevolutions() {
     // Axis of revolution:
-    auto axis_line = std::make_shared<entities::Line>(
+    auto axis_line = entities::MakeLine(
             Vector3d{1., 1., 1.}, Vector3d{1., 2., 3.});
 
     // Generatrix: Rational B-Spline Curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,  // non-periodic open NURBS curve
-        0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0,  // knot vector
-        1.0, 1.0, 1.0, 1.0,  // weights
-        1.0, -4.0,  0.0,    // control point P(0)
-        1.0, -5.0,  1.5,    // control point P(1)
-        1.0, -3.0,  2.0,    // control point P(2)
-        1.0,  0.0,  4.0,    // control point P(3)
-        0.0, 1.0,            // parameter range V(0), V(1)
-        1.0, 0.0, 0.0        // normal vector of the defining plane
-    };
-    auto generatrix = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(1.0, -4.0, 0.0);   // control point P(0)
+    cps.col(1) = Vector3d(1.0, -5.0, 1.5);   // control point P(1)
+    cps.col(2) = Vector3d(1.0, -3.0, 2.0);   // control point P(2)
+    cps.col(3) = Vector3d(1.0,  0.0, 4.0);   // control point P(3)
+    auto generatrix = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     // Surface of Revolution
     TestSurface rev_full("Surface of Revolution (0 to 2π)");
-    rev_full.surface = std::make_shared<entities::SurfaceOfRevolution>(
+    rev_full.surface = entities::MakeSurfaceOfRevolution(
             axis_line, generatrix, 0.0, 2*kPi);
 
     TestSurface rev_half("Surface of Revolution (π/2 to 3π/2)");
-    rev_half.surface = std::make_shared<entities::SurfaceOfRevolution>(
+    rev_half.surface = entities::MakeSurfaceOfRevolution(
             axis_line, generatrix, kPi / 2, 3 * kPi / 2);
 
     return {rev_full, rev_half};
@@ -118,20 +113,17 @@ inline surface_vec CreateSurfaceOfRevolutions() {
 /// @brief Tabulated Cylinderエンティティの作成
 inline surface_vec CreateTabulatedCylinders() {
     // Directrix curve
-    auto param = igesio::IGESParameterVector{
-        3,  // number of control points - 1
-        3,  // degree
-        false, false, false, false,   // non-periodic open NURBS curve
-        0., 0., 0., 0., 1., 1., 1., 1.,  // knot vector
-        1., 1., 1., 1.,               // weights
-        0.0, -4.0, -4.0,              // control points P(0)
-        0.0,  0.2, -1.1,              // control points P(1)
-        0.0, -1.0,  4.5,              // control points P(2)
-        0.0,  4.0,  4.0,              // control points P(3)
-        0.0, 1.0,                     // parameter range V(0), V(1)
-        1., 0., 0.                    // normal vector of the defining plane
-    };
-    auto directrix = std::make_shared<entities::RationalBSplineCurve>(param);
+    Matrix3Xd cps(3, 4);
+    cps.col(0) = Vector3d(0.0, -4.0, -4.0);  // control point P(0)
+    cps.col(1) = Vector3d(0.0,  0.2, -1.1);  // control point P(1)
+    cps.col(2) = Vector3d(0.0, -1.0,  4.5);  // control point P(2)
+    cps.col(3) = Vector3d(0.0,  4.0,  4.0);  // control point P(3)
+    auto directrix = entities::MakeRationalBSplineCurve(
+        3,                                         // degree
+        cps,
+        {0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0},  // knot vector
+        {},                                        // weights (all 1.0)
+        std::array<double, 2>{0.0, 1.0});          // parameter range V(0), V(1)
 
     // Axis direction
     Vector3d axis_dir{1., -1., 0.};
@@ -139,8 +131,8 @@ inline surface_vec CreateTabulatedCylinders() {
 
     // Tabulated cylinder
     TestSurface tabulated_cylinder("Tabulated Cylinder");
-    tabulated_cylinder.surface = std::make_shared<entities::TabulatedCylinder>(
-            directrix, axis_dir, axis_length);
+    tabulated_cylinder.surface = entities::MakeExtrudedSurface(
+            directrix, axis_dir.normalized() * axis_length);
 
     return {tabulated_cylinder};
 }
@@ -149,73 +141,41 @@ inline surface_vec CreateTabulatedCylinders() {
 inline surface_vec CreateRationalBSplineSurfaces() {
     // Plane (Y = 5)
     TestSurface nurbs_plane("Rational B-Spline Surface: Plane");
-    auto param = igesio::IGESParameterVector{
-        1, 1,  // K1, K2 (Number of control points - 1 in U and V)
-        1, 1,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,  // PROP1-5
-        0., 0., 1., 1.,   // Knot vector in U
-        0., 0., 1., 1.,   // Knot vector in V
-        1., 1., 1., 1.,   // Weights
-        // Control points in IGES order (u-index i varies fastest)
-        -5., 5.,  5.,     // Control point (0,0)
-         5., 5.,  5.,     // Control point (1,0)
-        -5., 5., -5.,     // Control point (0,1)
-         5., 5., -5.,     // Control point (1,1)
-        0., 1., 0., 1.    // Parameter range in U and V
-    };
-    nurbs_plane.surface = std::make_shared<entities::RationalBSplineSurface>(param);
+    nurbs_plane.surface = entities::MakeRationalBSplineSurface(
+        {1, 1},                                              // degrees {M1, M2}
+        {{Vector3d(-5., 5.,  5.), Vector3d(-5., 5., -5.)},   // P(0,j)
+         {Vector3d( 5., 5.,  5.), Vector3d( 5., 5., -5.)}},  // P(1,j)
+        {0., 0., 1., 1.},                                    // knot vector in U
+        {0., 0., 1., 1.});                                   // knot vector in V
 
-    // Freeform surface
+    // Freeform surface (6x6 control points, degree 3 in U and V)
+    // grid[i][j] = P(i,j) = (-25+10i, -25+10j, z_ij)
     TestSurface nurbs_freeform("Rational B-Spline Surface: Freeform");
-    param = igesio::IGESParameterVector{
-        5, 5,  // K1, K2 (Number of control points - 1 in U and V)
-        3, 3,  // M1, M2 (Degree in U and V)
-        false, false, true, false, false,         // PROP1-5
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in U
-        0., 0., 0., 0., 1., 2., 3., 3., 3., 3.,   // Knot vector in V
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,0) to W(5,1)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,2) to W(5,3)
-        1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,   // Weights W(0,4) to W(5,5)
-        // Control points (36 points, each with x, y, z; IGES order: u-index i fastest)
-        -25., -25., -10.,  // Control point (0,0)
-        -15., -25., -8.,   // Control point (1,0)
-        -5., -25., -5.,    // Control point (2,0)
-        5., -25., -3.,     // Control point (3,0)
-        15., -25., -8.,    // Control point (4,0)
-        25., -25., -10.,   // Control point (5,0)
-        -25., -15., -5.,   // Control point (0,1)
-        -15., -15., -4.,   // Control point (1,1)
-        -5., -15., -3.,    // Control point (2,1)
-        5., -15., -2.,     // Control point (3,1)
-        15., -15., -4.,    // Control point (4,1)
-        25., -15., -5.,    // Control point (5,1)
-        -25., -5., 0.,     // Control point (0,2)
-        -15., -5., -4.,    // Control point (1,2)
-        -5., -5., -8.,     // Control point (2,2)
-        5., -5., -8.,      // Control point (3,2)
-        15., -5., -4.,     // Control point (4,2)
-        25., -5., 2.,      // Control point (5,2)
-        -25., 5., 0.,      // Control point (0,3)
-        -15., 5., -4.,     // Control point (1,3)
-        -5., 5., -8.,      // Control point (2,3)
-        5., 5., -8.,       // Control point (3,3)
-        15., 5., -4.,      // Control point (4,3)
-        25., 5., 2.,       // Control point (5,3)
-        -25., 15., -5.,    // Control point (0,4)
-        -15., 15., -4.,    // Control point (1,4)
-        -5., 15., -3.,     // Control point (2,4)
-        5., 15., -2.,      // Control point (3,4)
-        15., 15., -4.,     // Control point (4,4)
-        25., 15., -5.,     // Control point (5,4)
-        -25., 25., -10.,   // Control point (0,5)
-        -15., 25., -8.,    // Control point (1,5)
-        -5., 25., -5.,     // Control point (2,5)
-        5., 25., -3.,      // Control point (3,5)
-        15., 25., -8.,     // Control point (4,5)
-        25., 25., -10.,    // Control point (5,5)
-        0., 3., 0., 3.     // Parameter range in U and V
-    };
-    nurbs_freeform.surface = std::make_shared<entities::RationalBSplineSurface>(param);
+    const std::vector<std::vector<Vector3d>> cp_grid{
+        {Vector3d(-25., -25., -10.), Vector3d(-25., -15., -5.),
+         Vector3d(-25., -5., 0.), Vector3d(-25., 5., 0.),
+         Vector3d(-25., 15., -5.), Vector3d(-25., 25., -10.)},  // P(0,j)
+        {Vector3d(-15., -25., -8.), Vector3d(-15., -15., -4.),
+         Vector3d(-15., -5., -4.), Vector3d(-15., 5., -4.),
+         Vector3d(-15., 15., -4.), Vector3d(-15., 25., -8.)},   // P(1,j)
+        {Vector3d(-5., -25., -5.), Vector3d(-5., -15., -3.),
+         Vector3d(-5., -5., -8.), Vector3d(-5., 5., -8.),
+         Vector3d(-5., 15., -3.), Vector3d(-5., 25., -5.)},     // P(2,j)
+        {Vector3d(5., -25., -3.), Vector3d(5., -15., -2.),
+         Vector3d(5., -5., -8.), Vector3d(5., 5., -8.),
+         Vector3d(5., 15., -2.), Vector3d(5., 25., -3.)},       // P(3,j)
+        {Vector3d(15., -25., -8.), Vector3d(15., -15., -4.),
+         Vector3d(15., -5., -4.), Vector3d(15., 5., -4.),
+         Vector3d(15., 15., -4.), Vector3d(15., 25., -8.)},     // P(4,j)
+        {Vector3d(25., -25., -10.), Vector3d(25., -15., -5.),
+         Vector3d(25., -5., 2.), Vector3d(25., 5., 2.),
+         Vector3d(25., 15., -5.), Vector3d(25., 25., -10.)}};   // P(5,j)
+    // weights (all 1.0) and parameter range ([0,3]x[0,3]) are defaulted
+    nurbs_freeform.surface = entities::MakeRationalBSplineSurface(
+        {3, 3},                                    // degrees {M1, M2}
+        cp_grid,
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.},  // knot vector in U
+        {0., 0., 0., 0., 1., 2., 3., 3., 3., 3.});  // knot vector in V
 
     return {nurbs_plane, nurbs_freeform};
 }
@@ -228,7 +188,7 @@ inline surface_vec CreateTrimmedSurfaces() {
     auto base = CreateRationalBSplineSurfaces();
 
     TestSurface untrimmed("Trimmed Surface (untrimmed over freeform NURBS)");
-    untrimmed.surface = std::make_shared<entities::TrimmedSurface>(base[1].surface);
+    untrimmed.surface = entities::MakeTrimmedSurface(base[1].surface, nullptr, {});
 
     return {untrimmed};
 }

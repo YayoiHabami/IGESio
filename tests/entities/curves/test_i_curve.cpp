@@ -13,8 +13,8 @@
 #include <string>
 #include <tuple>
 
-#include "igesio/numerics/tolerance.h"
-#include "igesio/numerics/integration.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/numerics/analysis/integration.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "./curves_for_testing.h"
 

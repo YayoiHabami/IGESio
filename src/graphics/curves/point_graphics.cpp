@@ -22,8 +22,8 @@ using igesio::graphics::PointGraphics;
 
 
 PointGraphics::PointGraphics(
-        const std::shared_ptr<const entities::Point> entity,
-        const std::shared_ptr<IOpenGL> gl)
+        const std::shared_ptr<const entities::Point>& entity,
+        const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kPoint, false) {
     Synchronize();
 }
@@ -80,7 +80,7 @@ std::vector<igesio::graphics::RayHit> PointGraphics::Intersect(
     constexpr auto kRay = numerics::BoundingBox::DirectionType::kRay;
 
     // 描画位置に一致させる: model = GetWorldTransform(), VBO = 定義空間座標
-    const igesio::Matrix4d m = GetWorldTransform().cast<double>();
+    const igesio::Matrix4d m = GetWorldTransformD();
     const Vector3d world_pt =
             (m * entity_->GetDefinedPosition().homogeneous()).hnormalized();
 
@@ -95,7 +95,7 @@ igesio::graphics::SelectionSamples PointGraphics::GetSelectionSamples(
     if (!entity_) return {};
 
     // 描画位置に一致させる: model = GetWorldTransform(), 座標 = 定義空間
-    const igesio::Matrix4d m = GetWorldTransform().cast<double>();
+    const igesio::Matrix4d m = GetWorldTransformD();
     const Vector3d world_pt =
             (m * entity_->GetDefinedPosition().homogeneous()).hnormalized();
 
@@ -117,7 +117,7 @@ void PointGraphics::DrawImpl(
     gl_->BindVertexArray(0);
 }
 
-void PointGraphics::Synchronize() {
+void PointGraphics::DoSynchronize() {
     // 既存のリソースを開放
     Cleanup();
 

@@ -33,7 +33,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/composite_curve.h"
 #include "igesio/entities/curves/line.h"
@@ -50,7 +50,6 @@ using i_ent::CircularArc;
 using i_ent::CompositeCurve;
 using i_ent::Line;
 using i_ent::LinearPath;
-using i_ent::RationalBSplineCurve;
 constexpr double kPi = igesio::kPi;
 /// @brief 浮動小数点比較の許容誤差
 constexpr double kTol = 1e-9;
@@ -67,8 +66,7 @@ constexpr double kEps = 1e-9;
 /// Line: (0,0,0)→(1,0,0), range=[0,1]
 std::shared_ptr<CompositeCurve> MakeSingleLine() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
+    cc->AddCurve(i_ent::MakeLine(Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
     return cc;
 }
 
@@ -78,9 +76,9 @@ std::shared_ptr<CompositeCurve> MakeSingleLine() {
 /// 全体範囲 [0,2], 接合点 t=1
 std::shared_ptr<CompositeCurve> MakeLineLine_LeftTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, 1.0, 0.0}));
     return cc;
 }
@@ -91,9 +89,9 @@ std::shared_ptr<CompositeCurve> MakeLineLine_LeftTurn() {
 /// 全体範囲 [0,2], 接合点 t=1
 std::shared_ptr<CompositeCurve> MakeLineLine_RightTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{1.0, 0.0, 0.0}, Vector3d{1.0, -1.0, 0.0}));
     return cc;
 }
@@ -105,9 +103,9 @@ std::shared_ptr<CompositeCurve> MakeLineLine_RightTurn() {
 /// NOTE: 接線連続だが接合点は角点として報告される（CompositeCurveの仕様）
 std::shared_ptr<CompositeCurve> MakeLineLine_Straight() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{1.0, 0.0, 0.0}, Vector3d{2.0, 0.0, 0.0}));
     return cc;
 }
@@ -118,9 +116,9 @@ std::shared_ptr<CompositeCurve> MakeLineLine_Straight() {
 /// 全体範囲 [0,3], 接合点 t=1, サブカーブ角点 t=2
 std::shared_ptr<CompositeCurve> MakeLineLinearPath_LeftTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{1.0, 0.0}, {2.0, 0.0}, {2.0, 1.0}}, false));
     return cc;
 }
@@ -132,9 +130,9 @@ std::shared_ptr<CompositeCurve> MakeLineLinearPath_LeftTurn() {
 /// NOTE: Line の代わりに LinearPath を使用（GetLinearSegments テスト用）
 std::shared_ptr<CompositeCurve> MakePathPath_LeftTurn() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}}, false));
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{1.0, 0.0}, {1.0, 1.0}}, false));
     return cc;
 }
@@ -145,11 +143,11 @@ std::shared_ptr<CompositeCurve> MakePathPath_LeftTurn() {
 /// 全体範囲 [0, π/2+1], 接合点 t=π/2
 std::shared_ptr<CompositeCurve> MakeArcPath_Quarter() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<CircularArc>(
+    cc->AddCurve(i_ent::MakeCircularArc(
         Vector2d{0.0, 0.0},    // 中心
         Vector2d{1.0, 0.0},    // 始点 (角度 0)
         Vector2d{0.0, 1.0}));  // 終点 (角度 π/2, CCW)
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 1.0}, {0.0, 2.0}}, false));
     return cc;
 }
@@ -163,23 +161,19 @@ std::shared_ptr<CompositeCurve> MakeArcPath_Quarter() {
 ///       オフセット計算を検証するためのファクトリ
 std::shared_ptr<CompositeCurve> MakePathNURBS_NonZeroRange() {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<LinearPath>(
+    cc->AddCurve(i_ent::MakeLinearPath(
         std::vector<Vector2d>{{0.0, 0.0}, {1.0, 0.0}}, false));
     // degree-1 NURBS: K=2, M=1, ノット=[2,2,3.5,5,5], range=[2,5]
-    // ノットベクトルサイズ = K+M+2 = 5, 重みサイズ = K+1 = 3
-    const auto param = igesio::IGESParameterVector{
-        2,                         // K (制御点数 - 1)
-        1,                         // M (次数)
-        false, false, true, false,  // PROP1-4 (非周期, 非閉, 多項式, 非平面外)
-        2.0, 2.0, 3.5, 5.0, 5.0,    // ノットベクトル (K+M+2=5 個)
-        1.0, 1.0, 1.0,             // 重み (K+1=3 個)
-        1.0, 0.0, 0.0,             // P0 = (1,0,0)
-        1.0, 1.0, 0.0,             // P1 = (1,1,0) (内部ノット t=3.5 に対応)
-        1.0, 2.0, 0.0,             // P2 = (1,2,0)
-        2.0, 5.0,                  // V(0)=2, V(1)=5
-        0.0, 0.0, 1.0              // 法線ベクトル
-    };
-    cc->AddCurve(std::make_shared<RationalBSplineCurve>(param));
+    igesio::Matrix3Xd cps(3, 3);
+    cps.col(0) = Vector3d(1.0, 0.0, 0.0);  // P0 = (1,0,0)
+    cps.col(1) = Vector3d(1.0, 1.0, 0.0);  // P1 = (1,1,0) (内部ノット t=3.5 に対応)
+    cps.col(2) = Vector3d(1.0, 2.0, 0.0);  // P2 = (1,2,0)
+    cc->AddCurve(i_ent::MakeRationalBSplineCurve(
+        1,                                  // M (次数)
+        cps,
+        {2.0, 2.0, 3.5, 5.0, 5.0},          // ノットベクトル (K+M+2=5 個)
+        {},                                 // 重み (全1.0)
+        std::array<double, 2>{2.0, 5.0}));  // V(0)=2, V(1)=5
     return cc;
 }
 
@@ -648,12 +642,12 @@ TEST(CompositeCurveSignedCurvatureTest, NormalFlipped_SignFlipped) {
 // 端点が許容内 (scale~100 → tol=1e-3) の隙間 (3e-4) → 警告なし・is_valid=true
 TEST(CompositeCurveContinuityTest, SmallGap_IsValidNoWarning) {
     auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
     // curve0の終点(100,0,0)とcurve1の始点(100.0003,0,0)に 3e-4 の隙間 (CADモデリング公差相当)
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{100.0003, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
+    cc->AddCurve(i_ent::MakeLine(
         Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
     const auto result = cc->ValidatePD();
     EXPECT_TRUE(result.is_valid);
@@ -663,15 +657,30 @@ TEST(CompositeCurveContinuityTest, SmallGap_IsValidNoWarning) {
 // 明らかに大きい隙間 (10, scale~100で0.1相対) → 連続性警告は出るがis_valid=true
 // (描画ブロックしない=本修正の要点)。隙間量は警告閾値の具体値に依存しないよう、
 // あらゆる妥当な連続性許容を確実に超える大きさにしている。
+// NOTE: この大きさの隙間はプログラム構築経路 (AddCurve) ではEntityValueErrorで
+//       拒否されるため、連続性を検証しないファイル読み込み経路
+//       (PDコンストラクタ+参照解決) で構築する。読み込んだ隙間はValidatePDが
+//       kWarningとして報告する、という読み込み側の仕様のテストである。
 TEST(CompositeCurveContinuityTest, LargeGap_IsValidWithWarning) {
-    auto cc = std::make_shared<CompositeCurve>();
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0}));
-    // curve0の終点(100,0,0)とcurve1の始点(110,0,0)に10の隙間 (真の不連続レベル)
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{110.0, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<Line>(
-        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0}));
+    const auto l0 = i_ent::MakeLine(
+        Vector3d{0.0, 0.0, 0.0}, Vector3d{100.0, 0.0, 0.0});
+    // l0の終点(100,0,0)とl1の始点(110,0,0)に10の隙間 (真の不連続レベル)
+    const auto l1 = i_ent::MakeLine(
+        Vector3d{110.0, 0.0, 0.0}, Vector3d{200.0, 0.0, 0.0});
+    const auto l2 = i_ent::MakeLine(
+        Vector3d{200.0, 0.0, 0.0}, Vector3d{200.0, 100.0, 0.0});
+    igesio::pointer2ID de2id;
+    de2id.emplace(1u, l0->GetID());
+    de2id.emplace(3u, l1->GetID());
+    de2id.emplace(5u, l2->GetID());
+    const auto param = igesio::IGESParameterVector{3, 1, 3, 5};
+    auto cc = std::make_shared<CompositeCurve>(
+        i_ent::RawEntityDE::ByDefault(i_ent::EntityType::kCompositeCurve),
+        param, de2id);
+    ASSERT_TRUE(cc->SetUnresolvedReference(l0));
+    ASSERT_TRUE(cc->SetUnresolvedReference(l1));
+    ASSERT_TRUE(cc->SetUnresolvedReference(l2));
+
     const auto result = cc->ValidatePD();
     EXPECT_TRUE(result.is_valid);  // 警告は描画をブロックしない (本修正の要点)
     // 連続性の警告 (kWarning) が含まれる

@@ -11,12 +11,16 @@
 #include <chrono>
 #include <ctime>
 #include <iomanip>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
 #include <igesio/reader.h>
+#include <igesio/entities/interfaces/i_surface.h>
+#include <igesio/graphics/core/material_property.h>
 
 namespace {
 
@@ -37,6 +41,31 @@ constexpr float kStatusBarHeight = 28.0f;
 constexpr ImGuiWindowFlags kPanelFlags = ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse
         | ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+/// @brief 物体色＋材質のプリセット (色の系統)
+struct ColorScheme {
+    /// @brief Combo表示名
+    const char* name;
+    /// @brief 説明 (ホバー時にツールチップ表示)
+    const char* tooltip;
+    /// @brief 物体の既定色 (RGB; [0,1]). std::nulloptで元のIGES色を維持する
+    std::optional<std::array<float, 3>> object_color;
+    /// @brief 金属度 [0,1]
+    float metallic;
+    /// @brief 表面粗さ [0,1]
+    float roughness;
+};
+
+/// @brief 選択肢として提示する色の系統の一覧
+/// @note 先頭(インデックス0)は元のIGES色・標準マットへ戻すための既定系統
+const std::vector<ColorScheme> kColorSchemes = {
+    {"IGES Default", "元のIGES色・標準マット", std::nullopt,            0.0f, 0.5f},
+    {"Steel",        "鋼/シルバー金属",  {{0.60f, 0.62f, 0.65f}},      1.0f, 0.35f},
+    {"Gold",         "ゴールド金属",     {{1.00f, 0.78f, 0.34f}},      1.0f, 0.30f},
+    {"Copper",       "銅/ブロンズ金属",  {{0.95f, 0.55f, 0.35f}},      1.0f, 0.35f},
+    {"Plastic Red",  "つや消し赤樹脂",   {{0.85f, 0.15f, 0.12f}},      0.0f, 0.45f},
+    {"Plastic Blue", "つや消し青樹脂",   {{0.18f, 0.35f, 0.85f}},      0.0f, 0.40f},
+};
 
 /// @brief GLFWのマウスボタン定数をMouseButtonへ変換する
 MouseButton ToMouseButton(const int glfw_button) {
@@ -157,7 +186,7 @@ IgesViewerGUI::IgesViewerGUI(
     renderer_.EnableTransparency(true);
 
     // 空のSceneを生成し、レンダラへ束ねる (ロード時にBindSceneRootで差し替える)
-    scene_ = std::make_unique<models::Scene>(std::make_shared<models::Assembly>());
+    scene_ = std::make_unique<models::Scene>(models::MakeAssembly());
     renderer_.SetScene(scene_.get());
 }
 
@@ -240,23 +269,24 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
     try {
         iges_data_ = igesio::ReadIges(filename);
 
-        // 既存の描画オブジェクト・キャッシュをクリア
-        for (auto& p : entities_) {
-            for (auto& entity : p.second) renderer_.RemoveEntity(entity->GetID());
-        }
+        // UI側のキャッシュをクリア (描画オブジェクトはレンダラがツリーとの
+        // 突き合わせで自動破棄・生成するため、手動のRemove/Addは不要)
         entities_.clear();
         show_entity_.clear();
         focused_assembly_id_ = std::nullopt;
         selected_hit_positions_.clear();
         last_edit_status_.clear();
 
-        // エンティティを取得してレンダラ・キャッシュへ追加
+        // 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
         for (const auto& pair : iges_data_.Root().GetEntities()) {
-            AddEntity(pair.second);
+            CacheEntityType(pair.second);
         }
+        ApplyDisplayFilter();
 
         // シーンをモデルのrootへ束ねる (描画時にツリーを走査させる)
         BindSceneRoot(iges_data_.RootPtr());
+        // 読み込んだエンティティへ現在の色の系統(物体色＋材質)を反映する
+        ApplyColorScheme();
         renderer_.Camera().Reset();
         // 起動後の初回読み込み時のみ、モデル全体を自動でフィットする
         if (!initial_fit_done_) {
@@ -270,7 +300,8 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
     }
 }
 
-void IgesViewerGUI::AddEntity(std::shared_ptr<entities::EntityBase> entity) {
+void IgesViewerGUI::CacheEntityType(
+        const std::shared_ptr<entities::EntityBase>& entity) {
     if (!entity->IsSupported()) {
         std::cerr << "Entity type " << ToString(entity->GetType())
                   << " is not supported." << std::endl;
@@ -295,23 +326,37 @@ void IgesViewerGUI::AddEntity(std::shared_ptr<entities::EntityBase> entity) {
         return;
     }
 
-    if (!renderer_.AddEntity(entity)) {
-        std::cerr << "Failed to add entity " << entity->GetID() << std::endl;
-        return;
-    }
     entities_[type].push_back(entity);
     show_entity_[type] = true;
 }
 
-void IgesViewerGUI::UpdateEntities() {
-    for (auto& p : show_entity_) {
-        const bool show = p.second;
-        for (auto& entity : entities_[p.first]) {
-            if (show) {
-                renderer_.AddEntity(entity);
-            } else {
-                renderer_.RemoveEntity(entity->GetID());
-            }
+void IgesViewerGUI::ApplyDisplayFilter() {
+    // 型別表示フラグをレンダラの表示フィルタへ変換する
+    // (除外型の描画オブジェクトはレンダラ側で温存され、再表示は安価)
+    graphics::DisplayFilter filter;
+    for (const auto& p : show_entity_) {
+        if (!p.second) filter.hidden_types.insert(p.first);
+    }
+    renderer_.SetDisplayFilter(filter);
+    needs_redraw_ = true;
+}
+
+void IgesViewerGUI::ApplyColorScheme() {
+    if (!scene_) return;
+    const auto& scheme = kColorSchemes[color_scheme_index_];
+
+    // 物体色: rootのオーバーライドとして設定する (個別ノードの色は最近接優先で
+    //         温存される). nullopt の系統は元のIGES色へ戻す
+    scene_->Root().SetColorOverride(scheme.object_color);
+
+    // 材質: 面単位でしか設定できないため、表示対象の面エンティティへ個別適用する
+    for (const auto& [type, list] : entities_) {
+        for (const auto& entity : list) {
+            if (!std::dynamic_pointer_cast<const entities::ISurface>(entity)) continue;
+            MaterialProperty mp;  // ao/opacity/textureは既定値
+            mp.metallic = scheme.metallic;
+            mp.roughness = scheme.roughness;
+            renderer_.SetMaterialProperty(entity->GetID(), mp);
         }
     }
     needs_redraw_ = true;
@@ -340,19 +385,15 @@ void IgesViewerGUI::OnModelEdited() {
             ++it;
         }
     }
-    // ツリーから消えたエンティティの描画オブジェクトを除去し、型別キャッシュも剪定する
+    // ツリーから消えたエンティティの型別キャッシュ (UI用) を剪定する
+    // (描画オブジェクトはレンダラのSweepが自動で破棄する)
     for (auto& p : entities_) {
         auto& vec = p.second;
         vec.erase(std::remove_if(vec.begin(), vec.end(),
                 [&](const std::shared_ptr<entities::EntityBase>& e) {
-                    if (scene_->Root().FindOwner(e->GetID()) != nullptr) {
-                        return false;
-                    }
-                    renderer_.RemoveEntity(e->GetID());
-                    return true;
+                    return scene_->Root().FindOwner(e->GetID()) == nullptr;
                 }), vec.end());
     }
-    renderer_.MarkSceneDirty();
     needs_redraw_ = true;
 }
 
@@ -432,6 +473,21 @@ void IgesViewerGUI::RenderMenuBar() {
                               renderer_.GetBackgroundColorRef().data())) {
             needs_redraw_ = true;
         }
+        // 色の系統 (物体色＋材質のプリセット) を選ぶ
+        if (ImGui::BeginCombo("Color Scheme",
+                              kColorSchemes[color_scheme_index_].name)) {
+            for (int i = 0; i < static_cast<int>(kColorSchemes.size()); ++i) {
+                const bool selected = (i == color_scheme_index_);
+                if (ImGui::Selectable(kColorSchemes[i].name, selected)) {
+                    color_scheme_index_ = i;
+                    ApplyColorScheme();
+                }
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", kColorSchemes[i].tooltip);
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
         bool aa = renderer_.IsAntialiasingEnabled();
         if (ImGui::MenuItem("Antialiasing", nullptr, &aa)) {
             renderer_.EnableAntialiasing(aa);
@@ -446,7 +502,7 @@ void IgesViewerGUI::RenderMenuBar() {
         if (ImGui::BeginMenu("Filters")) {
             if (ImGui::Checkbox("Show All", &show_all_)) {
                 for (auto& p : show_entity_) p.second = show_all_;
-                UpdateEntities();
+                ApplyDisplayFilter();
             }
             ImGui::Separator();
             bool changed = false;
@@ -456,7 +512,7 @@ void IgesViewerGUI::RenderMenuBar() {
                     if (show_all_ && !p.second) show_all_ = false;
                 }
             }
-            if (changed) UpdateEntities();
+            if (changed) ApplyDisplayFilter();
             ImGui::EndMenu();
         }
         ImGui::EndMenu();
@@ -603,10 +659,9 @@ void IgesViewerGUI::RenderAssemblyNode(models::Assembly& node) {
     ImGui::PushID(node.GetID().ToInt());
 
     // 可視チェック (このノードのサブツリー表示をトグル)
-    bool visible = node.Metadata().visible;
+    bool visible = node.Display().visible;
     if (ImGui::Checkbox("##vis", &visible)) {
-        node.Metadata().visible = visible;
-        renderer_.MarkSceneDirty();
+        node.SetVisible(visible);
         needs_redraw_ = true;
     }
     ImGui::SameLine();
@@ -731,10 +786,8 @@ void IgesViewerGUI::RenderNodeContextMenu(models::Assembly& node) {
     models::Assembly* np = &node;
     if (ImGui::MenuItem("New child")) {
         pending_action_ = [this, np]() {
-            auto created = std::make_shared<models::Assembly>();
-            created->Metadata().name = "Assembly";
+            auto created = models::MakeAssembly("Assembly");
             np->AddChildAssembly(created);
-            renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         };
     }
@@ -838,50 +891,46 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     }
 
     // 可視・抑制
-    bool node_visible = node.Metadata().visible;
+    bool node_visible = node.Display().visible;
     if (ImGui::Checkbox("Visible", &node_visible)) {
         node.SetVisibleRecursive(node_visible);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
-    bool node_suppressed = node.Metadata().suppressed;
+    bool node_suppressed = node.Display().suppressed;
     if (ImGui::Checkbox("Suppressed", &node_suppressed)) {
         node.SetSuppressedRecursive(node_suppressed);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
 
     // 色オーバーライド
-    bool has_color = node.Metadata().color_override.has_value();
+    bool has_color = node.Display().color_override.has_value();
     if (ImGui::Checkbox("Color override", &has_color)) {
-        node.Metadata().color_override = has_color
+        node.SetColorOverride(has_color
                 ? std::optional<std::array<float, 3>>(
                         std::array<float, 3>{0.8f, 0.8f, 0.8f})
-                : std::nullopt;
-        renderer_.MarkSceneDirty();
+                : std::nullopt);
         needs_redraw_ = true;
     }
-    if (node.Metadata().color_override.has_value()) {
-        if (ImGui::ColorEdit3("##color",
-                              node.Metadata().color_override->data())) {
-            renderer_.MarkSceneDirty();
+    if (node.Display().color_override.has_value()) {
+        // setter経由で書き戻すため、編集はローカルコピーで受ける
+        std::array<float, 3> color = *node.Display().color_override;
+        if (ImGui::ColorEdit3("##color", color.data())) {
+            node.SetColorOverride(color);
             needs_redraw_ = true;
         }
     }
 
     // 不透明度オーバーライド
-    bool has_opacity = node.Metadata().opacity_override.has_value();
+    bool has_opacity = node.Display().opacity_override.has_value();
     if (ImGui::Checkbox("Opacity override", &has_opacity)) {
-        node.Metadata().opacity_override =
-                has_opacity ? std::optional<float>(1.0f) : std::nullopt;
-        renderer_.MarkSceneDirty();
+        node.SetOpacityOverride(
+                has_opacity ? std::optional<float>(1.0f) : std::nullopt);
         needs_redraw_ = true;
     }
-    if (node.Metadata().opacity_override.has_value()) {
-        float opacity = *node.Metadata().opacity_override;
+    if (node.Display().opacity_override.has_value()) {
+        float opacity = *node.Display().opacity_override;
         if (ImGui::SliderFloat("##opacity", &opacity, 0.0f, 1.0f)) {
-            node.Metadata().opacity_override = opacity;
-            renderer_.MarkSceneDirty();
+            node.SetOpacityOverride(opacity);
             needs_redraw_ = true;
         }
     }
@@ -901,7 +950,6 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
         m(1, 3) = translate[1];
         m(2, 3) = translate[2];
         node.ComposeGlobalTransform(m);
-        renderer_.MarkSceneDirty();
         needs_redraw_ = true;
     }
 
@@ -911,10 +959,8 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     models::Assembly* np = &node;
     if (ImGui::Button("New child")) {
         pending_action_ = [this, np]() {
-            auto created = std::make_shared<models::Assembly>();
-            created->Metadata().name = "Assembly";
+            auto created = models::MakeAssembly("Assembly");
             np->AddChildAssembly(created);
-            renderer_.MarkSceneDirty();
             needs_redraw_ = true;
         };
     }
@@ -983,8 +1029,7 @@ void IgesViewerGUI::GroupSelectionIntoNewAssembly() {
     models::Assembly* parent = FocusedNode();
     if (parent == nullptr) parent = &root;
 
-    auto group = std::make_shared<models::Assembly>();
-    group->Metadata().name = "Group";
+    auto group = models::MakeAssembly("Group");
     parent->AddChildAssembly(group);
 
     const std::vector<ObjectID> ids(sel.Items().begin(), sel.Items().end());

@@ -6,7 +6,7 @@
  * @copyright 2026 Yayoi Habami
  * @note 実際のGL呼び出しは行わず、要所 (uniform設定/draw呼び出し/プログラム使用) を記録する.
  *       CreateXx/GenXxは非ゼロのIDを返し、コンパイル/リンク状態は常に成功 (gl::kTrue) とすることで、
- *       GL文脈なしで`EntityRenderer::Initialize()`や`AddEntity()`を通せる.
+ *       GL文脈なしで`EntityRenderer::Initialize()`や`Draw()`を通せる.
  */
 #ifndef TESTS_GRAPHICS_MOCK_OPEN_GL_H_
 #define TESTS_GRAPHICS_MOCK_OPEN_GL_H_
@@ -39,6 +39,12 @@ class MockOpenGL : public IOpenGL {
     int draw_arrays_calls = 0;
     /// @brief DrawElementsの呼び出し回数
     int draw_elements_calls = 0;
+    /// @brief GenVertexArraysの呼び出し回数 (描画オブジェクト生成の観測用)
+    int gen_vertex_arrays_calls = 0;
+    /// @brief DeleteVertexArraysの呼び出し回数 (Sweep等のGPU資源解放の観測用)
+    int delete_vertex_arrays_calls = 0;
+    /// @brief BufferDataの呼び出し回数 (再テッセレーションの観測用)
+    int buffer_data_calls = 0;
 
 
 
@@ -126,8 +132,13 @@ class MockOpenGL : public IOpenGL {
     void VertexAttribPointer(gl::Uint, gl::Int, gl::Enum, gl::Boolean, gl::Sizei,
                              const void*) override {}
     void BindVertexArray(gl::Uint) override {}
-    void DeleteVertexArrays(gl::Sizei, const gl::Uint*) override {}
-    void GenVertexArrays(gl::Sizei n, gl::Uint* arrays) override { FillIds(n, arrays); }
+    void DeleteVertexArrays(gl::Sizei, const gl::Uint*) override {
+        ++delete_vertex_arrays_calls;
+    }
+    void GenVertexArrays(gl::Sizei n, gl::Uint* arrays) override {
+        ++gen_vertex_arrays_calls;
+        FillIds(n, arrays);
+    }
     void PatchParameteri(gl::Enum, gl::Int) override {}
 
 
@@ -138,7 +149,9 @@ class MockOpenGL : public IOpenGL {
 
     void BindBuffer(gl::Enum, gl::Uint) override {}
     void BindBufferBase(gl::Enum, gl::Uint, gl::Uint) override {}
-    void BufferData(gl::Enum, gl::Sizeiptr, const void*, gl::Enum) override {}
+    void BufferData(gl::Enum, gl::Sizeiptr, const void*, gl::Enum) override {
+        ++buffer_data_calls;
+    }
     void DeleteBuffers(gl::Sizei, const gl::Uint*) override {}
     void GenBuffers(gl::Sizei n, gl::Uint* buffers) override { FillIds(n, buffers); }
 

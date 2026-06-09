@@ -18,7 +18,7 @@
 
 #include <optional>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/graphics/core/camera.h"
 
 

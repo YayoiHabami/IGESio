@@ -9,10 +9,11 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -139,13 +140,12 @@ bool Line::IsClosed() const { return false; }
 std::optional<i_ent::CurveDerivatives>
 Line::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
     const auto range = GetParameterRange();
-    // パラメータtが定義域内にあるかチェック
-    if (t < range[0] || t > range[1]) {
-        return std::nullopt;
-    }
+    // パラメータtが定義域内にあるかチェック (境界の浮動小数点誤差を許容し域内へ丸める)
+    auto tc = i_num::TryClampToRange(t, range[0], range[1]);
+    if (!tc) return std::nullopt;
 
     CurveDerivatives result(n);
-    result[0] = start_point_ + t * (terminate_point_ - start_point_);  // C(t)
+    result[0] = start_point_ + *tc * (terminate_point_ - start_point_);  // C(t)
     if (n >= 1) {
         result[1] = terminate_point_ - start_point_;  // C'(t)
     }
@@ -228,4 +228,37 @@ std::pair<const Vector3d&, const Vector3d&> Line::GetDefinedAnchorPoints() const
 std::pair<const Vector3d, const Vector3d> Line::GetAnchorPoints() const {
     return {Transform(start_point_, true).value(),
             Transform(terminate_point_, true).value()};
+}
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<Line> i_ent::MakeLine(
+        const Vector3d& start_point, const Vector3d& terminate_point,
+        const LineType line_type) {
+    return std::make_shared<Line>(start_point, terminate_point, line_type);
+}
+
+std::shared_ptr<Line> i_ent::MakeRay(
+        const Vector3d& origin, const Vector3d& direction) {
+    // 方向が定まらないため、ゼロベクトルは不可
+    if (i_num::IsApproxZero(direction.norm(), i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeRay: Direction must not be a zero vector.");
+    }
+    return std::make_shared<Line>(
+            origin, origin + direction, LineType::kRay);
+}
+
+std::shared_ptr<Line> i_ent::MakeUnboundedLine(
+        const Vector3d& point, const Vector3d& direction) {
+    // 方向が定まらないため、ゼロベクトルは不可
+    if (i_num::IsApproxZero(direction.norm(), i_num::kGeometryTolerance)) {
+        throw igesio::EntityValueError(
+                "MakeUnboundedLine: Direction must not be a zero vector.");
+    }
+    return std::make_shared<Line>(
+            point, point + direction, LineType::kLine);
 }

@@ -1,11 +1,11 @@
 # Numerics module
 add_library(igesio_numerics STATIC
-    tolerance.cpp
-    integration.cpp
-    combinatorics.cpp
-    bounding_box.cpp
-    polygon.cpp
-    optimize.cpp
+    core/tolerance.cpp
+    core/combinatorics.cpp
+    analysis/integration.cpp
+    analysis/optimization.cpp
+    geometric/bounding_box.cpp
+    geometric/polygon.cpp
 )
 
 # Set the source and include directories

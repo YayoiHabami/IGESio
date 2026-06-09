@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -18,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/entity_base.h"
@@ -28,6 +31,49 @@
 
 
 namespace igesio::graphics {
+
+/// @brief 同期キーへ (ObjectID, GeometryRevision) を順序通りに結合する
+/// @param seed 現在のキー値
+/// @param entity 結合するエンティティ
+/// @return 結合後のキー値
+/// @note boost::hash_combine方式. リビジョンの総和では参照先交換時に増減が
+///       相殺しうるため、同一性(ID)と値(rev)をハッシュで畳み込む
+inline uint64_t CombineGeometryKey(uint64_t seed,
+                                   const entities::IEntityIdentifier& entity) {
+    constexpr uint64_t kGolden = 0x9e3779b97f4a7c15ULL;
+    seed ^= std::hash<ObjectID>{}(entity.GetID())
+            + kGolden + (seed << 6) + (seed >> 2);
+    seed ^= entity.GeometryRevision() + kGolden + (seed << 6) + (seed >> 2);
+    return seed;
+}
+
+/// @brief エンティティ自身・DE変換チェーン・物理従属子を再帰的にキーへ結合する
+/// @param seed 現在のキー値
+/// @param entity 起点エンティティ
+/// @return 結合後のキー値
+/// @note テッセレーションが読む参照先 (DE変換行列・複合曲線の子・トリム面の境界・
+///       ルールド面の子曲線等) の形状変更を、親グラフィックスの再同期要否として
+///       検知するための走査. DE変換チェーンの循環はSetReference側で防止済み.
+///       物理従属はDAGであり循環しない前提
+inline uint64_t CombineGeometryKeyRecursive(
+        uint64_t seed, const entities::IEntityIdentifier& entity) {
+    seed = CombineGeometryKey(seed, entity);
+    const auto* base = dynamic_cast<const entities::EntityBase*>(&entity);
+    if (base == nullptr) return seed;
+
+    // DE変換チェーン (共有TransformationMatrixの編集を参照元の再同期として検知)
+    for (auto t = base->GetTransformationMatrix().GetPointer();
+         t != nullptr; t = t->GetRefTransformation()) {
+        seed = CombineGeometryKey(seed, *t);
+    }
+    // 物理従属子 (未解決参照はスキップ. 解決時は集合の変化としてキーに現れる)
+    for (const auto& cid : base->GetChildIDs()) {
+        if (const auto child = base->GetChildEntity(cid)) {
+            seed = CombineGeometryKeyRecursive(seed, *child);
+        }
+    }
+    return seed;
+}
 
 /// @brief エンティティの描画情報を管理するクラス
 /// @tparam T エンティティの型
@@ -72,8 +118,8 @@ class EntityGraphics : public IEntityGraphics {
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
     /// @throw std::invalid_argument entityがnullptrの場合
-    EntityGraphics(const std::shared_ptr<const T> entity,
-                   const std::shared_ptr<IOpenGL> gl,
+    EntityGraphics(const std::shared_ptr<const T>& entity,
+                   const std::shared_ptr<IOpenGL>& gl,
                    ShaderType shader_type,
                    bool use_entity_transform)
             : IEntityGraphics(gl, use_entity_transform),
@@ -154,6 +200,16 @@ class EntityGraphics : public IEntityGraphics {
     /// @return 描画オブジェクトのID
     const ObjectID& GetGraphicsID() const override {
         return graphics_id_;
+    }
+
+    /// @brief 現在の同期キーを計算する
+    /// @return 自エンティティ+DE変換チェーン+物理従属子(再帰)の
+    ///         (ObjectID, GeometryRevision) ハッシュ結合
+    /// @note 複合系 (CompositeCurve/CurveOnSurface/TrimmedSurface) の参照先も
+    ///       GetChildIDs経由で結合されるため、通常はオーバーライド不要
+    uint64_t CurrentGeometryKey() const override {
+        if (!entity_) return 0;
+        return CombineGeometryKeyRecursive(0, *entity_);
     }
 
     /// @brief エンティティの描画を行う
@@ -293,16 +349,17 @@ class EntityGraphics : public IEntityGraphics {
     /// @brief グローバル座標系への変換行列を設定する
     /// @param matrix グローバル座標系への変換行列 (親→モデル空間)
     /// @note 子要素 (複合ノード) を持つ場合は、matrix·M_entityを子へ伝播する.
-    void SetWorldTransform(const igesio::Matrix4f& matrix) override {
+    void SetWorldTransform(const igesio::Matrix4d& matrix) override {
         world_transform_ = matrix;
         if (child_graphics_.empty()) return;
 
-        // 子要素には matrix·M_entity を伝播する (M_entityは各子が自前で扱わない前提)
-        igesio::Matrix4f child_transform = matrix;
+        // 子要素には matrix·M_entity を伝播する (M_entityは各子が自前で扱わない前提).
+        // 単精度往復による誤差累積を避けるため、伝播はdoubleで行う
+        igesio::Matrix4d child_transform = matrix;
         if (auto ptr =
                 std::dynamic_pointer_cast<const entities::EntityBase>(entity_)) {
-            const igesio::Matrix4f m_entity = ptr->GetTransformationMatrix()
-                    .GetTransformation().template cast<float>();
+            const igesio::Matrix4d m_entity = ptr->GetTransformationMatrix()
+                    .GetTransformation();
             child_transform = matrix * m_entity;
         }
         for (auto& [st, list] : child_graphics_) {
@@ -312,22 +369,31 @@ class EntityGraphics : public IEntityGraphics {
         }
     }
 
-    /// @brief グローバル座標系への変換行列を取得する
-    /// @return グローバル座標系への変換行列.
+    /// @brief グローバル座標系への変換行列をGPU用の単精度で取得する
+    /// @return グローバル座標系への変換行列 (float).
     ///         use_entity_transform_がtrueの場合は、
     ///         `SetWorldTransform`で設定された変換行列に
     ///         entity_が参照する変換行列を掛け合わせたものを返す.
+    /// @note CPU側の幾何計算 (BB・ピッキング等) では精度を失わないよう
+    ///       GetWorldTransformD() を使用すること.
     igesio::Matrix4f GetWorldTransform() const override {
+        // 単精度はGL境界でのみ生成する. 一時へのダングリング参照を避けるため、
+        // doubleの正準値を名前付きローカルに受けてから単精度へ変換する
+        const igesio::Matrix4d w = GetWorldTransformD();
+        return w.cast<float>();
+    }
+
+    /// @brief グローバル座標系への変換行列を倍精度で取得する (CPU幾何の正準値)
+    /// @return グローバル座標系への変換行列 (double).
+    ///         use_entity_transform_がtrueの場合は、
+    ///         `SetWorldTransform`で設定された変換行列に
+    ///         entity_が参照する変換行列を掛け合わせたものを返す.
+    igesio::Matrix4d GetWorldTransformD() const override {
         if (use_entity_transform_ && entity_) {
             auto ptr = std::dynamic_pointer_cast<const entities::EntityBase>(entity_);
             if (ptr) {
-                // entity_が参照する変換行列を掛け合わせる
-                // NOTE: cast<float>()は遅延評価式を返すため、autoで受けると
-                //       GetTransformation()が返す一時Matrix4dへのダングリング参照
-                //       となる (Release最適化時にUBで描画が破綻する)。具体型で
-                //       受けて一時が生存中に即時評価・コピーさせる。
-                const igesio::Matrix4f entity_transform = ptr->GetTransformationMatrix()
-                        .GetTransformation().template cast<float>();
+                const igesio::Matrix4d entity_transform =
+                        ptr->GetTransformationMatrix().GetTransformation();
                 return world_transform_ * entity_transform;
             }
         }
@@ -488,10 +554,10 @@ class EntityGraphics : public IEntityGraphics {
 
         if (!entity_) return {};
 
-        // world_transform_ (親->ワールド) をdoubleへ昇格して適用する
+        // world_transform_ (親->ワールド) を適用する
         // (GetWorldBoundingBoxと同じ規約. TryGetPointAtは親空間を返すため、
         //  これを掛けるとワールド座標になる)
-        const igesio::Matrix4d wt = world_transform_.cast<double>();
+        const igesio::Matrix4d& wt = world_transform_;
 
         if (const auto* surf =
                 dynamic_cast<const entities::ISurface*>(entity_.get())) {
@@ -521,9 +587,12 @@ class EntityGraphics : public IEntityGraphics {
         // GetBoundingBox()はエンティティ自身のDE変換を適用済み(親空間)。
         // world_transform_ (親→ワールド) を適用してワールド空間のBBを得る。
         auto bb = geom->GetBoundingBox();
-        const igesio::Matrix4d wt = world_transform_.cast<double>();
+        const igesio::Matrix4d& wt = world_transform_;
         const igesio::Matrix3d r = wt.block<3, 3>(0, 0);
         const igesio::Vector3d t = wt.block<3, 1>(0, 3);
+        // 回転成分が退化変換(スケール・せん断・射影等)の場合はBBを構成できないため、
+        // throwを越境させず深度推定のフォールバックに委ねる(constなピック経路の保護)。
+        if (!numerics::IsRotation(r)) return std::nullopt;
         bb.Transform(r, t);
         return bb;
     }

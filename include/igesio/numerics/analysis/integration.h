@@ -1,5 +1,5 @@
 /**
- * @file numerics/integration.h
+ * @file numerics/analysis/integration.h
  * @brief 数値積分に関するユーティリティ関数群
  * @author Yayoi Habami
  * @date 2025-10-20
@@ -7,14 +7,14 @@
  * @note 念のため個別手法用の関数（`GaussLegendreIntegrate`など）も公開APIとして提供するが、
  *       基本的には精度・計算コストの面で優位である、`Integrate`関数を使用することを推奨する.
  */
-#ifndef IGESIO_NUMERICS_INTEGRATION_H_
-#define IGESIO_NUMERICS_INTEGRATION_H_
+#ifndef IGESIO_NUMERICS_ANALYSIS_INTEGRATION_H_
+#define IGESIO_NUMERICS_ANALYSIS_INTEGRATION_H_
 
 #include <array>
 #include <functional>
 #include <limits>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 
 
@@ -100,4 +100,4 @@ double Integrate(const std::function<double(double, double)>&,
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_INTEGRATION_H_
+#endif  // IGESIO_NUMERICS_ANALYSIS_INTEGRATION_H_

@@ -8,9 +8,10 @@
 #ifndef IGESIO_ENTITIES_CURVES_PARAMETRIC_SPLINE_CURVE_H_
 #define IGESIO_ENTITIES_CURVES_PARAMETRIC_SPLINE_CURVE_H_
 
+#include <memory>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/entity_base.h"
 
@@ -36,14 +37,14 @@ enum class ParametricSplineCurveType {
 };
 
 /// @brief パラメトリックスプライン曲線エンティティ (Entity Type 112)
-/// @note 曲線の次数を H、セグメント数を N とする. パラメトリックスプライン曲線は
-///       それぞれ多項式で定義される N 個のセグメントから構成される. 各セグメント i
+/// @note 連続性の指標をH、セグメント数をNとする. パラメトリックスプライン曲線は
+///       それぞれ多項式で定義されるN個のセグメントから構成される. 各セグメントi
 ///       (0 <= i <= N-1) は、パラメータ範囲 T(i) <= u < T(i+1) で定義され、s=u-T(i)
 ///       を用いて、曲線上の点 C(u) = (x(u), y(u), z(u)) は以下のように表される.
 ///       $p(u) = A_p(i) + s * B_p(i) + s^2 * C_p(i) + s^3 * D_p(i)$ (p = x, y, z)
-///       ここで、A_p(i), B_p(i), C_p(i), D_p(i) はそれぞれセグメント i における
-///       p成分の多項式係数である. H=1の場合、C_p(i) = D_p(i) = 0、
-///       H=2の場合、D_p(i) = 0 となる.
+///       ここで、A_p(i), B_p(i), C_p(i), D_p(i) はそれぞれセグメントiにおける
+///       p成分の多項式係数である. 多項式の次数が1の場合は C_p(i) = D_p(i) = 0、
+///       次数が2の場合は D_p(i) = 0 とする (規格の格納規約).
 class ParametricSplineCurve : public EntityBase, public virtual ICurve3D {
  private:
     /// @brief 曲線の種類 (CTYPE)
@@ -115,6 +116,25 @@ class ParametricSplineCurve : public EntityBase, public virtual ICurve3D {
     /// @throw std::invalid_argument iges_idがUnsetIDではなく、かつ
     ///        de_record.sequence_numberがReservedされていない場合
     explicit ParametricSplineCurve(const IGESParameterVector&);
+
+    /// @brief 型付きパラメータから生成するコンストラクタ
+    /// @param curve_type 曲線の種類 (CTYPE)
+    /// @param degree 連続性の指標 H (0 <= H <= 3)
+    /// @param breakpoints ブレークポイント T(1), ..., T(N+1)
+    ///        (サイズ N+1; 狭義単調増加)
+    /// @param coefficients 各セグメントの多項式係数 (サイズ N; 各要素は
+    ///        列が A, B, C, D、行が x, y, z の 3x4 行列)
+    /// @param n_dim 次元 (平面上の曲線は2、3次元曲線は3)
+    /// @note 末端 u=T(N+1) における関数値~3次導関数値 (TP値) は、
+    ///       最終セグメントの係数から自動計算される
+    /// @throw igesio::EntityValueError coefficientsが空の場合、
+    ///        breakpointsのサイズがN+1でない場合、
+    ///        breakpointsが狭義単調増加でない場合、degreeが3を超える場合、
+    ///        またはn_dimが2でも3でもない場合
+    ParametricSplineCurve(ParametricSplineCurveType, unsigned int,
+                          const std::vector<double>&,
+                          const std::vector<Matrix34d>&,
+                          unsigned int = 3);
 
     /// @brief 曲線の種類
     /// @return 曲線の種類 (ParametricSplineCurveType)
@@ -231,6 +251,43 @@ class ParametricSplineCurve : public EntityBase, public virtual ICurve3D {
     std::optional<std::pair<unsigned int, double>>
     FindSegmentIndex(const double t) const;
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief パラメトリックスプライン曲線を作成する
+/// @param curve_type 曲線の種類 (CTYPE)
+/// @param degree 連続性の指標 H (0 <= H <= 3)
+/// @param breakpoints ブレークポイント T(1), ..., T(N+1)
+///        (サイズ N+1; 狭義単調増加)
+/// @param coefficients 各セグメントの多項式係数 (サイズ N; 各要素は
+///        列が A, B, C, D、行が x, y, z の 3x4 行列)
+/// @param n_dim 次元 (平面上の曲線は2、3次元曲線は3)
+/// @return 作成されたParametricSplineCurveのshared_ptr
+/// @note 末端のTP値は最終セグメントの係数から自動計算される
+/// @throw igesio::EntityValueError コンストラクタと同条件
+std::shared_ptr<ParametricSplineCurve> MakeParametricSplineCurve(
+        ParametricSplineCurveType curve_type, unsigned int degree,
+        const std::vector<double>& breakpoints,
+        const std::vector<Matrix34d>& coefficients,
+        unsigned int n_dim = 3);
+
+/// @brief 通過点と接線ベクトルから3次スプライン曲線を作成する
+/// @param points 通過点 P(1), ..., P(N+1)
+/// @param tangents 各通過点における接線ベクトル (パラメータuに関する1次導関数)
+/// @param breakpoints 各通過点に対応するパラメータ値 (狭義単調増加)
+/// @return 作成されたParametricSplineCurveのshared_ptr
+///         (CTYPE=kCubic, H=1; 隣接セグメントが接線を共有するため勾配連続)
+/// @throw igesio::EntityValueError pointsが2点未満の場合、
+///        points/tangents/breakpointsのサイズが一致しない場合、
+///        またはbreakpointsが狭義単調増加でない場合
+std::shared_ptr<ParametricSplineCurve> MakeCubicSplineCurve(
+        const std::vector<Vector3d>& points,
+        const std::vector<Vector3d>& tangents,
+        const std::vector<double>& breakpoints);
 
 }  // namespace igesio::entities
 

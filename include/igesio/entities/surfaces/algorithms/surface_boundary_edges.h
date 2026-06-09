@@ -20,7 +20,7 @@
 
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/entities/interfaces/i_restricted_surface.h"
 
@@ -64,6 +64,17 @@ SurfaceBoundaryEdges ComputeRestrictedSurfaceEdges(
 ///       include_seams=falseかつ IsUClosed()/IsVClosed() の方向は両端辺を除外する。
 /// @note 無限のパラメータ範囲は有限値にクランプされる。
 SurfaceBoundaryEdges ComputeParametricSurfaceEdges(
+        const ISurface&, const SurfaceBoundaryEdgeParams& = {});
+
+/// @brief スイープ系曲面の折り目に沿う内部稜線エッジを生成する
+/// @param surface 曲面
+/// @param params 生成パラメータ
+/// @return 各u方向折り目u_cにおけるv方向アイソ曲線 S(u_c, v) の折れ線群
+/// @note ISurface::GetUCreaseParameters() が返す角パラメータのうち、パラメータ
+///       矩形の内部 (u0 < u_c < u1) のもののみを対象とする (端は境界辺と重複)。
+///       角を持たない曲面 (既定で空) では空を返す。境界辺とは別概念のため、
+///       描画側で境界エッジへ連結して用いる。
+SurfaceBoundaryEdges ComputeSurfaceCreaseEdges(
         const ISurface&, const SurfaceBoundaryEdgeParams& = {});
 
 }  // namespace igesio::entities

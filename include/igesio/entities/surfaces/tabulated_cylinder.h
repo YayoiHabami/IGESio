@@ -14,11 +14,12 @@
 #define IGESIO_ENTITIES_SURFACES_TABULATED_CYLINDER_H_
 
 #include <memory>
+#include <optional>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/entities/entity_base.h"
@@ -146,6 +147,14 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @brief 母線の方向ベクトルを取得する
     /// @return 母線の方向ベクトル (非単位ベクトル)
     Vector3d GetDirection() const;
+    /// @brief 定義空間における母線の方向ベクトルを取得する (非throw版)
+    /// @return 母線の方向ベクトル (非単位ベクトル);
+    ///         準線が未設定または始点が取得できない場合はstd::nullopt
+    std::optional<Vector3d> TryGetDefinedDirection() const;
+    /// @brief 親の空間における母線の方向ベクトルを取得する
+    /// @return 変換行列適用後 (v' = Rv) の方向ベクトル;
+    ///         準線が未設定または始点が取得できない場合はstd::nullopt
+    std::optional<Vector3d> TryGetDirection() const;
 
 
 
@@ -187,6 +196,11 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     ///       `std::numeric_limits<double>::infinity()`となる
     std::array<double, 4> GetParameterRange() const override;
 
+    /// @brief u方向(準線方向)に折れ目があるパラメータuの一覧を返す
+    /// @return 準線(directrix)の角点をu∈[0,1]へ写像した値. 準線未設定や
+    ///         パラメータ範囲が無限・退化の場合は空
+    std::vector<double> GetUCreaseParameters() const override;
+
     /// @brief 定義空間におけるサーフェスの偏導関数 S^(i,j)(u, v) を計算する
     /// @param u パラメータ値 u
     /// @param v パラメータ値 v
@@ -222,6 +236,35 @@ class TabulatedCylinder : public EntityBase, public virtual ISurface {
     /// @return 準線C(t)のパラメータ値 t
     double GetDirectrixParameterAtU(const double) const;
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 準線と母線の終点から平行曲面を作成する
+/// @param directrix 準線 C(t)
+/// @param location_vector 母線の終点 (LX, LY, LZ) の位置ベクトル
+/// @return 作成されたTabulatedCylinderのshared_ptr
+/// @throw std::invalid_argument directrixがnullptrの場合
+/// @throw igesio::EntityValueError 準線の始点とlocation_vectorが一致する場合
+/// @note 準線のSubordinateEntitySwitchはkPhysicallyDependentに設定される
+std::shared_ptr<TabulatedCylinder> MakeTabulatedCylinder(
+        const std::shared_ptr<ICurve>& directrix,
+        const Vector3d& location_vector);
+
+/// @brief 準線を押し出して平行曲面を作成する
+/// @param directrix 準線 C(t) (始点が取得できる曲線であること)
+/// @param extrusion 押し出しベクトル; 母線の終点はC(0) + extrusionとなる
+/// @return 作成されたTabulatedCylinderのshared_ptr
+/// @throw std::invalid_argument directrixがnullptrの場合、
+///        または準線の始点が取得できない場合
+/// @throw igesio::EntityValueError extrusionがゼロベクトルの場合
+/// @note 準線のSubordinateEntitySwitchはkPhysicallyDependentに設定される
+std::shared_ptr<TabulatedCylinder> MakeExtrudedSurface(
+        const std::shared_ptr<ICurve>& directrix,
+        const Vector3d& extrusion);
 
 }  // namespace igesio::entities
 

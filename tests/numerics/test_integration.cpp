@@ -1,6 +1,6 @@
 /**
  * @file numerics/test_integration.cpp
- * @brief numerics/integration.hのテスト
+ * @brief numerics/analysis/integration.hのテスト
  * @author Yayoi Habami
  * @date 2025-10-20
  * @copyright 2025 Yayoi Habami
@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/integration.h"
+#include "igesio/numerics/analysis/integration.h"
 
 namespace {
 

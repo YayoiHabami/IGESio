@@ -1,6 +1,6 @@
 /**
  * @file numerics/test_constexpr_math.cpp
- * @brief numerics/constexpr_math.hのテスト
+ * @brief numerics/core/constexpr_math.hのテスト
  * @author Yayoi Habami
  * @date 2025-10-20
  * @copyright 2025 Yayoi Habami
@@ -10,7 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "igesio/numerics/constexpr_math.h"
+#include "igesio/numerics/core/constexpr_math.h"
 
 namespace {
 

@@ -19,7 +19,7 @@
 
 #include "mock_open_gl.h"
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/composite_curve.h"
 #include "igesio/entities/curves/line.h"
 #include "igesio/graphics/core/draw_context.h"
@@ -38,12 +38,11 @@ using i_graph::ShaderType;
 /// @brief 2本の線分(直角折れ)からなるCompositeCurveを生成する
 /// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment
 std::shared_ptr<i_ent::CompositeCurve> MakeCompositeOfSegments() {
-    auto cc = std::make_shared<i_ent::CompositeCurve>();
-    cc->AddCurve(std::make_shared<i_ent::Line>(
-        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<i_ent::Line>(
-        igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(
+            igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}),
+        i_ent::MakeLine(
+            igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0})});
 }
 
 }  // namespace

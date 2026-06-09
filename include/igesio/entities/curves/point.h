@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_subfigure_definition.h"
 #include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/entities/entity_base.h"
@@ -102,7 +102,10 @@ class Point : public EntityBase, public virtual IGeometry {
 
     /// @brief (定義空間における) 点の位置ベクトルを設定する
     /// @param position 点の位置ベクトル
-    void SetDefinedPosition(const Vector3d& position) { position_ = position; }
+    void SetDefinedPosition(const Vector3d& position) {
+        position_ = position;
+        MarkGeometryModified();
+    }
     /// @brief (定義空間における) 点の位置ベクトルを取得する
     /// @return 点の位置ベクトル
     const Vector3d& GetDefinedPosition() const { return position_; }
@@ -163,6 +166,18 @@ class Point : public EntityBase, public virtual IGeometry {
         return TransformImpl(input, is_point);
     }
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 点エンティティを作成する
+/// @param position 点の位置ベクトル
+/// @return 作成されたPointのshared_ptr
+/// @note 描画用サブフィギュアが必要な場合は、作成後にSetSubfigure()で設定する
+std::shared_ptr<Point> MakePoint(const Vector3d& position);
 
 }  // namespace igesio::entities
 

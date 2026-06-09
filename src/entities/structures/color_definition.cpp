@@ -7,7 +7,13 @@
  */
 #include "igesio/entities/structures/color_definition.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <iomanip>
 #include <limits>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -112,7 +118,8 @@ i_ent::ColorNumber ColorDef::GetClosestStandardColor(
     double min_distance = std::numeric_limits<double>::max();
     ColorNumber closest_color = ColorNumber::kNoColor;
 
-    for (int i = 1; i < 8; ++i) {
+    // 標準色 (kBlack=1 〜 kWhite=8) の全てを探索する
+    for (int i = 1; i <= 8; ++i) {
         const auto& color_vector = kColorVectors[static_cast<size_t>(i)];
         double distance = std::sqrt(std::pow(rgb[0] - color_vector[0], 2) +
                                     std::pow(rgb[1] - color_vector[1], 2) +
@@ -123,4 +130,88 @@ i_ent::ColorNumber ColorDef::GetClosestStandardColor(
         }
     }
     return closest_color;
+}
+
+void ColorDef::SetRGB(const std::array<double, 3>& rgb) {
+    // 検証はValidatePDと同じ範囲規則 ([0.0, 100.0]) を用いる
+    constexpr std::array<const char*, 3> kComponentNames = {"Red", "Green", "Blue"};
+    for (size_t i = 0; i < 3; ++i) {
+        if (rgb[i] < 0.0 || rgb[i] > 100.0) {
+            throw igesio::EntityValueError(
+                    std::string(kComponentNames[i]) +
+                    " component is out of range [0.0, 100.0].");
+        }
+    }
+    rgb_ = rgb;
+    // DEのColor Numberも最も近い標準色へ更新する (構築時の不変条件を維持)
+    de_color_.SetColor(GetClosestStandardColor(rgb_));
+}
+
+std::array<int, 3> ColorDef::GetRGB255() const {
+    std::array<int, 3> rgb255{};
+    for (size_t i = 0; i < 3; ++i) {
+        // 範囲外のRGB値 (不正なファイルの読み込み時等) は[0, 255]に飽和させる
+        const auto scaled = std::lround(rgb_[i] * 255.0 / 100.0);
+        rgb255[i] = static_cast<int>(std::clamp(scaled, 0L, 255L));
+    }
+    return rgb255;
+}
+
+std::string ColorDef::GetHexCode() const {
+    const auto rgb255 = GetRGB255();
+    std::ostringstream oss;
+    oss << '#' << std::hex << std::uppercase << std::setfill('0')
+        << std::setw(2) << rgb255[0]
+        << std::setw(2) << rgb255[1]
+        << std::setw(2) << rgb255[2];
+    return oss.str();
+}
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<ColorDef>
+i_ent::MakeColorDefinition(const std::array<double, 3>& rgb,
+                           const std::string& color_name) {
+    return std::make_shared<ColorDefinition>(rgb, color_name);
+}
+
+std::shared_ptr<ColorDef>
+i_ent::MakeColorDefinitionFromRGB255(const int r, const int g, const int b,
+                                     const std::string& color_name) {
+    for (const int component : {r, g, b}) {
+        if (component < 0 || component > 255) {
+            throw std::invalid_argument(
+                    "MakeColorDefinitionFromRGB255: components must be in"
+                    " range [0, 255], but got (" + std::to_string(r) + ", " +
+                    std::to_string(g) + ", " + std::to_string(b) + ").");
+        }
+    }
+    return std::make_shared<ColorDefinition>(
+            std::array<double, 3>{r * 100.0 / 255.0,
+                                  g * 100.0 / 255.0,
+                                  b * 100.0 / 255.0}, color_name);
+}
+
+std::shared_ptr<ColorDef>
+i_ent::MakeColorDefinitionFromHex(const std::string& hex_code,
+                                  const std::string& color_name) {
+    // 先頭の'#'は省略可能。6桁の16進数字のみを受け付ける
+    const std::string digits = (!hex_code.empty() && hex_code.front() == '#')
+            ? hex_code.substr(1) : hex_code;
+    const bool all_hex_digits = std::all_of(
+            digits.begin(), digits.end(),
+            [](const unsigned char c) { return std::isxdigit(c) != 0; });
+    if (digits.size() != 6 || !all_hex_digits) {
+        throw std::invalid_argument(
+                "MakeColorDefinitionFromHex: hex_code must be in the form"
+                " \"#RRGGBB\" or \"RRGGBB\", but got \"" + hex_code + "\".");
+    }
+    const int r = std::stoi(digits.substr(0, 2), nullptr, 16);
+    const int g = std::stoi(digits.substr(2, 2), nullptr, 16);
+    const int b = std::stoi(digits.substr(4, 2), nullptr, 16);
+    return MakeColorDefinitionFromRGB255(r, g, b, color_name);
 }

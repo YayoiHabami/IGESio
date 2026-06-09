@@ -17,6 +17,9 @@
  *                       Clear / MoveEntityTo / MoveChildAssemblyTo / Set*Recursive /
  *                       ComposeGlobalTransform / ValidateSelfContainedRecursive /
  *                       IsEffectivelyEditable (kReject/kCascade/kOrphan)
+ *   - リビジョン・表示状態 (Scene Reconcileフェーズ1): Revision / Display /
+ *                       SetVisible / SetSuppressed / SetColorOverride /
+ *                       SetOpacityOverride (バンプ配線・等値ガード・Metadata分割契約)
  *
  * 座標系・ビュー・WorldBB系 (ResolvePlacement/GetCurveView/GetSurfaceView/
  * GetWorldBoundingBox) は test_assembly_coords.cpp で扱う。
@@ -27,10 +30,15 @@
  * TODO: ロード済みルートのIsReady()/Validate().is_validは、エンティティ個別の厳密検証に
  *       依存し実ファイルでは偽となりうるため、現状は要求しない(読み込み時検証の緩和=
  *       docs/todo.md v0.7.x 後に強化する)。Assembly層の責務である参照解決のみ検証する。
+ * TODO: Revision系で未カバーのケース: 空ノードへのClearでもバンプされる挙動と
+ *       SetGlobalTransformの同値再設定時のバンプは、実装詳細(未規定)として固定しない。
+ *       root間サブツリー移動の両側バンプは、単独の移動APIがなくRemoveChildAssembly→
+ *       AddChildAssemblyの合成でのみ発生するため、各操作のテストで間接的にカバーする。
  */
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -52,6 +60,7 @@ namespace i_mdl = igesio::models;
 using igesio::ObjectID;
 using i_ent::EntityBase;
 using i_mdl::Assembly;
+using i_mdl::MakeAssembly;
 
 /// @brief テスト用IGESファイル (一辺が丸められた立方体; 124/142/144の相互参照を含む)
 const std::string kCubePath =
@@ -109,8 +118,8 @@ struct InboundFixture {
 std::optional<InboundFixture> MakeInboundTree(const Assembly& src) {
     auto pair = FindReferencingPair(src);
     if (!pair.has_value()) return std::nullopt;
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
     root->AddEntity(src.GetEntity(pair->first));    // referrer は root直下
     child->AddEntity(src.GetEntity(pair->second));  // referent は child内
@@ -344,8 +353,8 @@ TEST_F(AssemblyTest, AddEntities_EmptyVectorIsNoOp) {
 
 // AddChildAssemblyは親子リンクを張り、子リストに反映される
 TEST_F(AssemblyTest, AddChildAssembly_SetsParentAndAppendsChild) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
 
     EXPECT_EQ(child->GetParent().lock(), root);
@@ -355,16 +364,16 @@ TEST_F(AssemblyTest, AddChildAssembly_SetsParentAndAppendsChild) {
 
 // nullptrの子追加で例外
 TEST_F(AssemblyTest, AddChildAssembly_ThrowsInvalidArgumentWhenNull) {
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     const std::shared_ptr<Assembly> null_child;
     EXPECT_THROW(root->AddChildAssembly(null_child), std::invalid_argument);
 }
 
 // Rootは最上位ノードを返す (ルート自身は自分)
 TEST_F(AssemblyTest, Root_ReturnsTopmostAncestor) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
-    auto grandchild = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
+    auto grandchild = MakeAssembly();
     root->AddChildAssembly(child);
     child->AddChildAssembly(grandchild);
 
@@ -378,10 +387,10 @@ TEST_F(AssemblyTest, FindOwner_ResolvesEntityAfterReindex) {
     auto ents = Entities();
     ASSERT_GE(ents.size(), 2u);
 
-    auto child = std::make_shared<Assembly>();
+    auto child = MakeAssembly();
     const auto id = child->AddEntity(ents[0]);  // アタッチ前に追加
 
-    auto root = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
     root->AddChildAssembly(child);  // ここで再インデックスされる
 
     EXPECT_EQ(root->FindOwner(id), child.get());
@@ -401,8 +410,8 @@ TEST_F(AssemblyTest, GetEntityIDs_RecursiveTogglesDescendants) {
     ASSERT_GE(ents.size(), 2u);
 
     const size_t split = ents.size() / 2;
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     for (size_t i = 0; i < split; ++i) root->AddEntity(ents[i]);
     for (size_t i = split; i < ents.size(); ++i) child->AddEntity(ents[i]);
     root->AddChildAssembly(child);
@@ -417,8 +426,8 @@ TEST_F(AssemblyTest, FindEntities_RecursiveCountsMatchSubsets) {
     ASSERT_GE(ents.size(), 2u);
 
     const size_t split = ents.size() / 2;
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     for (size_t i = 0; i < split; ++i) root->AddEntity(ents[i]);
     for (size_t i = split; i < ents.size(); ++i) child->AddEntity(ents[i]);
     root->AddChildAssembly(child);
@@ -544,8 +553,8 @@ TEST_F(AssemblyTest, RemoveEntity_ReturnsFalseWhenAlreadyRemoved) {
 
 // RemoveEntity: 編集ロックされたノードのエンティティは削除を拒否する
 TEST_F(AssemblyTest, RemoveEntity_RejectsWhenLocked) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
     auto ents = Entities();
     ASSERT_FALSE(ents.empty());
@@ -572,8 +581,8 @@ TEST_F(AssemblyTest, RemoveChildAssembly_AllowsIntraSubtreeReferences) {
     ASSERT_TRUE(pair.has_value());
     const auto& [referrer_id, referent_id] = *pair;
 
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
     // referrer/referentの両方をchildに入れる(参照はサブツリー内で閉じる)
     child->AddEntity(data_->Root().GetEntity(referrer_id));
@@ -621,9 +630,9 @@ TEST_F(AssemblyTest, RemoveChildAssembly_CascadeRemovesOutsideReferrer) {
 
 // RemoveChildAssembly: 直接の子でないIDはfalse、直接の子は削除できる
 TEST_F(AssemblyTest, RemoveChildAssembly_OnlyTargetsDirectChildren) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
-    auto grandchild = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
+    auto grandchild = MakeAssembly();
     root->AddChildAssembly(child);
     child->AddChildAssembly(grandchild);
 
@@ -639,8 +648,8 @@ TEST_F(AssemblyTest, RemoveChildAssembly_OnlyTargetsDirectChildren) {
 TEST_F(AssemblyTest, Clear_RemovesEntitiesChildrenAndDeindexes) {
     auto ents = Entities();
     ASSERT_GE(ents.size(), 2u);
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
     const auto id0 = root->AddEntity(ents[0]);
     const auto id1 = child->AddEntity(ents[1]);
@@ -656,8 +665,8 @@ TEST_F(AssemblyTest, Clear_RemovesEntitiesChildrenAndDeindexes) {
 TEST_F(AssemblyTest, MoveEntityTo_ReparentsAndUpdatesOwner) {
     auto ents = Entities();
     ASSERT_FALSE(ents.empty());
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
     const auto id = root->AddEntity(ents[0]);
 
@@ -671,14 +680,14 @@ TEST_F(AssemblyTest, MoveEntityTo_ReparentsAndUpdatesOwner) {
 TEST_F(AssemblyTest, MoveEntityTo_ThrowsForDifferentRootOrUnknownId) {
     auto ents = Entities();
     ASSERT_GE(ents.size(), 2u);
-    auto root1 = std::make_shared<Assembly>();
-    auto root2 = std::make_shared<Assembly>();
+    auto root1 = MakeAssembly();
+    auto root2 = MakeAssembly();
     const auto id = root1->AddEntity(ents[0]);
 
     // 異なるルートへの移動は不可
     EXPECT_THROW(root1->MoveEntityTo(id, *root2), std::invalid_argument);
     // ツリーに無いIDの移動は不可
-    auto child = std::make_shared<Assembly>();
+    auto child = MakeAssembly();
     root1->AddChildAssembly(child);
     EXPECT_THROW(root1->MoveEntityTo(ents[1]->GetID(), *child),
                  std::invalid_argument);
@@ -688,9 +697,9 @@ TEST_F(AssemblyTest, MoveEntityTo_ThrowsForDifferentRootOrUnknownId) {
 TEST_F(AssemblyTest, MoveChildAssemblyTo_ReparentsChild) {
     auto ents = Entities();
     ASSERT_FALSE(ents.empty());
-    auto root = std::make_shared<Assembly>();
-    auto a = std::make_shared<Assembly>();
-    auto b = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto a = MakeAssembly();
+    auto b = MakeAssembly();
     root->AddChildAssembly(a);
     root->AddChildAssembly(b);
     const auto id = b->AddEntity(ents[0]);
@@ -706,9 +715,9 @@ TEST_F(AssemblyTest, MoveChildAssemblyTo_ReparentsChild) {
 
 // MoveChildAssemblyTo: 循環(子孫への移動)・非直接子は例外
 TEST_F(AssemblyTest, MoveChildAssemblyTo_ThrowsOnCycleOrNonDirectChild) {
-    auto root = std::make_shared<Assembly>();
-    auto a = std::make_shared<Assembly>();
-    auto b = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto a = MakeAssembly();
+    auto b = MakeAssembly();
     root->AddChildAssembly(a);
     a->AddChildAssembly(b);
 
@@ -728,66 +737,66 @@ TEST_F(AssemblyTest, MoveChildAssemblyTo_ThrowsOnCycleOrNonDirectChild) {
 
 // SetVisibleRecursive: 自ノードと全子孫へ適用される
 TEST_F(AssemblyTest, SetVisibleRecursive_AppliesToSelfAndDescendants) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
-    auto grandchild = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
+    auto grandchild = MakeAssembly();
     root->AddChildAssembly(child);
     child->AddChildAssembly(grandchild);
 
     root->SetVisibleRecursive(false);
-    EXPECT_FALSE(root->Metadata().visible);
-    EXPECT_FALSE(child->Metadata().visible);
-    EXPECT_FALSE(grandchild->Metadata().visible);
+    EXPECT_FALSE(root->Display().visible);
+    EXPECT_FALSE(child->Display().visible);
+    EXPECT_FALSE(grandchild->Display().visible);
 
     root->SetVisibleRecursive(true);
-    EXPECT_TRUE(grandchild->Metadata().visible);
+    EXPECT_TRUE(grandchild->Display().visible);
 }
 
 // SetSuppressedRecursive: 自ノードと全子孫へ適用される
 TEST_F(AssemblyTest, SetSuppressedRecursive_AppliesToSelfAndDescendants) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
 
     root->SetSuppressedRecursive(true);
-    EXPECT_TRUE(root->Metadata().suppressed);
-    EXPECT_TRUE(child->Metadata().suppressed);
+    EXPECT_TRUE(root->Display().suppressed);
+    EXPECT_TRUE(child->Display().suppressed);
 }
 
 // SetColorOverrideRecursive: 設定と解除(nullopt)が全子孫へ伝播する
 TEST_F(AssemblyTest, SetColorOverrideRecursive_AppliesAndClears) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
 
     const std::array<float, 3> red{1.0f, 0.0f, 0.0f};
     root->SetColorOverrideRecursive(red);
-    ASSERT_TRUE(child->Metadata().color_override.has_value());
-    EXPECT_EQ(child->Metadata().color_override.value(), red);
+    ASSERT_TRUE(child->Display().color_override.has_value());
+    EXPECT_EQ(child->Display().color_override.value(), red);
 
     root->SetColorOverrideRecursive(std::nullopt);
-    EXPECT_FALSE(root->Metadata().color_override.has_value());
-    EXPECT_FALSE(child->Metadata().color_override.has_value());
+    EXPECT_FALSE(root->Display().color_override.has_value());
+    EXPECT_FALSE(child->Display().color_override.has_value());
 }
 
 // SetOpacityOverrideRecursive: 設定と解除(nullopt)が全子孫へ伝播する
 TEST_F(AssemblyTest, SetOpacityOverrideRecursive_AppliesAndClears) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
 
     root->SetOpacityOverrideRecursive(0.5f);
-    ASSERT_TRUE(child->Metadata().opacity_override.has_value());
-    EXPECT_FLOAT_EQ(child->Metadata().opacity_override.value(), 0.5f);
+    ASSERT_TRUE(child->Display().opacity_override.has_value());
+    EXPECT_FLOAT_EQ(child->Display().opacity_override.value(), 0.5f);
 
     root->SetOpacityOverrideRecursive(std::nullopt);
-    EXPECT_FALSE(child->Metadata().opacity_override.has_value());
+    EXPECT_FALSE(child->Display().opacity_override.has_value());
 }
 
 // ComposeGlobalTransform: 親フレーム合成(left-multiply)で、子孫は再帰しない
 TEST_F(AssemblyTest, ComposeGlobalTransform_ComposesInParentFrameNonRecursive) {
-    auto root = std::make_shared<Assembly>();
-    auto child = std::make_shared<Assembly>();
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
     root->AddChildAssembly(child);
 
     // original: x方向に1並進, applied: Z軸90°回転 (非可換で順序を検証可能)
@@ -827,4 +836,294 @@ TEST_F(AssemblyTest, ValidateSelfContainedRecursive_DetectsCrossNodeReference) {
 
     // referrer(root直下)がreferent(child内)を参照 -> rootノードで未解決
     EXPECT_FALSE(fx->root->ValidateSelfContainedRecursive().is_valid);
+}
+
+
+
+/**
+ * モデルリビジョン・表示状態 (Scene Reconcile フェーズ1)
+ *
+ * NOTE: バンプ回数は検証しない (増加/不変のみ検証する). レンダラとの契約は
+ *       「変化の検知」であり、回数は実装詳細のため (例: RemoveCascadeは
+ *       削除件数分バンプする).
+ */
+
+// Revision: 新規Assemblyの初期値は0
+TEST_F(AssemblyTest, Revision_InitiallyZero) {
+    auto root = MakeAssembly();
+    EXPECT_EQ(root->Revision(), 0u);
+}
+
+// Revision: 非ルートノードはルートの値を返し、子経由の操作もルートへ集約される
+TEST_F(AssemblyTest, Revision_NonRootNodeReturnsRootValue) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
+    root->AddChildAssembly(child);
+
+    const auto before = root->Revision();
+    child->AddEntity(ents[0]);  // 子経由の構造変更
+    EXPECT_GT(root->Revision(), before);
+    EXPECT_EQ(child->Revision(), root->Revision());
+}
+
+// AddEntityでモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnAddEntity) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    root->AddEntity(ents[0]);
+    EXPECT_GT(root->Revision(), before);
+}
+
+// AddEntities(一括追加)でモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnAddEntities) {
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    root->AddEntities(Entities());
+    EXPECT_GT(root->Revision(), before);
+}
+
+// RemoveEntity(成功)でモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnRemoveEntity) {
+    auto root = MakeAssembly();
+    root->AddEntities(Entities());
+    const auto victim = FindUnreferenced(*root);
+    ASSERT_TRUE(victim.has_value()) << "被参照のないエンティティが見つからない";
+
+    const auto before = root->Revision();
+    ASSERT_TRUE(root->RemoveEntity(*victim));
+    EXPECT_GT(root->Revision(), before);
+}
+
+// AddChildAssemblyでモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnAddChildAssembly) {
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    root->AddChildAssembly(MakeAssembly());
+    EXPECT_GT(root->Revision(), before);
+}
+
+// RemoveChildAssembly(成功)でモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnRemoveChildAssembly) {
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
+    root->AddChildAssembly(child);
+
+    const auto before = root->Revision();
+    ASSERT_TRUE(root->RemoveChildAssembly(child->GetID()));
+    EXPECT_GT(root->Revision(), before);
+}
+
+// Clearでモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnClear) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = MakeAssembly();
+    root->AddEntity(ents[0]);
+
+    const auto before = root->Revision();
+    root->Clear();
+    EXPECT_GT(root->Revision(), before);
+}
+
+// MoveEntityTo(別ノードへの移動)でモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnMoveEntityTo) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
+    root->AddChildAssembly(child);
+    const auto id = root->AddEntity(ents[0]);
+
+    const auto before = root->Revision();
+    root->MoveEntityTo(id, *child);
+    EXPECT_GT(root->Revision(), before);
+}
+
+// MoveChildAssemblyTo(親の付け替え)でモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnMoveChildAssemblyTo) {
+    auto root = MakeAssembly();
+    auto a = MakeAssembly();
+    auto b = MakeAssembly();
+    root->AddChildAssembly(a);
+    root->AddChildAssembly(b);
+
+    const auto before = root->Revision();
+    root->MoveChildAssemblyTo(b->GetID(), *a);
+    EXPECT_GT(root->Revision(), before);
+}
+
+// SetGlobalTransform / ComposeGlobalTransform でモデルリビジョンが増加する
+TEST_F(AssemblyTest, Revision_BumpsOnTransformChange) {
+    auto root = MakeAssembly();
+    igesio::Matrix4d t = igesio::Matrix4d::Identity();
+    t(0, 3) = 1.0;  // x方向へ1並進
+
+    const auto before_set = root->Revision();
+    root->SetGlobalTransform(t);
+    EXPECT_GT(root->Revision(), before_set);
+
+    const auto before_compose = root->Revision();
+    root->ComposeGlobalTransform(t);
+    EXPECT_GT(root->Revision(), before_compose);
+}
+
+// AddEntityの例外(nullptr)経路ではバンプされない
+TEST_F(AssemblyTest, Revision_NoBumpWhenAddEntityThrows) {
+    auto root = MakeAssembly();
+    const std::shared_ptr<EntityBase> null_entity;
+
+    const auto before = root->Revision();
+    EXPECT_THROW(root->AddEntity(null_entity), std::invalid_argument);
+    EXPECT_EQ(root->Revision(), before);
+}
+
+// ツリーに属さないIDのRemoveEntityは失敗し、バンプされない
+TEST_F(AssemblyTest, Revision_NoBumpWhenRemoveEntityNotFound) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    EXPECT_FALSE(root->RemoveEntity(ents[0]->GetID()));
+    EXPECT_EQ(root->Revision(), before);
+}
+
+// 参照が残るエンティティのkReject削除は拒否され、バンプされない
+TEST_F(AssemblyTest, Revision_NoBumpWhenRemoveEntityRejected) {
+    auto pair = FindReferencingPair(data_->Root());
+    ASSERT_TRUE(pair.has_value()) << "参照を持つエンティティが見つからない";
+    auto root = MakeAssembly();
+    root->AddEntity(data_->Root().GetEntity(pair->first));
+    root->AddEntity(data_->Root().GetEntity(pair->second));
+
+    const auto before = root->Revision();
+    EXPECT_FALSE(root->RemoveEntity(pair->second));  // referrerが残存
+    EXPECT_EQ(root->Revision(), before);
+}
+
+// 編集ロック中のRemoveEntityは失敗し、バンプされない
+TEST_F(AssemblyTest, Revision_NoBumpWhenRemoveEntityLocked) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = MakeAssembly();
+    const auto id = root->AddEntity(ents[0]);
+    root->Metadata().lock.editable = false;  // ロックの編集自体は非バンプ
+
+    const auto before = root->Revision();
+    EXPECT_FALSE(root->RemoveEntity(id));
+    EXPECT_EQ(root->Revision(), before);
+}
+
+// 同一ownerへのMoveEntityTo(早期return)ではバンプされない
+TEST_F(AssemblyTest, Revision_NoBumpWhenMoveEntityToSameOwner) {
+    auto ents = Entities();
+    ASSERT_FALSE(ents.empty());
+    auto root = MakeAssembly();
+    const auto id = root->AddEntity(ents[0]);
+
+    const auto before = root->Revision();
+    root->MoveEntityTo(id, *root);  // 既に所属先のため無変更
+    EXPECT_EQ(root->Revision(), before);
+}
+
+// SetVisible: 値が変化したときのみバンプされる (等値ガード)
+TEST_F(AssemblyTest, SetVisible_BumpsOnlyOnChange) {
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    root->SetVisible(false);
+    const auto after_change = root->Revision();
+    EXPECT_GT(after_change, before);
+
+    root->SetVisible(false);  // 同値再設定
+    EXPECT_EQ(root->Revision(), after_change);
+}
+
+// SetSuppressed: 値が変化したときのみバンプされる (等値ガード)
+TEST_F(AssemblyTest, SetSuppressed_BumpsOnlyOnChange) {
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    root->SetSuppressed(true);
+    const auto after_change = root->Revision();
+    EXPECT_GT(after_change, before);
+
+    root->SetSuppressed(true);  // 同値再設定
+    EXPECT_EQ(root->Revision(), after_change);
+}
+
+// SetColorOverride: 値が変化したときのみバンプされる (nullopt→nulloptも非バンプ)
+TEST_F(AssemblyTest, SetColorOverride_BumpsOnlyOnChange) {
+    auto root = MakeAssembly();
+    const std::array<float, 3> red{1.0f, 0.0f, 0.0f};
+
+    // 初期状態(nullopt)への同値再設定は非バンプ
+    const auto initial = root->Revision();
+    root->SetColorOverride(std::nullopt);
+    EXPECT_EQ(root->Revision(), initial);
+
+    root->SetColorOverride(red);
+    const auto after_set = root->Revision();
+    EXPECT_GT(after_set, initial);
+
+    root->SetColorOverride(red);  // 同値再設定
+    EXPECT_EQ(root->Revision(), after_set);
+}
+
+// SetOpacityOverride: 値が変化したときのみバンプされる (解除も変化として扱う)
+TEST_F(AssemblyTest, SetOpacityOverride_BumpsOnlyOnChange) {
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    root->SetOpacityOverride(0.5f);
+    const auto after_set = root->Revision();
+    EXPECT_GT(after_set, before);
+
+    root->SetOpacityOverride(0.5f);  // 同値再設定
+    EXPECT_EQ(root->Revision(), after_set);
+
+    root->SetOpacityOverride(std::nullopt);  // 解除は変化
+    EXPECT_GT(root->Revision(), after_set);
+}
+
+// SetVisibleRecursive: 全ノード同値なら非バンプ、変化があれば増加
+TEST_F(AssemblyTest, SetVisibleRecursive_NoBumpWhenAllValuesUnchanged) {
+    auto root = MakeAssembly();
+    auto child = MakeAssembly();
+    root->AddChildAssembly(child);
+
+    const auto before = root->Revision();
+    root->SetVisibleRecursive(true);  // 全ノードが既定値trueのため同値
+    EXPECT_EQ(root->Revision(), before);
+
+    root->SetVisibleRecursive(false);  // 変化あり
+    EXPECT_GT(root->Revision(), before);
+}
+
+// Display: 既定の表示状態 (可視・非抑制・オーバーライドなし)
+TEST_F(AssemblyTest, Display_DefaultState) {
+    auto root = MakeAssembly();
+    EXPECT_TRUE(root->Display().visible);
+    EXPECT_FALSE(root->Display().suppressed);
+    EXPECT_FALSE(root->Display().color_override.has_value());
+    EXPECT_FALSE(root->Display().opacity_override.has_value());
+}
+
+// Metadata(注釈・ロック)の自由編集はモデルリビジョンへ影響しない (live読み契約)
+TEST_F(AssemblyTest, Metadata_FreeEditDoesNotBump) {
+    auto root = MakeAssembly();
+
+    const auto before = root->Revision();
+    root->Metadata().name = "renamed";
+    root->Metadata().role_tag = "fixture";
+    root->Metadata().lock.selectable = false;
+    root->Metadata().lock.editable = false;
+    EXPECT_EQ(root->Revision(), before);
 }

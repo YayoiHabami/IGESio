@@ -10,12 +10,14 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "igesio/common/errors.h"
+#include "igesio/entities/curves/line.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/nurbs_algorithms.h"
 #include "igesio/entities/surfaces/algorithms/curve_surface_inversion.h"
@@ -34,19 +36,19 @@ using igesio::Vector2d;
 
 /// @brief S(u,v) と B(t) から C(t) を生成する
 std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
-        const std::shared_ptr<const i_ent::ISurface>& surface,
-        const std::shared_ptr<const i_ent::ICurve>& base_curve) {
+        const i_ent::ISurface& surface,
+        const i_ent::ICurve& base_curve) {
     // 曲面上の曲線 C(t) を折れ線近似で生成
-    auto polygon = i_ent::ComputeApproximatePolygon(*base_curve, {}, {},
+    auto polygon = i_ent::ComputeApproximatePolygon(base_curve, {}, {},
                                                     kDiscretizationTol);
     const auto& vertices = polygon.vertices;
 
     // kPolyLineを生成
-    auto curve_2d = std::make_shared<i_ent::LinearPath>(vertices);
+    auto curve_2d = i_ent::MakeLinearPath(vertices);
     // 各頂点を曲面上に射影
     std::vector<Vector3d> projected_vertices;
     for (const auto& uv : vertices) {
-        auto pt_opt = surface->TryGetPointAt(uv.x(), uv.y());
+        auto pt_opt = surface.TryGetPointAt(uv.x(), uv.y());
         if (!pt_opt) {
             throw igesio::ComputationError("CurveOnAParametricSurface: Failed to project "
                     "base curve point onto surface.");
@@ -55,14 +57,14 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     }
 
     // 端点接線を chain rule で計算: C'(t) = dS/du * u'(t) + dS/dv * v'(t)
-    auto [tmin, tmax] = base_curve->GetParameterRange();
+    auto [tmin, tmax] = base_curve.GetParameterRange();
     i_ent::NurbsEndpointTangents tangents;
     for (bool is_start : {true, false}) {
         double t = is_start ? tmin : tmax;
-        auto db_opt = base_curve->TryGetDerivatives(t, 1);
+        auto db_opt = base_curve.TryGetDerivatives(t, 1);
         if (!db_opt) continue;
         const auto& db = db_opt.value();
-        auto ds_opt = surface->TryGetDerivatives(db[0].x(), db[0].y(), 1);
+        auto ds_opt = surface.TryGetDerivatives(db[0].x(), db[0].y(), 1);
         if (!ds_opt) continue;
         const auto& ds = ds_opt.value();
         Vector3d tangent = ds(1, 0)*db[1].x() + ds(0, 1)*db[1].y();
@@ -79,7 +81,7 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
         opts.tolerance = kDiscretizationTol * 10.0;
         return i_ent::ApproximateWithNurbs(projected_vertices, tangents, opts);
     } catch (const std::exception&) {
-        return std::make_shared<i_ent::LinearPath>(projected_vertices);
+        return i_ent::MakeLinearPath(projected_vertices);
     }
 }
 
@@ -122,7 +124,72 @@ std::shared_ptr<i_ent::LinearPath> BuildParamSpaceBaseCurve(
     // 退化チェック (閉ループは3点以上、開折れ線は2点以上)
     if (uv.size() < (is_closed ? 3u : 2u)) return nullptr;
 
-    return std::make_shared<i_ent::LinearPath>(uv, is_closed);
+    return i_ent::MakeLinearPath(uv, is_closed);
+}
+
+/// @brief B(t)が曲面S(u,v)のパラメータ定義領域D内で定義されているかを検証する
+/// @param surface 曲面 S(u,v)
+/// @param base_curve 曲線 B(t)
+/// @throw igesio::EntityValueError B(t)がD外で定義されている場合
+void ValidateBaseCurveInDomain(const i_ent::ISurface& surface,
+                               const i_ent::ICurve& base_curve) {
+    auto [umin, umax, vmin, vmax] = surface.GetParameterRange();
+    auto surf_bbox = i_num::BoundingBox(Vector3d(umin, vmin, 0),
+                                        Vector3d(umax, vmax, 0));
+    auto base_bbox = base_curve.GetBoundingBox();
+    if (surf_bbox.Contains(base_bbox)) return;
+
+    // bboxが完全に含まれていない場合は、50点ほどサンプリングして確認
+    auto [tmin, tmax] = base_curve.GetParameterRange();
+    const size_t num_samples = 50;
+    for (size_t i = 0; i <= num_samples; ++i) {
+        // 各tにおける点を取得
+        double t = tmin + (tmax - tmin) * static_cast<double>(i) / num_samples;
+        auto pt_opt = base_curve.TryGetPointAt(t);
+        if (!pt_opt) continue;
+
+        // B(t)がD (surf_bbox) 内にあるか確認
+        Vector3d uv = {(*pt_opt).x(), (*pt_opt).y(), 0.0};
+        if (!surf_bbox.Contains(uv)) {
+            throw igesio::EntityValueError(
+                    "CurveOnAParametricSurface: Base curve is not defined "
+                    "within the parameter domain D: {(u,v) | u in ["
+                    + std::to_string(umin) + ", " + std::to_string(umax)
+                    + "], v in [" + std::to_string(vmin) + ", "
+                    + std::to_string(vmax) + "]  }.");
+        }
+    }
+}
+
+/// @brief 値コンストラクタ用のPDパラメータを構築する
+/// @param surface 曲面 S(u,v)
+/// @param base_curve 曲線 B(t)
+/// @param curve 曲線 C(t)
+/// @return 構築されたIGESParameterVector
+/// @throw std::invalid_argument いずれかがnullptrの場合
+/// @note 委譲コンストラクタの初期化式でnullptrを参照しないよう、
+///       GetID()の呼び出し前にここでnull検証を行う
+igesio::IGESParameterVector BuildCosParameters(
+        const std::shared_ptr<i_ent::ISurface>& surface,
+        const std::shared_ptr<i_ent::ICurve>& base_curve,
+        const std::shared_ptr<i_ent::ICurve>& curve) {
+    if (!surface) {
+        throw std::invalid_argument(
+                "CurveOnAParametricSurface: Surface pointer is null.");
+    }
+    if (!base_curve) {
+        throw std::invalid_argument(
+                "CurveOnAParametricSurface: Base curve pointer is null.");
+    }
+    if (!curve) {
+        throw std::invalid_argument(
+                "CurveOnAParametricSurface: Curve pointer is null.");
+    }
+    return {static_cast<int>(i_ent::CurveCreationType::kUnspecified),
+            surface->GetID(),
+            base_curve->GetID(),
+            curve->GetID(),
+            static_cast<int>(i_ent::PreferredRepresentation::kUnspecified)};
 }
 
 }  // namespace
@@ -161,24 +228,9 @@ CurveOnSurface::CurveOnAParametricSurface(
         const std::shared_ptr<ICurve>& curve)
         : CurveOnAParametricSurface(
             RawEntityDE::ByDefault(EntityType::kCurveOnAParametricSurface),
-            {static_cast<int>(CurveCreationType::kUnspecified),
-             surface->GetID(),
-             base_curve->GetID(),
-             curve->GetID(),
-             static_cast<int>(PreferredRepresentation::kUnspecified)
-        }, {}) {
-    if (!surface) {
-        throw std::invalid_argument(
-                "CurveOnAParametricSurface: Surface pointer is null.");
-    }
-    if (!base_curve) {
-        throw std::invalid_argument(
-                "CurveOnAParametricSurface: Base curve pointer is null.");
-    }
-    if (!curve) {
-        throw std::invalid_argument(
-                "CurveOnAParametricSurface: Curve pointer is null.");
-    }
+            // null検証は委譲前のBuildCosParameters内で行う
+            // (初期化式でのGetID()参照前に検証する必要があるため)
+            BuildCosParameters(surface, base_curve, curve), {}) {
     SetSurface(surface);
     SetCurves(base_curve, curve);
 }
@@ -532,6 +584,7 @@ void CurveOnSurface::SetSurface(const std::shared_ptr<ISurface>& surface) {
     } else {
         surface_.OverwritePointer(surface);
     }
+    MarkGeometryModified();
 }
 
 std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
@@ -557,32 +610,53 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::SetCurves(
         auto surf = GetSurface();
 
         // 投射した頂点から3D曲線を生成
-        generated_curve = CreateCurveOnSurface(surf, base_curve);
-        // SubordinateEntitySwitchをkPhysicallyDependentに設定
-        if (auto entity_base =
-                std::dynamic_pointer_cast<EntityBase>(generated_curve)) {
-            entity_base->SetSubordinateEntitySwitch(
-                SubordinateEntitySwitch::kPhysicallyDependent);
-        }
+        generated_curve = CreateCurveOnSurface(*surf, *base_curve);
 
         // S(B(t)) から C(t) を生成したので、優先表現を S(B(t)) に設定
         SetPreferredRepresentation(PreferredRepresentation::kSofB);
-        curve_.OverwritePointer(generated_curve);
     }
 
-    // 曲線を設定
-    if (curve->GetID() == curve_.GetID()) {
-        curve_.SetPointer(curve);
+    // 曲線を設定 (curve未指定の場合は自動生成したものを使用)
+    const auto& effective_curve = curve ? curve : generated_curve;
+    if (effective_curve->GetID() == curve_.GetID()) {
+        curve_.SetPointer(effective_curve);
     } else {
-        curve_.OverwritePointer(curve);
+        curve_.OverwritePointer(effective_curve);
     }
     // 従属状態に設定
-    auto curve_bs = std::dynamic_pointer_cast<EntityBase>(curve);
+    auto curve_bs = std::dynamic_pointer_cast<EntityBase>(effective_curve);
     if (curve_bs) {
         curve_bs->SetSubordinateEntitySwitch(i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
     }
 
+    MarkGeometryModified();
     return generated_curve;
+}
+
+bool CurveOnSurface::SetCreationType(const CurveCreationType type) {
+    // CRTNは規格上informationalであり、幾何形状との一致は検証しない
+    if (type == CurveCreationType::kUnspecified ||
+        type == CurveCreationType::kProjection ||
+        type == CurveCreationType::kIntersection ||
+        type == CurveCreationType::kIsoparametric) {
+        creation_type_ = type;
+        MarkGeometryModified();
+        return true;
+    }
+    return false;  // 無効なタイプ
+}
+
+bool CurveOnSurface::SetPreferredRepresentation(const PreferredRepresentation pref) {
+    if (pref == PreferredRepresentation::kUnspecified ||
+        pref == PreferredRepresentation::kSofB ||
+        pref == PreferredRepresentation::kC ||
+        pref == PreferredRepresentation::kEquallyPreferred) {
+        preferred_representation_ = pref;
+        // 優先表現はレンダラの表現選択 (S(B(t))/C(t)) に影響する
+        MarkGeometryModified();
+        return true;
+    }
+    return false;  // 無効な値
 }
 
 std::shared_ptr<i_ent::ICurve> CurveOnSurface::ReconstructOmittedBaseCurve() {
@@ -622,18 +696,97 @@ std::shared_ptr<i_ent::ICurve> CurveOnSurface::ReconstructOmittedBaseCurve() {
 
 
 /**
- * インスタンスの作成
+ * ファクトリ関数
  */
 
 std::pair<std::shared_ptr<i_ent::CurveOnAParametricSurface>, std::shared_ptr<i_ent::ICurve>>
 i_ent::MakeCurveOnAParametricSurface(const std::shared_ptr<ISurface>& surface,
-                                     const std::shared_ptr<ICurve>& base_curve) {
+                                     const std::shared_ptr<ICurve>& base_curve,
+                                     const CurveCreationType creation_type) {
+    if (!surface) {
+        throw std::invalid_argument(
+                "MakeCurveOnAParametricSurface: Surface pointer is null.");
+    }
+    if (!base_curve) {
+        throw std::invalid_argument(
+                "MakeCurveOnAParametricSurface: Base curve pointer is null.");
+    }
+
+    // C(t)の生成前にB(t)が定義領域D内にあるかを検証する (D外の場合、生成中の
+    // 射影失敗 (ComputationError) ではなく入力値の問題 (EntityValueError)
+    // として報告するため)
+    ValidateBaseCurveInDomain(*surface, *base_curve);
+
     // 曲線 C(t) を生成
-    auto curve = CreateCurveOnSurface(surface, base_curve);
+    auto curve = CreateCurveOnSurface(*surface, *base_curve);
     // CurveOnAParametricSurface エンティティを生成
     auto curve_on_surface = std::make_shared<CurveOnAParametricSurface>(
             surface, base_curve, curve);
+    curve_on_surface->SetCreationType(creation_type);
+    // C(t)はS(B(t))から生成したため、優先表現はkSofB (コンストラクタの
+    // SetCurvesではCの明示指定経路となり設定されないため、ここで設定する)
+    curve_on_surface->SetPreferredRepresentation(PreferredRepresentation::kSofB);
     return {curve_on_surface, curve};
+}
+
+std::shared_ptr<i_ent::CurveOnAParametricSurface>
+i_ent::MakeCurveOnAParametricSurface(const std::shared_ptr<ISurface>& surface,
+                                     const std::shared_ptr<ICurve>& base_curve,
+                                     const std::shared_ptr<ICurve>& curve,
+                                     const CurveCreationType creation_type,
+                                     const PreferredRepresentation preferred) {
+    // nullチェックはコンストラクタ (BuildCosParameters) が行う
+    auto curve_on_surface = std::make_shared<CurveOnAParametricSurface>(
+            surface, base_curve, curve);
+    curve_on_surface->SetCreationType(creation_type);
+    curve_on_surface->SetPreferredRepresentation(preferred);
+    return curve_on_surface;
+}
+
+i_ent::CurveOnSurfaceParts i_ent::MakeIsoparametricCurve(
+        const std::shared_ptr<ISurface>& surface,
+        const IsoparametricDirection direction, const double value) {
+    if (!surface) {
+        throw std::invalid_argument(
+                "MakeIsoparametricCurve: Surface pointer is null.");
+    }
+
+    // 固定値が定義域内かを検証し、パラメータ空間上のB(t)の端点を決める
+    const auto [umin, umax, vmin, vmax] = surface->GetParameterRange();
+    Vector3d start, end;
+    if (direction == IsoparametricDirection::kUConstant) {
+        if (value < umin || value > umax) {
+            throw igesio::EntityValueError(
+                    "MakeIsoparametricCurve: u = " + std::to_string(value) +
+                    " is outside the parameter domain [" + std::to_string(umin) +
+                    ", " + std::to_string(umax) + "].");
+        }
+        start = Vector3d(value, vmin, 0.0);
+        end = Vector3d(value, vmax, 0.0);
+    } else {
+        if (value < vmin || value > vmax) {
+            throw igesio::EntityValueError(
+                    "MakeIsoparametricCurve: v = " + std::to_string(value) +
+                    " is outside the parameter domain [" + std::to_string(vmin) +
+                    ", " + std::to_string(vmax) + "].");
+        }
+        start = Vector3d(umin, value, 0.0);
+        end = Vector3d(umax, value, 0.0);
+    }
+    // 非有界な定義域 (平面等) ではB(t)の端点を定められない
+    if (!start.allFinite() || !end.allFinite()) {
+        throw igesio::EntityValueError(
+                "MakeIsoparametricCurve: The surface parameter domain is "
+                "unbounded; cannot determine the endpoints of the base curve.");
+    }
+
+    // B(t): パラメータ空間上の線分 (EUF=05・物理従属はSetCurvesが設定する)
+    auto base_curve = std::make_shared<Line>(start, end);
+
+    // 本体とC(t)を生成し、CRTN=3 (アイソパラメトリック) を設定
+    auto [curve_on_surface, curve] = MakeCurveOnAParametricSurface(
+            surface, base_curve, CurveCreationType::kIsoparametric);
+    return {curve_on_surface, base_curve, curve};
 }
 
 
@@ -651,40 +804,12 @@ bool CurveOnSurface::SetBaseCurve(const std::shared_ptr<const ICurve>& base_curv
     auto surf_opt = surface_.TryGetEntity<ISurface>();
     if (surf_opt) {
         // S(u,v)の定義領域D内で定義されているか確認
-        auto surface = surf_opt.value();
-        auto [umin, umax, vmin, vmax] = surface->GetParameterRange();
-        auto surf_bbox = i_num::BoundingBox(Vector3d(umin, vmin, 0),
-                                            Vector3d(umax, vmax, 0));
-        auto base_bbox = base_curve->GetBoundingBox();
-        if (!surf_bbox.Contains(base_bbox)) {
-            // bboxが完全に含まれていない場合は、50点ほどサンプリングして確認
-            auto [tmin, tmax] = base_curve->GetParameterRange();
-            const size_t num_samples = 50;
-            for (size_t i = 0; i <= num_samples; ++i) {
-                // 各tにおける点を取得
-                double t = tmin + (tmax - tmin) * static_cast<double>(i) / num_samples;
-                auto pt_opt = base_curve->TryGetPointAt(t);
-                if (!pt_opt) continue;
-
-                // B(t)がD (surf_bbox) 内にあるか確認
-                Vector3d uv = {(*pt_opt).x(), (*pt_opt).y(), 0.0};
-                if (!surf_bbox.Contains(uv)) {
-                    throw igesio::EntityValueError(
-                            "CurveOnAParametricSurface: Base curve is not defined "
-                            "within the parameter domain D: {(u,v) | u in ["
-                            + std::to_string(umin) + ", " + std::to_string(umax)
-                            + "], v in [" + std::to_string(vmin) + ", "
-                            + std::to_string(vmax) + "]  }.");
-                }
-            }
-        }
+        ValidateBaseCurveInDomain(*surf_opt.value(), *base_curve);
     }
 
-    if (base_curve->GetID() == base_curve_.GetID()) {
-        return base_curve_.SetPointer(base_curve);
-    } else {
-        return base_curve_.OverwritePointer(base_curve);
-    }
-
-    return true;
+    const bool ok = (base_curve->GetID() == base_curve_.GetID())
+            ? base_curve_.SetPointer(base_curve)
+            : base_curve_.OverwritePointer(base_curve);
+    if (ok) MarkGeometryModified();
+    return ok;
 }

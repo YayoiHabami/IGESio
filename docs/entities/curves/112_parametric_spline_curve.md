@@ -55,13 +55,14 @@ Here, the coefficient matrix $A_i \in \mathbb{R}^{3\times 4}$ contains the polyn
 
 1.  To avoid degeneracy, at least one of the nine coefficients $b_{p,i}, c_{p,i}, d_{p,i} \ (p = x, y, z)$ must be non-zero.
 2.  For 2D (planar) splines, the curve is defined on the $z = z_t$ plane (i.e., $a_{z,i} = z_t, b_{z,i} = c_{z,i} = d_{z,i} = 0$ ).
-3.  The parameter $h$ is used as an indicator of the smoothness of the curve and satisfies the following conditions:
+3.  If the degree of a polynomial is 1 or 2, then $c_{p,i} = d_{p,i} = 0$ or $d_{p,i} = 0$, respectively (a storage convention so that twelve coefficients are always stored).
+4.  The parameter $h$ is used as an indicator of the smoothness of the curve and satisfies the following conditions:
 
 | $h$ | Description |
 |---|---|
 | 0 | The curve is continuous at all breakpoints. |
-| 1 | The curve is continuous and has a continuous first derivative at all breakpoints, and $c_{p,i} = d_{p,i} = 0\ (p = x, y, z), i = 0, \ldots, n-1$ |
-| 2 | The curve is continuous and has continuous first and second derivatives at all breakpoints, and $d_{p,i} = 0\ (p = x, y, z), i = 0, \ldots, n-1$ |
+| 1 | The curve is continuous and has a continuous first derivative at all breakpoints. |
+| 2 | The curve is continuous and has continuous first and second derivatives at all breakpoints. |
 | 3 | (IGES 5.3 does not specify continuity conditions for this value) |
 
 The overall parametric curve $C(t)$ is defined by combining each segment $C_i(t)$ as follows:

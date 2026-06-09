@@ -2,16 +2,33 @@
 
 include(CMakeFindDependencyMacro)
 
-# Handle Eigen dependency if enabled
+# Handle Eigen dependency if enabled.
+# Eigen is exposed through IGESio's public headers, so a consumer of the
+# installed package must have a discoverable Eigen3 (it is not bundled).
 if(@IGESIO_ENABLE_EIGEN@)
     find_dependency(Eigen3 REQUIRED)
 endif()
 
-# Handle Boost dependency
-find_dependency(Boost QUIET)
+# Threads is a PUBLIC dependency of IGESio::common
+# (std::thread/std::async backend for igesio/common/parallel.h)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_dependency(Threads)
+
+# NOTE: Boost (Boost.Math, header-only) is a PRIVATE build-time dependency
+# and is not part of the installed interface, so it is not required here.
 
 # Include the targets file
 include("${CMAKE_CURRENT_LIST_DIR}/IGESioTargets.cmake")
+
+# Attach Eigen to the imported target here. It cannot be part of the
+# install(EXPORT) link interface because a FetchContent-built Eigen is a
+# non-exported real target (the export step would fail), so the dependency
+# found by find_dependency(Eigen3) above is appended afterwards instead.
+if(@IGESIO_ENABLE_EIGEN@)
+    set_property(TARGET IGESio::common APPEND PROPERTY
+        INTERFACE_LINK_LIBRARIES Eigen3::Eigen
+    )
+endif()
 
 # Check that all required components are found
 check_required_components(IGESio)

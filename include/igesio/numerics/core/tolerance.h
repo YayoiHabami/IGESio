@@ -1,16 +1,17 @@
 /**
- * @file numerics/tolerance.h
+ * @file numerics/core/tolerance.h
  * @brief 許容誤差に関する定数と、近似比較のための関数を定義する
  * @author Yayoi Habami
  * @date 2025-07-05
  * @copyright 2025 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_TOLERANCE_H_
-#define IGESIO_NUMERICS_TOLERANCE_H_
+#ifndef IGESIO_NUMERICS_CORE_TOLERANCE_H_
+#define IGESIO_NUMERICS_CORE_TOLERANCE_H_
 
 #include <limits>
+#include <optional>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 
 
 
@@ -23,6 +24,12 @@ constexpr double kAngleTolerance = 1e-12;
 /// @brief 近似比較に使用する許容誤差
 constexpr double kParameterTolerance
     = std::numeric_limits<double>::epsilon() * 100;
+/// @brief 単精度(float)を経由した幾何データの近似比較に使用する許容誤差
+/// @note GPUへ渡す変換行列(Matrix4f)などは単精度に丸められるため、回転行列の
+///       R·Rᵀ−I が約1e-7の残差を持つ. これはdouble機械イプシロン尺度の
+///       kParameterTolerance(約2.2e-14)では検証できないため、float由来の値を
+///       検証・比較する箇所ではこちらを使用すること.
+constexpr double kFloatGeometryTolerance = 1e-5;
 
 /// @brief 計算の許容誤差
 /// @note 絶対許容誤差と相対許容誤差の両方を指定する
@@ -147,6 +154,21 @@ bool IsApproxConstant(const Matrix<T, N, M>& mat, const double value,
     return true;  // 全ての要素が許容誤差以下であればtrue
 }
 
+/// @brief 3x3行列がほぼ回転行列(直交かつ行列式が+1)であるかを判定する
+/// @param rot 判定する行列
+/// @param tolerance 許容誤差 (デフォルトはkFloatGeometryTolerance)
+/// @return R·Rᵀがほぼ単位行列で、かつdetがほぼ+1であればtrue
+/// @note 単精度を経由した回転行列を想定し、既定でfloat尺度の許容誤差を用いる.
+bool IsRotation(const Matrix3d&, double tolerance = kFloatGeometryTolerance);
+
+/// @brief 与えられた3x3行列に最も近い回転行列を返す
+/// @param rot 入力行列 (ほぼ回転行列であることを想定)
+/// @return 正規直交かつ行列式が+1の回転行列
+/// @note 列ベクトルをGram-Schmidt法で正規直交化し、第3列を第1×第2列とすることで
+///       右手系(det=+1)を保証する. ほぼ回転行列である入力の微小な非直交性を
+///       除去する用途. 入力が回転から大きく外れる場合の結果は保証しない.
+Matrix3d NearestRotation(const Matrix3d&);
+
 /// @brief a < b かどうかを判定する
 /// @param a 判定する値1
 /// @param b 判定する値2
@@ -173,6 +195,18 @@ bool IsApproxGreaterThan(const double, const double, const double = kParameterTo
 /// @note a=b=±∞の場合もtrue
 bool IsApproxGEQ(const double, const double, const double = kParameterTolerance);
 
+/// @brief 値tが許容誤差を考慮して範囲[lo, hi]内にあるかを判定し、
+///        範囲内であれば[lo, hi]へクランプした値を返す
+/// @param t 判定する値
+/// @param lo 範囲の下限
+/// @param hi 範囲の上限
+/// @param tolerance 許容誤差 (デフォルトはkParameterTolerance)
+/// @return 範囲内ならstd::clamp(t, lo, hi)、範囲外ならstd::nullopt
+/// @note 厳密比較では境界値が浮動小数点丸めで僅かに域外へ出た際に
+///       評価不能となるため、許容誤差つき比較で判定し域内へ丸める
+std::optional<double> TryClampToRange(
+    double t, double lo, double hi, double tolerance = kParameterTolerance);
+
 }  // namespace igesio
 
-#endif  // IGESIO_NUMERICS_TOLERANCE_H_
+#endif  // IGESIO_NUMERICS_CORE_TOLERANCE_H_

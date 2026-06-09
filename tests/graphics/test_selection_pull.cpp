@@ -21,7 +21,7 @@
 
 #include "mock_open_gl.h"
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/composite_curve.h"
 #include "igesio/entities/curves/line.h"
@@ -45,7 +45,7 @@ constexpr std::array<float, 4> kHighlight = {1.0f, 0.6f, 0.0f, 1.0f};
 
 /// @brief スモーク用の単純な円弧 (100)
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
-    return std::make_shared<i_ent::CircularArc>(
+    return i_ent::MakeCircularArc(
         igesio::Vector2d(0.0, 0.0), igesio::Vector2d(1.0, 0.0),
         igesio::Vector2d(0.0, 1.0), 0.0);
 }
@@ -54,12 +54,11 @@ std::shared_ptr<i_ent::CircularArc> MakeArc() {
 /// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment.
 ///       親(102)と子(各Line)はそれぞれ別IDを持つ.
 std::shared_ptr<i_ent::CompositeCurve> MakeComposite() {
-    auto cc = std::make_shared<i_ent::CompositeCurve>();
-    cc->AddCurve(std::make_shared<i_ent::Line>(
-        igesio::Vector3d{0.0, 0.0, 0.0}, igesio::Vector3d{1.0, 0.0, 0.0}));
-    cc->AddCurve(std::make_shared<i_ent::Line>(
-        igesio::Vector3d{1.0, 0.0, 0.0}, igesio::Vector3d{1.0, 1.0, 0.0}));
-    return cc;
+    return i_ent::MakeCompositeCurve({
+        i_ent::MakeLine(igesio::Vector3d{0.0, 0.0, 0.0},
+                        igesio::Vector3d{1.0, 0.0, 0.0}),
+        i_ent::MakeLine(igesio::Vector3d{1.0, 0.0, 0.0},
+                        igesio::Vector3d{1.0, 1.0, 0.0})});
 }
 
 }  // namespace

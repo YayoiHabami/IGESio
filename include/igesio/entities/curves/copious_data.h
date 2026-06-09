@@ -9,6 +9,9 @@
 #ifndef IGESIO_ENTITIES_CURVES_COPIOUS_DATA_H_
 #define IGESIO_ENTITIES_CURVES_COPIOUS_DATA_H_
 
+#include <memory>
+#include <vector>
+
 #include "igesio/entities/interfaces/i_curve.h"
 #include "igesio/entities/curves/copious_data_base.h"
 
@@ -82,6 +85,37 @@ class CopiousData : public CopiousDataBase,
         return TransformImpl(input, is_point);
     }
 };
+
+
+
+/**
+ * ファクトリ関数
+ */
+
+/// @brief 平面上の点列 (Form 1) を作成する
+/// @param points 点列 (x, y)
+/// @param z_t 定義座標系におけるz座標 (全点で共通)
+/// @return 作成されたCopiousDataのshared_ptr
+/// @throw igesio::EntityValueError 点が2点未満の場合
+std::shared_ptr<CopiousData> MakeCopiousData(
+        const std::vector<Vector2d>& points, double z_t = 0.0);
+
+/// @brief 3次元空間の点列 (Form 2) を作成する
+/// @param points 点列 (x, y, z)
+/// @return 作成されたCopiousDataのshared_ptr
+/// @throw igesio::EntityValueError 点が2点未満の場合
+std::shared_ptr<CopiousData> MakeCopiousData(
+        const std::vector<Vector3d>& points);
+
+/// @brief 点列と対応ベクトル (Form 3; 座標6つ組) を作成する
+/// @param points 点列 (x, y, z)
+/// @param vectors 各点に対応するベクトル (i番目はpoints[i]に対応)
+/// @return 作成されたCopiousDataのshared_ptr
+/// @throw igesio::EntityValueError 点が2点未満の場合、
+///        またはpointsとvectorsの数が異なる場合
+std::shared_ptr<CopiousData> MakeCopiousData(
+        const std::vector<Vector3d>& points,
+        const std::vector<Vector3d>& vectors);
 
 }  // namespace igesio::entities
 

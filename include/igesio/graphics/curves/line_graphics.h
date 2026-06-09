@@ -37,8 +37,8 @@ class SegmentGraphics
     /// @param gl OpenGL関数のラッパー
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがICurveを継承していない場合
-    explicit SegmentGraphics(const std::shared_ptr<const entities::Line>,
-                          const std::shared_ptr<IOpenGL>);
+    explicit SegmentGraphics(const std::shared_ptr<const entities::Line>&,
+                          const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~SegmentGraphics();
@@ -67,7 +67,7 @@ class SegmentGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
 
 
@@ -100,8 +100,8 @@ class LineGraphics
     /// @param gl OpenGL関数のラッパー
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがICurveを継承していない場合
-    explicit LineGraphics(const std::shared_ptr<const entities::Line>,
-                          const std::shared_ptr<IOpenGL>);
+    explicit LineGraphics(const std::shared_ptr<const entities::Line>&,
+                          const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~LineGraphics();
@@ -130,7 +130,7 @@ class LineGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
 
 

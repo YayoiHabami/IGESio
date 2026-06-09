@@ -58,15 +58,14 @@ A simple GUI application example, [IGES viewer](docs/examples.md#gui), demonstra
 
 ### Reading and Writing IGES Files
 
-IGESio provides `igesio::ReadIges` and `igesio::WriteIges` functions for reading and writing IGES files. Both functions use the `igesio::models::IgesData` type to represent all IGES file data.
+IGESio provides `igesio::ReadIges` and `igesio::WriteIges` functions for reading and writing IGES files. Both functions use the `igesio::IgesData` type to represent all IGES file data.
 
 Entities not yet supported by IGESio are loaded as `igesio::entities::UnsupportedEntity`. These entities have their parameters parsed, but do not provide entity-specific functionality. For details, see [entities/UnsupportedEntity](docs/entities/entities.md#UnsupportedEntity).
 
 ```cpp
 #include <iostream>
 #include <unordered_map>
-#include <igesio/reader.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 // Read IGES file
 auto data = igesio::ReadIges("path/to/file.igs");
@@ -74,7 +73,7 @@ auto data = igesio::ReadIges("path/to/file.igs");
 // Count entities by type and check support
 std::unordered_map<igesio::entities::EntityType, int> type_counts;
 std::unordered_map<igesio::entities::EntityType, bool> is_supported;
-for (const auto& [id, entity] : data.GetEntities()) {
+for (const auto& [id, entity] : data.Root().GetEntities()) {
   type_counts[entity->GetType()]++;
   is_supported[entity->GetType()] = entity->IsSupported();
 }
@@ -100,25 +99,21 @@ You can also create entities programmatically. The following example creates a c
 
 ```cpp
 #include <memory>
-#include <array>
 #include <iostream>
-#include <igesio/entities/curves/circular_arc.h>
-#include <igesio/entities/structures/color_definition.h>
-#include <igesio/writer.h>
+#include <igesio/igesio.h>
 
 // Create a Circular Arc entity (center: (3.0, 0.0), radius: 1.0)
-auto circle = std::make_shared<igesio::entities::CircularArc>(
-    igesio::Vector2d{3.0, 0.0}, 1.0);
+auto circle = igesio::entities::MakeCircle(igesio::Vector2d{3.0, 0.0}, 1.0);
 
-// Set color using Color Definition entity (≈ #4C7FFF)
-auto color_def = std::make_shared<igesio::entities::ColorDefinition>(
-    std::array<double, 3>{30.0, 50.0, 100.0}, "Bright Blue");
+// Set color using Color Definition entity (#4C7FFF)
+auto color_def = igesio::entities::MakeColorDefinitionFromHex(
+    "#4C7FFF", "Bright Blue");
 circle->OverwriteColor(color_def);
 
 // Create IgesData and add entities
-igesio::models::IgesData iges_data;
-iges_data.AddEntity(color_def);
-iges_data.AddEntity(circle);
+igesio::IgesData iges_data;
+iges_data.Root().AddEntity(color_def);
+iges_data.Root().AddEntity(circle);
 
 // Write to IGES file
 auto success = igesio::WriteIges(iges_data, "created_circle.igs");
@@ -189,7 +184,7 @@ This library retrieves third-party dependencies using CMake's FetchContent (sour
 **License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) for full license texts.
 
 **Note**:
-- ※1 Eigen3 is a header-only library and is currently required for building. In the future, we plan to support enabling/disabling via the `IGESIO_ENABLE_EIGEN` option
+- ※1 Eigen3 is a header-only library and is currently required for building. In the future, we plan to support enabling/disabling via the `IGESIO_ENABLE_EIGEN` option. Because Eigen3 is exposed through IGESio's public headers, projects consuming an installed IGESio via `find_package` must also have Eigen3 available.
 - ※2 glad's source code is licensed under MIT license, and the included Khronos XML API Registry is licensed under Apache License 2.0
 - Google Test is only used during development and is not distributed with the library
 

@@ -8,9 +8,10 @@
  */
 #include "igesio/entities/curves/linear_path.h"
 
+#include <memory>
 #include <vector>
 
-#include "igesio/numerics/tolerance.h"
+#include "igesio/numerics/core/tolerance.h"
 
 namespace {
 
@@ -46,6 +47,26 @@ FindVertexIndex(const std::vector<double>& vertex_lengths,
         if (std::abs(vertex_lengths[i] - t) < eps) return i;
     }
     return std::nullopt;
+}
+
+/// @brief 2次元の頂点列を3xN行列に変換する (z行は共通のz_t)
+igesio::Matrix3Xd ToCoordinateMatrix(
+        const std::vector<igesio::Vector2d>& vertices, const double z_t) {
+    igesio::Matrix3Xd mat(3, vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        mat.block<2, 1>(0, i) = vertices[i];
+        mat(2, i) = z_t;
+    }
+    return mat;
+}
+
+/// @brief 3次元の頂点列を3xN行列に変換する
+igesio::Matrix3Xd ToCoordinateMatrix(const std::vector<Vector3d>& vertices) {
+    igesio::Matrix3Xd mat(3, vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        mat.col(i) = vertices[i];
+    }
+    return mat;
 }
 
 }  // namespace
@@ -219,13 +240,18 @@ std::array<double, 2> LinearPath::GetParameterRange() const {
 
 std::optional<i_ent::CurveDerivatives>
 LinearPath::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
-    auto idx = GetSegmentIndexAt(t);
+    // 境界の浮動小数点誤差を許容し域内へ丸める
+    const auto range = GetParameterRange();
+    auto tc = i_num::TryClampToRange(t, range[0], range[1]);
+    if (!tc) return std::nullopt;
+
+    auto idx = GetSegmentIndexAt(*tc);
     if (!idx.has_value())  return std::nullopt;
 
     CurveDerivatives result(n);
 
     // 0階導関数: 点の座標値
-    auto point_opt = GetCoordinateAtLength(t);
+    auto point_opt = GetCoordinateAtLength(*tc);
     if (point_opt.has_value()) {
         result[0] = point_opt.value();
     } else {
@@ -277,4 +303,35 @@ double LinearPath::Length(const double start, const double end) const {
     }
     // 対応するセグメントが存在していれば、セグメントの長さはend-startに相当
     return end - start;
+}
+
+
+/**
+ * ファクトリ関数
+ */
+
+std::shared_ptr<LinearPath> i_ent::MakeLinearPath(
+        const std::vector<Vector2d>& vertices,
+        const bool is_closed, const double z_t) {
+    // 既存の2Dコンストラクタはz=0固定のため、z_t対応の行列を組んで
+    // CopiousDataBase継承コンストラクタ経由で生成する
+    const auto type = is_closed ? CopiousDataType::kPlanarLoop
+                                : CopiousDataType::kPlanarPolyline;
+    return std::make_shared<LinearPath>(
+            type, ToCoordinateMatrix(vertices, z_t));
+}
+
+std::shared_ptr<LinearPath> i_ent::MakeLinearPath(
+        const std::vector<Vector3d>& vertices) {
+    return std::make_shared<LinearPath>(
+            CopiousDataType::kPolyline3D, ToCoordinateMatrix(vertices));
+}
+
+std::shared_ptr<LinearPath> i_ent::MakeLinearPath(
+        const std::vector<Vector3d>& vertices,
+        const std::vector<Vector3d>& vectors) {
+    // 頂点とベクトルの数の不一致はCopiousDataBaseコンストラクタが検証する
+    return std::make_shared<LinearPath>(
+            CopiousDataType::kPolylineAndVectors,
+            ToCoordinateMatrix(vertices), ToCoordinateMatrix(vectors));
 }

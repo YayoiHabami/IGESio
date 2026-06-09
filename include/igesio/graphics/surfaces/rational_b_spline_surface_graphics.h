@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include "igesio/numerics/matrix.h"
+#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/surfaces/rational_b_spline_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
@@ -43,8 +43,8 @@ class RationalBSplineSurfaceGraphics
     /// @throw std::invalid_argument entityがnullptrの場合、
     ////       entityがISurfaceを継承していない場合
     explicit RationalBSplineSurfaceGraphics(
-            const std::shared_ptr<const entities::RationalBSplineSurface>,
-            const std::shared_ptr<IOpenGL>);
+            const std::shared_ptr<const entities::RationalBSplineSurface>&,
+            const std::shared_ptr<IOpenGL>&);
 
     /// @brief デストラクタ
     ~RationalBSplineSurfaceGraphics();
@@ -91,7 +91,7 @@ class RationalBSplineSurfaceGraphics
     /// @brief エンティティをセットアップする
     /// @note 内部で参照するエンティティの状態に基づいて、
     ///       描画用のリソースを再セットアップする
-    void Synchronize() override;
+    void DoSynchronize() override;
 
     /// @brief OpenGLリソースを解放する
     /// @note SSBO等のOpenGLリソースを解放する
