@@ -16,6 +16,9 @@ set(TEST_SOURCES
     test_pointer_container.cpp
     test_geometry_revision.cpp
 
+    # Factory
+    test_factory.cpp
+
     # Curves
     curves/test_i_curve.cpp
     curves/test_circular_arc.cpp

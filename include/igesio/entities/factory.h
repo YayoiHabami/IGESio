@@ -25,14 +25,24 @@ namespace igesio::entities {
 /// @note RawEntityDEとIGESParameterVectorからエンティティを作成する場合は、
 ///       このクラスを使用する。`std::shared_ptr<EntityBase>`を返す。
 class EntityFactory {
- private:
+ public:
     /// @brief エンティティ作成関数
+    /// @note 引数は順に、DEレコード・PDレコードのパラメータ・DEポインターとIDの
+    ///       マッピング・親IGESDataのID (`CreateEntity`の引数と同順).
     using CreateFunction = std::function<std::shared_ptr<EntityBase>(
             const RawEntityDE&, const IGESParameterVector&,
             const pointer2ID&, const ObjectID&)>;
 
-    /// @brief エンティティタイプと作成関数のマッピング
+ private:
+    /// @brief エンティティタイプと作成関数のマッピング (組み込み実装)
     inline static std::unordered_map<EntityType, CreateFunction> creators_;
+
+    /// @brief ユーザー登録の作成関数のマッピング
+    /// @note キーはエンティティのtype番号. `RegisterEntityCreator`で登録される.
+    ///       組み込みの`creators_`とは分離し、登録・解除が組み込み実装へ影響
+    ///       しないようにする. キーを`int`とするのは、将来のユーザー定義type番号
+    ///       (enum外の番号) の登録と同一マップを共用するため
+    inline static std::unordered_map<int, CreateFunction> user_creators_;
 
     /// @brief 初期化されたか
     inline static bool initialized_ = false;
@@ -82,6 +92,53 @@ class EntityFactory {
     static std::shared_ptr<EntityBase>
     CreateEntity(const RawEntityDE&, const RawEntityPD&,
                  const pointer2ID&, const ObjectID& = IDGenerator::UnsetID());
+
+    /// @brief エンティティ作成関数を登録する
+    /// @param type 対象のエンティティタイプ
+    /// @param creator 作成関数
+    /// @throw std::invalid_argument creatorが空の場合、typeが有効なIGESの
+    ///        type番号でない場合、またはtypeの作成関数が登録済み
+    ///        (組み込み実装を含む) の場合
+    /// @note 組み込み実装の上書きは許可しない (本ライブラリ対応済みのtypeは
+    ///       登録できない). フォーム番号による分岐はcreator内部で行うこと.
+    /// @note スレッド安全性は保証しない. 登録はファイル読み込みの開始前に
+    ///       完了させること
+    static void RegisterEntityCreator(EntityType, CreateFunction);
+
+    /// @brief ユーザー登録のエンティティ作成関数を解除する
+    /// @param type 対象のエンティティタイプ
+    /// @return 解除した場合はtrue. 未登録、または組み込み実装のtypeを
+    ///         指定した場合はfalse
+    /// @note 組み込み実装は解除できない
+    static bool UnregisterEntityCreator(EntityType);
+
+    /// @brief 指定タイプのエンティティ作成関数が存在するか
+    /// @param type 対象のエンティティタイプ
+    /// @return 組み込み実装またはユーザー登録の作成関数が存在する場合はtrue
+    static bool IsEntityCreatorRegistered(EntityType);
+
+    /// @brief ユーザー定義番号のエンティティ作成関数を登録する
+    /// @param type_number ユーザー定義のtype番号 (600-699, 10000-99999)
+    /// @param creator 作成関数
+    /// @throw std::invalid_argument creatorが空の場合、type_numberがユーザー
+    ///        定義番号でない場合、またはその番号の作成関数が登録済みの場合
+    /// @note 登録した番号のエンティティは読み込み時にこの関数で生成される
+    ///       (未登録のユーザー定義番号はUnsupportedEntityとして保持される).
+    ///       作成関数へ渡されるDEレコードはentity_typeがkUserDefinedであり、
+    ///       実番号はuser_type_numberに設定されている.
+    /// @note スレッド安全性は保証しない. 登録はファイル読み込みの開始前に
+    ///       完了させること
+    static void RegisterUserEntityCreator(int, CreateFunction);
+
+    /// @brief ユーザー定義番号のエンティティ作成関数を解除する
+    /// @param type_number ユーザー定義のtype番号
+    /// @return 解除した場合はtrue. 未登録の場合はfalse
+    static bool UnregisterUserEntityCreator(int);
+
+    /// @brief ユーザー定義番号のエンティティ作成関数が登録済みか
+    /// @param type_number ユーザー定義のtype番号
+    /// @return ユーザー登録の作成関数が存在する場合はtrue
+    static bool IsUserEntityCreatorRegistered(int);
 };
 
 /// @brief エンティティを複製する

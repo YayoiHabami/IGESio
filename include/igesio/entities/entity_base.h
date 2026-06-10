@@ -173,6 +173,23 @@ class EntityBase : public virtual IEntityIdentifier {
         : EntityBase(RawEntityDE::ByDefault(entity_type),
                      parameters, de2id) {}
 
+    /// @brief コンストラクタ (ユーザー定義エンティティ用; デフォルトのDEレコードを使用)
+    /// @param user_type_number ユーザー定義のtype番号 (600-699, 10000-99999)
+    /// @param parameters PDレコードのパラメータ
+    /// @param de2id DEポインターとIDのマッピング
+    /// @throw igesio::DataFormatError user_type_numberがユーザー定義番号でない場合
+    /// @throw igesio::EntityDataError parametersのいずれかが正しくない場合
+    /// @throw std::out_of_range de2idが空でなく、かつparameters側で指定されている
+    ///        ポインターの値がde2idに存在しない場合
+    /// @note ユーザー定義エンティティクラスをコードから直接構築する際の公式経路.
+    ///       GetType()はkUserDefinedを返し、実番号はGetTypeNumber()で取得する.
+    /// @note 継承コンストラクタでは、必ず`InitializePD`を呼び出すこと.
+    EntityBase(const int user_type_number,
+               const IGESParameterVector& parameters,
+               const pointer2ID& de2id = {})
+        : EntityBase(RawEntityDE::ByDefaultUserDefined(user_type_number),
+                     parameters, de2id) {}
+
     /// @brief ジオメトリリビジョンをインクリメントする
     /// @note 形状・DE変換参照に影響するmutatorの末尾 (成功経路のみ) で呼ぶこと (規約).
     ///       呼び忘れは「編集が描画へ反映されない」として顕在化する.
@@ -192,6 +209,10 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @brief エンティティのフォーム番号 (15th field of DE)
     /// @note IGESのPDレコードにおけるフォーム番号を表す.
     int form_number_;
+    /// @brief ユーザー定義エンティティの実type番号
+    /// @note type_ == EntityType::kUserDefined のときのみ有効 (それ以外は0).
+    ///       IGES 5.3予約のユーザー定義番号 (600-699, 10000-99999) を保持する
+    const int user_type_number_ = 0;
 
     /// @brief コンストラクタ
     /// @param de_record DEレコードのパラメータ
@@ -231,6 +252,14 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @brief エンティティのタイプを取得する
     /// @return エンティティのタイプ (EntityType列挙型の値)
     EntityType GetType() const override { return type_; }
+
+    /// @brief ファイルに出力する実type番号を取得する
+    /// @return 通常のエンティティはGetType()の数値. ユーザー定義エンティティ
+    ///         (kUserDefined) は構築時に指定された実番号 (600-699, 10000-99999)
+    int GetTypeNumber() const {
+        return (type_ == EntityType::kUserDefined)
+                ? user_type_number_ : static_cast<int>(type_);
+    }
 
     /// @brief エンティティのフォーム番号を取得する
     /// @return エンティティのフォーム番号

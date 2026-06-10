@@ -298,3 +298,84 @@ TEST(ToStringsTest, NormalCase) {
     s_exp = "     308       0               1                          SubFig       0D     16";
     EXPECT_EQ(s2, s_exp) << "Second line mismatch";
 }
+
+
+
+/******************************************************************************
+ * ユーザー定義エンティティ (kUserDefined) のテスト
+ * (ByDefaultUserDefined / TypeNumber / ToStrings / ToRawEntityDE / IsValid)
+ *****************************************************************************/
+
+// 正常系 (代表値): ByDefaultUserDefinedがkUserDefined+実番号のDEを生成する
+TEST(ByDefaultUserDefinedTest, NormalCase) {
+    auto de = i_ent::RawEntityDE::ByDefaultUserDefined(602);
+    EXPECT_EQ(de.entity_type, i_ent::EntityType::kUserDefined);
+    EXPECT_EQ(de.user_type_number, 602);
+    EXPECT_EQ(de.TypeNumber(), 602);
+    EXPECT_EQ(de.form_number, 0);
+
+    // フォーム番号は任意の値を許容し、IsValidも通ること
+    auto de_form = i_ent::RawEntityDE::ByDefaultUserDefined(10001, 7);
+    EXPECT_EQ(de_form.form_number, 7);
+    EXPECT_NO_THROW(i_ent::IsValid(de_form));
+}
+
+// 正常系 (境界値): 予約範囲の下限・上限は受理される
+TEST(ByDefaultUserDefinedTest, RangeBoundariesAccepted) {
+    EXPECT_NO_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(600));
+    EXPECT_NO_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(699));
+    EXPECT_NO_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(10000));
+    EXPECT_NO_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(99999));
+}
+
+// 異常系: 予約範囲の直外はDataFormatError
+TEST(ByDefaultUserDefinedTest, ThrowsDataFormatErrorWhenOutOfRange) {
+    EXPECT_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(599),
+                 igesio::DataFormatError);
+    EXPECT_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(700),
+                 igesio::DataFormatError);
+    EXPECT_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(9999),
+                 igesio::DataFormatError);
+    EXPECT_THROW(i_ent::RawEntityDE::ByDefaultUserDefined(100000),
+                 igesio::DataFormatError);
+}
+
+// 正常系: ユーザー定義番号がToStrings→ToRawEntityDEで往復する
+TEST(ToRawEntityDETest, UserDefinedRoundTrip) {
+    auto de = i_ent::RawEntityDE::ByDefaultUserDefined(602);
+    auto [f, s] = i_ent::ToStrings(de, 1, 1, 1);
+
+    auto parsed = i_ent::ToRawEntityDE(f, s);
+    EXPECT_EQ(parsed.entity_type, i_ent::EntityType::kUserDefined);
+    EXPECT_EQ(parsed.user_type_number, 602);
+    EXPECT_EQ(parsed.TypeNumber(), 602);
+
+    // 5桁の番号 (uint16_t非互換領域) も往復すること
+    auto de5 = i_ent::RawEntityDE::ByDefaultUserDefined(99999);
+    auto [f5, s5] = i_ent::ToStrings(de5, 1, 1, 1);
+    auto parsed5 = i_ent::ToRawEntityDE(f5, s5);
+    EXPECT_EQ(parsed5.entity_type, i_ent::EntityType::kUserDefined);
+    EXPECT_EQ(parsed5.user_type_number, 99999);
+}
+
+// 異常系: 1行目と2行目でユーザー定義番号が異なる場合はSectionFormatError
+// (両方kUserDefinedへ縮約されて不一致を見逃さないこと)
+TEST(ToRawEntityDETest, ThrowsSectionFormatErrorWhenUserDefinedNumberMismatch) {
+    auto [f602, s602] = i_ent::ToStrings(
+            i_ent::RawEntityDE::ByDefaultUserDefined(602), 1, 1, 1);
+    auto [f604, s604] = i_ent::ToStrings(
+            i_ent::RawEntityDE::ByDefaultUserDefined(604), 1, 1, 1);
+
+    EXPECT_THROW(i_ent::ToRawEntityDE(f602, s604), igesio::SectionFormatError);
+}
+
+// 異常系: 予約範囲外のenum外番号 (700) は従来通りSectionFormatError
+TEST(ToRawEntityDETest, ThrowsSectionFormatErrorWhenOutOfRangeNumber) {
+    auto [f, s] = i_ent::ToStrings(
+            i_ent::RawEntityDE::ByDefaultUserDefined(602), 1, 1, 1);
+    // 両行のtype番号部分を予約範囲外の700に置き換える
+    f.replace(f.find("602"), 3, "700");
+    s.replace(s.find("602"), 3, "700");
+
+    EXPECT_THROW(i_ent::ToRawEntityDE(f, s), igesio::SectionFormatError);
+}

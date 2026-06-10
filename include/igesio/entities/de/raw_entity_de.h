@@ -180,6 +180,11 @@ constexpr int kDefaultEntitySubscriptNumber = 0;
 struct RawEntityDE {
     /// @brief エンティティタイプ (L1, d1-8)
     EntityType entity_type = EntityType::kNull;
+    /// @brief ユーザー定義エンティティの実type番号
+    /// @note entity_type == EntityType::kUserDefined のときのみ有効 (それ以外は0).
+    ///       IGES 5.3予約のユーザー定義番号 (600-699, 10000-99999) を保持する.
+    ///       10000以上はEntityTypeの基底型 (uint16_t) に収まらないためintで持つ
+    int user_type_number = 0;
     /// @brief パラメータデータへのポインタ (L1, d9-16)
     /// @note このエンティティの最初のパラメータデータレコードのシーケンス番号
     /// @note (ポインタ); RawEntityData.sequence_numberと同じ値を持つ
@@ -286,6 +291,25 @@ struct RawEntityDE {
     ///       そのため、これらタイプに対する戻り値を修正せずに`IsValid`に与えた場合、
     ///       `igesio::DataFormatError`例外が投げられることに注意する。
     static RawEntityDE ByDefault(const EntityType, const int = 0);
+
+    /// @brief ユーザー定義エンティティのデフォルトDEレコードを作成する
+    /// @param type_number ユーザー定義のtype番号 (600-699, 10000-99999)
+    /// @param form_number フォーム番号 (任意の値を許容する)
+    /// @return entity_typeにkUserDefined、user_type_numberに実番号を設定した
+    ///         デフォルト値のRawEntityDEのインスタンス
+    /// @throw igesio::DataFormatError type_numberがユーザー定義番号でない場合
+    /// @note ユーザー定義エンティティをコードから構築する際の公式経路.
+    ///       フィールドの値型・フォーム番号には制約を設けない (仕様が定義
+    ///       されないため寛容に扱う)
+    static RawEntityDE ByDefaultUserDefined(const int, const int = 0);
+
+    /// @brief ファイルに出力する実type番号を取得する
+    /// @return 通常のエンティティはentity_typeの数値.
+    ///         ユーザー定義エンティティ (kUserDefined) はuser_type_number
+    int TypeNumber() const {
+        return (entity_type == EntityType::kUserDefined)
+                ? user_type_number : static_cast<int>(entity_type);
+    }
 
  private:
     /// @brief インスタンス作成時 (基本的に文字列からの変換時) に、

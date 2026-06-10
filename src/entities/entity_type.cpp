@@ -215,6 +215,8 @@ std::string igesio::entities::ToString(const EntityType type) {
             return "Face";
         case EntityType::kShell:
             return "Shell";
+        case EntityType::kUserDefined:
+            return "User Defined";
         default:
             return "Unknown";
     }

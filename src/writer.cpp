@@ -155,8 +155,9 @@ SerializePdSection(const std::vector<igesio::entities::RawEntityPD>& pd_sections
             types = ProvisionalParameterTypes(pd.data);
 
         // パラメータデータの先頭にエンティティタイプを追加
+        // (TypeNumber: ユーザー定義エンティティは実番号を出力する)
         auto data = pd.data;
-        data.insert(data.begin(), std::to_string(static_cast<int>(pd.type)));
+        data.insert(data.begin(), std::to_string(pd.TypeNumber()));
         types.insert(types.begin(), igesio::IGESParameterType::kInteger);
 
         auto lines = igesio::utils::ToFreeFormattedLines(
@@ -389,8 +390,9 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
         intermediate.directory_entry_section.push_back(de);
 
         try {
+            // GetTypeNumber: ユーザー定義エンティティ (kUserDefined) は実番号で構築する
             auto pd = entities::ToRawEntityPD(
-                entity->GetType(), id, entity->GetParameters(), id2de);
+                entity->GetTypeNumber(), id, entity->GetParameters(), id2de);
             intermediate.parameter_data_section.push_back(pd);
         } catch (std::out_of_range& e) {
             // dataが持たないエンティティへの参照を含む場合

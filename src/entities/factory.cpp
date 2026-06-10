@@ -8,6 +8,9 @@
 #include "igesio/entities/factory.h"
 
 #include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
 #include "igesio/entities/structures/unsupported_entity.h"
 
@@ -165,9 +168,25 @@ std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
         const pointer2ID& de2id, const ObjectID& iges_id) {
     Initialize();  // 初期化
 
+    // ユーザー定義エンティティ (kUserDefined) は実番号で引く
+    if (de.entity_type == ET::kUserDefined) {
+        auto user_it = user_creators_.find(de.user_type_number);
+        if (user_it != user_creators_.end()) {
+            return user_it->second(de, parameters, de2id, iges_id);
+        }
+        // 未登録のユーザー定義番号は生データを保持し、往復出力可能とする
+        return std::make_shared<i_ent::UnsupportedEntity>(de, parameters, de2id);
+    }
+
     auto it = creators_.find(de.entity_type);
     if (it != creators_.end()) {
         return it->second(de, parameters, de2id, iges_id);
+    }
+
+    // ユーザー登録の作成関数を探す (キーはtype番号)
+    auto user_it = user_creators_.find(static_cast<int>(de.entity_type));
+    if (user_it != user_creators_.end()) {
+        return user_it->second(de, parameters, de2id, iges_id);
     }
 
     // 対応するエンティティが存在しない場合はUnsupportedEntityを返す
@@ -178,6 +197,81 @@ std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
         const RawEntityDE& de, const RawEntityPD& pd,
         const pointer2ID& de2id, const ObjectID& iges_id) {
     return CreateEntity(de, ToIGESParameterVector(pd), de2id, iges_id);
+}
+
+void i_ent::EntityFactory::RegisterEntityCreator(
+        const EntityType type, CreateFunction creator) {
+    // 組み込みcreatorの充填前に重複チェックが素通りするのを防ぐ
+    Initialize();
+
+    if (!creator) {
+        throw std::invalid_argument(
+                "Creator function must not be empty (entity type " +
+                std::to_string(static_cast<int>(type)) + ")");
+    }
+    // ユーザー定義番号の登録はRegisterUserEntityCreatorで行う
+    if (type == ET::kUserDefined) {
+        throw std::invalid_argument(
+                "Use RegisterUserEntityCreator to register creators "
+                "for user-defined type numbers");
+    }
+    // enumに存在しない値のキャスト (無効なtype番号) を弾く
+    if (!ToEntityType(static_cast<int>(type)).has_value()) {
+        throw std::invalid_argument(
+                "Invalid entity type number: " +
+                std::to_string(static_cast<int>(type)));
+    }
+    // 上書き禁止 (組み込み実装・ユーザー登録とも)
+    if (creators_.find(type) != creators_.end() ||
+        user_creators_.find(static_cast<int>(type)) != user_creators_.end()) {
+        throw std::invalid_argument(
+                "Creator for entity type " +
+                std::to_string(static_cast<int>(type)) +
+                " is already registered");
+    }
+
+    user_creators_[static_cast<int>(type)] = std::move(creator);
+}
+
+bool i_ent::EntityFactory::UnregisterEntityCreator(const EntityType type) {
+    // 組み込み実装 (creators_) には触れない
+    return user_creators_.erase(static_cast<int>(type)) > 0;
+}
+
+bool i_ent::EntityFactory::IsEntityCreatorRegistered(const EntityType type) {
+    Initialize();
+    return creators_.find(type) != creators_.end() ||
+           user_creators_.find(static_cast<int>(type)) != user_creators_.end();
+}
+
+void i_ent::EntityFactory::RegisterUserEntityCreator(
+        const int type_number, CreateFunction creator) {
+    if (!creator) {
+        throw std::invalid_argument(
+                "Creator function must not be empty (entity type " +
+                std::to_string(type_number) + ")");
+    }
+    if (!IsUserDefinedEntityNumber(type_number)) {
+        throw std::invalid_argument(
+                "Not a user-defined entity type number "
+                "(600-699, 10000-99999): " + std::to_string(type_number));
+    }
+    // 上書き禁止
+    if (user_creators_.find(type_number) != user_creators_.end()) {
+        throw std::invalid_argument(
+                "Creator for entity type " + std::to_string(type_number) +
+                " is already registered");
+    }
+
+    user_creators_[type_number] = std::move(creator);
+}
+
+bool i_ent::EntityFactory::UnregisterUserEntityCreator(const int type_number) {
+    return user_creators_.erase(type_number) > 0;
+}
+
+bool i_ent::EntityFactory::IsUserEntityCreatorRegistered(const int type_number) {
+    return user_creators_.find(type_number) != user_creators_.end();
 }
 
 std::shared_ptr<i_ent::EntityBase> i_ent::CloneEntity(const EntityBase& entity) {
@@ -199,7 +293,9 @@ std::shared_ptr<i_ent::EntityBase> i_ent::CloneEntity(const EntityBase& entity) 
     // DE/PDへシリアライズし、iges_id未指定 (UnsetID) で再構築することで新IDを採番する
     auto de = entity.GetRawEntityDE(id2de);
     de.sequence_number = id2de.at(self_id);
-    auto pd = ToRawEntityPD(entity.GetType(), self_id, entity.GetParameters(), id2de);
+    // GetTypeNumber: ユーザー定義エンティティ (kUserDefined) は実番号で構築する
+    auto pd = ToRawEntityPD(
+            entity.GetTypeNumber(), self_id, entity.GetParameters(), id2de);
     pd.sequence_number = de.sequence_number;
     return EntityFactory::CreateEntity(de, pd, de2id, IDGenerator::UnsetID());
 }

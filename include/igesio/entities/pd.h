@@ -32,6 +32,10 @@ namespace igesio::entities {
 struct RawEntityPD {
     /// @brief エンティティタイプ
     EntityType type = EntityType::kNull;
+    /// @brief ユーザー定義エンティティの実type番号
+    /// @note type == EntityType::kUserDefined のときのみ有効 (それ以外は0).
+    ///       IGES 5.3予約のユーザー定義番号 (600-699, 10000-99999) を保持する
+    int user_type_number = 0;
     /// @brief DEポインタ
     /// @note Directory Entryセクションにおける、当該エンティティの
     ///       シーケンス番号（L1, d74-80）を示す
@@ -94,6 +98,14 @@ struct RawEntityPD {
     /// @param other ムーブ元のRawEntityPD
     /// @return ムーブ先のRawEntityPD
     RawEntityPD& operator=(RawEntityPD&&) noexcept;
+
+    /// @brief ファイルに出力する実type番号を取得する
+    /// @return 通常のエンティティはtypeの数値.
+    ///         ユーザー定義エンティティ (kUserDefined) はuser_type_number
+    int TypeNumber() const {
+        return (type == EntityType::kUserDefined)
+                ? user_type_number : static_cast<int>(type);
+    }
 };
 
 
@@ -172,6 +184,23 @@ IGESParameterVector ToIGESParameterVector(const RawEntityPD&);
 /// @throw std::out_of_range idまたはvecで指定されるIDがid2deに存在しない場合
 RawEntityPD
 ToRawEntityPD(const EntityType, const ObjectID&,
+              const IGESParameterVector&, const id2pointer&);
+
+/// @brief IGESParameterVectorからRawEntityPDを作成する (type番号指定版)
+/// @param type_number エンティティの実type番号. ユーザー定義番号
+///        (600-699, 10000-99999) も指定可能
+/// @param id エンティティのID
+/// @param vec IGESParameterVector
+/// @param id2de IDからDEポインタへのマッピング
+/// @return RawEntityPD. ユーザー定義番号の場合はtypeがkUserDefinedとなり、
+///         user_type_numberに実番号が設定される
+/// @throw igesio::TypeConversionError type_numberが有効なエンティティタイプ
+///        番号でもユーザー定義番号でもない場合
+/// @throw std::out_of_range idまたはvecで指定されるIDがid2deに存在しない場合
+/// @note 書き出し経路 (writer/CloneEntity) がEntityBase::GetTypeNumber()の
+///       値からRawEntityPDを構築するためのオーバーロード
+RawEntityPD
+ToRawEntityPD(const int, const ObjectID&,
               const IGESParameterVector&, const id2pointer&);
 
 }  // namespace igesio::entities

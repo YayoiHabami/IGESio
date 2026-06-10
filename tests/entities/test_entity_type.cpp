@@ -236,4 +236,35 @@ TEST(EntityTypeTest, ToString) {
     EXPECT_EQ(TS(ET::kLoop), "Loop");
     EXPECT_EQ(TS(ET::kFace), "Face");
     EXPECT_EQ(TS(ET::kShell), "Shell");
+    EXPECT_EQ(TS(ET::kUserDefined), "User Defined");
+}
+
+
+
+/******************************************************************************
+ * IsUserDefinedEntityNumberのテスト
+ *****************************************************************************/
+
+// 正常系 (境界値): IGES 5.3予約のユーザー定義範囲 (600-699, 10000-99999)
+TEST(IsUserDefinedEntityNumberTest, Boundaries) {
+    // 600-699の境界
+    EXPECT_FALSE(ie::IsUserDefinedEntityNumber(599));   // 直外
+    EXPECT_TRUE(ie::IsUserDefinedEntityNumber(600));    // 下限
+    EXPECT_TRUE(ie::IsUserDefinedEntityNumber(699));    // 上限
+    EXPECT_FALSE(ie::IsUserDefinedEntityNumber(700));   // 直外
+
+    // 10000-99999の境界
+    EXPECT_FALSE(ie::IsUserDefinedEntityNumber(9999));    // 直外
+    EXPECT_TRUE(ie::IsUserDefinedEntityNumber(10000));    // 下限
+    EXPECT_TRUE(ie::IsUserDefinedEntityNumber(99999));    // 上限
+    EXPECT_FALSE(ie::IsUserDefinedEntityNumber(100000));  // 直外
+}
+
+// ユーザー定義番号・kUserDefinedのセンチネル値はToEntityTypeでは変換されない
+// (受け入れはパース側のIsUserDefinedEntityNumber併用で行う)
+TEST(IsUserDefinedEntityNumberTest, ToEntityTypeRemainsStrict) {
+    EXPECT_FALSE(ie::ToEntityType(602).has_value());
+    EXPECT_FALSE(ie::ToEntityType(10001).has_value());
+    EXPECT_FALSE(ie::ToEntityType(
+            static_cast<int>(ie::EntityType::kUserDefined)).has_value());
 }
