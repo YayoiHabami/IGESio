@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/common/parallel.h"
+
 #include "./shaders.h"
 
 namespace {
@@ -338,6 +340,8 @@ void EntityRenderer::EnsureSynced() const {
     SweepStaleGraphics(root);
     RebuildDrawList();
     UpdateAutoClipSphere();
+    // 可視集合が変わったためバケットの再構築が必要
+    draw_buckets_dirty_ = true;
 
     synced_revision_ = root.Revision();
     synced_root_ = root.GetID();
@@ -373,16 +377,48 @@ void EntityRenderer::SweepStaleGraphics(const models::Assembly& root) const {
     }
 }
 
+void EntityRenderer::PrepareCpuGeometries() const {
+    // 再同期が必要な描画オブジェクトを集める
+    std::vector<i_graph::IEntityGraphics*> dirty;
+    for (const auto& [id, graphics] : visible_list_) {
+        if (graphics && graphics->NeedsResync()) dirty.push_back(graphics);
+    }
+    if (dirty.empty()) return;
+
+    // CPU相 (テッセレーション・遅延生成等) を並列に前倒しする. PrewarmCpuはGL呼び出しを
+    // 含まず、各オブジェクトが自身のステージングのみ書き込むためロックなしで並列実行できる.
+    igesio::ParallelForEach(
+            dirty, [](i_graph::IEntityGraphics* g) { g->PrewarmCpu(); });
+
+    // 子の遅延生成・型確定でシェーダー型集合が変わりうるためバケットを作り直す
+    draw_buckets_dirty_ = true;
+}
+
 void EntityRenderer::ResyncGeometries() const {
+    // GPUへの転送 (Synchronize→DoSynchronize). PrepareCpuGeometriesで前倒し済みなら
+    // 即転送される. 単一GLコンテキスト前提でこのスレッドで直列に行う.
     bool resynced = false;
     for (const auto& [id, graphics] : visible_list_) {
-        if (graphics->NeedsResync()) {
+        if (graphics && graphics->NeedsResync()) {
             graphics->Synchronize();
             resynced = true;
         }
     }
     // 形状変更はBBoxも変えるため、自動クリップ球を追従させる
     if (resynced) UpdateAutoClipSphere();
+}
+
+void EntityRenderer::RebuildDrawBuckets() const {
+    draw_list_.clear();
+    for (const auto& [id, graphics] : visible_list_) {
+        if (!graphics) continue;
+        // バッチ描画のためシェーダー別に収集する (複合は子の各型へ収集される)
+        for (const auto st : graphics->GetShaderTypes()) {
+            if (HasSpecificShaderCode(st) && shader_programs_.count(st) > 0) {
+                draw_list_[st].push_back(graphics);
+            }
+        }
+    }
 }
 
 i_graph::IEntityGraphics* EntityRenderer::FindOrCreateGraphics(
@@ -393,9 +429,11 @@ i_graph::IEntityGraphics* EntityRenderer::FindOrCreateGraphics(
         return it->second.get();  // nullptrは負キャッシュ (再試行しない)
     }
 
-    // 遅延生成. 生成失敗 (型起因の恒久的失敗) はnullptrを負キャッシュする
+    // 遅延生成. 生成失敗 (型起因の恒久的失敗) はnullptrを負キャッシュする.
+    // 同期はReconcile経路 (ResyncGeometries) で並列前倒し+直列GL転送するため、
+    // ここでは生成時の同期を省く (synchronize=false)。
     auto ptr = std::static_pointer_cast<const entities::IEntityIdentifier>(entity);
-    auto graphics = CreateEntityGraphics(ptr, gl_);
+    auto graphics = CreateEntityGraphics(ptr, gl_, /*synchronize=*/false);
     if (graphics) {
         graphics->SetGlobalParam(*default_global_param_);
         // ビュー層のマテリアルオーバーライドを生成時に適用する
@@ -522,11 +560,19 @@ void EntityRenderer::Draw() const {
         gl_->Viewport(0, 0, display_width_, display_height_);
     }
 
-    // モデルリビジョン (構造・変換・表示状態) との突き合わせと、
-    // ジオメトリリビジョン (形状) の遅延再同期.
-    // カメラ操作・選択変更だけの再描画では走査せずキャッシュを再利用する
+    // 3フェーズ整流:
+    // (1) EnsureSynced: モデルリビジョンと突き合わせ、可視リストを再構築 (構造)
+    // (2) PrepareCpuGeometries: 形状のCPU準備を並列前倒し (遅延生成・テッセレーション)
+    // (3) RebuildDrawBuckets: CPU状態確定後にシェーダー別バケットを構築 (変化時のみ)
+    // (4) ResyncGeometries: GPUへ直列転送
+    // カメラ操作・選択変更だけの再描画では走査・準備・再バケットを省きキャッシュを再利用する
     // (選択ハイライトは毎フレームctxからPULLされるため再walkは不要)
     EnsureSynced();
+    PrepareCpuGeometries();
+    if (draw_buckets_dirty_) {
+        RebuildDrawBuckets();
+        draw_buckets_dirty_ = false;
+    }
     ResyncGeometries();
 
     // 描画するエンティティが1つもない場合は何もしない
@@ -568,7 +614,8 @@ void EntityRenderer::FitView() {
 }
 
 void EntityRenderer::RebuildDrawList() const {
-    draw_list_.clear();
+    // draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが管理する.
+    // ここでは可視リストのみ再構築する
     visible_list_.clear();
     if (scene_ == nullptr) return;
     WalkAssembly(scene_->Root(), igesio::Matrix4d::Identity(),
@@ -633,13 +680,9 @@ void EntityRenderer::WalkAssembly(
                 opacity_ovr ? *opacity_ovr : natural[3]});
         }
 
-        // バッチ描画のためシェーダー別に収集する (複合は子の各型へ収集される)
-        for (const auto st : graphics->GetShaderTypes()) {
-            if (HasSpecificShaderCode(st) && shader_programs_.count(st) > 0) {
-                draw_list_[st].push_back(graphics);
-            }
-        }
-        // ピック用の平坦リストへエンティティ毎に一意に収集する
+        // ピック用の平坦リストへエンティティ毎に一意に収集する.
+        // シェーダー別バケット (draw_list_) はCPU準備フェーズ後にRebuildDrawBucketsで
+        // 構築する (遅延生成の子・テッセレーション結果で型集合が確定してから振り分けるため)
         visible_list_.emplace_back(id, graphics);
     }
 
@@ -789,6 +832,9 @@ std::vector<i_graph::EntityHit> EntityRenderer::PickEntities(
     // 描画キャッシュをツリーと突き合わせる. これにより削除済み・非表示・抑制中・
     // フィルタ除外のエンティティは構造的にヒット不能になる
     EnsureSynced();
+    // 遅延生成 (142の子C(t)) 等のCPU状態を確定させる (CanIntersect/Intersectが成立する).
+    // GPU転送は不要なためResyncGeometriesは呼ばない
+    PrepareCpuGeometries();
 
     // フォールバック深度: カメラのターゲットをレイへ射影した距離
     const igesio::Vector3d target = camera_.GetTarget().cast<double>();
@@ -856,6 +902,8 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
 
     // 描画キャッシュをツリーと突き合わせる (PickEntitiesと同様)
     EnsureSynced();
+    // 遅延生成等のCPU状態を確定させる (GetSelectionSamples/境界が成立する)
+    PrepareCpuGeometries();
 
     // VP行列を一度だけ計算し、各サンプルの射影で使い回す
     const float aspect = static_cast<float>(w) / static_cast<float>(h);

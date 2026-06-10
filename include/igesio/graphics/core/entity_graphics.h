@@ -293,6 +293,18 @@ class EntityGraphics : public IEntityGraphics {
         return types;
     }
 
+    /// @brief 描画用CPUデータを事前構築する (既定: 子要素へカスケード)
+    /// @note 複合ノードは子要素 (child_graphics_) のPrewarmCpuを呼び、子に内包された
+    ///       遅延生成・テッセレーション等のCPU準備を伝播する。葉ノードは子を持たない
+    ///       ためno-op (重いCPU処理を持つ葉は本メソッドを個別にオーバーライドする)。
+    void PrewarmCpu() override {
+        for (auto& [st, list] : child_graphics_) {
+            for (auto& child : list) {
+                if (child) child->PrewarmCpu();
+            }
+        }
+    }
+
     /// @brief 子要素の描画オブジェクトを追加する (複合ノード化)
     /// @param graphics 追加する描画オブジェクト
     /// @note graphicsがnullptrの場合は何もしない. 子のShaderTypeでバケットへ格納する.

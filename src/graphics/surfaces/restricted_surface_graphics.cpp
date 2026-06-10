@@ -27,7 +27,8 @@ igesio::graphics::RestrictedSurfaceGraphics::RestrictedSurfaceGraphics(
         const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
           edge_buffer_(gl) {
-    Synchronize();
+    // 同期 (テッセレーション+GP転送) はレンダラのreconcile経路が駆動する
+    // (PrewarmCpuで並列前倒し → DoSynchronizeでGL転送)。ctorでは行わない。
 }
 
 igesio::graphics::RestrictedSurfaceGraphics::~RestrictedSurfaceGraphics() {
@@ -54,14 +55,33 @@ void igesio::graphics::RestrictedSurfaceGraphics::DrawImpl(
  * public
  */
 
+void igesio::graphics::RestrictedSurfaceGraphics::PrewarmCpu() {
+    if (!entity_) return;
+    // GL転送前のCPU相. 同一同期キーでは再構築しない (冪等)。自身のメンバのみ
+    // 書き込むため、レンダラから並列に呼んでも安全。
+    const std::uint64_t key = CurrentGeometryKey();
+    if (cpu_ready_ && cpu_key_ == key) return;
+
+    // テッセレーションは制限付き曲面(143/144/108有界)共通のアルゴリズムへ委譲する
+    pending_mesh_ = entities::TessellateRestrictedSurface(*entity_);
+    // 境界エッジ (外周/内周トリム境界) をモデル空間の折れ線として計算する
+    pending_edge_loops_ = entities::ComputeRestrictedSurfaceEdges(*entity_).loops;
+    cpu_ready_ = true;
+    cpu_key_ = key;
+}
+
 void igesio::graphics::RestrictedSurfaceGraphics::DoSynchronize() {
     Cleanup();
     SyncTexture();
-    GenerateSurfaceData();
 
-    // 境界エッジ (外周/内周トリム境界) を構築する
-    const auto edges = entities::ComputeRestrictedSurfaceEdges(*entity_);
-    edge_buffer_.Build(edges.loops);
+    // CPU相 (テッセレーション・境界エッジ). 通常はレンダラが並列に前倒し済み。
+    // 未構築なら自前で構築する (直列フォールバック)。
+    PrewarmCpu();
+
+    // ステージングを消費してGPUへ転送する
+    vertices_ = std::move(pending_mesh_.vertices);
+    indices_ = std::move(pending_mesh_.indices);
+    edge_buffer_.Build(pending_edge_loops_);
 
     gl_->GenVertexArrays(1, &vao_);
     gl_->GenBuffers(1, &vbo_);
@@ -90,6 +110,10 @@ void igesio::graphics::RestrictedSurfaceGraphics::DoSynchronize() {
                     indices_.data(), gl::kStaticDraw);
 
     gl_->BindVertexArray(0);
+
+    // ステージングは消費済み。次回 (編集による再同期) は再度PrewarmCpuで構築する。
+    cpu_ready_ = false;
+    pending_edge_loops_.clear();
 }
 
 void igesio::graphics::RestrictedSurfaceGraphics::Cleanup() {
@@ -150,13 +174,6 @@ igesio::graphics::RestrictedSurfaceGraphics::GetSelectionSamples(
 /**
  * private
  */
-
-void igesio::graphics::RestrictedSurfaceGraphics::GenerateSurfaceData() {
-    // テッセレーションは制限付き曲面(143/144/108有界)共通のアルゴリズムへ委譲する
-    auto mesh = entities::TessellateRestrictedSurface(*entity_);
-    vertices_ = std::move(mesh.vertices);
-    indices_ = std::move(mesh.indices);
-}
 
 void igesio::graphics::RestrictedSurfaceGraphics::AppendBoundaryWorldPolyline(
         const entities::ICurve& uv_boundary, int n_samples,

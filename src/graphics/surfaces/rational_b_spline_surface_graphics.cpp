@@ -27,7 +27,7 @@ RationalBSplineSurfaceGraphics::RationalBSplineSurfaceGraphics(
         const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kRationalBSplineSurface, true),
           edge_buffer_(gl) {
-    Synchronize();
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 RationalBSplineSurfaceGraphics::~RationalBSplineSurfaceGraphics() {

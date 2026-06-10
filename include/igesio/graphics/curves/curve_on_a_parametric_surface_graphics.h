@@ -46,10 +46,20 @@ class CurveOnAParametricSurfaceGraphics
     CurveOnAParametricSurfaceGraphics& operator=(
             const CurveOnAParametricSurfaceGraphics&) = delete;
 
-    /// @brief エンティティをセットアップする
-    /// @note 内部で参照するエンティティの状態に基づいて、
-    ///       描画用のリソースを再セットアップする
+    /// @brief 描画用CPUデータを事前構築する (子C(t)の描画オブジェクトを生成する)
+    /// @note GL転送を伴わないCPU相. 子を生成しておくことで、同期前でも
+    ///       GetShaderTypes/Intersect/色伝播が正しく機能する。生成時に親の
+    ///       変換・色を子へ伝播する。GPU転送はDoSynchronizeが行う。
+    void PrewarmCpu() override;
+
+    /// @brief エンティティをセットアップする (子C(t)のGPU転送)
+    /// @note 子が未生成ならPrewarmCpuで生成してから子をSynchronizeする
     void DoSynchronize() override;
+
+    /// @brief グローバル座標系への変換行列を設定する
+    /// @note 子C(t)はchild_graphics_でなく専用メンバのため、基底のカスケードが
+    ///       届かない。基底適用後にmatrix·M_entityを子へ明示的に伝播する。
+    void SetWorldTransform(const igesio::Matrix4d&) override;
 
     /// @brief OpenGLリソースを解放する
     void Cleanup() override;

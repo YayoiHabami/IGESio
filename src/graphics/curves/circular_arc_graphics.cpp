@@ -22,7 +22,7 @@ CircularArcGraphics::CircularArcGraphics(
         const std::shared_ptr<const entities::CircularArc>& entity,
         const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kCircularArc, true) {
-    Synchronize();
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 CircularArcGraphics::~CircularArcGraphics() {

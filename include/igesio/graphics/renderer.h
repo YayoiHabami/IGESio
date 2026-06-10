@@ -98,6 +98,28 @@ struct DisplayFilter {
 
 /// @brief エンティティの描画を担当するクラス
 /// @note OpenGLを使用してエンティティの曲線を描画する
+/// @note 保持する描画オブジェクト・各リストはすべてScene (`scene_`) 由来の派生キャッシュ。
+///       scene_は非所有でレンダラより長命であること。ツリー編集はAssemblyのモデル
+///       リビジョン (`synced_root_`+`synced_revision_` のペア比較) で自動検知し、レンダラ
+///       内部の変更は`local_dirty_`で表す。編集後の手動通知は不要。
+/// @note GL前提のメソッド (`Initialize`/`Cleanup`/`EnsureSynced`/`ResyncGeometries`/
+///       `Draw`) はGLコンテキストをカレントにしたスレッドから呼ぶこと。
+///       setter (`SetScene`/`SetMaterialProperty`/`SetDisplayFilter`等) はGLを触らず
+///       フラグ/キュー操作のみ行い、GLを要する適用 (マテリアル・テクスチャ) は
+///       reconcile走査へ遅延する。
+/// @note 描画は「3フェーズ整流」で行う:
+///       (A) `EnsureSynced` 構造突き合わせ (`visible_list_`構築) →
+///       (B) `PrepareCpuGeometries` CPU準備を並列前倒し →
+///       (C) `RebuildDrawBuckets` 型確定後にシェーダー別バケット構築 →
+///       (D) `ResyncGeometries` GPU転送。`Draw`はA〜Dを順に実行する。
+///       ピック/範囲選択はA→Bのみ行い、`visible_list_`を解析的に走査する
+///       (描画バケット・GPU転送は不要)。
+/// @note 描画リストは2系統。`draw_list_`はシェーダー別バッチ描画用 (複合は子の各型へ
+///       重複登録)、`visible_list_`はピック用 (エンティティ毎に一意)。バケット構築は
+///       CPU準備後に行い、型集合が確定してから振り分ける。
+/// @note カメラ操作・選択変更のみのフレームは早期returnと`draw_buckets_dirty_`未更新で
+///       リスト・バケットを再利用する。選択ハイライトは毎フレーム`DrawContext`からPULL
+///       するため再走査は不要。
 class EntityRenderer {
     /// @brief OpenGLラッパー
     std::shared_ptr<IOpenGL> gl_;
@@ -172,6 +194,10 @@ class EntityRenderer {
     ///       ピックはこちらを走査して二重判定を避ける. 削除済み・非表示・抑制中・
     ///       フィルタ除外のエンティティは構造的に含まれない
     mutable std::vector<std::pair<ObjectID, IEntityGraphics*>> visible_list_;
+    /// @brief draw_list_ (シェーダー別バケット) の再構築が必要か
+    /// @note 構造再構築 (visible_list_変化) またはCPU準備 (PrewarmCpu) で
+    ///       シェーダー型集合が変わりうる時に立てる. 変化が無い間はバケットを再利用する
+    mutable bool draw_buckets_dirty_ = true;
     /// @brief 表示フィルタ (ビュー状態)
     DisplayFilter display_filter_;
     /// @brief エンティティ毎の描画プロパティのオーバーライド
@@ -381,6 +407,10 @@ class EntityRenderer {
      */
 
     /// @brief エンティティを描画する
+    /// @note 3フェーズ整流を順に実行する: `EnsureSynced` (構造) →
+    ///       `PrepareCpuGeometries` (CPU準備) → `RebuildDrawBuckets` (型確定後・変化時
+    ///       のみ) → `ResyncGeometries` (GPU転送) → `ExecuteDrawList`。
+    ///       GLコンテキストをカレントにしたスレッドから呼ぶこと。
     void Draw() const;
 
     /// @brief 現在の描画状態をキャプチャする
@@ -481,12 +511,14 @@ class EntityRenderer {
     gl::Uint CreateShaderProgram(gl::Uint, gl::Uint,
                                  gl::Uint = 0, gl::Uint = 0, gl::Uint = 0);
 
-    /// @brief 描画キャッシュ・描画/可視リストをSceneツリーと突き合わせる (Reconcile)
+    /// @brief 描画キャッシュ・可視リストをSceneツリーと突き合わせる (Reconcile; 構造相)
     /// @note Draw/PickEntities/PickEntitiesInRectの冒頭で呼ぶ. モデルリビジョン
     ///       (synced_root_とのペア比較) とlocal_dirty_が一致する間は何もしない.
-    ///       不一致時はSweep→ツリー走査 (遅延生成+リスト再構築)→自動クリップ球更新を
-    ///       行う. 描画オブジェクトの生成/Cleanup()を行うため、GLコンテキストが
-    ///       カレントなスレッドから呼ぶこと. scene_またはgl_が未設定なら何もしない
+    ///       不一致時はSweep→ツリー走査 (遅延生成+visible_list_再構築)→自動クリップ球
+    ///       更新を行い、draw_buckets_dirty_を立てる (draw_list_バケットはCPU準備後に
+    ///       RebuildDrawBucketsが構築する). Sweepのcleanupやマテリアル適用のSyncTextureで
+    ///       GLに触れるため、GLコンテキストがカレントなスレッドから呼ぶこと.
+    ///       scene_またはgl_が未設定なら何もしない
     void EnsureSynced() const;
 
     /// @brief ツリーから削除されたエンティティの描画キャッシュを破棄する (Sweep)
@@ -495,19 +527,34 @@ class EntityRenderer {
     ///       material_overrides_/pending_material_ids_も同条件で掃除する
     void SweepStaleGraphics(const models::Assembly& root) const;
 
-    /// @brief 可視エンティティのジオメトリ再同期を遅延実行する
-    /// @note Drawの冒頭 (EnsureSynced後) で呼ぶ. visible_list_の各要素について
-    ///       同期キーの不一致 (NeedsResync) を検査し、Synchronize()を再実行する.
+    /// @brief 可視エンティティの描画用CPUデータを並列に事前構築する (CPU相)
+    /// @note Draw/Pickの冒頭 (EnsureSynced後) で呼ぶ. visible_list_のうち
+    ///       NeedsResyncな要素へ並列にPrewarmCpu()を呼ぶ (GL呼び出しを含まない).
+    ///       これにより遅延生成 (142の子C(t)) ・テッセレーション等のCPU状態が確定し、
+    ///       GetShaderTypes/Intersectが同期前でも正しく機能する.
+    ///       準備対象があればdraw_buckets_dirty_を立てる.
+    void PrepareCpuGeometries() const;
+
+    /// @brief 可視エンティティのジオメトリをGPUへ再同期する (GPU相)
+    /// @note Drawの冒頭 (PrepareCpuGeometries後) で呼ぶ. visible_list_の各要素について
+    ///       同期キーの不一致 (NeedsResync) を検査し、Synchronize()でGPU転送する.
     ///       形状変更はBBoxも変えるため、再同期があれば自動クリップ球も更新する.
-    ///       ピッキングはエンティティを解析的に読むため再同期不要
+    ///       ピッキングはエンティティを解析的に読むためGPU相は不要 (CPU相のみ呼ぶ)
     void ResyncGeometries() const;
+
+    /// @brief visible_list_からシェーダー別バケット (draw_list_) を再構築する
+    /// @note PrepareCpuGeometries後 (CPU状態確定後) に、draw_buckets_dirty_の時のみ呼ぶ.
+    ///       各オブジェクトのGetShaderTypes()でバケットへ振り分ける (複合は各子型へ).
+    void RebuildDrawBuckets() const;
 
     /// @brief 指定IDの描画オブジェクトを取得し、未在席なら遅延生成する
     /// @param id エンティティのID
     /// @param entity 生成に用いるエンティティ
     /// @return 描画オブジェクトのポインタ. 生成失敗 (型起因) はnullptr
     /// @note 生成失敗はnullptrを負キャッシュし、再試行しない. 生成時は
-    ///       default_global_param_とmaterial_overrides_を適用する
+    ///       default_global_param_とmaterial_overrides_を適用する. 同期はreconcile経路
+    ///       (PrepareCpuGeometries/ResyncGeometries) で行うため、生成時の同期は省く
+    ///       (CreateEntityGraphics(synchronize=false))
     IEntityGraphics* FindOrCreateGraphics(
             const ObjectID& id,
             const std::shared_ptr<entities::EntityBase>& entity) const;
@@ -523,8 +570,10 @@ class EntityRenderer {
     ///       シーン未設定またはBBoxが空の場合は自動クリッピングを解除する
     void UpdateAutoClipSphere() const;
 
-    /// @brief scene_を走査して描画/可視リストを再構築し、ワールド変換と色を
-    ///        リフレッシュする (EnsureSyncedのWalkステップ)
+    /// @brief scene_を走査して可視リスト (visible_list_) を再構築し、ワールド変換と
+    ///        色をリフレッシュする (EnsureSyncedのWalkステップ)
+    /// @note draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが構築するため
+    ///       ここでは扱わない
     void RebuildDrawList() const;
 
     /// @brief Assemblyツリーを再帰走査する (RebuildDrawListの実体)
@@ -535,9 +584,9 @@ class EntityRenderer {
     /// @note 可視/抑制サブツリー (node.Display()で判定) と表示フィルタ除外型は
     ///       スキップする (キャッシュは温存). 未在席の描画オブジェクトは遅延生成し、
     ///       適用待ちマテリアルを適用する. node大域変換を掛けた累積をworld_transform_へ
-    ///       流し (M_entityは含めない)、graphicsをシェーダー別にdraw_list_へ、
-    ///       エンティティ毎に一意にvisible_list_へ収集する. 色/不透明度の最近接
-    ///       オーバーライドを解決し、各描画オブジェクトへフレーム毎にPUSHする.
+    ///       流し (M_entityは含めない)、エンティティ毎に一意にvisible_list_へ収集する
+    ///       (シェーダー別バケットdraw_list_はRebuildDrawBucketsが構築). 色/不透明度の
+    ///       最近接オーバーライドを解決し、各描画オブジェクトへフレーム毎にPUSHする.
     void WalkAssembly(const models::Assembly& node,
                       const igesio::Matrix4d& parent_accum,
                       const std::optional<std::array<float, 3>>& inherited_color,

@@ -25,7 +25,7 @@ ICurveGraphics::ICurveGraphics(
         const std::shared_ptr<const entities::ICurve>& entity,
         const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralCurve, false) {
-    Synchronize();
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 ICurveGraphics::~ICurveGraphics() {

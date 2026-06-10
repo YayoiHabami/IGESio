@@ -127,24 +127,32 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
 
 std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(
         const std::shared_ptr<const i_ent::IEntityIdentifier>& entity,
-        const std::shared_ptr<i_graph::IOpenGL>& gl) {
+        const std::shared_ptr<i_graph::IOpenGL>& gl,
+        const bool synchronize) {
     // entityがnullptrの場合は無効なポインタを返す
     if (!entity) return nullptr;
     // UnsupportedEntityの場合は無効なポインタを返す
     if (!entity->IsSupported()) return nullptr;
 
+    std::unique_ptr<i_graph::IEntityGraphics> graphics;
     if (auto curve = std::dynamic_pointer_cast<const i_ent::ICurve>(entity)) {
         // 曲線の描画オブジェクトを作成
-        return CreateCurveGraphics(curve, gl);
+        graphics = CreateCurveGraphics(curve, gl);
     } else if (auto surface = std::dynamic_pointer_cast<const i_ent::ISurface>(entity)) {
         // 曲面の描画オブジェクトを作成
-        return CreateSurfaceGraphics(surface, gl);
+        graphics = CreateSurfaceGraphics(surface, gl);
     } else if (auto point = std::dynamic_pointer_cast<const i_ent::Point>(entity)) {
         // Type 116: Pointの描画オブジェクトを作成
         // NOTE: curvesの下に配置してはいるが、ICurveを継承していないため、ここで処理する
-        return std::make_unique<i_graph::PointGraphics>(point, gl);
+        graphics = std::make_unique<i_graph::PointGraphics>(point, gl);
+    } else {
+        // いずれにも当てはまらない場合は無効なポインタを返す
+        return nullptr;
     }
 
-    // いずれにも当てはまらない場合は無効なポインタを返す
-    return nullptr;
+    // 既定では生成時に同期 (CPU構築+GL転送) まで行い即描画可能な状態で返す.
+    // 複合系は自身のSynchronizeが子孫へ伝播する。レンダラはsynchronize=falseで
+    // 遅延し、reconcile経路で並列前倒し+直列GL転送を行う。
+    if (graphics && synchronize) graphics->Synchronize();
+    return graphics;
 }

@@ -34,7 +34,7 @@ ISurfaceGraphics::ISurfaceGraphics(
         const std::shared_ptr<IOpenGL>& gl)
         : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
           edge_buffer_(gl) {
-    Synchronize();
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 ISurfaceGraphics::~ISurfaceGraphics() {

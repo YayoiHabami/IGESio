@@ -8,6 +8,7 @@
 #ifndef IGESIO_GRAPHICS_SURFACES_RESTRICTED_SURFACE_GRAPHICS_H_
 #define IGESIO_GRAPHICS_SURFACES_RESTRICTED_SURFACE_GRAPHICS_H_
 
+#include <cstdint>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -15,6 +16,7 @@
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_restricted_surface.h"
+#include "igesio/entities/surfaces/algorithms/restricted_surface_mesh.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
 
@@ -41,6 +43,17 @@ class RestrictedSurfaceGraphics
     std::vector<gl::Uint> indices_;
     /// @brief 境界エッジ (外周/内周トリム境界) の線分バッファ
     SurfaceEdgeBuffer edge_buffer_;
+
+    /// @brief 描画用CPUデータのステージング (PrewarmCpuが構築、DoSynchronizeが消費)
+    /// @note GL転送前のCPU側メッシュ。前倒しテッセレーション結果をここへ置き、
+    ///       DoSynchronize (GLスレッド) がvertices_/indices_へ移してGPUへ転送する。
+    entities::RestrictedSurfaceMesh pending_mesh_;
+    /// @brief 境界エッジループ (モデル空間の折れ線群) のステージング
+    std::vector<std::vector<Vector3d>> pending_edge_loops_;
+    /// @brief pending_*が現在の幾何キーで構築済みか (冪等判定用)
+    bool cpu_ready_ = false;
+    /// @brief pending_*構築時の同期キー (CurrentGeometryKeyと比較)
+    std::uint64_t cpu_key_ = 0;
 
  public:
     /// @brief コンストラクタ
@@ -83,16 +96,23 @@ class RestrictedSurfaceGraphics
     }
 
     /// @brief 全ての可能なシェーダータイプを取得する
-    /// @note 面シェーダーに加え、エッジがあればkSurfaceEdgeを含める
+    /// @note 面シェーダーに加え、境界エッジ用のkSurfaceEdgeを常に含める。
+    ///       描画バケットは同期前 (edge_buffer_未構築) のreconcile段で構築されるため、
+    ///       構築状態に依存させてはならない (実際に空ならDrawがIsEmptyで早期return)。
     std::unordered_set<ShaderType> GetShaderTypes() const override {
         auto types = EntityGraphics::GetShaderTypes();
-        if (!edge_buffer_.IsEmpty()) types.insert(ShaderType::kSurfaceEdge);
+        types.insert(ShaderType::kSurfaceEdge);
         return types;
     }
 
-    /// @brief エンティティをセットアップする
-    /// @note 内部で参照するエンティティの状態に基づいて、
-    ///       描画用のリソースを再セットアップする
+    /// @brief 描画用CPUデータ (テッセレーション・境界エッジ) を事前構築する
+    /// @note GL呼び出しを含まないため、レンダラから並列に呼べる。結果は
+    ///       pending_mesh_/pending_edge_loops_へ格納する。同一同期キーでは再構築しない。
+    void PrewarmCpu() override;
+
+    /// @brief エンティティをセットアップする (GL転送)
+    /// @note PrewarmCpuで前倒し済みならステージングをGPUへ転送するのみ。未構築なら
+    ///       自前でPrewarmCpuを呼んでから転送する (直列フォールバック)。
     void DoSynchronize() override;
 
     /// @brief OpenGLリソースを解放する
@@ -113,9 +133,6 @@ class RestrictedSurfaceGraphics
     void DrawImpl(gl::Uint, const std::pair<float, float>&) const override;
 
  private:
-    /// @brief 描画用の頂点/法線データとインデックスデータを生成する
-    void GenerateSurfaceData();
-
     /// @brief UV境界曲線を基底曲面S(u,v)で3D化したワールド折れ線をresultへ追加する
     /// @param uv_boundary UV空間の境界曲線 (TryGetPointAtが(u,v,0)を返す)
     /// @param n_samples サンプル分割数

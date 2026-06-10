@@ -29,7 +29,7 @@ EllipseGraphics::EllipseGraphics(
     if (entity->GetConicType() != entities::ConicType::kEllipse) {
         throw std::invalid_argument("Entity is not an ellipse.");
     }
-    Synchronize();
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 EllipseGraphics::~EllipseGraphics() {

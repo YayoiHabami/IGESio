@@ -81,10 +81,12 @@ class RationalBSplineSurfaceGraphics
     }
 
     /// @brief 全ての可能なシェーダータイプを取得する
-    /// @note 面シェーダーに加え、エッジがあればkSurfaceEdgeを含める
+    /// @note 面シェーダーに加え、境界エッジ用のkSurfaceEdgeを常に含める。
+    ///       描画バケットは同期前 (edge_buffer_未構築) のreconcile段で構築されるため、
+    ///       構築状態に依存させてはならない (実際に空ならDrawがIsEmptyで早期return)。
     std::unordered_set<ShaderType> GetShaderTypes() const override {
         auto types = EntityGraphics::GetShaderTypes();
-        if (!edge_buffer_.IsEmpty()) types.insert(ShaderType::kSurfaceEdge);
+        types.insert(ShaderType::kSurfaceEdge);
         return types;
     }
 
