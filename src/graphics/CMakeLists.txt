@@ -90,7 +90,7 @@ target_link_libraries(igesio_graphics
     PRIVATE
         # gladは公開ヘッダに出さない (core/open_gl.cppのみが内部で使用).
         # 静的ライブラリのため、リンク用アーカイブは利用側へ自動で伝播する.
-        glad_gl_core_43
+        igesio_glad_gl_core_43
 )
 
 # Create an alias for the graphics library

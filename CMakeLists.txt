@@ -243,17 +243,19 @@ if(IGESIO_ENABLE_GRAPHICS)
   # コンテキスト固有のロード (gladLoadGLContext) をライブラリ内部に封じ込められる.
   # gl:core=4.3: graphicsモジュールはテッセレーション (GL 4.0) とSSBO (GL 4.3)
   # に依存するため、要求バージョンと同じ4.3 coreで生成したローダを使用する.
-  add_library(glad_gl_core_43 STATIC
+  # ターゲット名にigesio_接頭辞を付ける: add_subdirectory/FetchContentで本ライブラリを
+  # 取り込む利用側が自前の同名gladターゲットを持つ場合の、CMakeターゲット名衝突を避けるため.
+  add_library(igesio_glad_gl_core_43 STATIC
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad_gl_core_43/src/gl.c"
   )
   # Use generator expressions for the include directories,
   # making the target relocatable for both build and install.
-  target_include_directories(glad_gl_core_43 PUBLIC
+  target_include_directories(igesio_glad_gl_core_43 PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad_gl_core_43/include>"
     "$<INSTALL_INTERFACE:include>"
   )
   # glad付属CMakeのリンク指定と同等 (Linuxでのdlopen用; MSVC等では空)
-  target_link_libraries(glad_gl_core_43 PUBLIC ${CMAKE_DL_LIBS})
+  target_link_libraries(igesio_glad_gl_core_43 PUBLIC ${CMAKE_DL_LIBS})
   message(STATUS "OpenGL (glad) support enabled")
 else()
   message(STATUS "OpenGL (glad) support is disabled")
@@ -393,7 +395,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         # gladアーカイブはエクスポートを維持する (PRIVATE依存として利用側へ自動で
         # 伝播し、利用側は`IGESio::graphics`をリンクするだけでよい).
         # gladヘッダはinstallしない (公開includeにgladを一切出さないため).
-        install(TARGETS glad_gl_core_43
+        install(TARGETS igesio_glad_gl_core_43
             EXPORT IGESioTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
