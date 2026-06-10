@@ -557,7 +557,7 @@ class EntityRenderer {
     ///       (CreateEntityGraphics(synchronize=false))
     IEntityGraphics* FindOrCreateGraphics(
             const ObjectID& id,
-            const std::shared_ptr<entities::EntityBase>& entity) const;
+            const std::shared_ptr<entities::IEntityIdentifier>& entity) const;
 
     /// @brief 指定IDの描画オブジェクトを取得する
     /// @param id エンティティのID

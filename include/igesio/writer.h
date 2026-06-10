@@ -44,6 +44,9 @@ bool WriteIgesIntermediate(const models::IntermediateIgesData&, const std::strin
 ///        save_unsupportedがfalseの場合
 /// @throw igesio::DataFormatError dataのエンティティが、dataが持たないエンティティを
 ///        参照している場合
+/// @note 非IGESエンティティ (EntityType::kNonIges; IGESへシリアライズされない
+///       計算・描画専用型) はIGESファイルに現れないのが正常系のため、エラーと
+///       せずスキップされる (save_unsupportedの対象外)
 models::IntermediateIgesData
 ConvertToIntermediate(const models::IgesData&, const bool = false);
 
@@ -61,6 +64,8 @@ ConvertToIntermediate(const models::IgesData&, const bool = false);
 /// @throw igesio::DataFormatError dataのエンティティが、dataが持たないエンティティを
 ///        参照している場合
 /// @note すでにfile_pathに同名のファイルが存在する場合は上書きする.
+/// @note 非IGESエンティティ (EntityType::kNonIges) は出力からスキップされる
+///       (ConvertToIntermediateの注記を参照).
 bool WriteIges(const models::IgesData&, const std::string&, const bool = false);
 
 }  // namespace igesio

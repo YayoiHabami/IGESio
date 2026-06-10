@@ -1391,6 +1391,7 @@ igesio::entities::RawEntityDE igesio::entities::RawEntityDE::ByDefault(
                 fn = 1;  // デフォルト値の場合は暗黙的に1に変更
             }
             return DefaultDE(et, fn, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "????????");
+        case EntityType::kNonIges:
         case EntityType::kUserDefined:
             // 無効
             break;

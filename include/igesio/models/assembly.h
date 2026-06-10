@@ -151,7 +151,12 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     ObjectID id_ = IDGenerator::Generate(ObjectType::kAssembly);
 
     /// @brief このノードが直接所有するエンティティのIDとポインタのマッピング
-    std::unordered_map<ObjectID, std::shared_ptr<entities::EntityBase>> entities_;
+    /// @note 値型は識別の基底`IEntityIdentifier`. IGESエンティティ(EntityBase)に
+    ///       加えて、非IGESエンティティ(計算・描画専用のユーザー定義型)も保存できる.
+    ///       IGES固有の機構(ポインタ解決・DEステータス・検証等)はEntityBaseへの
+    ///       キャストで選別し、非EntityBaseには安全な既定挙動を与える
+    std::unordered_map<ObjectID, std::shared_ptr<entities::IEntityIdentifier>>
+            entities_;
 
     /// @brief 子Assemblyのリスト (物理的な所有)
     std::vector<std::shared_ptr<Assembly>> children_;
@@ -203,7 +208,53 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @param[out] entity ポインタを設定するエンティティ
     /// @note entityが未登録のポインタを持ち、かつentities_がそれを持つ場合、
     ///       entityにそのポインタを設定する. 対象はこのノードのentities_のみ.
-    void SetPointerIfUnset(const std::shared_ptr<entities::EntityBase>&);
+    /// @note ポインタ解決はIGESエンティティ固有の機構のため、entity・entities_の
+    ///       要素ともEntityBaseへのキャストで選別する (非EntityBaseは対象外)
+    void SetPointerIfUnset(const std::shared_ptr<entities::IEntityIdentifier>&);
+
+    /// @brief エンティティを一括追加する実装 (AddEntitiesの共通本体)
+    /// @param entities 追加するエンティティの配列
+    /// @note EntityBase版とテンプレート版のAddEntitiesで共有する.
+    ///       ポインタの一括解決はEntityBaseの要素のみを対象とする
+    /// @note テンプレート版AddEntitiesから任意の要素型で実体化されるため、
+    ///       ヘッダ内で定義する
+    template <typename T>
+    void AddEntitiesImpl(const std::vector<std::shared_ptr<T>>& entities) {
+        // 事前にreserveしてリハッシュを抑える
+        entities_.reserve(entities_.size() + entities.size());
+
+        // まず全エンティティをマップとルート逆引きインデックスへ登録する
+        for (const auto& entity : entities) {
+            if (!entity) {
+                throw std::invalid_argument("Entity pointer is null");
+            }
+            const auto id = entity->GetID();
+            entities_[id] = entity;
+            RegisterInIndex(id, this);
+        }
+        // 構造変更としてモデルリビジョンをバンプする (一括追加で1回)
+        BumpRevision();
+
+        // 全件登録後に参照解決を1回だけ行う (O(エンティティ数+参照数)).
+        // 各エンティティの未解決参照のうち、このノードが持つものを解決することで、
+        // 前方参照・後方参照の双方が一括で解決される. 1件ずつAddEntityを呼ぶ場合に
+        // 生じる挿入ごとの全件走査 (O(N^2)) を回避するための経路.
+        // ポインタ解決はIGESエンティティ(EntityBase)固有の機構のため、
+        // 非EntityBaseの要素はスキップする
+        for (const auto& [id, ent] : entities_) {
+            const auto eb =
+                    std::dynamic_pointer_cast<entities::EntityBase>(ent);
+            if (!eb) continue;
+            for (const auto& rid : eb->GetUnresolvedReferences()) {
+                auto it = entities_.find(rid);
+                if (it == entities_.end()) continue;
+                if (auto ref = std::dynamic_pointer_cast<entities::EntityBase>(
+                        it->second)) {
+                    eb->SetUnresolvedReference(ref);
+                }
+            }
+        }
+    }
 
     /// @brief nodeが自身(this)のサブツリーに属すか (自身を含む)
     /// @param node 判定対象のノード
@@ -241,8 +292,13 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @param entity 追加するエンティティ
     /// @return 追加に成功した場合は、そのエンティティのIDを返す.
     /// @throw std::invalid_argument entityがnullptrの場合
+    /// @note IGESエンティティ(EntityBase)のほか、`IEntityIdentifier`を実装した
+    ///       非IGESエンティティ(計算・描画専用のユーザー定義型)も追加できる.
+    ///       非IGESエンティティはIGES出力(WriteIges)からスキップされる.
+    /// @note ビュー(CurveView/SurfaceView)は型上は追加可能だが、スナップショット
+    ///       意味論(生成時点の変換を固定)のため追加しないこと(非推奨)
     template<typename T>
-    std::enable_if_t<std::is_base_of_v<entities::EntityBase, T>, ObjectID>
+    std::enable_if_t<std::is_base_of_v<entities::IEntityIdentifier, T>, ObjectID>
     AddEntity(const std::shared_ptr<T>& entity) {
         // nullptrチェック
         if (!entity) {
@@ -271,6 +327,22 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     void AddEntities(
             const std::vector<std::shared_ptr<entities::EntityBase>>&);
 
+    /// @brief 複数のエンティティを一括で追加する (テンプレート版)
+    /// @param entities 追加するエンティティの配列
+    ///        (要素型はIEntityIdentifierを実装する任意の型)
+    /// @throw std::invalid_argument いずれかのエンティティがnullptrの場合
+    /// @note 非IGESエンティティを含む配列を一括追加する場合に使用する.
+    ///       ポインタの一括解決はEntityBaseの要素のみを対象とする
+    /// @note 波括弧初期化リスト (`AddEntities({a, b})` 等) はテンプレート引数を
+    ///       推論できないため、EntityBase版のオーバーロードへ一意に解決される
+    ///       (オーバーロード曖昧の構造的な回避)
+    template <typename T, std::enable_if_t<
+            std::is_base_of_v<entities::IEntityIdentifier, T> &&
+            !std::is_same_v<T, entities::EntityBase>, int> = 0>
+    void AddEntities(const std::vector<std::shared_ptr<T>>& entities) {
+        AddEntitiesImpl(entities);
+    }
+
     /// @brief エンティティが参照する全てのエンティティのポインタが設定済みか
     /// @return 一つでも未設定のポインタがある場合は`false`
     /// @note Directory Entry フィールド関連のメンバも含む. このノードのみを対象とする.
@@ -286,11 +358,23 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @param id エンティティのID
     /// @return 指定されたIDのエンティティのポインタ. 存在しない場合は`nullptr`.
     /// @note このノードが直接所有するエンティティのみを対象とする.
-    std::shared_ptr<entities::EntityBase> GetEntity(const ObjectID&) const;
+    std::shared_ptr<entities::IEntityIdentifier> GetEntity(const ObjectID&) const;
+
+    /// @brief エンティティのポインタを指定型として取得する
+    /// @tparam T 取得する型 (EntityBase・具象エンティティ・能力インターフェース等)
+    /// @param id エンティティのID
+    /// @return `dynamic_pointer_cast<T>`の結果.
+    ///         存在しない場合・型が一致しない場合は`nullptr`.
+    /// @note このノードが直接所有するエンティティのみを対象とする.
+    template <typename T>
+    std::shared_ptr<T> GetEntityAs(const ObjectID& id) const {
+        return std::dynamic_pointer_cast<T>(GetEntity(id));
+    }
 
     /// @brief エンティティへの参照の取得
     /// @return このノードが直接所有するエンティティのポインタのマップ
-    const std::unordered_map<ObjectID, std::shared_ptr<entities::EntityBase>>&
+    const std::unordered_map<ObjectID,
+                             std::shared_ptr<entities::IEntityIdentifier>>&
     GetEntities() const { return entities_; }
 
     /// @brief エンティティの数を取得する
@@ -442,13 +526,15 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @param type エンティティのタイプ
     /// @param recursive trueの場合は全子孫を含める (デフォルト: false)
     /// @return 該当するエンティティのリスト
-    std::vector<std::shared_ptr<entities::EntityBase>>
+    std::vector<std::shared_ptr<entities::IEntityIdentifier>>
     FindEntitiesByType(entities::EntityType type, bool recursive = false) const;
 
     /// @brief 指定のEntityUseFlagを持つエンティティを取得する
     /// @param flag エンティティの用途フラグ
     /// @param recursive trueの場合は全子孫を含める (デフォルト: false)
     /// @return 該当するエンティティのリスト
+    /// @note 用途フラグはDEステータス由来のため、対象はIGESエンティティ
+    ///       (EntityBase) のみ. 非IGESエンティティは含まれない
     std::vector<std::shared_ptr<entities::EntityBase>>
     FindEntitiesByUseFlag(entities::EntityUseFlag flag,
                           bool recursive = false) const;
@@ -457,9 +543,10 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     /// @param predicate エンティティを受け取り、合致する場合にtrueを返す述語
     /// @param recursive trueの場合は全子孫を含める (デフォルト: false)
     /// @return 該当するエンティティのリスト
-    std::vector<std::shared_ptr<entities::EntityBase>>
-    FindEntities(const std::function<bool(const entities::EntityBase&)>& predicate,
-                 bool recursive = false) const;
+    std::vector<std::shared_ptr<entities::IEntityIdentifier>>
+    FindEntities(
+            const std::function<bool(const entities::IEntityIdentifier&)>& predicate,
+            bool recursive = false) const;
 
 
 

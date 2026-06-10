@@ -5,6 +5,7 @@ set(TEST_SOURCES
     test_assembly_coords.cpp
     test_initial_tree.cpp
     test_flatten.cpp
+    test_non_iges_entity.cpp
 
     test_selection_set.cpp
     test_scene.cpp

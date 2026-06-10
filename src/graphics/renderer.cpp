@@ -423,7 +423,7 @@ void EntityRenderer::RebuildDrawBuckets() const {
 
 i_graph::IEntityGraphics* EntityRenderer::FindOrCreateGraphics(
         const ObjectID& id,
-        const std::shared_ptr<entities::EntityBase>& entity) const {
+        const std::shared_ptr<entities::IEntityIdentifier>& entity) const {
     auto it = graphics_cache_.find(id);
     if (it != graphics_cache_.end()) {
         return it->second.get();  // nullptrは負キャッシュ (再試行しない)
@@ -432,8 +432,7 @@ i_graph::IEntityGraphics* EntityRenderer::FindOrCreateGraphics(
     // 遅延生成. 生成失敗 (型起因の恒久的失敗) はnullptrを負キャッシュする.
     // 同期はReconcile経路 (ResyncGeometries) で並列前倒し+直列GL転送するため、
     // ここでは生成時の同期を省く (synchronize=false)。
-    auto ptr = std::static_pointer_cast<const entities::IEntityIdentifier>(entity);
-    auto graphics = CreateEntityGraphics(ptr, gl_, /*synchronize=*/false);
+    auto graphics = CreateEntityGraphics(entity, gl_, /*synchronize=*/false);
     if (graphics) {
         graphics->SetGlobalParam(*default_global_param_);
         // ビュー層のマテリアルオーバーライドを生成時に適用する
@@ -642,7 +641,10 @@ void EntityRenderer::WalkAssembly(
         // 物理従属エンティティは親 (複合曲線・トリム面等) の描画オブジェクトが
         // 子として描画するため、独立した描画対象としない
         // (二重描画と重複ピックの防止)
-        if (entity->GetSubordinateEntitySwitch()
+        // (従属スイッチはDEステータス由来のためEntityBaseのみが持つ.
+        //  非IGESエンティティは常に独立扱い=描画対象)
+        const auto eb = std::dynamic_pointer_cast<entities::EntityBase>(entity);
+        if (eb && eb->GetSubordinateEntitySwitch()
                 == entities::SubordinateEntitySwitch::kPhysicallyDependent) {
             continue;
         }

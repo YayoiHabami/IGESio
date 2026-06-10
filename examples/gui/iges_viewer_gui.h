@@ -92,7 +92,7 @@ class IgesViewerGUI {
 
     /// @brief エンティティタイプごとの(表示対象)エンティティリスト
     std::map<entities::EntityType,
-             std::vector<std::shared_ptr<entities::EntityBase>>> entities_;
+             std::vector<std::shared_ptr<entities::IEntityIdentifier>>> entities_;
     /// @brief エンティティタイプごとの表示フラグ
     std::map<entities::EntityType, bool> show_entity_;
     /// @brief 全エンティティを表示するフラグ
@@ -148,7 +148,7 @@ class IgesViewerGUI {
     /// @brief 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
     /// @note 描画オブジェクト自体はレンダラがSceneツリーとの突き合わせで
     ///       遅延生成するため、ここではUI状態のみを構築する
-    void CacheEntityType(const std::shared_ptr<entities::EntityBase>& entity);
+    void CacheEntityType(const std::shared_ptr<entities::IEntityIdentifier>& entity);
 
     /// @brief 型別表示フラグ(show_entity_)をレンダラの表示フィルタへ反映する
     void ApplyDisplayFilter();

@@ -340,12 +340,18 @@ namespace {
 /// @param node 対象ノード
 /// @param[out] out 収集した(ID, エンティティ)の格納先
 /// @note Assemblyは非永続のため、出力時は全子孫の所有エンティティをフラットに束ねる
+/// @note IGESへシリアライズできるのはEntityBaseのみ. 非IGESエンティティ
+///       (計算・描画専用のユーザー定義型) はIGESファイルに現れないのが正常系の
+///       ため、エラーとせずスキップする (ビューが出力されないのと同じ扱い)
 void CollectAllEntities(
         const igesio::models::Assembly& node,
         std::vector<std::pair<igesio::ObjectID,
                 std::shared_ptr<igesio::entities::EntityBase>>>& out) {
     for (const auto& [id, entity] : node.GetEntities()) {
-        out.emplace_back(id, entity);
+        if (auto eb = std::dynamic_pointer_cast<igesio::entities::EntityBase>(
+                entity)) {
+            out.emplace_back(id, eb);
+        }
     }
     for (const auto& child : node.GetChildAssemblies()) {
         if (child) CollectAllEntities(*child, out);

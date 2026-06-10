@@ -18,6 +18,7 @@
 // インターフェース・抽象クラス
 #include "igesio/entities/interfaces.h"
 #include "igesio/entities/entity_base.h"
+#include "igesio/entities/non_iges_entity_base.h"
 
 // 具象エンティティ (カテゴリ別集約)
 #include "igesio/entities/curves.h"

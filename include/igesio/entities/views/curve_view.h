@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "igesio/common/id_generator.h"
 #include "igesio/numerics/core/matrix.h"
@@ -86,6 +87,16 @@ class CurveView : public ICurve {
     /// @note 転送しないと元エンティティの形状編集がビュー越しに検知されない
     uint64_t GeometryRevision() const override {
         return base_->GeometryRevision();
+    }
+    /// @brief 参照する全てのエンティティのIDを取得する(元へ委譲)
+    /// @note GeometryRevisionと同様、ビューの形状は元の参照先(子曲線等)に
+    ///       依存するため転送する
+    std::vector<ObjectID> GetReferencedEntityIDs() const override {
+        return base_->GetReferencedEntityIDs();
+    }
+    /// @brief 物理的に従属するエンティティのIDを取得する(元へ委譲)
+    std::vector<ObjectID> GetChildIDs() const override {
+        return base_->GetChildIDs();
     }
 
 

@@ -98,9 +98,11 @@ TEST_F(InitialTreeTest, TypeCountsFlatEqualsRecursive) {
 // 物理従属メンバも平坦マップに第一級で保持される (§8.1: ラウンドトリップ源泉)
 TEST_F(InitialTreeTest, PhysicallyDependentMembersPresentAtRoot) {
     const auto& root = data_->Root();
+    // 従属スイッチはDEステータス由来のため、EntityBaseへキャストして判定する
     const auto dependents = root.FindEntities(
-            [](const i_ent::EntityBase& e) {
-                return e.GetSubordinateEntitySwitch()
+            [](const i_ent::IEntityIdentifier& e) {
+                const auto* eb = dynamic_cast<const i_ent::EntityBase*>(&e);
+                return eb != nullptr && eb->GetSubordinateEntitySwitch()
                         == i_ent::SubordinateEntitySwitch::kPhysicallyDependent;
             });
     EXPECT_FALSE(dependents.empty())

@@ -301,28 +301,36 @@ void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
 }
 
 void IgesViewerGUI::CacheEntityType(
-        const std::shared_ptr<entities::EntityBase>& entity) {
+        const std::shared_ptr<entities::IEntityIdentifier>& entity) {
     if (!entity->IsSupported()) {
         std::cerr << "Entity type " << ToString(entity->GetType())
                   << " is not supported." << std::endl;
         return;
-    } else if (auto result = entity->Validate(); !result.is_valid) {
-        std::cerr << "Entity " << entity->GetID() << " is invalid: "
-                  << result.Message() << std::endl;
-        return;
-    } else if (!result.errors.empty()) {
-        // 警告のみ (幾何的品質の指摘など): 描画は継続しつつ診断を表示する
-        std::cerr << "Entity " << entity->GetID() << " has warnings: "
-                  << result.Message() << std::endl;
+    }
+
+    // 検証・従属スイッチはIGESエンティティ(EntityBase)固有.
+    // 非IGESエンティティは検証なし・独立扱いでそのままキャッシュする
+    const auto eb = std::dynamic_pointer_cast<entities::EntityBase>(entity);
+    if (eb) {
+        if (auto result = eb->Validate(); !result.is_valid) {
+            std::cerr << "Entity " << eb->GetID() << " is invalid: "
+                      << result.Message() << std::endl;
+            return;
+        } else if (!result.errors.empty()) {
+            // 警告のみ (幾何的品質の指摘など): 描画は継続しつつ診断を表示する
+            std::cerr << "Entity " << eb->GetID() << " has warnings: "
+                      << result.Message() << std::endl;
+        }
+        if (eb->GetSubordinateEntitySwitch()
+                == entities::SubordinateEntitySwitch::kPhysicallyDependent) {
+            // 物理従属は親エンティティ経由で描画されるためスキップ
+            return;
+        }
     }
 
     const entities::EntityType type = entity->GetType();
-    if (entity->GetSubordinateEntitySwitch()
-            == entities::SubordinateEntitySwitch::kPhysicallyDependent) {
-        // 物理従属は親エンティティ経由で描画されるためスキップ
-        return;
-    } else if (type == entities::EntityType::kTransformationMatrix
-               || type == entities::EntityType::kColorDefinition) {
+    if (type == entities::EntityType::kTransformationMatrix
+            || type == entities::EntityType::kColorDefinition) {
         return;
     }
 
@@ -390,7 +398,7 @@ void IgesViewerGUI::OnModelEdited() {
     for (auto& p : entities_) {
         auto& vec = p.second;
         vec.erase(std::remove_if(vec.begin(), vec.end(),
-                [&](const std::shared_ptr<entities::EntityBase>& e) {
+                [&](const std::shared_ptr<entities::IEntityIdentifier>& e) {
                     return scene_->Root().FindOwner(e->GetID()) == nullptr;
                 }), vec.end());
     }

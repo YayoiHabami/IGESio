@@ -80,7 +80,10 @@ TEST(WriteIgesTest, UserDefinedEntityRoundTrip) {
     auto read = iio::ReadIges(output_path);
     const auto& entities = read.Root().GetEntities();
     ASSERT_EQ(entities.size(), 1u);
-    const auto& read_entity = entities.begin()->second;
+    // GetTypeNumberはEntityBaseのAPIのため、型を指定して取得する
+    const auto read_entity = read.Root().GetEntityAs<iio::entities::EntityBase>(
+            entities.begin()->first);
+    ASSERT_NE(read_entity, nullptr);
     EXPECT_EQ(read_entity->GetType(), iio::entities::EntityType::kUserDefined);
     EXPECT_EQ(read_entity->GetTypeNumber(), 602);
     EXPECT_FALSE(read_entity->IsSupported());

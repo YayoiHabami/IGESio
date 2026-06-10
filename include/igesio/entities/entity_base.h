@@ -478,9 +478,9 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @note 追加ポインタを含む全Parameter Dataセクションのデータを取得する
     IGESParameterVector GetParameters() const;
 
-    /// @brief 物理的に従属するエンティティを取得する
-    /// @return 物理的に従属するエンティティのID
-    virtual std::vector<ObjectID> GetChildIDs() const { return {}; }
+    // 物理的に従属するエンティティのID (GetChildIDs) は
+    // IEntityIdentifierの既定実装 (空) を継承する. 物理従属子を持つ
+    // エンティティ (複合曲線・トリム面等) がオーバーライドする.
 
     /// @brief 物理的に従属するエンティティのポインタを取得する
     /// @param id 物理的に従属するエンティティのID
@@ -501,7 +501,7 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @brief エンティティが参照する全てのエンティティのIDを取得する
     /// @return 参照する全てのエンティティのID
     /// @note Directory Entry フィールド関連のメンバも含む
-    virtual std::vector<ObjectID> GetReferencedEntityIDs() const;
+    std::vector<ObjectID> GetReferencedEntityIDs() const override;
 
     /// @brief エンティティが参照する全てのエンティティのポインタが設定済みか
     /// @return 一つでも未設定のポインタがある場合は`false`
