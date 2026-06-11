@@ -9,11 +9,13 @@
 #define SRC_GRAPHICS_SHADERS_CURVES_H_
 
 #include <array>
+#include <utility>
+#include <vector>
 
 // 定数の取得のためのインクルード
 #include "igesio/graphics/curves/rational_b_spline_curve_graphics.h"
 
-#include "./shader_code.h"
+#include "igesio/graphics/shader_registry.h"
 
 namespace igesio::graphics::shaders {
 
@@ -153,34 +155,35 @@ constexpr std::array<const char*, 4> kRationalBSplineCurveShader = {
 
 
 
-/// @brief 曲線シェーダーのソースコードを取得する
-/// @param shader_type シェーダーのタイプ
-/// @return シェーダーのソースコード、
-///         指定されたタイプのシェーダーがない場合はnullopt
-std::optional<ShaderCode>
-GetCurveShaderCode(const ShaderType shader_type) {
-    switch (shader_type) {
-        case ShaderType::kGeneralCurve:  // Type ---
-            return ShaderCode(kGeneralCurveShader);
-        case ShaderType::kCircularArc:   // Type 100
-            return ShaderCode(kCircularArcShader);
-        case ShaderType::kEllipse:       // Type 104, Form 1
-            return ShaderCode(kEllipseShader);
-        case ShaderType::kCopiousData:   // Type 106, Forms 1-13
-            return ShaderCode(kCopiousDataShader);
-        case ShaderType::kSegment:       // Type 110, Form 0
-            return ShaderCode(kSegmentShader);
-        case ShaderType::kLine:          // Type 110, Forms 1-2
-            return ShaderCode(kLineShader);
-        case ShaderType::kPoint:         // Type 116
-            return ShaderCode(kPointShader);
-        case ShaderType::kRationalBSplineCurve:  // Type 126
-            return ShaderCode(kRationalBSplineCurveShader);
-        case ShaderType::kSurfaceEdge:  // サーフェス境界エッジ (汎用曲線シェーダーを再利用)
-            return ShaderCode(kGeneralCurveShader);
-        default:
-            return std::nullopt;  // 他のシェーダータイプは未実装
-    }
+/// @brief 組み込み曲線シェーダーの定義一覧を取得する
+/// @return (組み込みShaderId, ShaderInfo) のリスト
+/// @note ShaderRegistryの組み込み設定用. 曲線系はいずれも光源を使用しない.
+///       kSurfaceEdgeのみ表示モードで取捨される (kNoEdgeで非表示)
+inline std::vector<std::pair<ShaderId, ShaderInfo>> GetBuiltinCurveShaderInfos() {
+    constexpr auto kAlways = ShaderDrawCategory::kAlways;
+    return {
+        {ShaderId::kGeneralCurve,           // Type ---
+         {"GeneralCurve", ShaderCode(kGeneralCurveShader), false, kAlways}},
+        {ShaderId::kCircularArc,            // Type 100
+         {"CircularArc", ShaderCode(kCircularArcShader), false, kAlways}},
+        {ShaderId::kEllipse,                // Type 104, Form 1
+         {"Ellipse", ShaderCode(kEllipseShader), false, kAlways}},
+        {ShaderId::kCopiousData,            // Type 106, Forms 1-13
+         {"CopiousData", ShaderCode(kCopiousDataShader), false, kAlways}},
+        {ShaderId::kSegment,                // Type 110, Form 0
+         {"Segment", ShaderCode(kSegmentShader), false, kAlways}},
+        {ShaderId::kLine,                   // Type 110, Forms 1-2
+         {"Line", ShaderCode(kLineShader), false, kAlways}},
+        {ShaderId::kPoint,                  // Type 116
+         {"Point", ShaderCode(kPointShader), false, kAlways}},
+        {ShaderId::kRationalBSplineCurve,   // Type 126
+         {"RationalBSplineCurve", ShaderCode(kRationalBSplineCurveShader),
+          false, kAlways}},
+        // サーフェス境界エッジ (汎用曲線シェーダーを再利用)
+        {ShaderId::kSurfaceEdge,
+         {"SurfaceEdge", ShaderCode(kGeneralCurveShader), false,
+          ShaderDrawCategory::kSurfaceEdge}},
+    };
 }
 
 }  // namespace igesio::graphics::shaders

@@ -17,9 +17,6 @@ namespace igesio::graphics {
 
 void SurfaceEdgeBuffer::Build(
         const std::vector<std::vector<Vector3d>>& loops) {
-    Cleanup();
-    if (!gl_) return;
-
     // 各ループを隣接点ペア (線分) へ平坦化する
     std::vector<float> vertices;
     for (const auto& loop : loops) {
@@ -34,17 +31,24 @@ void SurfaceEdgeBuffer::Build(
             vertices.push_back(static_cast<float>(b.z()));
         }
     }
-    if (vertices.empty()) return;
+    BuildFromSegments(vertices);
+}
 
-    vertex_count_ = static_cast<gl::Sizei>(vertices.size() / 3);
+void SurfaceEdgeBuffer::BuildFromSegments(
+        const std::vector<float>& segment_vertices) {
+    Cleanup();
+    if (!gl_) return;
+    if (segment_vertices.empty()) return;
+
+    vertex_count_ = static_cast<gl::Sizei>(segment_vertices.size() / 3);
 
     gl_->GenVertexArrays(1, &vao_);
     gl_->GenBuffers(1, &vbo_);
 
     gl_->BindVertexArray(vao_);
     gl_->BindBuffer(gl::kArrayBuffer, vbo_);
-    gl_->BufferData(gl::kArrayBuffer, vertices.size() * sizeof(float),
-                    vertices.data(), gl::kStaticDraw);
+    gl_->BufferData(gl::kArrayBuffer, segment_vertices.size() * sizeof(float),
+                    segment_vertices.data(), gl::kStaticDraw);
     gl_->VertexAttribPointer(0, 3, gl::kFloat, gl::kFalse,
                              3 * sizeof(float), nullptr);
     gl_->EnableVertexAttribArray(0);

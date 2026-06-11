@@ -4,6 +4,7 @@ add_library(igesio_graphics STATIC
     core/texture.cpp
     core/i_entity_graphics.cpp
     core/open_gl.cpp
+    core/pick_registry.cpp
     core/ray.cpp
     core/surface_edge_buffer.cpp
 
@@ -20,9 +21,13 @@ add_library(igesio_graphics STATIC
     surfaces/surface_mesh.cpp                          # general surface mesh
     surfaces/i_surface_graphics.cpp                    # general surfaces
     surfaces/rational_b_spline_surface_graphics.cpp    # 128
-    surfaces/trimmed_surface_graphics.cpp              # 144
+    surfaces/restricted_surface_graphics.cpp           # 143/144/108(bounded)
+
+    meshes/triangle_mesh_graphics.cpp                  # MeshEntity (non-IGES)
 
     factory.cpp
+    graphics_registry.cpp
+    shader_registry.cpp
 
     renderer.cpp
 )
@@ -90,7 +95,7 @@ target_link_libraries(igesio_graphics
     PRIVATE
         # gladは公開ヘッダに出さない (core/open_gl.cppのみが内部で使用).
         # 静的ライブラリのため、リンク用アーカイブは利用側へ自動で伝播する.
-        glad_gl_core_43
+        igesio_glad_gl_core_43
 )
 
 # Create an alias for the graphics library

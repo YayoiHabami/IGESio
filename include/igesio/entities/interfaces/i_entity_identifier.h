@@ -10,6 +10,7 @@
 #define IGESIO_ENTITIES_INTERFACES_I_ENTITY_IDENTIFIER_H_
 
 #include <cstdint>
+#include <vector>
 
 #include "igesio/common/id_generator.h"
 #include "igesio/entities/entity_type.h"
@@ -54,6 +55,20 @@ class IEntityIdentifier {
     ///       既定実装は0 (形状を持たない実装用). 実装は`EntityBase`が一元化し、
     ///       ビュー(CurveView/SurfaceView)は元エンティティへ転送する
     virtual uint64_t GeometryRevision() const { return 0; }
+
+    /// @brief エンティティが参照する全てのエンティティのIDを取得する
+    /// @return 参照する全てのエンティティのID
+    /// @note Assemblyの削除戦略 (参照が残る場合の拒否・連鎖削除) と逆引き検索が
+    ///       参照グラフとして利用する. 既定実装は空 (参照を持たない実装用).
+    ///       IGESエンティティは`EntityBase`がDEフィールド関連を含めて一元実装し、
+    ///       ビュー(CurveView/SurfaceView)は元エンティティへ転送する
+    virtual std::vector<ObjectID> GetReferencedEntityIDs() const { return {}; }
+
+    /// @brief 物理的に従属するエンティティのIDを取得する
+    /// @return 物理的に従属するエンティティのID
+    /// @note 複合曲線の構成曲線・トリム面の境界など、親と生存を共にする子を表す.
+    ///       Assemblyの連鎖削除と描画層の同期キー計算が利用する. 既定実装は空.
+    virtual std::vector<ObjectID> GetChildIDs() const { return {}; }
 };
 
 }  // namespace igesio::entities

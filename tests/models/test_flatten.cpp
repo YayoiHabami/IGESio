@@ -257,7 +257,7 @@ TEST(FlattenTest, EmitsGeneratedTransformAndClosure) {
     EXPECT_EQ(CountType(out.Root(), i_ent::EntityType::kTransformationMatrix), 1u);
 
     // 複製Lineが、出力マップ内に存在する124を参照する
-    std::shared_ptr<i_ent::EntityBase> clone;
+    std::shared_ptr<i_ent::IEntityIdentifier> clone;
     for (const auto& [id, e] : out.Root().GetEntities()) {
         if (e->GetType() == i_ent::EntityType::kLine) clone = e;
     }

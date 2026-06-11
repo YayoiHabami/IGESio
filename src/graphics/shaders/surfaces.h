@@ -9,10 +9,10 @@
 #define SRC_GRAPHICS_SHADERS_SURFACES_H_
 
 #include <array>
-#include <optional>
+#include <utility>
+#include <vector>
 
-#include "igesio/graphics/core/i_entity_graphics.h"
-#include "./shader_code.h"
+#include "igesio/graphics/shader_registry.h"
 
 
 
@@ -36,20 +36,20 @@ constexpr std::array<const char*, 4> kRationalBSplineSurfaceShader = {
 
 
 
-/// @brief 曲面シェーダーのソースコードを取得する
-/// @param shader_type シェーダーの種類
-/// @return シェーダーのソースコード、
-///         指定された種類のシェーダーがない場合はnullopt
-std::optional<ShaderCode>
-GetSurfaceShaderCode(const ShaderType shader_type) {
-    switch (shader_type) {
-        case ShaderType::kGeneralSurface:
-            return ShaderCode(kGeneralSurfaceShader);
-        case ShaderType::kRationalBSplineSurface:
-            return ShaderCode(kRationalBSplineSurfaceShader);
-        default:
-            return std::nullopt;
-    }
+/// @brief 組み込み曲面シェーダーの定義一覧を取得する
+/// @return (組み込みShaderId, ShaderInfo) のリスト
+/// @note ShaderRegistryの組み込み設定用. 曲面系はいずれも光源を使用する
+///       面塗りであり、kWireFrameでは描画されない
+inline std::vector<std::pair<ShaderId, ShaderInfo>>
+GetBuiltinSurfaceShaderInfos() {
+    constexpr auto kFill = ShaderDrawCategory::kSurfaceFill;
+    return {
+        {ShaderId::kGeneralSurface,
+         {"GeneralSurface", ShaderCode(kGeneralSurfaceShader), true, kFill}},
+        {ShaderId::kRationalBSplineSurface,    // Type 128
+         {"RationalBSplineSurface", ShaderCode(kRationalBSplineSurfaceShader),
+          true, kFill}},
+    };
 }
 
 }  // namespace igesio::graphics::shaders

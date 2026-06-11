@@ -1,35 +1,30 @@
 /**
- * @file graphics/shaders/shader_code.h
- * @brief シェーダープログラムをまとめる構造体を定義する
+ * @file graphics/core/shader_code.h
+ * @brief シェーダープログラムのソースコードをまとめる構造体を定義する
  * @author Yayoi Habami
- * @date 2025-08-09
- * @copyright 2025 Yayoi Habami
+ * @date 2026-06-11
+ * @copyright 2026 Yayoi Habami
  */
-#ifndef SRC_GRAPHICS_SHADERS_SHADER_CODE_H_
-#define SRC_GRAPHICS_SHADERS_SHADER_CODE_H_
+#ifndef IGESIO_GRAPHICS_CORE_SHADER_CODE_H_
+#define IGESIO_GRAPHICS_CORE_SHADER_CODE_H_
 
 #include <array>
 #include <string>
+#include <utility>
 
+namespace igesio::graphics {
 
-
-/// @brief シェーダー関連のソースをまとめる名前空間
-/// @note 各シェーダーのソースコードは`k<ShaderType>Shader`に定義される.
-///       定数の型は`std::array<const char*, 2>`などで、
-///       (1) 2要素の場合は vertex → fragment
-///       (2) 3要素の場合は vertex → geometry → fragment
-///       (3) 4要素の場合は vertex → tcs → tes → fragment
-///       (4) 5要素の場合は vertex → tcs → tes → geometry → fragment
-///       の順で定義・使用される
-namespace igesio::graphics::shaders {
-
-/// @brief シェーダーのコードをまとめた構造体
+/// @brief シェーダーのソースコードをまとめた構造体
 /// @note 組み合わせおよび順序は以下の通り:
 ///       (1) vertex → fragment
 ///       (2) vertex → geometry → fragment
 ///       (3) vertex → tcs → tes → fragment
 ///       (4) vertex → tcs → tes → geometry → fragment
 /// @note computeシェーダーには非対応
+/// @note 各ステージは完結したGLSL文字列のほか、組み込みGLSLスニペットの
+///       `#include "glsl/..."`参照を含められる (コンパイル直前にレンダラが
+///       展開する)。展開はライブラリのソースディレクトリを実行時に読むため、
+///       ソースを配置しない環境では完結したGLSL文字列のみ使用できる
 struct ShaderCode {
     /// @brief 頂点シェーダーのソースコード
     std::string vertex;
@@ -51,6 +46,22 @@ struct ShaderCode {
         if (tcs.empty() != tes.empty()) return true;
         return false;
     }
+
+    /// @brief デフォルトコンストラクタ (全ステージ空)
+    ShaderCode() = default;
+
+    /// @brief コンストラクタ (各ステージを文字列で指定)
+    /// @param vertex 頂点シェーダーのソースコード
+    /// @param fragment フラグメントシェーダーのソースコード
+    /// @param geometry ジオメトリシェーダーのソースコード (省略可)
+    /// @param tcs TCSのソースコード (省略可; tesとセットで指定すること)
+    /// @param tes TESのソースコード (省略可; tcsとセットで指定すること)
+    ShaderCode(std::string vertex, std::string fragment,
+               std::string geometry = "",
+               std::string tcs = "", std::string tes = "")
+        : vertex(std::move(vertex)), fragment(std::move(fragment)),
+          geometry(std::move(geometry)),
+          tcs(std::move(tcs)), tes(std::move(tes)) {}
 
     /// @brief コンストラクタ (2要素)
     /// @param shaders 頂点/フラグメントシェーダーのソースコード
@@ -75,6 +86,6 @@ struct ShaderCode {
           geometry(shaders[3]), fragment(shaders[4]) {}
 };
 
-}  // namespace igesio::graphics::shaders
+}  // namespace igesio::graphics
 
-#endif  // SRC_GRAPHICS_SHADERS_SHADER_CODE_H_
+#endif  // IGESIO_GRAPHICS_CORE_SHADER_CODE_H_

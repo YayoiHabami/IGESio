@@ -33,6 +33,9 @@ This document covers the interfaces for specific entities and individual entity 
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
   - [`CurveOnAParametricSurface` (type 142)](#curveonaparametricsurface-type-142)
 - [Surfaces](#surfaces)
+  - [`Plane` (type 108)](#plane-type-108)
+    - [`Plane` (type 108, form 0)](#plane-type-108-form-0)
+    - [`BoundedPlane` (type 108, forms 1 / -1)](#boundedplane-type-108-forms-1---1)
   - [`RuledSurface` (type 118)](#ruledsurface-type-118)
   - [`SurfaceOfRevolution` (type 120)](#surfaceofrevolution-type-120)
   - [`TabulatedCylinder` (type 122)](#tabulatedcylinder-type-122)
@@ -560,6 +563,54 @@ open_curve->SetLineWeightNumber(2);
 ## Surfaces
 
 This section describes the surface entities in IGES files. Surface entities are used to represent surfaces in 3D space.
+
+### `Plane` (type 108)
+
+> Defined at [plane.h](../../include/igesio/entities/surfaces/plane.h)
+
+The plane entity (Type 108) represents a plane defined by $A \cdot X + B \cdot Y + C \cdot Z = D$. Depending on the form number, it is split into two classes: the unbounded plane `Plane` (Form 0), whose domain is the entire plane, and the bounded plane `BoundedPlane` (Form 1 / -1), whose domain is restricted by a simple closed curve lying in the plane. See [Plane (Type 108)](surfaces/108_plane.md) for details.
+
+#### `Plane` (type 108, form 0)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ Plane
+>                     └─ IGeometry <── ISurface <───┘
+> ```
+
+The `Plane` class is used to represent an unbounded plane whose domain is the entire plane. The coefficients $(A, B, C)$ represent the normal direction of the plane, and at least one of them must be nonzero. The following code example generates an unbounded plane representing the plane $Z = -8$ (see figure).
+
+#### `BoundedPlane` (type 108, forms 1 / -1)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬──────────────────────────────── EntityBase <─┬─ BoundedPlane
+>                     └─ IGeometry <── ISurface <── IRestrictedSurface <─┘
+> ```
+
+The `BoundedPlane` class is used to represent a bounded plane whose domain is restricted by a simple closed curve lying in the plane. Form 1 denotes a positive region (material) and Form -1 a negative region (a hole), but the geometry is identical; only the sense of the region differs. It implements `IRestrictedSurface` and handles its domain within the same framework as a [TrimmedSurface](#trimmedsurface-type-144).
+
+The following code example generates a bounded plane (Form 1) whose boundary is a circle of radius $8$ lying in the plane $Z = 8$, together with an unbounded plane (Form 0) representing the plane $Z = -8$ (see figure).
+
+```cpp
+namespace i_ent = igesio::entities;
+
+// Bounded plane (Form 1): a circular region in the plane Z = 8.
+// The boundary is a circle of radius 8 lying in the same plane (z_t = 8).
+auto boundary = i_ent::MakeCircle(igesio::Vector2d(-40.0, 0.0), 8.0, 8.0);
+auto bounded_plane = i_ent::MakeBoundedPlane(
+        0.0, 0.0, 1.0, 8.0,  // plane: 0*X + 0*Y + 1*Z = 8  (Z = 8)
+        boundary);
+bounded_plane->OverwriteColor(i_ent::ColorNumber::kRed);
+
+// Unbounded plane (Form 0): the plane Z = -8 (no bounding curve).
+auto unbounded_plane = i_ent::MakePlane(0.0, 0.0, 1.0, -8.0);
+unbounded_plane->OverwriteColor(i_ent::ColorNumber::kBlue);
+```
+
+<img src="./images/plane.png" width=400px alt="Plane Example" />
+
+**Figure: Example of a Plane entity**. Red is the bounded plane (Form 1), blue is the unbounded plane (Form 0).
 
 ### `RuledSurface` (type 118)
 

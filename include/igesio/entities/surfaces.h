@@ -8,6 +8,7 @@
 #ifndef IGESIO_ENTITIES_SURFACES_H_
 #define IGESIO_ENTITIES_SURFACES_H_
 
+#include "igesio/entities/surfaces/plane.h"                  // Type 108
 #include "igesio/entities/surfaces/ruled_surface.h"          // Type 118
 #include "igesio/entities/surfaces/surface_of_revolution.h"  // Type 120
 #include "igesio/entities/surfaces/tabulated_cylinder.h"     // Type 122

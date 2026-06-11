@@ -280,7 +280,7 @@ EntityRenderer
 
 `IEntityGraphics`は型消去基底クラスであり、各エンティティに対応した`EntityGraphics<T>`テンプレートクラスの具体型として実装される。
 
-描画ループでは`EntityRenderer::Draw()`が`ShaderType`ごとにGLSLシェーダープログラムを切り替えながら、登録された`IEntityGraphics`の`Draw()`を順に呼び出す。
+描画ループでは`EntityRenderer::Draw()`が`ShaderId`ごとにGLSLシェーダープログラムを切り替えながら、登録された`IEntityGraphics`の`Draw()`を順に呼び出す。
 
 ### 描画対応の方針
 

@@ -30,6 +30,9 @@ add_library(igesio_entities STATIC
     entity_base.cpp
     structures/unsupported_entity.cpp
 
+    # Non-IGES entities
+    meshes/mesh_entity.cpp
+
     # Entities
     structures/null_entity.cpp                 # 000
     curves/circular_arc.cpp                    # 100
@@ -42,6 +45,7 @@ add_library(igesio_entities STATIC
     curves/line.cpp                            # 110
     curves/parametric_spline_curve.cpp         # 112
     curves/point.cpp                           # 116
+    surfaces/plane.cpp                         # 108
     surfaces/ruled_surface.cpp                 # 118
     surfaces/surface_of_revolution.cpp         # 120
     surfaces/tabulated_cylinder.cpp            # 122

@@ -8,7 +8,10 @@
 #include "igesio/graphics/factory.h"
 
 #include <memory>
+#include <typeindex>
 #include <utility>
+
+#include "igesio/graphics/graphics_registry.h"
 
 #include "igesio/graphics/curves/i_curve_graphics.h"
 #include "igesio/graphics/curves/circular_arc_graphics.h"
@@ -22,7 +25,7 @@
 
 #include "igesio/graphics/surfaces/i_surface_graphics.h"
 #include "igesio/graphics/surfaces/rational_b_spline_surface_graphics.h"
-#include "igesio/graphics/surfaces/trimmed_surface_graphics.h"
+#include "igesio/graphics/surfaces/restricted_surface_graphics.h"
 
 namespace {
 
@@ -115,10 +118,10 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
                 const i_ent::RationalBSplineSurface>(entity)) {
         // Type 128: RationalBSplineSurfaceの描画オブジェクトを作成
         return std::make_unique<i_graph::RationalBSplineSurfaceGraphics>(r_bspline_surface, gl);
-    } else if (auto trimmed = std::dynamic_pointer_cast<
-                const i_ent::TrimmedSurface>(entity)) {
-        // Type 144: TrimmedSurfaceの描画オブジェクトを作成
-        return std::make_unique<i_graph::TrimmedSurfaceGraphics>(trimmed, gl);
+    } else if (auto restricted = std::dynamic_pointer_cast<
+                const i_ent::IRestrictedSurface>(entity)) {
+        // Type 143/144/108(有界): 制限付き曲面の描画オブジェクトを作成
+        return std::make_unique<i_graph::RestrictedSurfaceGraphics>(restricted, gl);
     }
 
     // いずれにも当てはまらない場合は無効なポインタを返す
@@ -127,24 +130,45 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateSurfaceGraphics(
 
 std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(
         const std::shared_ptr<const i_ent::IEntityIdentifier>& entity,
-        const std::shared_ptr<i_graph::IOpenGL>& gl) {
+        const std::shared_ptr<i_graph::IOpenGL>& gl,
+        const bool synchronize) {
     // entityがnullptrの場合は無効なポインタを返す
     if (!entity) return nullptr;
     // UnsupportedEntityの場合は無効なポインタを返す
     if (!entity->IsSupported()) return nullptr;
 
+    // レジストリ登録 (GraphicsRegistry) を動的型の完全一致で最優先する.
+    // 登録がある型はその結果を最終とする (nullptrの返却は「型起因の恒久的失敗」
+    // として負キャッシュされる. 下の不変条件と同じ扱い)
+    // (typeidのオペランドに関数呼び出し (operator*) を直接置くと
+    //  -Wpotentially-evaluated-expression となるため、参照へ束縛してから渡す)
+    const i_ent::IEntityIdentifier& entity_ref = *entity;
+    if (auto creator = i_graph::GraphicsRegistry::FindCreator(
+            std::type_index(typeid(entity_ref)))) {
+        auto registered = creator(entity, gl);
+        if (registered && synchronize) registered->Synchronize();
+        return registered;
+    }
+
+    std::unique_ptr<i_graph::IEntityGraphics> graphics;
     if (auto curve = std::dynamic_pointer_cast<const i_ent::ICurve>(entity)) {
         // 曲線の描画オブジェクトを作成
-        return CreateCurveGraphics(curve, gl);
+        graphics = CreateCurveGraphics(curve, gl);
     } else if (auto surface = std::dynamic_pointer_cast<const i_ent::ISurface>(entity)) {
         // 曲面の描画オブジェクトを作成
-        return CreateSurfaceGraphics(surface, gl);
+        graphics = CreateSurfaceGraphics(surface, gl);
     } else if (auto point = std::dynamic_pointer_cast<const i_ent::Point>(entity)) {
         // Type 116: Pointの描画オブジェクトを作成
         // NOTE: curvesの下に配置してはいるが、ICurveを継承していないため、ここで処理する
-        return std::make_unique<i_graph::PointGraphics>(point, gl);
+        graphics = std::make_unique<i_graph::PointGraphics>(point, gl);
+    } else {
+        // いずれにも当てはまらない場合は無効なポインタを返す
+        return nullptr;
     }
 
-    // いずれにも当てはまらない場合は無効なポインタを返す
-    return nullptr;
+    // 既定では生成時に同期 (CPU構築+GL転送) まで行い即描画可能な状態で返す.
+    // 複合系は自身のSynchronizeが子孫へ伝播する。レンダラはsynchronize=falseで
+    // 遅延し、reconcile経路で並列前倒し+直列GL転送を行う。
+    if (graphics && synchronize) graphics->Synchronize();
+    return graphics;
 }

@@ -546,18 +546,27 @@ i_ent::ToRawEntityDE(const std::string& first, const std::string& second) {
     // 1行目を変換
     try {
         // Parameter 1: Entity Type Number
-        auto e_type1 = ToEntityType(igesio::FromIgesInteger(
-                first.substr(++i, w), std::nullopt));
-        auto e_type2 = ToEntityType(igesio::FromIgesInteger(
-                second.substr(i, w), std::nullopt));
-        if (e_type1 != e_type2) {
+        // kUserDefinedへ縮約される前の生番号同士で一致を確認する
+        // (602と604が共にkUserDefinedとなり不一致を見逃すことを防ぐ)
+        const int type_num1 = igesio::FromIgesInteger(
+                first.substr(++i, w), std::nullopt);
+        const int type_num2 = igesio::FromIgesInteger(
+                second.substr(i, w), std::nullopt);
+        if (type_num1 != type_num2) {
                 throw iio::SectionFormatError(
                         "Entity type mismatch: '" + first + "' and '" + second + "'");
-        } else if (!e_type1.has_value()) {
+        }
+        if (auto e_type = ToEntityType(type_num1); e_type.has_value()) {
+                de.entity_type = e_type.value();
+        } else if (i_ent::IsUserDefinedEntityNumber(type_num1)) {
+                // ユーザー定義番号 (600-699, 10000-99999) はkUserDefinedとして
+                // 受け入れ、実番号を併走フィールドへ保持する
+                de.entity_type = EntityType::kUserDefined;
+                de.user_type_number = type_num1;
+        } else {
                 throw iio::SectionFormatError(
                         "Invalid entity type: '" + first + "' and '" + second + "'");
         }
-        de.entity_type = e_type1.value();
 
         // Parameter 2: Pointer to Parameter Data Record
         de.parameter_data_pointer = igesio::FromIgesInteger(
@@ -693,8 +702,8 @@ std::pair<std::string, std::string> i_ent::ToStrings(
     oss1 << std::setfill(' ');
 
     // 1行目の出力
-    // Parameter 1: Entity Type Number
-    oss1 << std::setw(kFixedColWidth) << static_cast<int>(param.entity_type);
+    // Parameter 1: Entity Type Number (ユーザー定義エンティティは実番号)
+    oss1 << std::setw(kFixedColWidth) << param.TypeNumber();
     // Parameter 2: Pointer to Parameter Data Record
     oss1 << std::setw(kFixedColWidth)
          << ((pd_pointer >= 0) ? std::to_string(pd_pointer) : "xxx");
@@ -723,8 +732,8 @@ std::pair<std::string, std::string> i_ent::ToStrings(
          << ((sequence_number > 0) ? std::to_string(sequence_number) : "xxx");
 
     // 2行目の出力
-    // Parameter 11: Entity Type Number
-    oss2 << std::setw(kFixedColWidth) << static_cast<int>(param.entity_type);
+    // Parameter 11: Entity Type Number (ユーザー定義エンティティは実番号)
+    oss2 << std::setw(kFixedColWidth) << param.TypeNumber();
     // Parameter 12: Line Weight Number
     oss2 << std::setw(kFixedColWidth)
          << ((param.IsDefault()[6] ? " " : std::to_string(param.line_weight_number)));
@@ -1084,6 +1093,13 @@ void i_ent::IsValid(const i_ent::RawEntityDE& de) {
             is_form_valid = IsInRange(form, 1, 2);
             ::IsValid(de, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "????????");
             break;
+        case EntityType::kUserDefined:
+            // ユーザー定義エンティティ: 仕様が定義されないため、フォーム番号・
+            // ステータスとも制約を設けない (フィールドの値型のみ一般的な
+            // 幾何エンティティと同じ制約とする)
+            is_form_valid = true;
+            ::IsValid(de, {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+            break;
         default:
             // Unhandled entity type
             throw iio::DataFormatError("Unhandled entity type: " +
@@ -1375,9 +1391,33 @@ igesio::entities::RawEntityDE igesio::entities::RawEntityDE::ByDefault(
                 fn = 1;  // デフォルト値の場合は暗黙的に1に変更
             }
             return DefaultDE(et, fn, {Na, Na, IP, Na, Na, ZP, Na, Na, I}, "????????");
+        case EntityType::kNonIges:
+        case EntityType::kUserDefined:
+            // 無効
+            break;
     }
 
     // エンティティタイプが無効な場合
     throw DataFormatError("Invalid entity type: " +
             std::to_string(static_cast<int>(entity_type)));
+}
+
+igesio::entities::RawEntityDE igesio::entities::RawEntityDE::ByDefaultUserDefined(
+        const int type_number, const int form_number) {
+    if (!IsUserDefinedEntityNumber(type_number)) {
+        throw igesio::DataFormatError(
+                "Not a user-defined entity type number (600-699, 10000-99999): " +
+                std::to_string(type_number));
+    }
+
+    constexpr auto Na = DEValueType::kNA;
+    constexpr auto I = DEValueType::kInt;
+    constexpr auto IP = DEValueType::kIPtr;
+    constexpr auto ZP = DEValueType::kZPtr;
+    // フィールドの値型は一般的な幾何エンティティと同じ構成、ステータスは
+    // 全桁任意とする (IsValidのkUserDefinedケースと対応させる)
+    auto de = DefaultDE(EntityType::kUserDefined, form_number,
+                        {Na, IP, IP, ZP, ZP, ZP, I, IP, I}, "????????");
+    de.user_type_number = type_number;
+    return de;
 }

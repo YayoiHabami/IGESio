@@ -27,8 +27,8 @@ constexpr size_t kMaxDegree = 5;
 RationalBSplineCurveGraphics::RationalBSplineCurveGraphics(
         const std::shared_ptr<const entities::RationalBSplineCurve>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineCurve, true) {
-    Synchronize();
+        : EntityGraphics(entity, gl, ShaderId::kRationalBSplineCurve, true) {
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 RationalBSplineCurveGraphics::~RationalBSplineCurveGraphics() {

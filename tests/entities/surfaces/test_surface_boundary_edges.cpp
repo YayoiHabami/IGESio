@@ -296,6 +296,35 @@ TEST(ComputeRestrictedSurfaceEdges, ExplicitOuterWithHole_ProducesTwoLoops) {
     AssertAllOnPlaneY5(edges);
 }
 
+// 多角形外周: 等間隔グリッド外の角点も評価点に含め、生成ループが各角を通過する
+TEST(ComputeRestrictedSurfaceEdges, PolygonOuter_LoopPassesThroughCorners) {
+    auto plane = MakePlane();
+    // 既定divisions=64のグリッドに角が乗らない非対称三角形を外周にする
+    auto outer = i_ent::MakeLinearPath(
+        std::vector<Vector2d>{{0.1, 0.1}, {0.8, 0.2}, {0.55, 0.9}}, true);
+    auto ts = BuildTrimmed(plane, outer);
+
+    const auto edges = i_ent::ComputeRestrictedSurfaceEdges(*ts);
+    ASSERT_EQ(edges.loops.size(), 1u);
+    const auto& loop = edges.loops.front();
+
+    // 境界曲線の各角点tcについて、S(B(tc))がループ頂点に厳密に存在する
+    auto base = ts->GetBaseSurface();
+    ASSERT_NE(base, nullptr);
+    const auto corners = outer->GetCornerParams();
+    ASSERT_FALSE(corners.empty());
+    for (const double tc : corners) {
+        const auto uv = outer->TryGetPointAt(tc);
+        ASSERT_TRUE(uv.has_value());
+        const auto expected = base->TryGetPointAt(uv->x(), uv->y());
+        ASSERT_TRUE(expected.has_value());
+        const bool found = std::any_of(
+            loop.begin(), loop.end(),
+            [&](const Vector3d& q) { return (q - *expected).norm() < kPosTol; });
+        EXPECT_TRUE(found) << "corner at t=" << tc << " is not on the loop";
+    }
+}
+
 TEST(ComputeRestrictedSurfaceEdges, ClosedBaseUntrimmed_SkipsSeam) {
     auto closed = MakeClosedBaseSurface();
     auto ts = BuildTrimmed(closed, nullptr);  // N1=0, 穴なし

@@ -7,6 +7,10 @@
  */
 #include "igesio/entities/interfaces/i_restricted_surface.h"
 
+#include <algorithm>
+#include <array>
+#include <limits>
+#include <optional>
 #include <utility>
 
 #include "igesio/entities/curves/algorithms.h"
@@ -147,4 +151,41 @@ void IRestrictedSurface::BuildDomainCache() const {
     }
 
     domain_cache_ = std::move(cache);
+}
+
+
+
+/**
+ * ドメインUV範囲の取得 (自由関数)
+ */
+
+std::optional<std::array<double, 4>>
+igesio::entities::GetRestrictedDomainUVBounds(
+        const IRestrictedSurface& surface, const double margin_ratio) {
+    constexpr double kInf = std::numeric_limits<double>::infinity();
+    double u_lo = kInf, u_hi = -kInf, v_lo = kInf, v_hi = -kInf;
+    bool found = false;
+
+    auto accumulate = [&](const i_num::PolygonData& poly) {
+        for (const auto& p : poly.vertices) {
+            u_lo = std::min(u_lo, p.x());
+            u_hi = std::max(u_hi, p.x());
+            v_lo = std::min(v_lo, p.y());
+            v_hi = std::max(v_hi, p.y());
+            found = true;
+        }
+    };
+    auto accumulate_ccp = [&](const i_num::CurveContainmentPolygons& ccp) {
+        accumulate(ccp.circumscribed);  // ドメインを外側から包む多角形を含める
+        accumulate(ccp.approximate);
+    };
+
+    if (const auto& outer = surface.GetOuterDomainPolygon()) accumulate_ccp(*outer);
+    for (const auto& inner : surface.GetInnerDomainPolygons()) accumulate_ccp(inner);
+
+    if (!found || !(u_hi > u_lo) || !(v_hi > v_lo)) return std::nullopt;
+
+    const double um = (u_hi - u_lo) * margin_ratio;
+    const double vm = (v_hi - v_lo) * margin_ratio;
+    return std::array<double, 4>{u_lo - um, u_hi + um, v_lo - vm, v_hi + vm};
 }

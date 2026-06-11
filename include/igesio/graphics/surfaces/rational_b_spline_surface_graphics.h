@@ -65,10 +65,10 @@ class RationalBSplineSurfaceGraphics
 
     /// @brief エンティティの描画を行う (シェーダー型で分岐)
     /// @note kSurfaceEdgeでは境界エッジを線描画し、それ以外は基底に委譲する
-    void Draw(gl::Uint shader, const ShaderType shader_type,
+    void Draw(gl::Uint shader, const ShaderId shader_id,
               const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override {
-        if (shader_type == ShaderType::kSurfaceEdge) {
+        if (shader_id == ShaderId::kSurfaceEdge) {
             if (edge_buffer_.IsEmpty()) return;
             const bool highlighted = ctx.IsHighlighted(GetEntityID());
             const auto& color = highlighted
@@ -77,14 +77,16 @@ class RationalBSplineSurfaceGraphics
                                        color, GetLineWidth(), highlighted);
             return;
         }
-        EntityGraphics::Draw(shader, shader_type, viewport, ctx);
+        EntityGraphics::Draw(shader, shader_id, viewport, ctx);
     }
 
     /// @brief 全ての可能なシェーダータイプを取得する
-    /// @note 面シェーダーに加え、エッジがあればkSurfaceEdgeを含める
-    std::unordered_set<ShaderType> GetShaderTypes() const override {
-        auto types = EntityGraphics::GetShaderTypes();
-        if (!edge_buffer_.IsEmpty()) types.insert(ShaderType::kSurfaceEdge);
+    /// @note 面シェーダーに加え、境界エッジ用のkSurfaceEdgeを常に含める。
+    ///       描画バケットは同期前 (edge_buffer_未構築) のreconcile段で構築されるため、
+    ///       構築状態に依存させてはならない (実際に空ならDrawがIsEmptyで早期return)。
+    std::unordered_set<ShaderId> GetShaderIds() const override {
+        auto types = EntityGraphics::GetShaderIds();
+        types.insert(ShaderId::kSurfaceEdge);
         return types;
     }
 

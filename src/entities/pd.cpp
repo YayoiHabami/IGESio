@@ -98,18 +98,29 @@ i_ent::RawEntityPD i_ent::ToRawEntityPD(
             lines, p_delim, r_delim, iio::kColDEPointer - 1);
 
     // エンティティタイプを取得
-    auto type = i_ent::ToEntityType(std::stoi(data[0]));
+    const int type_number = std::stoi(data[0]);
+    auto type = i_ent::ToEntityType(type_number);
+    int user_type_number = 0;
     if (!type.has_value()) {
-        throw iio::TypeConversionError(
-                "Invalid entity type: " + std::to_string(std::stoi(data[0])) +
-                " on line " + std::to_string(sequence_number) +
-                " of the Parameter Data section");
+        if (i_ent::IsUserDefinedEntityNumber(type_number)) {
+            // ユーザー定義番号 (600-699, 10000-99999) はkUserDefinedとして
+            // 受け入れ、実番号を併走フィールドへ保持する
+            type = i_ent::EntityType::kUserDefined;
+            user_type_number = type_number;
+        } else {
+            throw iio::TypeConversionError(
+                    "Invalid entity type: " + std::to_string(type_number) +
+                    " on line " + std::to_string(sequence_number) +
+                    " of the Parameter Data section");
+        }
     }
 
-    return i_ent::RawEntityPD(
+    auto pd = i_ent::RawEntityPD(
         type.value(), de_pointer, sequence_number,
         // 1つ目の要素はエンティティタイプなので除外
         std::vector<std::string>(data.begin() + 1, data.end()));
+    pd.user_type_number = user_type_number;
+    return pd;
 }
 
 i_ent::RawEntityPD i_ent::ToRawEntityPD(
@@ -211,8 +222,8 @@ std::vector<unsigned int> GetPhysicallyDependentChildDEPointer(
 std::tuple<std::size_t, std::size_t, std::size_t>
 i_ent::GetEntityParameterCount(
         const EntityType type, const std::vector<std::string>& data) {
-    switch (type) {
-        case EntityType::kNull: return E000ParamCount(data);
+    if (type == EntityType::kNull) {
+        return E000ParamCount(data);
     }
     // 上記以外は未実装
     throw iio::NotImplementedError(
@@ -409,4 +420,23 @@ i_ent::ToRawEntityPD(const EntityType type,
     unsigned int de_pointer = id2de.at(id);
 
     return RawEntityPD(type, de_pointer, 0, data, types);
+}
+
+i_ent::RawEntityPD
+i_ent::ToRawEntityPD(const int type_number,
+                     const ObjectID& id,
+                     const IGESParameterVector& vec,
+                     const id2pointer& id2de) {
+    if (auto type = ToEntityType(type_number); type.has_value()) {
+        return ToRawEntityPD(type.value(), id, vec, id2de);
+    }
+    if (!IsUserDefinedEntityNumber(type_number)) {
+        throw iio::TypeConversionError(
+                "Invalid entity type number: " + std::to_string(type_number));
+    }
+
+    // ユーザー定義番号はkUserDefined+実番号の併走フィールドで構築する
+    auto pd = ToRawEntityPD(EntityType::kUserDefined, id, vec, id2de);
+    pd.user_type_number = type_number;
+    return pd;
 }

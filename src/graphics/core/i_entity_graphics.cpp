@@ -12,11 +12,15 @@
 #include <string>
 #include <utility>
 
+#include "igesio/graphics/shader_registry.h"
+
 namespace {
 
 namespace i_graph = igesio::graphics;
 using IEntityGraphics = igesio::graphics::IEntityGraphics;
-using ShaderType = igesio::graphics::ShaderType;
+using ShaderId = igesio::graphics::ShaderId;
+using ShaderRegistry = igesio::graphics::ShaderRegistry;
+using ShaderDrawCategory = igesio::graphics::ShaderDrawCategory;
 
 }  // namespace
 
@@ -95,42 +99,23 @@ void IEntityGraphics::SetColor(const std::array<float, 4>&color) {
  * その他
  */
 
-std::string i_graph::ToString(const ShaderType shader_type) {
-    switch (shader_type) {
-        case ShaderType::kNone:
-            return "None";
-        case ShaderType::kGeneralCurve:
-            return "GeneralCurve";
-        case ShaderType::kCircularArc:
-            return "CircularArc";
-        case ShaderType::kEllipse:
-            return "Ellipse";
-        case ShaderType::kCopiousData:
-            return "CopiousData";
-        case ShaderType::kSegment:
-            return "Segment";
-        case ShaderType::kLine:
-            return "Line";
-        case ShaderType::kRationalBSplineCurve:
-            return "RationalBSplineCurve";
-        case ShaderType::kSurfaceEdge:
-            return "SurfaceEdge";
-        case ShaderType::kGeneralSurface:
-            return "GeneralSurface";
-        case ShaderType::kRationalBSplineSurface:
-            return "RationalBSplineSurface";
-        case ShaderType::kComposite:
-            return "Composite";
-        default:
-            return "Unknown";
-    }
+bool i_graph::HasSpecificShaderCode(const ShaderId shader_id) {
+    const auto* info = ShaderRegistry::Get(shader_id);
+    return info != nullptr && !info->code.IsIncomplete();
 }
 
-bool i_graph::UsesLighting(const ShaderType shader_type) {
-    if (static_cast<int>(shader_type) >= static_cast<int>(ShaderType::kGeneralSurface) &&
-        shader_type != ShaderType::kNone &&
-        shader_type != ShaderType::kComposite) {
-        return true;
-    }
-    return false;
+bool i_graph::IsSurfaceFill(const ShaderId shader_id) {
+    const auto* info = ShaderRegistry::Get(shader_id);
+    return info != nullptr &&
+           info->category == ShaderDrawCategory::kSurfaceFill;
+}
+
+std::string i_graph::ToString(const ShaderId shader_id) {
+    const auto* info = ShaderRegistry::Get(shader_id);
+    return (info != nullptr) ? info->name : "Unknown";
+}
+
+bool i_graph::UsesLighting(const ShaderId shader_id) {
+    const auto* info = ShaderRegistry::Get(shader_id);
+    return info != nullptr && info->uses_lighting;
 }

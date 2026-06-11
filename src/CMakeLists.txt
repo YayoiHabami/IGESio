@@ -7,6 +7,10 @@ add_subdirectory(models)
 if(IGESIO_ENABLE_GRAPHICS)
     add_subdirectory(graphics)
 endif()
+# 拡張モジュール (いずれかの拡張が有効な場合のみ)
+if(IGESIO_EXTENSIONS_ENABLED)
+    add_subdirectory(extensions)
+endif()
 
 # Create the igesio library
 add_library(igesio STATIC
@@ -31,6 +35,9 @@ target_link_libraries(igesio PUBLIC
 )
 if(IGESIO_ENABLE_GRAPHICS)
     target_link_libraries(igesio PUBLIC IGESio::graphics)
+endif()
+if(IGESIO_EXTENSIONS_ENABLED)
+    target_link_libraries(igesio PUBLIC IGESio::extensions)
 endif()
 
 # Create an alias for the igesio library

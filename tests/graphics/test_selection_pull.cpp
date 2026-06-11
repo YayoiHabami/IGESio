@@ -51,7 +51,7 @@ std::shared_ptr<i_ent::CircularArc> MakeArc() {
 }
 
 /// @brief 2線分(直角折れ)からなるCompositeCurve(102)を生成する
-/// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment.
+/// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderId::kSegment.
 ///       親(102)と子(各Line)はそれぞれ別IDを持つ.
 std::shared_ptr<i_ent::CompositeCurve> MakeComposite() {
     return i_ent::MakeCompositeCurve({
@@ -158,7 +158,7 @@ TEST(SelectionPullTest, Draw_CompositeHighlightsChildrenWhenParentSelected) {
     ctx.highlight_color = kHighlight;
 
     // 子の型(kSegment)で描画 -> 子へ委譲される
-    graphics->Draw(/*shader=*/1u, i_graph::ShaderType::kSegment,
+    graphics->Draw(/*shader=*/1u, i_graph::ShaderId::kSegment,
                    std::pair<float, float>{800.0f, 600.0f}, ctx);
 
     ASSERT_EQ(gl->last_vec_by_name.count("mainColor"), 1u);
@@ -181,7 +181,7 @@ TEST(SelectionPullTest, Draw_CompositeChildrenNotHighlightedWhenParentNotSelecte
     ctx.selection = &selection;
     ctx.highlight_color = kHighlight;
 
-    graphics->Draw(/*shader=*/1u, i_graph::ShaderType::kSegment,
+    graphics->Draw(/*shader=*/1u, i_graph::ShaderId::kSegment,
                    std::pair<float, float>{800.0f, 600.0f}, ctx);
 
     ASSERT_EQ(gl->last_vec_by_name.count("mainColor"), 1u);

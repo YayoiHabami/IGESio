@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "igesio/numerics/core/tolerance.h"
+#include "igesio/entities/interfaces/i_restricted_surface.h"
 
 namespace {
 
@@ -82,6 +83,19 @@ double ComputeFallbackExtent(const ISurface& surface,
 ParamRange GetEffectiveParamRange(const ISurface& surface,
                                    const double fallback_extent) {
     const auto r = surface.GetParameterRange();
+    const bool any_inf = !std::isfinite(r[0]) || !std::isfinite(r[1]) ||
+                         !std::isfinite(r[2]) || !std::isfinite(r[3]);
+
+    // 無限範囲の制限面: ドメインのUV範囲を窓に使う (中心・広がりが正しい)。
+    // 原点からオフセットしたトリム領域 (有界平面など) もこれで拾える。
+    if (any_inf) {
+        if (const auto* rs =
+                dynamic_cast<const i_ent::IRestrictedSurface*>(&surface)) {
+            if (auto b = i_ent::GetRestrictedDomainUVBounds(*rs)) {
+                return {(*b)[0], (*b)[1], (*b)[2], (*b)[3]};
+            }
+        }
+    }
 
     // 片側または両側が無限の区間を有限にクランプする
     auto clamp_range = [&](const double lo,
@@ -91,8 +105,8 @@ ParamRange GetEffectiveParamRange(const ISurface& surface,
         if (!lo_inf && !hi_inf) return {lo, hi};
         if (!lo_inf &&  hi_inf) return {lo, lo + fallback_extent};
         if ( lo_inf && !hi_inf) return {hi - fallback_extent, hi};
-        // 両側無限: 原点中心にfallback_extentの幅を設定
-        return {-fallback_extent * 0.5, fallback_extent * 0.5};
+        // 両側無限 (無限平面など): 描画/エッジと同じ ±kInfiniteParamClamp に合わせる
+        return {-i_ent::kInfiniteParamClamp, i_ent::kInfiniteParamClamp};
     };
 
     const auto [u_min, u_max] = clamp_range(r[0], r[1]);

@@ -39,7 +39,14 @@ CreateSurfaceGraphics(const std::shared_ptr<const entities::ISurface>&,
 /// @brief エンティティの描画オブジェクト作成する関数
 /// @param entity 描画するエンティティのポインタ
 /// @param gl OpenGL関数のラッパー
+/// @param synchronize 生成時に同期 (CPU構築+GL転送) まで行うか (既定: true)
 /// @return 作成された描画オブジェクト、無効な場合はnullptr
+/// @note ディスパッチ順: ①GraphicsRegistry (動的型の完全一致. 登録があれば
+///       その結果を最終とする) → ②組み込みの能力ディスパッチ
+///       (ICurve/ISurface/Point) → ③nullptr
+/// @note 既定では生成時にSynchronizeまで行い、即描画可能な状態で返す. レンダラは
+///       reconcile経路でCPU相を並列に前倒ししてからGL転送を直列に行うため、
+///       synchronize=falseを指定して生成時の同期を省く (子孫も未同期で返る)。
 /// @note 不変条件: nullptrの返却は「型起因の恒久的失敗」(未サポート型・
 ///       描画対応のないインターフェース) のみとすること. レンダラはnullptrを
 ///       負キャッシュとして保持し、同一エンティティの生成を再試行しない.
@@ -47,7 +54,8 @@ CreateSurfaceGraphics(const std::shared_ptr<const entities::ISurface>&,
 ///       失敗時のジオメトリリビジョンを記録し変化時に再試行する設計が必要
 std::unique_ptr<IEntityGraphics>
 CreateEntityGraphics(const std::shared_ptr<const entities::IEntityIdentifier>&,
-                     const std::shared_ptr<IOpenGL>&);
+                     const std::shared_ptr<IOpenGL>&,
+                     bool synchronize = true);
 
 }  // namespace igesio::graphics
 

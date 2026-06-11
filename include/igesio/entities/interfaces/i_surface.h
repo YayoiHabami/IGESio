@@ -21,6 +21,12 @@
 
 namespace igesio::entities {
 
+/// @brief 無限パラメータ範囲を持つ曲面を離散化/探索する際のクランプ値
+/// @note 無限平面・半直線状の曲面などの無限端をこの値で打ち切る。境界エッジ生成・
+///       交差判定でサンプリング範囲を一致させるためのentities層の共有定数
+///       (graphics層の同名定数と同値)
+constexpr double kInfiniteParamClamp = 100.0;
+
 /// @brief 曲面の偏導関数
 class SurfaceDerivatives {
     /// @brief 何階までの偏導関数を格納するか

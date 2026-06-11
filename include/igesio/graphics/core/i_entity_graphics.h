@@ -8,6 +8,7 @@
 #ifndef IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 #define IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -24,6 +25,7 @@
 #include "igesio/graphics/core/material_property.h"
 #include "igesio/graphics/core/ray.h"
 #include "igesio/graphics/core/draw_context.h"
+#include "igesio/graphics/core/shader_id.h"
 
 
 
@@ -38,85 +40,29 @@ constexpr double kDefaultLineWidth =
 ///       ための共有定数. 半直線・直線・無限平面などの無限端をこの値で打ち切る
 constexpr double kInfiniteParamClamp = 100.0;
 
-/// @brief シェーダーのタイプ
-/// @note この列挙体の値に基づき、どのシェーダープログラムを使用するかを決定する
-/// @note `kNone`は最大値として使用される.
-///       forループなどでは、`kNone`未満の値を使用すること
-enum class ShaderType {
-    /// @brief 汎用曲線シェーダー
-    /// @note `ICurve`を継承したクラスについて、
-    ///       曲線をCPU上で離散化したうえで、離散化した点をGPUに渡して描画する
-    kGeneralCurve,
-    /// @brief 円弧シェーダー (Type: 100; Circular Arc)
-    kCircularArc,
-    /// @brief 楕円シェーダー (Type: 104, Form: 1; Conic Arc)
-    kEllipse,
-    // 双曲線シェーダー/放物線シェーダーは特殊化なし
+/// @brief 特定のシェーダーコードを持つShaderIdか
+/// @param shader_id ShaderIdの値
+/// @return kCompositeやkNone、未登録IDなど、shader_idが特定の
+///         シェーダーコードを持たない場合はfalseを返す
+/// @note ShaderRegistryの登録内容 (codeの有無) を参照する
+bool HasSpecificShaderCode(const ShaderId);
 
-    /// @brief Copious Dataシェーダー
-    ///        (Type: 106, Forms: 1-3, 11-13; Copious Data)
-    kCopiousData,
-
-    /// @brief 線分シェーダー (Type: 110, Form 0; Line)
-    kSegment,
-    /// @brief 半直線/直線シェーダー (Type: 110, Forms 1-2; Line)
-    kLine,
-    /// @brief 点シェーダー (Type: 116; Point)
-    kPoint,
-    /// @brief NURBS曲線シェーダー (Type: 126; Rational B-Spline Curve)
-    kRationalBSplineCurve,
-
-    /// @brief サーフェス境界エッジシェーダー
-    /// @note 面の境界を線として描画する (汎用曲線シェーダーを再利用する).
-    ///       光源を使わない線描画のため、必ずkGeneralSurfaceより前に配置すること
-    ///       (UsesLightingがkGeneralSurface以降をtrueと判定するため)
-    kSurfaceEdge,
-
-    /// @brief 汎用曲面シェーダー
-    /// @note これ以降のすべてのシェーダーは、Lightを使用する
-    kGeneralSurface,
-
-    /// @brief NURBS曲面シェーダー (Type: 128; Rational B-Spline Surface)
-    kRationalBSplineSurface,
-
-    /// @brief 複数のシェーダーを使用する
-    /// @note 子要素(child_graphics_)を持つEntityGraphics(複合ノード)で使用される.
-    ///       Composite Curveなど、複数の子要素を持ち、それぞれの子要素で
-    ///       異なるシェーダーを使用する場合に使用される.
-    kComposite,
-    /// @brief シェーダーなし
-    /// @note 最大値として使用される
-    kNone,
-};
-
-/// @brief 特定のシェーダーコードを持つShaderTypeか
-/// @param shader_type ShaderTypeの値
-/// @return kCompositeやkNoneなど、shader_typeが特定のシェーダーコード
-///         を持たない場合はfalseを返す
-inline bool HasSpecificShaderCode(const ShaderType shader_type) {
-    return shader_type != ShaderType::kNone &&
-           shader_type != ShaderType::kComposite;
-}
-
-/// @brief 面塗り (三角形描画) のシェーダー型か
-/// @param st シェーダー型
+/// @brief 面塗り (三角形描画) のシェーダーか
+/// @param shader_id シェーダーの識別子
 /// @return 面塗りの場合はtrue
-inline bool IsSurfaceFill(const ShaderType st) {
-    return st == ShaderType::kGeneralSurface ||
-           st == ShaderType::kRationalBSplineSurface;
-}
+/// @note ShaderRegistryのメタ情報 (ShaderDrawCategory) を参照する
+bool IsSurfaceFill(const ShaderId);
 
-/// @brief ShaderTypeの値を文字列に変換する
-/// @param shader_type ShaderTypeの値
-/// @return ShaderTypeの値に対応する文字列
-std::string ToString(const ShaderType);
+/// @brief ShaderIdの値を文字列に変換する
+/// @param shader_id ShaderIdの値
+/// @return ShaderRegistryに登録された名前. 未登録IDの場合は"Unknown"
+std::string ToString(const ShaderId);
 
 /// @brief シェーダーの計算が光源を使用するか
-/// @param shader_type ShaderTypeの値
+/// @param shader_id ShaderIdの値
 /// @return 光源を使用する場合はtrue, そうでない場合はfalse
-/// @note kGeneralSurface以降のシェーダーは光源を使用する
-///       (kCompositeとkNoneは除く)
-bool UsesLighting(const ShaderType);
+/// @note ShaderRegistryのメタ情報 (uses_lighting) を参照する
+bool UsesLighting(const ShaderId);
 
 
 /// @brief 範囲選択用のジオメトリサンプル（ワールド座標）
@@ -131,15 +77,38 @@ struct SelectionSamples {
     /// @brief polylinesが閉じた境界ループか（点内外判定に利用可能か）
     /// @note 分割が起きた場合は閉ループ性が保証されないためfalseとする
     bool polylines_closed = false;
+
+    /// @brief 線分群の共有頂点プール (ワールド座標)
+    /// @note メッシュのエッジのように多数の線分が頂点を共有する場合用.
+    ///       判定側は各頂点を1回だけ射影すればよく、線分ごとの点列
+    ///       (polylines) より大幅に軽い. 内包判定ではpointsと同様に
+    ///       「全点が矩形内」の対象になる (線分に属さない頂点も含む)
+    std::vector<Vector3d> segment_vertices;
+    /// @brief segment_verticesへのインデックスペア (各ペアが1線分)
+    /// @note 交差判定で線分として評価される. 折れ線と異なり連続性を
+    ///       仮定しないため、エッジ集合をそのまま表現できる
+    std::vector<std::array<std::uint32_t, 2>> segments;
+
+    /// @brief サンプルが空か
+    /// @note 範囲選択の早期リジェクトに利用可能
+    bool IsEmpty() const {
+        return points.empty() && polylines.empty() &&
+               segment_vertices.empty() && segments.empty();
+    }
 };
 
 /// @brief EntityGraphicsの型消去クラス
 /// @note すべての描画用クラスの基底クラス
-/// @note 責務は2フェーズに分かれる:
-///       - Build: `Synchronize`/`SyncTexture` がエンティティのジオメトリから
-///         GPUリソース (VAO/テクスチャ等) を構築する. ジオメトリ変更時に再実行可.
-///       - Draw: `Draw(..., ctx)` が `DrawContext` からPULLした表示状態 (変換・色・
-///         材質・選択ハイライト) を適用して描画する. 論理状態は保持しない.
+/// @note 処理は段階に分かれ、各段階に置ける処理が決まっている。レンダラは
+///       生成 (ctor) → `PrewarmCpu` (CPU準備) → `Synchronize`/`DoSynchronize`
+///       (GPU転送) → `Draw` (毎フレーム) の順に駆動する。シェーダー型列挙・ピック・
+///       バウンディング・バケット構築が要る状態は `PrewarmCpu` までに確定させること。
+///       各関数に置ける処理は個々のコメントを参照。
+/// @note GLを呼べるのはGPU転送 (`DoSynchronize`)・毎フレーム描画 (`Draw`)・
+///       `SyncTexture`・`Cleanup` に限る。生成・`PrewarmCpu`・ピック系では呼ばない。
+/// @note 子の保持は2方式。`child_graphics_` + `AddChildGraphics` を使うと、型列挙・
+///       変換/色伝播・`PrewarmCpu` カスケード・選択集約を基底が肩代わりする。独自メンバで
+///       子を持つ場合はこれらを各々オーバーライドして伝播し、子は `PrewarmCpu` で生成する。
 class IEntityGraphics {
  protected:
     /// @brief エンティティの色 (RGBA)
@@ -185,15 +154,21 @@ class IEntityGraphics {
     /// @note CurrentGeometryKey()との不一致が再テッセレーションの要否を表す
     uint64_t synced_geometry_key_ = 0;
 
-    /// @brief 再同期の実体 (エンティティのジオメトリからGPUリソースを再構築する)
+    /// @brief 再同期の実体 (エンティティのジオメトリからGPUリソースを構築・転送する)
     /// @note 呼び出しはSynchronize() (NVI) 経由でのみ行うこと.
     ///       キー記録を基底で一元化するための分離
+    /// @note GLリソースの生成・転送のみを行う。重いCPU準備は`PrewarmCpu`に置き、
+    ///       未準備時に備え冒頭で`PrewarmCpu`を呼ぶ。同期キーはSynchronizeが記録するため
+    ///       ここでは設定しない。
     virtual void DoSynchronize() = 0;
 
     /// @brief コンストラクタ
     /// @param gl OpenGL関数のラッパー
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
+    /// @note 派生クラスのコンストラクタは同一性の確立 (entity_/gl_/shader_id_・
+    ///       自前バッファ) のみ行うこと。`Synchronize`を呼ばず、GLリソース生成や重い
+    ///       CPU処理も行わない (同期はレンダラ/ファクトリが駆動する)。
     explicit IEntityGraphics(const std::shared_ptr<IOpenGL>&, bool);
 
 
@@ -227,11 +202,13 @@ class IEntityGraphics {
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
-    /// @param shader_type 描画に使用するシェーダーのタイプ
+    /// @param shader_id 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
-    /// @note shader_typeに合致する要素がない場合は何もしない
-    virtual void Draw(gl::Uint, const ShaderType, const std::pair<float, float>&,
+    /// @note shader_idに合致する要素がない場合は何もしない
+    /// @note 描画コマンドの発行とctxからの状態適用のみを行う。バケットに登録されていても
+    ///       バッファが空・未構築なら自衛する (IsDrawable等)。論理状態は変更しない。
+    virtual void Draw(gl::Uint, const ShaderId, const std::pair<float, float>&,
                       const DrawContext&) const = 0;
 
     /// @brief エンティティの描画を行う
@@ -245,6 +222,7 @@ class IEntityGraphics {
     /// @note 内部で参照するエンティティの状態に基づいて、描画用のリソースを
     ///       再セットアップ (DoSynchronize) し、末尾で同期キーを記録する.
     ///       キー記録を基底で一元化し、各実装の記録漏れを構造的に排除する
+    /// @note 非virtual。派生クラスは本関数でなく`DoSynchronize`を実装する。
     void Synchronize() {
         DoSynchronize();
         synced_geometry_key_ = CurrentGeometryKey();
@@ -257,6 +235,7 @@ class IEntityGraphics {
     ///       物理従属子 (GetChildIDs) を再帰的に結合する. 同一性(ID)を含めることで、
     ///       参照集合の変化とカウンタの変化の両方が必ずキーに現れる
     ///       (リビジョン総和では参照先交換時に相殺しうるため不可)
+    /// @note 同期状態に依らずいつでも呼べること (NeedsResyncの判定に使う)。
     virtual uint64_t CurrentGeometryKey() const = 0;
 
     /// @brief 再Synchronizeが必要か
@@ -266,7 +245,19 @@ class IEntityGraphics {
     }
 
     /// @brief テクスチャ用の描画リソースを同期する
+    /// @note GLテクスチャの生成・転送を行う (GLスレッドから呼ぶこと)。
     virtual void SyncTexture() = 0;
+
+    /// @brief 描画用CPUデータ (テッセレーション・遅延する子の生成等) を事前構築する
+    /// @note GLを一切呼ばない。重いCPU処理を持つクラス (RestrictedSurfaceGraphics等) や
+    ///       子を遅延生成するクラス (CurveOnAParametricSurfaceGraphics) がオーバーライド
+    ///       し、結果を自身のCPUステージングへ格納する。レンダラのreconcile経路から
+    ///       ワーカースレッドで並列に呼べるよう、自身のメンバのみ書き込む
+    ///       (entity_は読み取り専用)。
+    /// @note 冪等であること (同期キー/存在チェックでガードし、再呼び出しで作り直さない)。
+    ///       ステージングは`Cleanup`で破棄されない専用メンバへ置く (DoSynchronizeが
+    ///       先頭でCleanupするため)。GPU転送はSynchronize/DoSynchronizeが別途行う。
+    virtual void PrewarmCpu() {}
 
 
 
@@ -338,17 +329,24 @@ class IEntityGraphics {
 
     /// @brief 描画用のシェーダーのタイプを取得する
     /// @return 描画用のシェーダーのタイプ
-    virtual ShaderType GetShaderType() const = 0;
+    virtual ShaderId GetShaderId() const = 0;
 
     /// @brief 全ての可能なシェーダータイプを取得する
     /// @return 全ての可能なシェーダータイプのリスト
-    /// @note 例えば子要素がある場合、`GetShaderType`のShaderTypeに加えて、
-    ///       各子要素のShaderTypeも含まれる.
-    virtual std::unordered_set<ShaderType> GetShaderTypes() const {
-        return {GetShaderType()};
+    /// @note 例えば子要素がある場合、`GetShaderId`のShaderIdに加えて、
+    ///       各子要素のShaderIdも含まれる.
+    /// @note 描きうるシェーダー型 (能力) を返し、GPU生成物 (vbo_/edge_buffer_) に
+    ///       依存させないこと。バケット構築 (RebuildDrawBuckets) はGPU転送前・
+    ///       `PrewarmCpu`後に本関数を呼ぶ。GPUバッファで決まる能力 (面エッジ) は
+    ///       無条件に報告し (空ならDrawが早期return)、CPUで確定する型 (遅延する子の型)
+    ///       は`PrewarmCpu`で子を生成して反映する。
+    virtual std::unordered_set<ShaderId> GetShaderIds() const {
+        return {GetShaderId()};
     }
 
     /// @brief OpenGLリソースを解放する
+    /// @note GLリソースの解放のみ。`PrewarmCpu`のCPUステージングは破棄しない
+    ///       (DoSynchronizeが先頭で本関数を呼ぶため)。
     virtual void Cleanup() = 0;
 
     /// @brief 描画可能な状態かどうかを確認する
@@ -372,6 +370,9 @@ class IEntityGraphics {
     /// @param params 探索制御パラメータ
     /// @return 交差点のリスト (distance昇順). CanIntersect()がfalseの場合は空リスト
     /// @note デフォルト実装は空リストを返す
+    /// @note ピック・選択系 (CanIntersect/本関数/GetSelectionSamples) はエンティティを
+    ///       解析的に読み、GPUメッシュに依存しない (GPU転送なしで成立)。委譲型は
+    ///       `PrewarmCpu`後に子へ委譲してよい。
     virtual std::vector<RayHit> Intersect(
             const Ray&,
             const RayIntersectionParams& = {}) const { return {}; }
@@ -387,6 +388,7 @@ class IEntityGraphics {
     /// @return エンティティのバウンディングボックスにworld_transform_を
     ///         適用したもの. BBを定義できない (IGeometryでない) 場合はstd::nullopt
     /// @note ピッキング時の代表深度の算出に用いる
+    /// @note エンティティ由来でGPU生成物に依存しない (GPU転送なしで成立)。
     virtual std::optional<numerics::BoundingBox> GetWorldBoundingBox() const = 0;
 };
 

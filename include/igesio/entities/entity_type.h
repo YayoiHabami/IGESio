@@ -264,8 +264,32 @@ enum class EntityType : uint16_t {
     /// @brief face‡ (境界表現ソリッドクラス)
     kFace = 510,
     /// @brief shell‡ (境界表現ソリッドクラス)
-    kShell = 514
+    kShell = 514,
+
+    /// @brief 非IGESエンティティ (本ライブラリの拡張用センチネル)
+    /// @note IGESへシリアライズされない計算・描画専用エンティティ
+    ///       (メッシュ・点群等のユーザー定義型) を一括して表す.
+    ///       kUserDefinedと異なりIGES type番号を持たず、パーサー・ライターを
+    ///       一切通らない (IGES出力からはスキップされる). 型同士の識別は
+    ///       この列挙型ではなくC++の型システム (能力インターフェース) で行う.
+    ///       IGESファイル上にこの値 (65534) が現れることはない
+    kNonIges = 0xFFFE,
+    /// @brief ユーザー定義エンティティ (本ライブラリの拡張用センチネル)
+    /// @note IGES 5.3がユーザー定義用に予約する番号 (600-699, 10000-99999) の
+    ///       エンティティを一括して表す. 実際のtype番号はこの列挙型では表現せず
+    ///       (10000以上はuint16_tに収まらない)、`RawEntityDE::user_type_number`
+    ///       等の併走フィールドで保持する. IGESファイル上にこの値 (65535) は出力されない
+    kUserDefined = 0xFFFF
 };
+
+/// @brief IGES 5.3がユーザー定義エンティティ用に予約する番号か
+/// @param n エンティティタイプ番号
+/// @return 600-699または10000-99999の場合はtrue
+/// @note この範囲の番号を持つエンティティは`EntityType::kUserDefined`として
+///       扱い、実番号は`RawEntityDE::user_type_number`等に保持する
+constexpr bool IsUserDefinedEntityNumber(const int n) {
+    return (n >= 600 && n <= 699) || (n >= 10000 && n <= 99999);
+}
 
 /// @brief 数値をエンティティタイプに変換する
 /// @param n エンティティタイプ番号

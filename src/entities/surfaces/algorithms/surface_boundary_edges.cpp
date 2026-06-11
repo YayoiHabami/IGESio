@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -20,10 +21,6 @@
 namespace igesio::entities {
 
 namespace {
-
-/// @brief 無限のパラメータをクランプする量 (mm相当)
-/// @note 無限平面/半直線状の曲面でも有限の境界辺を生成するための保守的な上限
-constexpr double kInfiniteParamClamp = 100.0;
 
 /// @brief 値が無限の場合に代替値へクランプする
 double ClampInfinite(const double x, const double fallback) {
@@ -45,17 +42,19 @@ void FlushPolyline(std::vector<Vector3d>& current,
 /// @param divisions 分割数
 /// @param loops 追加先のループ群
 /// @note Bの評価不能点、または基底曲面のドメイン外で折れ線を分割する
+/// @note 等間隔点に加えて境界曲線の角点も評価点に含め、S(B(t))が曲面の角を
+///       丸めず正確に通過するようにする
 void AppendSurfaceCurveLoop(const ISurface& base, const ICurve& uv_curve,
                             const int divisions,
                             std::vector<std::vector<Vector3d>>& loops) {
     auto range = uv_curve.GetParameterRange();
     const double t0 = ClampInfinite(range[0], -kInfiniteParamClamp);
     const double t1 = ClampInfinite(range[1], kInfiniteParamClamp);
-    if (!(t1 > t0) || divisions < 1) return;
+    const auto params =
+            BuildCornerAwareSampleParams(uv_curve, t0, t1, divisions);
 
     std::vector<Vector3d> current;
-    for (int k = 0; k <= divisions; ++k) {
-        const double t = t0 + (t1 - t0) * k / static_cast<double>(divisions);
+    for (const double t : params) {
         const auto uv = uv_curve.TryGetPointAt(t);
         std::optional<Vector3d> p;
         if (uv) p = base.TryGetPointAt(uv->x(), uv->y());
@@ -101,6 +100,34 @@ void AppendIsoEdge(const ISurface& surf, const bool vary_u, const double fixed,
 }  // namespace
 
 
+
+std::vector<double> BuildCornerAwareSampleParams(
+        const ICurve& curve, const double t0, const double t1,
+        const int divisions) {
+    std::vector<double> params;
+    if (!(t1 > t0) || divisions < 1) return params;
+
+    params.reserve(divisions + 1);
+    for (int k = 0; k <= divisions; ++k) {
+        params.push_back(t0 + (t1 - t0) * k / static_cast<double>(divisions));
+    }
+
+    // 開区間内の角点を併合する (端点t0/t1は等間隔点に既に含まれる)。
+    // 近接重複判定の幅はパラメータスパンに対する相対値とする
+    const double eps = (t1 - t0) * 1e-9;
+    for (const double tc : curve.GetCornerParams()) {
+        if (tc > t0 + eps && tc < t1 - eps) params.push_back(tc);
+    }
+
+    std::sort(params.begin(), params.end());
+    params.erase(
+        std::unique(params.begin(), params.end(),
+                    [eps](const double a, const double b) {
+                        return std::abs(a - b) <= eps;
+                    }),
+        params.end());
+    return params;
+}
 
 SurfaceBoundaryEdges ComputeParametricSurfaceEdges(
         const ISurface& surf, const SurfaceBoundaryEdgeParams& params) {

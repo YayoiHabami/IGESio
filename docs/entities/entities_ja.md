@@ -33,6 +33,9 @@
   - [`RationalBSplineCurve` (type 126)](#rationalbsplinecurve-type-126)
   - [`CurveOnAParametricSurface` (type 142)](#curveonaparametricsurface-type-142)
 - [Surfaces](#surfaces)
+  - [`Plane` (type 108)](#plane-type-108)
+    - [`Plane` (type 108, form 0)](#plane-type-108-form-0)
+    - [`BoundedPlane` (type 108, forms 1 / -1)](#boundedplane-type-108-forms-1---1)
   - [`RuledSurface` (type 118)](#ruledsurface-type-118)
   - [`SurfaceOfRevolution` (type 120)](#surfaceofrevolution-type-120)
   - [`TabulatedCylinder` (type 122)](#tabulatedcylinder-type-122)
@@ -560,6 +563,54 @@ open_curve->SetLineWeightNumber(2);
 ## Surfaces
 
 　本節では、IGESファイルに記述される曲面エンティティについて解説します。曲面エンティティは、3次元空間内の曲面を表現するために使用されます。
+
+### `Plane` (type 108)
+
+> Defined at [plane.h](../../include/igesio/entities/surfaces/plane.h)
+
+　平面エンティティ (Type 108) は、$A \cdot X + B \cdot Y + C \cdot Z = D$ で定義される平面を表現します。フォーム番号により、定義域が全平面の無限平面`Plane` (Form 0) と、平面上の単純閉曲線で定義域を制限した有界平面`BoundedPlane` (Form 1 / -1) の2クラスに分かれます。詳細は[Plane (Type 108)](surfaces/108_plane_ja.md)を参照してください。
+
+#### `Plane` (type 108, form 0)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬─────────────── EntityBase <─┬─ Plane
+>                     └─ IGeometry <── ISurface <───┘
+> ```
+
+　`Plane`は、定義域が全平面の無限平面を表現するためのクラスです。係数 $(A, B, C)$ は平面の法線方向を表し、少なくとも1つは非ゼロである必要があります。以下のコード例は、平面 $Z = -8$ を表す無限平面を生成します（図参照）。
+
+#### `BoundedPlane` (type 108, forms 1 / -1)
+
+> Ancestor class:
+> ```plaintext
+> IEntityIdentifier <─┬──────────────────────────────────── EntityBase <─┬─ BoundedPlane
+>                     └─ IGeometry <── ISurface <── IRestrictedSurface <─┘
+> ```
+
+　`BoundedPlane`は、平面上にある単純閉曲線によって定義域を制限した有界平面を表現するためのクラスです。Form 1は正領域 (実体)、Form -1は負領域 (穴) を表しますが、幾何は同一で領域の符号 (sense) のみが異なります。`IRestrictedSurface`を実装し、[TrimmedSurface](#trimmedsurface-type-144)と同一の枠組みで定義域を扱います。
+
+　以下のコード例は、平面 $Z = 8$ 上に半径 $8$ の円を境界とする有界平面 (Form 1) と、平面 $Z = -8$ を表す無限平面 (Form 0) を生成します（図参照）。
+
+```cpp
+namespace i_ent = igesio::entities;
+
+// 有界平面 (Form 1): 平面 Z = 8 上の円形領域
+// 境界は同一平面上 (z_t = 8) に乗る半径8の円
+auto boundary = i_ent::MakeCircle(igesio::Vector2d(-40.0, 0.0), 8.0, 8.0);
+auto bounded_plane = i_ent::MakeBoundedPlane(
+        0.0, 0.0, 1.0, 8.0,  // plane: 0*X + 0*Y + 1*Z = 8  (Z = 8)
+        boundary);
+bounded_plane->OverwriteColor(i_ent::ColorNumber::kRed);
+
+// 無限平面 (Form 0): 平面 Z = -8 (境界曲線なし)
+auto unbounded_plane = i_ent::MakePlane(0.0, 0.0, 1.0, -8.0);
+unbounded_plane->OverwriteColor(i_ent::ColorNumber::kBlue);
+```
+
+<img src="./images/plane.png" width=400px alt="Plane Example" />
+
+**図: Planeエンティティの例**. 赤が有界平面 (Form 1)、青が無限平面 (Form 0).
 
 ### `RuledSurface` (type 118)
 

@@ -13,6 +13,16 @@
 #       - This option is provided for future flexibility in case we want to make Eigen optional later on, but for now it must be ON.
 #   - IGESIO_ENABLE_GRAPHICS: Enable OpenGL (glad) support (default: OFF)
 #   - IGESIO_ENABLE_TEXTURE_IO: Enable texture I/O support (default: OFF)
+#
+# Extension options:
+#   - IGESIO_ENABLE_ALL_EXTENSIONS: Enable all extensions (default: OFF)
+#   - IGESIO_ENABLE_STL_EXTENSION: Enable the STL (stereolithography) file I/O extension (default: OFF)
+#   - IGESIO_ENABLE_OBJ_EXTENSION: Enable the OBJ (Wavefront OBJ) file I/O extension (default: OFF)
+#
+# Defined macros:
+#   - IGESIO_ENABLE_BOOST: Defined when Boost support is enabled
+#   - IGESIO_STL_EXTENSION_ENABLED: Defined when the STL extension is enabled
+#   - IGESIO_OBJ_EXTENSION_ENABLED: Defined when the OBJ extension is enabled
 cmake_minimum_required(VERSION 3.14)
 
 # Set CMP0135 policy to control timestamp handling for FetchContent archive extraction
@@ -214,6 +224,34 @@ option(IGESIO_ENABLE_GRAPHICS "Enable OpenGL (glad) support" OFF)
 # Option to enable texture I/O support (stb)
 option(IGESIO_ENABLE_TEXTURE_IO "Enable texture I/O support" OFF)
 
+# Options to enable extensions
+# Option to enable the STL (stereolithography) file I/O extension
+option(IGESIO_ENABLE_STL_EXTENSION "Enable STL file I/O extension" OFF)
+# Option to enable the OBJ (Wavefront OBJ) file I/O extension
+option(IGESIO_ENABLE_OBJ_EXTENSION "Enable OBJ file I/O extension" OFF)
+# Option to enable all extensions at once
+option(IGESIO_ENABLE_ALL_EXTENSIONS "Enable all extensions" OFF)
+if(IGESIO_ENABLE_ALL_EXTENSIONS)
+  set(IGESIO_ENABLE_STL_EXTENSION ON)
+  set(IGESIO_ENABLE_OBJ_EXTENSION ON)
+  message(STATUS "All IGESio extensions enabled")
+endif()
+if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION)
+  set(IGESIO_EXTENSIONS_ENABLED ON)
+else()
+  set(IGESIO_EXTENSIONS_ENABLED OFF)
+endif()
+
+# Define macros for enabled extensions
+if(IGESIO_ENABLE_OBJ_EXTENSION)
+  add_compile_definitions(IGESIO_OBJ_EXTENSION_ENABLED)
+endif()
+if(IGESIO_ENABLE_STL_EXTENSION)
+  add_compile_definitions(IGESIO_STL_EXTENSION_ENABLED)
+endif()
+
+
+
 # Option to build GUI (with GLFW and ImGui)
 option(IGESIO_BUILD_GUI "Build GUI (with GLFW and ImGui)" OFF)
 if(IGESIO_BUILD_GUI)
@@ -243,17 +281,19 @@ if(IGESIO_ENABLE_GRAPHICS)
   # コンテキスト固有のロード (gladLoadGLContext) をライブラリ内部に封じ込められる.
   # gl:core=4.3: graphicsモジュールはテッセレーション (GL 4.0) とSSBO (GL 4.3)
   # に依存するため、要求バージョンと同じ4.3 coreで生成したローダを使用する.
-  add_library(glad_gl_core_43 STATIC
+  # ターゲット名にigesio_接頭辞を付ける: add_subdirectory/FetchContentで本ライブラリを
+  # 取り込む利用側が自前の同名gladターゲットを持つ場合の、CMakeターゲット名衝突を避けるため.
+  add_library(igesio_glad_gl_core_43 STATIC
     "${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad_gl_core_43/src/gl.c"
   )
   # Use generator expressions for the include directories,
   # making the target relocatable for both build and install.
-  target_include_directories(glad_gl_core_43 PUBLIC
+  target_include_directories(igesio_glad_gl_core_43 PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/glad_gl_core_43/include>"
     "$<INSTALL_INTERFACE:include>"
   )
   # glad付属CMakeのリンク指定と同等 (Linuxでのdlopen用; MSVC等では空)
-  target_link_libraries(glad_gl_core_43 PUBLIC ${CMAKE_DL_LIBS})
+  target_link_libraries(igesio_glad_gl_core_43 PUBLIC ${CMAKE_DL_LIBS})
   message(STATUS "OpenGL (glad) support enabled")
 else()
   message(STATUS "OpenGL (glad) support is disabled")
@@ -393,7 +433,17 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         # gladアーカイブはエクスポートを維持する (PRIVATE依存として利用側へ自動で
         # 伝播し、利用側は`IGESio::graphics`をリンクするだけでよい).
         # gladヘッダはinstallしない (公開includeにgladを一切出さないため).
-        install(TARGETS glad_gl_core_43
+        install(TARGETS igesio_glad_gl_core_43
+            EXPORT IGESioTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+    endif()
+
+    # Install the extensions library if any extension is enabled
+    if(IGESIO_EXTENSIONS_ENABLED)
+        install(TARGETS igesio_extensions
             EXPORT IGESioTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

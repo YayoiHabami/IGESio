@@ -32,8 +32,9 @@ using CurveOnSurfaceGraphics = i_graph::CurveOnAParametricSurfaceGraphics;
 CurveOnSurfaceGraphics::CurveOnAParametricSurfaceGraphics(
         const std::shared_ptr<const i_ent::CurveOnAParametricSurface>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kComposite, true) {
-    Synchronize();
+        : EntityGraphics(entity, gl, ShaderId::kComposite, true) {
+    // 同期 (子曲線の生成+CPU構築+GL転送) はレンダラのreconcile経路が駆動する
+    // (ctorでは行わない)。DoSynchronizeが子を生成・同期する。
 }
 
 CurveOnSurfaceGraphics::~CurveOnAParametricSurfaceGraphics() {
@@ -42,14 +43,14 @@ CurveOnSurfaceGraphics::~CurveOnAParametricSurfaceGraphics() {
 
 
 
-void CurveOnSurfaceGraphics::DoSynchronize() {
+void CurveOnSurfaceGraphics::PrewarmCpu() {
     std::shared_ptr<const i_ent::ICurve> curve;
     try {
         // 曲線を取得
         curve = entity_->GetCurve();
         if (curve == nullptr) return;
     } catch (const std::runtime_error&) {
-        // 曲線が取得できない場合、同期処理を中止
+        // 曲線が取得できない場合はスキップ (DoSynchronizeでも再試行される)
         return;
     }
 
@@ -66,10 +67,42 @@ void CurveOnSurfaceGraphics::DoSynchronize() {
         } else {
             curve_graphics_ = std::make_unique<ICurveGraphics>(curve, gl_);
         }
+        // 親のフレーム状態 (変換・色) を新しい子へ伝播する.
+        // WalkAssemblyでの適用時点では子が未生成のため、ここで反映する.
+        SetWorldTransform(world_transform_);
+        if (is_color_overridden_) {
+            curve_graphics_->SetColor(
+                    {color_[0], color_[1], color_[2], color_[3]});
+        } else {
+            curve_graphics_->ResetColor();
+        }
     }
 
-    // 曲線の描画用データを同期
+    // 子のCPU側準備 (契約の伝播; 現状ICurve系はno-op)
+    curve_graphics_->PrewarmCpu();
+}
+
+void CurveOnSurfaceGraphics::DoSynchronize() {
+    // 子の生成/再生成はCPU相で行う (未prewarm時の直列フォールバックを兼ねる).
+    // 冪等: 同一曲線では再生成せず、変更時のみ作り直す
+    PrewarmCpu();
+    if (curve_graphics_ == nullptr) return;
+
+    // 子C(t)のGPUリソースを同期する
     curve_graphics_->Synchronize();
+}
+
+void CurveOnSurfaceGraphics::SetWorldTransform(const igesio::Matrix4d& matrix) {
+    EntityGraphics::SetWorldTransform(matrix);
+    if (curve_graphics_ == nullptr) return;
+    // 子C(t)はchild_graphics_でなく専用メンバのため基底のカスケードが届かない.
+    // 基底と同一規則で matrix·M_entity を子へ伝播する
+    igesio::Matrix4d child_transform = matrix;
+    if (entity_ != nullptr) {
+        child_transform = matrix
+                * entity_->GetTransformationMatrix().GetTransformation();
+    }
+    curve_graphics_->SetWorldTransform(child_transform);
 }
 
 void CurveOnSurfaceGraphics::Cleanup() {
@@ -81,24 +114,24 @@ bool CurveOnSurfaceGraphics::IsDrawable() const {
     return curve_graphics_ != nullptr && curve_graphics_->IsDrawable();
 }
 
-std::unordered_set<i_graph::ShaderType> CurveOnSurfaceGraphics::GetShaderTypes() const {
-    std::unordered_set<ShaderType> shader_types = {GetShaderType()};
+std::unordered_set<i_graph::ShaderId> CurveOnSurfaceGraphics::GetShaderIds() const {
+    std::unordered_set<ShaderId> shader_ids = {GetShaderId()};
 
     if (curve_graphics_ != nullptr) {
         // 曲線のシェーダータイプを追加
-        shader_types.insert(curve_graphics_->GetShaderType());
+        shader_ids.insert(curve_graphics_->GetShaderId());
     }
 
-    return shader_types;
+    return shader_ids;
 }
 
 void CurveOnSurfaceGraphics::Draw(
-        gl::Uint shader, const ShaderType shader_type,
+        gl::Uint shader, const ShaderId shader_id,
         const std::pair<float, float>& viewport,
         const DrawContext& ctx) const {
     if (curve_graphics_ == nullptr) return;
 
-    if (shader_type == curve_graphics_->GetShaderType()) {
+    if (shader_id == curve_graphics_->GetShaderId()) {
         // 142自身が選択中なら、委譲先の子(別ID)へハイライトを強制する
         DrawContext child_ctx = ctx;
         if (ctx.IsHighlighted(GetEntityID())) child_ctx.force_highlight = true;

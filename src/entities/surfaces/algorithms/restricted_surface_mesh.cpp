@@ -107,8 +107,21 @@ class QuadtreeMesher {
               nv_(base_div_ * sub_),
               depth_(static_cast<size_t>(base_div_) * base_div_, 0) {
         const auto range = surface.GetParameterRange();
-        u_range_ = {range[0], range[1]};
-        v_range_ = {range[2], range[3]};
+        const bool finite = std::isfinite(range[0]) && std::isfinite(range[1]) &&
+                            std::isfinite(range[2]) && std::isfinite(range[3]);
+        if (finite) {
+            u_range_ = {range[0], range[1]};
+            v_range_ = {range[2], range[3]};
+        } else {
+            // 無限基底 (平面など) の制限面: ドメイン多角形のUV範囲からグリッドを導出する。
+            // 多角形が無い (境界未解決) 場合は退化範囲のままとし、空メッシュとなる。
+            u_range_ = {0.0, 0.0};
+            v_range_ = {0.0, 0.0};
+            if (auto b = GetRestrictedDomainUVBounds(surface)) {
+                u_range_ = {(*b)[0], (*b)[1]};
+                v_range_ = {(*b)[2], (*b)[3]};
+            }
+        }
     }
 
     /// @brief メッシュを構築する
@@ -119,15 +132,12 @@ class QuadtreeMesher {
         EmitAllLeaves();
     }
 
-    /// @brief 構築した頂点行列を取り出す (使用列数に切り詰める)
-    MatrixXf TakeVertices() {
-        vertices_.conservativeResize(8, n_verts_);
-        return std::move(vertices_);
-    }
-
-    /// @brief 構築したインデックス列を取り出す
-    std::vector<std::uint32_t> TakeIndices() {
-        return std::move(indices_);
+    /// @brief 構築したメッシュを取り出す (頂点チャンネルを使用列数に切り詰める)
+    num::TriangleMeshf TakeMesh() {
+        mesh_.positions.conservativeResize(3, n_verts_);
+        mesh_.normals.conservativeResize(3, n_verts_);
+        mesh_.uvs.conservativeResize(2, n_verts_);
+        return std::move(mesh_);
     }
 
  private:
@@ -155,7 +165,14 @@ class QuadtreeMesher {
     /// @return 書き込んだ列インデックス
     int AddVertexData(const std::array<float, 8>& vdata) {
         const int col = n_verts_;
-        for (int r = 0; r < 8; ++r) vertices_(r, col) = vdata[r];
+        mesh_.positions(0, col) = vdata[0];
+        mesh_.positions(1, col) = vdata[1];
+        mesh_.positions(2, col) = vdata[2];
+        mesh_.normals(0, col) = vdata[3];
+        mesh_.normals(1, col) = vdata[4];
+        mesh_.normals(2, col) = vdata[5];
+        mesh_.uvs(0, col) = vdata[6];
+        mesh_.uvs(1, col) = vdata[7];
         ++n_verts_;
         return col;
     }
@@ -267,7 +284,7 @@ class QuadtreeMesher {
         }
     }
 
-    /// @brief 全葉から見た頂点数の上界で頂点行列を事前確保する
+    /// @brief 全葉から見た頂点数の上界で頂点チャンネルを事前確保する
     void AllocateVertices() {
         int64_t est = 0;
         for (int d : depth_) {
@@ -276,8 +293,10 @@ class QuadtreeMesher {
             est += static_cast<int64_t>(n + 1) * (n + 1)
                  + static_cast<int64_t>(4) * n * n;
         }
-        vertices_.resize(8, static_cast<int>(est));
-        indices_.reserve(static_cast<size_t>(est) * 2);
+        mesh_.positions.resize(3, static_cast<int>(est));
+        mesh_.normals.resize(3, static_cast<int>(est));
+        mesh_.uvs.resize(2, static_cast<int>(est));
+        mesh_.indices.reserve(static_cast<size_t>(est) * 2);
     }
 
     /// @brief 全ルートの葉を走査して三角形を生成する
@@ -347,9 +366,9 @@ class QuadtreeMesher {
 
         // poly[0] 基点でファン三角分割
         for (int k = 1; k + 1 < np; ++k) {
-            indices_.push_back(static_cast<std::uint32_t>(poly[0]));
-            indices_.push_back(static_cast<std::uint32_t>(poly[k]));
-            indices_.push_back(static_cast<std::uint32_t>(poly[k + 1]));
+            mesh_.indices.push_back(static_cast<std::uint32_t>(poly[0]));
+            mesh_.indices.push_back(static_cast<std::uint32_t>(poly[k]));
+            mesh_.indices.push_back(static_cast<std::uint32_t>(poly[k + 1]));
         }
     }
 
@@ -369,12 +388,11 @@ class QuadtreeMesher {
     std::array<double, 2> v_range_;
     /// @brief 各ルートセルの四分木深さ
     std::vector<int> depth_;
-    /// @brief 頂点データ {x,y,z,nx,ny,nz,tu,tv} (各列が1頂点)
-    MatrixXf vertices_;
+    /// @brief 構築中のメッシュ (positions/normals/uvsは上界サイズで確保し、
+    ///        TakeMeshで確定済み頂点数へ切り詰める)
+    num::TriangleMeshf mesh_;
     /// @brief 確定済み頂点数
     int n_verts_ = 0;
-    /// @brief 三角形インデックス
-    std::vector<std::uint32_t> indices_;
     /// @brief 仮想格子点キー → 評価結果 のメモ
     std::unordered_map<int64_t, VertexInfo> vmemo_;
     /// @brief サブ辺キー → 交差頂点列インデックス のメモ
@@ -385,16 +403,12 @@ class QuadtreeMesher {
 
 
 
-RestrictedSurfaceMesh TessellateRestrictedSurface(
+numerics::TriangleMeshf TessellateRestrictedSurface(
         const IRestrictedSurface& surface,
         const RestrictedSurfaceMeshParams& params) {
     QuadtreeMesher mesher(surface, params.base_div, params.max_depth);
     mesher.Build();
-
-    RestrictedSurfaceMesh mesh;
-    mesh.vertices = mesher.TakeVertices();
-    mesh.indices = mesher.TakeIndices();
-    return mesh;
+    return mesher.TakeMesh();
 }
 
 }  // namespace igesio::entities

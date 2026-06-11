@@ -170,7 +170,8 @@ EntityBase::EntityBase(const RawEntityDE& de_record,
                                         static_cast<uint16_t>(de_record.entity_type))
                 : IDGenerator::GetReservedID(iges_id, de_record.sequence_number)),
             type_(de_record.entity_type),
-            form_number_(de_record.form_number) {
+            form_number_(de_record.form_number),
+            user_type_number_(de_record.user_type_number) {
     // DEレコードのパラメータを設定
     SetDERecord(de_record, de2id);
 }
@@ -189,6 +190,7 @@ i_ent::RawEntityDE EntityBase::GetRawEntityDE(const id2pointer& id2de) const {
     try {
         // 1st field (Entity Type)
         de.entity_type = type_;
+        de.user_type_number = user_type_number_;
         // 2nd field (Parameter Data) -> Ignored in this context
         // 3rd field (Structure)
         field_name = "Structure (3rd field)";
