@@ -7,6 +7,7 @@ set (TEST_SOURCES
     test_integration.cpp
     test_optimization.cpp
     test_polygon.cpp
+    test_triangle_mesh.cpp
 )
 
 add_executable(test_numerics ${TEST_SOURCES})

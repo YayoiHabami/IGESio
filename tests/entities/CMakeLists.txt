@@ -19,6 +19,9 @@ set(TEST_SOURCES
     # Factory
     test_factory.cpp
 
+    # Non-IGES entities
+    test_mesh_entity.cpp
+
     # Curves
     curves/test_i_curve.cpp
     curves/test_circular_arc.cpp

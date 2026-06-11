@@ -22,6 +22,10 @@
 #include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/numerics/geometric/polygon.h"
 
+// メッシュ (三角形メッシュと基本アルゴリズム)
+#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/mesh/algorithms.h"
+
 namespace igesio {
 
 // 頻用型をigesio直下に昇格させる別名

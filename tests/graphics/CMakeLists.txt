@@ -1,5 +1,6 @@
 set(TEST_SOURCES
     test_graphics_registry.cpp
+    test_triangle_mesh_render.cpp
     test_renderer_smoke.cpp
     test_selection_pull.cpp
     test_composite_render.cpp

@@ -7,13 +7,18 @@
  */
 #include "igesio/graphics/graphics_registry.h"
 
+#include <memory>
 #include <typeindex>
 #include <unordered_map>
 #include <utility>
 
+#include "igesio/entities/mesh_entity.h"
+#include "igesio/graphics/meshes/triangle_mesh_graphics.h"
+
 namespace {
 
 namespace i_graph = igesio::graphics;
+namespace i_ent = igesio::entities;
 
 /// @brief レジストリのストレージ
 struct RegistryStorage {
@@ -30,8 +35,20 @@ struct RegistryStorage {
 RegistryStorage& GetStorage() {
     static RegistryStorage storage = [] {
         RegistryStorage s;
-        // 組み込みの描画対応 (MeshEntity等) はここでseedする
-        // (コアの組み込み分は静的レジストラに頼らず、遅延初期化で確実に登録する)
+        // 組み込みの描画対応はここでseedする (コアの組み込み分は静的レジストラに
+        // 頼らず、遅延初期化で確実に登録する). seedはリビジョンを増やさない
+        // (レンダラの初期値0と整合し、起動直後の不要な負キャッシュ破棄を避ける).
+        // NOTE: ここでTryRegister等を呼ぶとGetStorage()の再帰初期化になるため、
+        //       必ずローカルのs.creatorsへ直接挿入すること
+        s.creators.emplace(
+            std::type_index(typeid(i_ent::MeshEntity)),
+            [](const std::shared_ptr<const i_ent::IEntityIdentifier>& entity,
+               const std::shared_ptr<i_graph::IOpenGL>& gl)
+                    -> std::unique_ptr<i_graph::IEntityGraphics> {
+                return std::make_unique<i_graph::TriangleMeshGraphics>(
+                    std::dynamic_pointer_cast<const i_ent::MeshEntity>(entity),
+                    gl);
+            });
         return s;
     }();
     return storage;

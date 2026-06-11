@@ -22,6 +22,8 @@ add_library(igesio_graphics STATIC
     surfaces/rational_b_spline_surface_graphics.cpp    # 128
     surfaces/restricted_surface_graphics.cpp           # 143/144/108(bounded)
 
+    meshes/triangle_mesh_graphics.cpp                  # MeshEntity (non-IGES)
+
     factory.cpp
     graphics_registry.cpp
 

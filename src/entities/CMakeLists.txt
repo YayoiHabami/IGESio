@@ -30,6 +30,9 @@ add_library(igesio_entities STATIC
     entity_base.cpp
     structures/unsupported_entity.cpp
 
+    # Non-IGES entities
+    mesh_entity.cpp
+
     # Entities
     structures/null_entity.cpp                 # 000
     curves/circular_arc.cpp                    # 100
