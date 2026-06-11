@@ -7,6 +7,8 @@
  */
 #include "igesio/graphics/meshes/triangle_mesh_graphics.h"
 
+#include <array>
+#include <cstdint>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -20,6 +22,31 @@ namespace i_graph = igesio::graphics;
 namespace i_num = igesio::numerics;
 namespace gl = igesio::graphics::gl;
 
+/// @brief 折り目判定の二面角しきい値 (cos(30°))
+/// @note 隣接2面の単位面法線の内積がこの値を下回るエッジを折り目として
+///       kShadedの特徴エッジに含める
+constexpr double kCreaseAngleCos = 0.8660254037844386;
+
+/// @brief 頂点インデックスペア列を線分頂点列 (x,y,z×2/線分) へ平坦化する
+/// @param positions メッシュの頂点位置 (3×N)
+/// @param edges エッジの頂点インデックスペア列
+/// @return SurfaceEdgeBuffer::BuildFromSegmentsへ渡す線分頂点列.
+///         GPU境界のためここで単精度へ変換する
+std::vector<float> FlattenEdgeSegments(
+        const i_num::TriangleMeshd::Matrix3X& positions,
+        const std::vector<std::array<std::uint32_t, 2>>& edges) {
+    std::vector<float> vertices;
+    vertices.reserve(edges.size() * 6);
+    for (const auto& edge : edges) {
+        for (const auto index : edge) {
+            vertices.push_back(static_cast<float>(positions(0, index)));
+            vertices.push_back(static_cast<float>(positions(1, index)));
+            vertices.push_back(static_cast<float>(positions(2, index)));
+        }
+    }
+    return vertices;
+}
+
 }  // namespace
 
 
@@ -27,12 +54,38 @@ namespace gl = igesio::graphics::gl;
 i_graph::TriangleMeshGraphics::TriangleMeshGraphics(
         const std::shared_ptr<const entities::MeshEntity>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, false) {
+        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, false),
+          all_edge_buffer_(gl), feature_edge_buffer_(gl) {
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 i_graph::TriangleMeshGraphics::~TriangleMeshGraphics() {
     Cleanup();
+}
+
+void i_graph::TriangleMeshGraphics::Draw(
+        gl::Uint shader, const ShaderType shader_type,
+        const std::pair<float, float>& viewport,
+        const DrawContext& ctx) const {
+    if (shader_type == ShaderType::kSurfaceEdge) {
+        const auto& buffer = (ctx.display_mode == DisplayMode::kWireFrame)
+                ? all_edge_buffer_ : feature_edge_buffer_;
+        if (buffer.IsEmpty()) return;
+        const bool highlighted = ctx.IsHighlighted(GetEntityID());
+        const auto& color = highlighted
+                ? ctx.highlight_color : kSurfaceEdgeColor;
+        buffer.DrawWithState(shader, GetWorldTransform(),
+                                color, GetLineWidth(), highlighted);
+        return;
+    }
+    EntityGraphics::Draw(shader, shader_type, viewport, ctx);
+}
+
+std::unordered_set<i_graph::ShaderType>
+i_graph::TriangleMeshGraphics::GetShaderTypes() const {
+    auto types = EntityGraphics::GetShaderTypes();
+    types.insert(ShaderType::kSurfaceEdge);
+    return types;
 }
 
 void i_graph::TriangleMeshGraphics::PrewarmCpu() {
@@ -56,6 +109,13 @@ void i_graph::TriangleMeshGraphics::PrewarmCpu() {
     // GPU境界のためここで単精度へ変換する (CPU正準値はdoubleのまま)
     staging_vertices_ = BuildInterleavedVertices(*source);
     staging_indices_.assign(source->indices.begin(), source->indices.end());
+
+    // エッジ抽出 (kWireFrame用の全エッジとkShaded用の特徴エッジ.
+    // 面法線は頂点位置から計算されるため、法線補完前のmeshで良い)
+    const auto edges = i_num::ExtractMeshEdges(mesh, kCreaseAngleCos);
+    staging_all_edges_ = FlattenEdgeSegments(mesh.positions, edges.all_edges);
+    staging_feature_edges_ =
+            FlattenEdgeSegments(mesh.positions, edges.feature_edges);
 
     staged_geometry_key_ = CurrentGeometryKey();
     staged_ = true;
@@ -101,6 +161,11 @@ void i_graph::TriangleMeshGraphics::DoSynchronize() {
 
     gl_->BindVertexArray(0);
     index_count_ = static_cast<int>(staging_indices_.size());
+
+    // エッジ線分バッファを転送 (kWireFrame=全エッジ / kShaded=特徴エッジ.
+    // 特徴エッジが無い場合は空のままとなり、Draw側のIsEmptyで描画されない)
+    all_edge_buffer_.BuildFromSegments(staging_all_edges_);
+    feature_edge_buffer_.BuildFromSegments(staging_feature_edges_);
 }
 
 void i_graph::TriangleMeshGraphics::DrawImpl(
@@ -125,4 +190,8 @@ void i_graph::TriangleMeshGraphics::Cleanup() {
         ebo_ = 0;
     }
     index_count_ = 0;
+
+    // エッジ線分バッファのGPUリソースを解放 (CPUステージングは破棄しない)
+    all_edge_buffer_.Cleanup();
+    feature_edge_buffer_.Cleanup();
 }

@@ -8,7 +8,10 @@
  *       - GraphicsRegistryへの組み込みseed (MeshEntity → TriangleMeshGraphics)
  *       - CreateEntityGraphics経由の生成 (登録操作なしで成立すること)
  *       - レンダラでの描画 (法線あり/なしメッシュ)・編集後の自動再同期
+ *       - 表示モード別のエッジ描画 (kShaded/kWireFrame/kNoEdge)
  * @note 検証はMockOpenGLの呼び出し回数のデルタで行う (絶対回数は実装詳細).
+ *       面塗りはDrawElements、エッジ線分はDrawArraysで発行されるため、
+ *       メッシュ1体のみのシーンでは両者を分離して観測できる.
  */
 #include <gtest/gtest.h>
 
@@ -115,6 +118,71 @@ TEST(TriangleMeshRenderTest, RendererDrawsMeshWithoutNormals) {
 
     renderer.Draw();
     EXPECT_GT(gl->draw_elements_calls, 0);
+}
+
+// kShaded (既定) では面塗りと特徴エッジ (平面quadでは外周=境界) の両方が描画される
+TEST(TriangleMeshRenderTest, ShadedModeDrawsFillAndFeatureEdges) {
+    auto gl = std::make_shared<MockOpenGL>();
+    i_graph::EntityRenderer renderer(gl);
+    try {
+        renderer.Initialize();
+    } catch (const igesio::ImplementationError& e) {
+        GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
+    }
+
+    auto root = i_mod::MakeAssembly();
+    root->AddEntity(std::make_shared<i_ent::MeshEntity>(
+            MakeQuadMeshWithNormals()));
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
+
+    renderer.Draw();
+    EXPECT_GT(gl->draw_elements_calls, 0);  // 面塗り
+    EXPECT_GT(gl->draw_arrays_calls, 0);    // 特徴エッジ (境界)
+}
+
+// kWireFrameでは面塗りが抑止され、エッジ (全エッジ) のみが描画される
+TEST(TriangleMeshRenderTest, WireframeModeDrawsEdgesWithoutSurfaceFill) {
+    auto gl = std::make_shared<MockOpenGL>();
+    i_graph::EntityRenderer renderer(gl);
+    try {
+        renderer.Initialize();
+    } catch (const igesio::ImplementationError& e) {
+        GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
+    }
+
+    auto root = i_mod::MakeAssembly();
+    root->AddEntity(std::make_shared<i_ent::MeshEntity>(
+            MakeQuadMeshWithNormals()));
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
+    renderer.SetDisplayMode(i_graph::DisplayMode::kWireFrame);
+
+    renderer.Draw();
+    EXPECT_EQ(gl->draw_elements_calls, 0);  // 面塗りなし
+    EXPECT_GT(gl->draw_arrays_calls, 0);    // 全エッジ
+}
+
+// kNoEdgeでは面塗りのみが描画され、エッジは描画されない
+TEST(TriangleMeshRenderTest, NoEdgeModeDrawsFillOnly) {
+    auto gl = std::make_shared<MockOpenGL>();
+    i_graph::EntityRenderer renderer(gl);
+    try {
+        renderer.Initialize();
+    } catch (const igesio::ImplementationError& e) {
+        GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
+    }
+
+    auto root = i_mod::MakeAssembly();
+    root->AddEntity(std::make_shared<i_ent::MeshEntity>(
+            MakeQuadMeshWithNormals()));
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
+    renderer.SetDisplayMode(i_graph::DisplayMode::kNoEdge);
+
+    renderer.Draw();
+    EXPECT_GT(gl->draw_elements_calls, 0);  // 面塗り
+    EXPECT_EQ(gl->draw_arrays_calls, 0);    // エッジなし
 }
 
 // SetMesh (形状編集) が手動通知なしで次回Drawの再同期として反映される

@@ -20,6 +20,17 @@
 
 namespace igesio::graphics {
 
+/// @brief 表示モード (面と面エッジの描画組み合わせ)
+/// @note 従属しない曲線エンティティはいずれのモードでも常に描画される.
+enum class DisplayMode {
+    /// @brief 面と面エッジの両方を描画する
+    kShaded,
+    /// @brief 面エッジのみを描画する (面の塗りつぶしを描画しない)
+    kWireFrame,
+    /// @brief 面のみを描画する (面エッジを描画しない)
+    kNoEdge
+};
+
 /// @brief 描画時に下ろす表示コンテキスト
 /// @note GLfloatはfloatのエイリアスのため、色は`std::array<float, 4>`で持つ
 ///       (gladに依存させない). 描画側の`mainColor` uniformへそのまま渡せる.
@@ -32,6 +43,10 @@ struct DrawContext {
     /// @note 複合ノードは描画を子(別ID)へ委譲するため、親が選択された場合は本フラグを
     ///       立てた複製コンテキストを子へ渡し、子のID判定に依らずハイライトさせる.
     bool force_highlight = false;
+    /// @brief 表示モード (面/面エッジの描画組み合わせ)
+    /// @note メッシュ系グラフィックスがkSurfaceEdge描画時のエッジ集合
+    ///       (全エッジ/特徴エッジ) の選択に使用する
+    DisplayMode display_mode = DisplayMode::kShaded;
 
     /// @brief 指定IDをハイライト表示すべきか
     /// @param id 判定対象のID

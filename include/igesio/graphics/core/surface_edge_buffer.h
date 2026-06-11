@@ -68,6 +68,13 @@ class SurfaceEdgeBuffer {
     ///       平坦化される (N点のループ → N-1本の線分).
     void Build(const std::vector<std::vector<Vector3d>>&);
 
+    /// @brief 平坦化済みの線分頂点列からGPUバッファを構築する
+    /// @param segment_vertices 線分頂点列 (頂点毎にx,y,z; 2頂点で1線分.
+    ///        要素数は6の倍数であること)
+    /// @note 既存リソースを解放してから再構築する. 独立した線分の集合
+    ///       (メッシュエッジ等) をループ点列へ詰め替えずに転送するための入口
+    void BuildFromSegments(const std::vector<float>&);
+
     /// @brief 表示状態 (model, 色, 線幅) を設定して線分を描画する
     /// @param shader 使用中のシェーダープログラムID (呼び出し側でbind済み)
     /// @param model モデル変換行列

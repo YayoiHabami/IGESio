@@ -23,6 +23,7 @@
 #include "igesio/models/scene.h"
 #include "igesio/graphics/core/i_open_gl.h"
 #include "igesio/graphics/core/camera.h"
+#include "igesio/graphics/core/draw_context.h"
 #include "igesio/graphics/core/light.h"
 #include "igesio/graphics/core/texture.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
@@ -55,17 +56,6 @@ enum class BoxSelectionMode {
     kContained,
     /// @brief 交差: 矩形がエンティティに少しでもかかって見える場合に選択
     kCrossing,
-};
-
-/// @brief 表示モード (面と面エッジの描画組み合わせ)
-/// @note 従属しない曲線エンティティはいずれのモードでも常に描画される.
-enum class DisplayMode {
-    /// @brief 面と面エッジの両方を描画する
-    kShaded,
-    /// @brief 面エッジのみを描画する (面の塗りつぶしを描画しない)
-    kWireFrame,
-    /// @brief 面のみを描画する (面エッジを描画しない)
-    kNoEdge
 };
 
 /// @brief 描画全般に関する (細かい) 設定

@@ -594,8 +594,10 @@ void EntityRenderer::Draw() const {
     // 描画するエンティティが1つもない場合は何もしない
     if (visible_list_.empty()) return;
 
-    // 選択ハイライトをPULLするための表示コンテキスト (全シェーダーで共通)
-    const DrawContext ctx{&scene_->ActiveSelection(), kSelectionColor};
+    // 選択ハイライトと表示モードをPULLするための表示コンテキスト
+    // (全シェーダーで共通)
+    const DrawContext ctx{&scene_->ActiveSelection(), kSelectionColor,
+                          false, settings_.display_mode};
     ExecuteDrawList(ctx);
 }
 

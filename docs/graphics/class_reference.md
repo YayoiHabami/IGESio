@@ -149,6 +149,7 @@
 |---|---|
 | `selection` | 参照する`SelectionSet`(非所有) |
 | `highlight_color` | 選択ハイライト色 (RGBA) |
+| `display_mode` | 表示モード(`DisplayMode`; 面/面エッジの描画組み合わせ)。メッシュ系グラフィックスがエッジ集合(全エッジ/特徴エッジ)の選択に使用する |
 | `IsHighlighted(id)` | 指定IDが選択中(ハイライト対象)かを返す |
 
 ## ファクトリ関数 (`include/igesio/graphics/factory.h`)
