@@ -9,6 +9,11 @@ if(IGESIO_ENABLE_GRAPHICS)
     add_subdirectory(graphics)
 endif()
 
+# extensionsテストは対応する拡張が有効な場合のみ
+if(IGESIO_ENABLE_STL_EXTENSION)
+    add_subdirectory(extensions)
+endif()
+
 
 
 set(TEST_SOURCES

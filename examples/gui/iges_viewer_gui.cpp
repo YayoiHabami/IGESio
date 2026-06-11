@@ -8,8 +8,10 @@
 #include "./iges_viewer_gui.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <memory>
 #include <optional>
@@ -21,6 +23,9 @@
 #include <igesio/reader.h>
 #include <igesio/entities/interfaces/i_surface.h>
 #include <igesio/graphics/core/material_property.h>
+#ifdef IGESIO_STL_EXTENSION_ENABLED
+#include <igesio/extensions/stl.h>
+#endif
 
 namespace {
 
@@ -66,6 +71,23 @@ const std::vector<ColorScheme> kColorSchemes = {
     {"Plastic Red",  "つや消し赤樹脂",   {{0.85f, 0.15f, 0.12f}},      0.0f, 0.45f},
     {"Plastic Blue", "つや消し青樹脂",   {{0.18f, 0.35f, 0.85f}},      0.0f, 0.40f},
 };
+
+/// @brief 表示用のファイル名 (パス末尾の要素) を取得する
+std::string FileDisplayName(const std::string& path) {
+    return std::filesystem::path(path).filename().string();
+}
+
+#ifdef IGESIO_STL_EXTENSION_ENABLED
+/// @brief パスの拡張子が.stlか (大文字小文字は区別しない)
+bool HasStlExtension(const std::string& path) {
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    return ext == ".stl";
+}
+#endif  // IGESIO_STL_EXTENSION_ENABLED
 
 /// @brief GLFWのマウスボタン定数をMouseButtonへ変換する
 MouseButton ToMouseButton(const int glfw_button) {
@@ -217,7 +239,7 @@ void IgesViewerGUI::Run(const bool vsync) {
 
     // 起動時ファイルの読み込み (Initialize後にGLが有効)
     if (!initial_iges_file_.empty()) {
-        LoadIgesFile(initial_iges_file_);
+        LoadFile(initial_iges_file_, true);
         initial_iges_file_.clear();
     }
 
@@ -265,39 +287,80 @@ void IgesViewerGUI::CaptureScreenshot(const std::string& filename) {
  * モデルの読み込み・同期
  */
 
-void IgesViewerGUI::LoadIgesFile(const std::string& filename) {
+void IgesViewerGUI::LoadFile(const std::string& filename, const bool replace) {
+#ifdef IGESIO_STL_EXTENSION_ENABLED
+    if (HasStlExtension(filename)) {
+        LoadStlFile(filename, replace);
+        return;
+    }
+#endif
+    LoadIgesFile(filename, replace);
+}
+
+void IgesViewerGUI::LoadIgesFile(const std::string& filename,
+                                 const bool replace) {
     try {
-        iges_data_ = igesio::ReadIges(filename);
-
-        // UI側のキャッシュをクリア (描画オブジェクトはレンダラがツリーとの
-        // 突き合わせで自動破棄・生成するため、手動のRemove/Addは不要)
-        entities_.clear();
-        show_entity_.clear();
-        focused_assembly_id_ = std::nullopt;
-        selected_hit_positions_.clear();
-        last_edit_status_.clear();
-
-        // 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
-        for (const auto& pair : iges_data_.Root().GetEntities()) {
-            CacheEntityType(pair.second);
-        }
-        ApplyDisplayFilter();
-
-        // シーンをモデルのrootへ束ねる (描画時にツリーを走査させる)
-        BindSceneRoot(iges_data_.RootPtr());
-        // 読み込んだエンティティへ現在の色の系統(物体色＋材質)を反映する
-        ApplyColorScheme();
-        renderer_.Camera().Reset();
-        // 起動後の初回読み込み時のみ、モデル全体を自動でフィットする
-        if (!initial_fit_done_) {
-            renderer_.FitView();
-            initial_fit_done_ = true;
-        }
-        needs_redraw_ = true;
+        // 読み込んだモデルのrootをそのまま子Assemblyとして組み込む
+        // (エンティティは子Assemblyのshared_ptrが保持するため、
+        //  IgesData自体を保持し続ける必要はない)
+        const auto data = igesio::ReadIges(filename);
+        const auto child = data.RootPtr();
+        child->Metadata().name = FileDisplayName(filename);
+        AttachLoadedAssembly(child, replace);
+        last_edit_status_ = "Loaded IGES: " + filename;
     } catch (const std::exception& e) {
         std::cerr << "Error loading IGES file: " << e.what() << std::endl;
         last_edit_status_ = std::string("Load error: ") + e.what();
     }
+}
+
+#ifdef IGESIO_STL_EXTENSION_ENABLED
+void IgesViewerGUI::LoadStlFile(const std::string& filename,
+                                const bool replace) {
+    try {
+        const auto mesh = extensions::ReadStlAsEntity(filename);
+        const auto child = models::MakeAssembly();
+        child->Metadata().name = FileDisplayName(filename);
+        child->AddEntity(mesh);
+        AttachLoadedAssembly(child, replace);
+        last_edit_status_ = "Loaded STL: " + filename;
+    } catch (const std::exception& e) {
+        std::cerr << "Error loading STL file: " << e.what() << std::endl;
+        last_edit_status_ = std::string("Load error: ") + e.what();
+    }
+}
+#endif  // IGESIO_STL_EXTENSION_ENABLED
+
+void IgesViewerGUI::AttachLoadedAssembly(
+        const std::shared_ptr<models::Assembly>& child, const bool replace) {
+    if (replace) {
+        // 読込済みモデルを一掃する (Rootは固定のままSceneとの束ねを維持し、
+        // 選択セットやRootの色オーバーライドの器を保つ. 描画オブジェクトは
+        // レンダラがツリーとの突き合わせで自動破棄・生成する)
+        scene_->Root().Clear();
+        scene_->ActiveSelection().Clear();
+        entities_.clear();
+        show_entity_.clear();
+        focused_assembly_id_ = std::nullopt;
+        selected_hit_positions_.clear();
+        renderer_.Camera().Reset();
+    }
+
+    scene_->Root().AddChildAssembly(child);
+
+    // 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
+    for (const auto& pair : child->GetEntities()) {
+        CacheEntityType(pair.second);
+    }
+    ApplyDisplayFilter();
+    // 読み込んだエンティティへ現在の色の系統(物体色＋材質)を反映する
+    ApplyColorScheme();
+    // 起動後の初回読み込み時のみ、モデル全体を自動でフィットする
+    if (!initial_fit_done_) {
+        renderer_.FitView();
+        initial_fit_done_ = true;
+    }
+    needs_redraw_ = true;
 }
 
 void IgesViewerGUI::CacheEntityType(
@@ -370,14 +433,6 @@ void IgesViewerGUI::ApplyColorScheme() {
     needs_redraw_ = true;
 }
 
-void IgesViewerGUI::BindSceneRoot(std::shared_ptr<models::Assembly> root) {
-    // 新Sceneを生成 → レンダラのポインタを更新 → 旧Sceneを解放 (ダングリング回避)
-    auto new_scene = std::make_unique<models::Scene>(std::move(root));
-    renderer_.SetScene(new_scene.get());
-    scene_ = std::move(new_scene);
-    needs_redraw_ = true;
-}
-
 void IgesViewerGUI::OnModelEdited() {
     auto& sel = scene_->ActiveSelection();
     // 消えたIDを選択・hit座標から除去する
@@ -415,7 +470,7 @@ void IgesViewerGUI::RenderMenuBar() {
     if (!ImGui::BeginMainMenuBar()) return;
 
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem("Load IGES...")) request_load_popup_ = true;
+        if (ImGui::MenuItem("Load File...")) request_load_popup_ = true;
         if (ImGui::MenuItem("Screenshot")) {
             CaptureScreenshot("screenshot " + CurrentTimeString() + ".png");
             last_edit_status_ = "Saved screenshot.";
@@ -572,15 +627,26 @@ void IgesViewerGUI::RenderMenuBar() {
 
 void IgesViewerGUI::RenderLoadPopup() {
     if (request_load_popup_) {
-        ImGui::OpenPopup("Load IGES");
+        ImGui::OpenPopup("Load File");
         request_load_popup_ = false;
     }
-    if (ImGui::BeginPopupModal("Load IGES", nullptr,
+    if (ImGui::BeginPopupModal("Load File", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
         static char path_buf[512] = "";
         ImGui::InputText("Path", path_buf, IM_ARRAYSIZE(path_buf));
-        if (ImGui::Button("Load")) {
-            LoadIgesFile(path_buf);
+#ifdef IGESIO_STL_EXTENSION_ENABLED
+        ImGui::TextDisabled("IGES (.igs/.iges) / STL (.stl)");
+#else
+        ImGui::TextDisabled("IGES (.igs/.iges)");
+#endif
+        // Replace=読込済みモデルを全て置き換え / Add=現在のシーンへ追加
+        if (ImGui::Button("Load (Replace)")) {
+            LoadFile(path_buf, true);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load (Add)")) {
+            LoadFile(path_buf, false);
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
