@@ -77,7 +77,7 @@ class PickPinGraphics : public i_graph::EntityGraphics<PickPinEntity> {
     PickPinGraphics(const std::shared_ptr<const PickPinEntity>& entity,
                     const std::shared_ptr<i_graph::IOpenGL>& gl)
             : EntityGraphics<PickPinEntity>(
-                  entity, gl, i_graph::ShaderType::kGeneralCurve, false) {}
+                  entity, gl, i_graph::ShaderId::kGeneralCurve, false) {}
 
  protected:
     /// @brief 同期 (GLリソースなしのため何もしない)

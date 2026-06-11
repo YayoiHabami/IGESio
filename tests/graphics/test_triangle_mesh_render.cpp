@@ -74,7 +74,7 @@ TEST(TriangleMeshRenderTest, CreateEntityGraphicsBuildsMeshGraphics) {
     ASSERT_NE(graphics, nullptr);
     EXPECT_NE(dynamic_cast<i_graph::TriangleMeshGraphics*>(graphics.get()),
               nullptr);
-    EXPECT_EQ(graphics->GetShaderType(), i_graph::ShaderType::kGeneralSurface);
+    EXPECT_EQ(graphics->GetShaderId(), i_graph::ShaderId::kGeneralSurface);
     // synchronize=true (既定) でVAO生成・バッファ転送まで行われる
     EXPECT_GT(gl->gen_vertex_arrays_calls, 0);
     EXPECT_GT(gl->buffer_data_calls, 0);

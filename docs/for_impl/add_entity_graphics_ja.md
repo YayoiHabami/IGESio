@@ -8,7 +8,7 @@
 - [描画方式の選択](#描画方式の選択)
 - [パターン A: 汎用クラスをそのまま使う (追加作業なし)](#パターン-a-汎用クラスをそのまま使う-追加作業なし)
 - [パターン B: 専用のGraphicsクラスを新規作成する](#パターン-b-専用のgraphicsクラスを新規作成する)
-  - [ステップ 1: ShaderTypeを追加する](#ステップ-1-shadertypeを追加する)
+  - [ステップ 1: ShaderIdを追加する](#ステップ-1-shaderidを追加する)
   - [ステップ 2: Graphicsクラスのヘッダーを作成する](#ステップ-2-graphicsクラスのヘッダーを作成する)
   - [ステップ 3: Graphicsクラスのソースファイルを作成する](#ステップ-3-graphicsクラスのソースファイルを作成する)
     - [CPU離散化方式の場合](#cpu離散化方式の場合)
@@ -33,7 +33,7 @@
 | **汎用クラス流用** (対応不要) | `ICurve`を継承しており`GetParameterRange()`と `TryGetDerivatives()`が正しく実装されていれば、追加作業なしで`ICurveGraphics` (汎用CPU離散化) が自動で使用される。同様に`ISurface`に対しては`ISurfaceGraphics`が使われる。まず汎用描画で確認してから専用実装に移行するのが推奨の進め方。 |
 | **CPU離散化 (専用)** | 汎用と同じVBO方式を使いたいが、特殊な描画モード (`GL_POINTS`, `GL_LINES` 等) や前処理が必要な場合。`ICurveGraphics` / `ISurfaceGraphics`の継承も可能。 |
 | **GPUパラメトリック** | 形状が解析式で表現でき、テッセレーションでGPU上の精密な描画が望ましい場合 (円弧、NURBS等)。 |
-| **複合ノード** | 子エンティティの集合体であり、各子が独自のShaderTypeを持つ場合 (CompositeCurve等)。 |
+| **複合ノード** | 子エンティティの集合体であり、各子が独自のShaderIdを持つ場合 (CompositeCurve等)。 |
 
 ## パターン A: 汎用クラスをそのまま使う (追加作業なし)
 
@@ -47,26 +47,27 @@ return std::make_unique<i_graph::ICurveGraphics>(entity, gl);
 
 ## パターン B: 専用のGraphicsクラスを新規作成する
 
-### ステップ 1: ShaderTypeを追加する
+### ステップ 1: ShaderIdを追加する
 
-`include/igesio/graphics/core/i_entity_graphics.h`の`ShaderType`列挙体に新しい値を追加する。
+組み込みシェーダーとして追加する場合は、`include/igesio/graphics/core/shader_id.h`の`ShaderId`に静的メンバ定数を追加し、未使用の固定値(0〜255の範囲)を割り当てる。
 
 ```cpp
-// i_entity_graphics.h (抜粋)
-enum class ShaderType {
-    // ... 既存の値 ...
-    kRationalBSplineCurve,
-
-    // ↓ 新たに追加 (kGeneralSurface より前に曲線を挿入)
-    kMyNewCurve,   // Type NNN: MyNewEntity 用
-
-    kGeneralSurface,
+// shader_id.h (抜粋)
+class ShaderId {
+ public:
+    // ... 既存の定数 ...
+    /// @brief MyNewEntity用のシェーダー (Type NNN)
+    static const ShaderId kMyNewCurve;
     // ...
-    kNone,  // 番兵値; 末尾に置くこと
 };
+
+// クラス定義の後に定数定義を追加 (値は既存の組み込みIDと重複しないこと)
+inline const ShaderId ShaderId::kMyNewCurve{11};
 ```
 
-> **注意**: 光源計算が必要な曲面シェーダーは`kGeneralSurface`以降に配置すること。`UsesLighting()`の判定は`kGeneralSurface` 以上かどうかで行われる。
+値の順序に意味は無い。光源計算の有無や表示モードでの取捨は、ステップ5で登録するメタ情報(`ShaderInfo`の`uses_lighting`/`category`)で指定する。
+
+ライブラリを改変しない拡張(ユーザーコード)の場合は定数を追加せず、`ShaderRegistry::Register`が採番する`ShaderId`を使用する(`docs/graphics/overview.md`の§6を参照)。この場合、ステップ5も`Register`呼び出しに置き換わる。
 
 ### ステップ 2: Graphicsクラスのヘッダーを作成する
 
@@ -126,11 +127,11 @@ class MyNewEntityGraphics
 EntityGraphics<T, has_surfaces>
   T             : 対象のエンティティ型 (IEntityIdentifier を継承していること)
   has_surfaces  : サーフェスを持つ場合 true (デフォルト false)
-                  true にすると ambientStrength / specularStrength / shininess /
+                  true にすると roughness / metallic / ao /
                   useTexture 等のマテリアルuniform変数が自動設定される
 ```
 
-使用する`ShaderType`はテンプレート引数ではなく、コンストラクタの第3引数として基底へ渡す(下記の例を参照)。
+使用する`ShaderId`はテンプレート引数ではなく、コンストラクタの第3引数として基底へ渡す(下記の例を参照)。
 
 ### ステップ 3: Graphicsクラスのソースファイルを作成する
 
@@ -153,8 +154,8 @@ using igesio::graphics::MyNewEntityGraphics;
 MyNewEntityGraphics::MyNewEntityGraphics(
         const std::shared_ptr<const entities::MyNewEntity> entity,
         const std::shared_ptr<IOpenGL> gl)
-        // 第3引数=このクラスのShaderType、第4引数=エンティティ変換行列を含むか
-        : EntityGraphics(entity, gl, ShaderType::kMyNewCurve, false) {
+        // 第3引数=このクラスのShaderId、第4引数=エンティティ変換行列を含むか
+        : EntityGraphics(entity, gl, ShaderId::kMyNewCurve, false) {
     // 基底の非virtualなSynchronize()を呼ぶ (DoSynchronize実行+同期キー記録)
     Synchronize();
 }
@@ -218,8 +219,8 @@ void MyNewEntityGraphics::DrawImpl(
 MyNewEntityGraphics::MyNewEntityGraphics(
         const std::shared_ptr<const entities::MyNewEntity> entity,
         const std::shared_ptr<IOpenGL> gl)
-        // 第3引数=このクラスのShaderType、第4引数=エンティティ変換行列を含むか
-        : EntityGraphics(entity, gl, ShaderType::kMyNewCurve, true) {
+        // 第3引数=このクラスのShaderId、第4引数=エンティティ変換行列を含むか
+        : EntityGraphics(entity, gl, ShaderId::kMyNewCurve, true) {
     Synchronize();
 }
 
@@ -280,19 +281,19 @@ void MyNewEntityGraphics::DrawImpl(
 
 | uniform 変数名 | 型 | 説明 |
 |---|---|---|
-| `ambientStrength` | `float` | 環境光強度 |
-| `specularStrength` | `float` | 鏡面反射強度 |
-| `shininess` | `int` | 輝度 |
+| `roughness` | `float` | 表面粗さ |
+| `metallic` | `float` | 金属度 |
+| `ao` | `float` | アンビエントオクルージョン |
 | `useTexture` | `int` | テクスチャ使用フラグ (0 or 1) |
 | `textureSampler` | `sampler2D` | テクスチャサンプラー |
 
-`view`, `projection`, `lightPos`, `viewPos`等のカメラ/光源関連のuniform変数は`EntityRenderer::Draw()`が全シェーダープログラムに一括設定する。
+`view`/`projection`は`EntityRenderer`が全シェーダープログラムに設定する。光源関連(`viewPos_WorldSpace`/`ambientColor`/`numLights`/`lightPositions`/`lightAttenuations`/`lightColors`)は、`ShaderInfo`で`uses_lighting = true`を指定したシェーダーにのみ設定される(ユニフォーム契約の詳細は`docs/graphics/overview.md`の§6を参照)。
 
 共通コードを再利用する場合は`glsl/common/`にファイルを置き、`#include "glsl/common/xxx.glsl"`でインクルードできる。
 
 ### ステップ 5: シェーダーコード定義を登録する
 
-`src/graphics/shaders/curves.h` (または `surfaces.h`) にシェーダーのパスを定義し、`GetCurveShaderCode()`のswitch文に追加する。
+`src/graphics/shaders/curves.h` (または `surfaces.h`) にシェーダーのパスを定義し、`GetBuiltinCurveShaderInfos()`(または`GetBuiltinSurfaceShaderInfos()`)の組み込み定義一覧へ追加する。一覧の各要素はステップ1の`ShaderId`定数と`ShaderInfo`(名前・コード・光源使用フラグ・描画カテゴリ)の組であり、`ShaderRegistry`の初期化時に設定される。
 
 ```cpp
 // src/graphics/shaders/curves.h (抜粋)
@@ -311,17 +312,18 @@ constexpr std::array<const char*, 4> kMyNewCurveShader = {
     "glsl/curves/nnn_my_new_entity.frag"
 };
 
-// GetCurveShaderCode() に追加
-std::optional<ShaderCode> GetCurveShaderCode(const ShaderType shader_type) {
-    switch (shader_type) {
-        // ... 既存のcase ...
-        case ShaderType::kMyNewCurve:
-            return ShaderCode(kMyNewCurveShader);
-        default:
-            return std::nullopt;
-    }
+// GetBuiltinCurveShaderInfos() の一覧へ追加
+inline std::vector<std::pair<ShaderId, ShaderInfo>> GetBuiltinCurveShaderInfos() {
+    constexpr auto kAlways = ShaderDrawCategory::kAlways;
+    return {
+        // ... 既存の定義 ...
+        {ShaderId::kMyNewCurve,             // Type NNN
+         {"MyNewCurve", ShaderCode(kMyNewCurveShader), false, kAlways}},
+    };
 }
 ```
+
+名前(`ShaderInfo::name`)は`ToString(ShaderId)`の表示と`ShaderRegistry::Find()`の検索に使われるため、一意にすること。光源計算が必要な面塗りシェーダーは`uses_lighting = true`かつ`ShaderDrawCategory::kSurfaceFill`を指定する。
 
 ### ステップ 6: ファクトリ関数に登録する
 
@@ -360,10 +362,10 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
 
 複数の子エンティティをそれぞれ独立して描画するエンティティの場合。専用基底はなく、統合された`EntityGraphics`をそのまま使う。
 
-1. `EntityGraphics<T>`を継承したクラスを作成し、コンストラクタで基底へ`ShaderType::kComposite`を渡す。
+1. `EntityGraphics<T>`を継承したクラスを作成し、コンストラクタで基底へ`ShaderId::kComposite`を渡す。
 2. `DoSynchronize()`の中で各子要素のGraphicsオブジェクトを再同期する(子の生成と`AddChildGraphics()`での登録は`factory.cpp`が行う)。
 3. `factory.cpp`で子要素のGraphicsを追加する処理を実装する(既存の`CreateCompositeCurveGraphics()`を参照)。
-4. `ShaderType::kComposite`を使うため、新しいShaderTypeの追加は不要。`DrawImpl()`は空でよく、描画は型が一致する子へ自動的に委譲される。
+4. `ShaderId::kComposite`を使うため、新しいShaderIdの追加は不要。`DrawImpl()`は空でよく、描画は型が一致する子へ自動的に委譲される。
 
 ## 変換行列 (world_transform_) の扱いについて
 
@@ -391,7 +393,7 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
 
 ### 専用Graphicsクラスを作成する場合
 
-- [ ] `ShaderType`列挙体に値を追加 (`i_entity_graphics.h`)
+- [ ] `ShaderId`に静的メンバ定数を追加 (`shader_id.h`; ユーザー拡張の場合は`ShaderRegistry::Register`で採番)
 - [ ] `XxxGraphics`クラスのヘッダー作成 (`include/igesio/graphics/curves/` または `surfaces/`)
 - [ ] `XxxGraphics`クラスのCPP作成 (`src/graphics/curves/`または`surfaces/`)
   - [ ] `DoSynchronize()`の実装 (VAO/VBOの生成。コンストラクタ末尾で`Synchronize()`を呼ぶ)
@@ -399,7 +401,7 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateCurveGraphics(
   - [ ] VAO以外のリソースがある場合は`Cleanup()`もオーバーライド
   - [ ] テッセレーションが`GetChildIDs()`に現れない参照を読む場合のみ`CurrentGeometryKey()`をオーバーライド (既定実装は自エンティティ+DE変換チェーン+物理従属子を再帰結合する)
 - [ ] GLSLシェーダーファイルの作成 (`src/graphics/shaders/glsl/`)
-- [ ] `curves.h`または`surfaces.h`にシェーダーパス定数と`GetXxxShaderCode()`のcase を追加
+- [ ] `curves.h`または`surfaces.h`にシェーダーパス定数と`GetBuiltinXxxShaderInfos()`の定義を追加
 - [ ] `factory.cpp`に`dynamic_cast`分岐を追加
 - [ ] CMakeLists.txt にCPPファイルを追加
 

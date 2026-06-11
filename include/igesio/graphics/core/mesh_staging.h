@@ -5,7 +5,7 @@
  * @date 2026-06-11
  * @copyright 2026 Yayoi Habami
  * @note GLに依存しない純粋な整形処理 (単体テスト可能)。SoAレイアウトの
- *       メッシュを、汎用曲面シェーダー (ShaderType::kGeneralSurface) の
+ *       メッシュを、汎用曲面シェーダー (ShaderId::kGeneralSurface) の
  *       頂点レイアウトへinterleaveする。転送系の描画クラス
  *       (ISurfaceGraphics / RestrictedSurfaceGraphics / TriangleMeshGraphics)
  *       が共用する。

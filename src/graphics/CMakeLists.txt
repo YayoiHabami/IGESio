@@ -27,6 +27,7 @@ add_library(igesio_graphics STATIC
 
     factory.cpp
     graphics_registry.cpp
+    shader_registry.cpp
 
     renderer.cpp
 )

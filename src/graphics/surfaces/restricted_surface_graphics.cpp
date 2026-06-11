@@ -26,7 +26,7 @@
 igesio::graphics::RestrictedSurfaceGraphics::RestrictedSurfaceGraphics(
         const std::shared_ptr<const entities::IRestrictedSurface>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
+        : EntityGraphics(entity, gl, ShaderId::kGeneralSurface, true),
           edge_buffer_(gl) {
     // 同期 (テッセレーション+GP転送) はレンダラのreconcile経路が駆動する
     // (PrewarmCpuで並列前倒し → DoSynchronizeでGL転送)。ctorでは行わない。

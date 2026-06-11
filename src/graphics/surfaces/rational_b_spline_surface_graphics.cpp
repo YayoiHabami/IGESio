@@ -25,7 +25,7 @@ using igesio::graphics::RationalBSplineSurfaceGraphics;
 RationalBSplineSurfaceGraphics::RationalBSplineSurfaceGraphics(
         const std::shared_ptr<const entities::RationalBSplineSurface>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kRationalBSplineSurface, true),
+        : EntityGraphics(entity, gl, ShaderId::kRationalBSplineSurface, true),
           edge_buffer_(gl) {
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }

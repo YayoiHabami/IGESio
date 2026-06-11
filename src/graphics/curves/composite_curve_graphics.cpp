@@ -21,7 +21,7 @@ using igesio::graphics::CompositeCurveGraphics;
 CompositeCurveGraphics::CompositeCurveGraphics(
         const std::shared_ptr<const entities::CompositeCurve>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kComposite, true) {}
+        : EntityGraphics(entity, gl, ShaderId::kComposite, true) {}
 
 void CompositeCurveGraphics::DoSynchronize() {
     for (auto& [shader, graphics] : child_graphics_) {

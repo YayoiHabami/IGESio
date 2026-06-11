@@ -15,6 +15,7 @@
 
 #include "igesio/common/parallel.h"
 #include "igesio/graphics/graphics_registry.h"
+#include "igesio/graphics/shader_registry.h"
 
 #include "./shaders.h"
 
@@ -24,20 +25,25 @@ namespace i_graph = igesio::graphics;
 namespace gl = igesio::graphics::gl;
 using EntityRenderer = igesio::graphics::EntityRenderer;
 
-/// @brief 表示モードに応じて当該シェーダー型を描画すべきか判定する
-/// @param st シェーダー型
+/// @brief 表示モードに応じて当該シェーダーを描画すべきか判定する
+/// @param id シェーダーの識別子
 /// @param mode 表示モード
 /// @return 描画すべき場合はtrue
-/// @note 面塗り(kGeneralSurface/kRationalBSplineSurface)と面エッジ(kSurfaceEdge)を
-///       モードで切り替える. それ以外 (独立曲線・点) は常に描画する.
-bool ShouldDrawShaderType(const i_graph::ShaderType st,
-                          const i_graph::DisplayMode mode) {
-    const bool is_surface_fill = IsSurfaceFill(st);
-    const bool is_surface_edge = st == i_graph::ShaderType::kSurfaceEdge;
+/// @note 面塗り (kSurfaceFill) と面エッジ (kSurfaceEdge) をモードで切り替える.
+///       それ以外 (kAlways; 独立曲線・点) は常に描画する. カテゴリは
+///       ShaderRegistryのメタ情報から取得する (未登録IDはkAlways扱い)
+bool ShouldDrawShaderId(const i_graph::ShaderId id,
+                        const i_graph::DisplayMode mode) {
+    const auto* info = i_graph::ShaderRegistry::Get(id);
+    const auto category = (info != nullptr)
+            ? info->category : i_graph::ShaderDrawCategory::kAlways;
     switch (mode) {
-        case i_graph::DisplayMode::kShaded:    return true;
-        case i_graph::DisplayMode::kNoEdge:    return !is_surface_edge;
-        case i_graph::DisplayMode::kWireFrame: return !is_surface_fill;
+        case i_graph::DisplayMode::kShaded:
+            return true;
+        case i_graph::DisplayMode::kNoEdge:
+            return category != i_graph::ShaderDrawCategory::kSurfaceEdge;
+        case i_graph::DisplayMode::kWireFrame:
+            return category != i_graph::ShaderDrawCategory::kSurfaceFill;
     }
     return true;
 }
@@ -321,7 +327,7 @@ void EntityRenderer::Initialize() {
         throw igesio::ImplementationError(
                 "GL backend is not set; call SetGLBackend() before Initialize()");
     }
-    InitShaders();
+    CompilePendingShaders();
 
     // 深度テストを有効化
     gl_->Enable(gl::kDepthTest);
@@ -344,7 +350,7 @@ void EntityRenderer::Cleanup() {
     local_dirty_ = true;
 
     // シェーダープログラムの削除
-    for (auto& [shader_type, program_id] : shader_programs_) {
+    for (auto& [shader_id, program_id] : shader_programs_) {
         gl_->DeleteProgram(program_id);
     }
     shader_programs_.clear();
@@ -460,7 +466,7 @@ void EntityRenderer::RebuildDrawBuckets() const {
     for (const auto& [id, graphics] : visible_list_) {
         if (!graphics) continue;
         // バッチ描画のためシェーダー別に収集する (複合は子の各型へ収集される)
-        for (const auto st : graphics->GetShaderTypes()) {
+        for (const auto st : graphics->GetShaderIds()) {
             if (HasSpecificShaderCode(st) && shader_programs_.count(st) > 0) {
                 draw_list_[st].push_back(graphics);
             }
@@ -599,6 +605,10 @@ void EntityRenderer::Draw() const {
 
     // シーン(描画の基準ツリー)が未設定なら描画しない (描画はScene走査に一本化)
     if (scene_ == nullptr) return;
+
+    // Initialize後にShaderRegistryへ登録されたシェーダーを遅延コンパイルする
+    // (Initialize前の契約は変えない: 初期化前のDrawではコンパイルしない)
+    if (!shader_programs_.empty()) CompilePendingShaders();
 
     // 現在の表示サイズと、このクラスが保持している表示サイズが異なる場合は更新
     auto [x, y, width, height] = GetCurrentViewport();
@@ -761,11 +771,11 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
         std::copy_n(l.color.data(), 4, light_col.begin() + 4 * i);
     }
 
-    for (const auto& [shader_type, program_id] : shader_programs_) {
+    for (const auto& [shader_id, program_id] : shader_programs_) {
         // 表示モードに応じて面塗り/面エッジのシェーダー型を取捨する
-        if (!ShouldDrawShaderType(shader_type, settings_.display_mode)) continue;
+        if (!ShouldDrawShaderId(shader_id, settings_.display_mode)) continue;
 
-        auto it = draw_list_.find(shader_type);
+        auto it = draw_list_.find(shader_id);
         if (it == draw_list_.end() || it->second.empty()) continue;
 
         gl_->UseProgram(program_id);
@@ -779,7 +789,7 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
         // 出すため、面の奥にある曲線は真の前面深度で正しく遮蔽される.
 
         // 光源のパラメータを設定 (配列uniformとして送信)
-        if (UsesLighting(shader_type)) {
+        if (UsesLighting(shader_id)) {
             // 視点位置 (鏡面・アンビエントFresnelで使用) と環境光色を送信
             gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "viewPos_WorldSpace"),
                             1, camera_.GetPosition().data());
@@ -799,7 +809,7 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
 
         for (auto* graphics : it->second) {
             if (graphics && graphics->IsDrawable()) {
-                graphics->Draw(program_id, shader_type, viewport, ctx);
+                graphics->Draw(program_id, shader_id, viewport, ctx);
             }
         }
     }
@@ -1015,7 +1025,8 @@ std::array<int, 4> EntityRenderer::GetCurrentViewport() const {
  * private member functions
  */
 
-gl::Uint EntityRenderer::CompileVertexShader(const std::string& vertex_source) {
+gl::Uint EntityRenderer::CompileVertexShader(
+        const std::string& vertex_source) const {
     if (vertex_source.empty()) {
         throw igesio::ImplementationError("Vertex shader source is empty");
     }
@@ -1038,7 +1049,8 @@ gl::Uint EntityRenderer::CompileVertexShader(const std::string& vertex_source) {
     return vertex_shader;
 }
 
-gl::Uint EntityRenderer::CompileGeometryShader(const std::string& geometry_source) {
+gl::Uint EntityRenderer::CompileGeometryShader(
+        const std::string& geometry_source) const {
     if (geometry_source.empty()) {
         return 0;  // ジオメトリシェーダーが空の場合は0を返す
     }
@@ -1062,7 +1074,7 @@ gl::Uint EntityRenderer::CompileGeometryShader(const std::string& geometry_sourc
 }
 
 std::pair<float, float> EntityRenderer::CompileTCSAndTES(
-        const std::string& tcs_source, const std::string& tes_source) {
+        const std::string& tcs_source, const std::string& tes_source) const {
     if (tcs_source.empty() || tes_source.empty()) {
         return {0, 0};  // TCSまたはTESが空の場合は0を返す
     }
@@ -1100,7 +1112,8 @@ std::pair<float, float> EntityRenderer::CompileTCSAndTES(
     return {tcs_shader, tes_shader};
 }
 
-gl::Uint EntityRenderer::CompileFragmentShader(const std::string& fragment_source) {
+gl::Uint EntityRenderer::CompileFragmentShader(
+        const std::string& fragment_source) const {
     if (fragment_source.empty()) {
         throw igesio::ImplementationError("Fragment shader source is empty");
     }
@@ -1125,7 +1138,8 @@ gl::Uint EntityRenderer::CompileFragmentShader(const std::string& fragment_sourc
 
 gl::Uint EntityRenderer::CreateShaderProgram(
         gl::Uint vertex_shader, gl::Uint fragment_shader,
-        gl::Uint geometry_shader, gl::Uint tcs_shader, gl::Uint tes_shader) {
+        gl::Uint geometry_shader, gl::Uint tcs_shader,
+        gl::Uint tes_shader) const {
     gl::Uint program_id = gl_->CreateProgram();
 
     if (vertex_shader == 0 || fragment_shader == 0) {
@@ -1155,54 +1169,76 @@ gl::Uint EntityRenderer::CreateShaderProgram(
     return program_id;
 }
 
-void EntityRenderer::InitShaders() {
-    for (int i = 0; i < static_cast<int>(ShaderType::kNone); ++i) {
-        auto shader_type = static_cast<ShaderType>(i);
-        std::optional<shaders::ShaderCode> shader_opt;
+gl::Uint EntityRenderer::CompileShaderProgram(const ShaderCode& code) const {
+    gl::Uint vertex_shader = 0, geometry_shader = 0,
+           tcs_shader = 0, tes_shader = 0, fragment_shader = 0,
+           program_id = 0;
+
+    try {
+        // 各シェーダーをコンパイルする (存在しない場合は0が返る)
+        vertex_shader = CompileVertexShader(code.vertex);
+        geometry_shader = CompileGeometryShader(code.geometry);
+        std::tie(tcs_shader, tes_shader) = CompileTCSAndTES(code.tcs, code.tes);
+        fragment_shader = CompileFragmentShader(code.fragment);
+
+        // 各シェーダーをリンクしてプログラムを作成
+        program_id = CreateShaderProgram(
+            vertex_shader, fragment_shader,
+            geometry_shader, tcs_shader, tes_shader);
+
+        // リンク後、各シェーダーオブジェクトを削除
+        gl_->DeleteShader(vertex_shader);
+        if (geometry_shader != 0) gl_->DeleteShader(geometry_shader);
+        if (tcs_shader != 0) gl_->DeleteShader(tcs_shader);
+        if (tes_shader != 0) gl_->DeleteShader(tes_shader);
+        gl_->DeleteShader(fragment_shader);
+    } catch (const igesio::ImplementationError& e) {
+        // エラーが発生した場合はリソースを解放
+        if (vertex_shader != 0) gl_->DeleteShader(vertex_shader);
+        if (geometry_shader != 0) gl_->DeleteShader(geometry_shader);
+        if (tcs_shader != 0) gl_->DeleteShader(tcs_shader);
+        if (tes_shader != 0) gl_->DeleteShader(tes_shader);
+        if (fragment_shader != 0) gl_->DeleteShader(fragment_shader);
+        if (program_id != 0) gl_->DeleteProgram(program_id);
+        throw e;  // エラーを再スロー
+    }
+
+    return program_id;
+}
+
+void EntityRenderer::CompilePendingShaders() const {
+    // リビジョンが一致し、かつコンパイル済みプログラムがある間は何もしない
+    // (空の場合は初回 (Initialize) のため、リビジョンに依らずコンパイルする)
+    const auto revision = ShaderRegistry::Revision();
+    if (revision == synced_shader_registry_revision_ &&
+        !shader_programs_.empty()) {
+        return;
+    }
+
+    bool compiled = false;
+    for (const auto id : ShaderRegistry::AllIds()) {
+        if (shader_programs_.count(id) > 0) continue;  // コンパイル済み
+        const auto* info = ShaderRegistry::Get(id);
+        // センチネル (kComposite/kNone) 等、コードを持たない定義は対象外
+        if (info == nullptr || info->code.IsIncomplete()) continue;
+
+        // 組み込みGLSLスニペットのインクルードを展開する
+        ShaderCode code;
         try {
-            shader_opt = shaders::GetShaderCode(shader_type);
+            code = shaders::ExpandShaderCodeIncludes(info->code);
         } catch (const igesio::FileError& e) {
             // #includeするファイルが見つからない場合はエラーをスロー
-            throw igesio::ImplementationError(std::string(e.what()));
-        }
-        if (!shader_opt || shader_opt->IsIncomplete()) {
-            continue;  // シェーダーが未実装の場合はスキップ
-        }
-        auto code = *shader_opt;
-
-        gl::Uint vertex_shader = 0, geometry_shader = 0,
-               tcs_shader = 0, tes_shader = 0, fragment_shader = 0,
-               program_id = 0;
-
-        try {
-            // 各シェーダーをコンパイルする (存在しない場合は0が返る)
-            vertex_shader = CompileVertexShader(code.vertex);
-            geometry_shader = CompileGeometryShader(code.geometry);
-            std::tie(tcs_shader, tes_shader) = CompileTCSAndTES(code.tcs, code.tes);
-            fragment_shader = CompileFragmentShader(code.fragment);
-
-            // 各シェーダーをリンクしてプログラムを作成
-            program_id = CreateShaderProgram(
-                vertex_shader, fragment_shader,
-                geometry_shader, tcs_shader, tes_shader);
-
-            // リンク後、各シェーダーオブジェクトを削除
-            gl_->DeleteShader(vertex_shader);
-            if (geometry_shader != 0) gl_->DeleteShader(geometry_shader);
-            if (tcs_shader != 0) gl_->DeleteShader(tcs_shader);
-            if (tes_shader != 0) gl_->DeleteShader(tes_shader);
-            gl_->DeleteShader(fragment_shader);
-        } catch (const igesio::ImplementationError& e) {
-            // エラーが発生した場合はリソースを解放
-            if (vertex_shader != 0) gl_->DeleteShader(vertex_shader);
-            if (geometry_shader != 0) gl_->DeleteShader(geometry_shader);
-            if (tcs_shader != 0) gl_->DeleteShader(tcs_shader);
-            if (tes_shader != 0) gl_->DeleteShader(tes_shader);
-            if (fragment_shader != 0) gl_->DeleteShader(fragment_shader);
-            if (program_id != 0) gl_->DeleteProgram(program_id);
-            throw e;  // エラーを再スロー
+            throw igesio::ImplementationError(
+                    std::string(e.what()) + " in shader " + info->name);
         }
 
-        shader_programs_[shader_type] = program_id;
+        shader_programs_[id] = CompileShaderProgram(code);
+        compiled = true;
     }
+
+    // 新たにコンパイルしたシェーダーを描画バケットへ反映する
+    // (プログラム未在席で取りこぼしたIDをRebuildDrawBucketsに拾わせる)
+    if (compiled) draw_buckets_dirty_ = true;
+
+    synced_shader_registry_revision_ = revision;
 }

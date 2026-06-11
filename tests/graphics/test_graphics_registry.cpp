@@ -65,7 +65,7 @@ class PinGraphics : public i_graph::EntityGraphics<PinEntity> {
     PinGraphics(const std::shared_ptr<const PinEntity>& entity,
                 const std::shared_ptr<i_graph::IOpenGL>& gl)
             : EntityGraphics<PinEntity>(
-                  entity, gl, i_graph::ShaderType::kGeneralCurve, false) {
+                  entity, gl, i_graph::ShaderId::kGeneralCurve, false) {
         ++pin_graphics_created;
     }
 

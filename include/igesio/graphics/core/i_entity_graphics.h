@@ -25,6 +25,7 @@
 #include "igesio/graphics/core/material_property.h"
 #include "igesio/graphics/core/ray.h"
 #include "igesio/graphics/core/draw_context.h"
+#include "igesio/graphics/core/shader_id.h"
 
 
 
@@ -39,85 +40,29 @@ constexpr double kDefaultLineWidth =
 ///       ための共有定数. 半直線・直線・無限平面などの無限端をこの値で打ち切る
 constexpr double kInfiniteParamClamp = 100.0;
 
-/// @brief シェーダーのタイプ
-/// @note この列挙体の値に基づき、どのシェーダープログラムを使用するかを決定する
-/// @note `kNone`は最大値として使用される.
-///       forループなどでは、`kNone`未満の値を使用すること
-enum class ShaderType {
-    /// @brief 汎用曲線シェーダー
-    /// @note `ICurve`を継承したクラスについて、
-    ///       曲線をCPU上で離散化したうえで、離散化した点をGPUに渡して描画する
-    kGeneralCurve,
-    /// @brief 円弧シェーダー (Type: 100; Circular Arc)
-    kCircularArc,
-    /// @brief 楕円シェーダー (Type: 104, Form: 1; Conic Arc)
-    kEllipse,
-    // 双曲線シェーダー/放物線シェーダーは特殊化なし
+/// @brief 特定のシェーダーコードを持つShaderIdか
+/// @param shader_id ShaderIdの値
+/// @return kCompositeやkNone、未登録IDなど、shader_idが特定の
+///         シェーダーコードを持たない場合はfalseを返す
+/// @note ShaderRegistryの登録内容 (codeの有無) を参照する
+bool HasSpecificShaderCode(const ShaderId);
 
-    /// @brief Copious Dataシェーダー
-    ///        (Type: 106, Forms: 1-3, 11-13; Copious Data)
-    kCopiousData,
-
-    /// @brief 線分シェーダー (Type: 110, Form 0; Line)
-    kSegment,
-    /// @brief 半直線/直線シェーダー (Type: 110, Forms 1-2; Line)
-    kLine,
-    /// @brief 点シェーダー (Type: 116; Point)
-    kPoint,
-    /// @brief NURBS曲線シェーダー (Type: 126; Rational B-Spline Curve)
-    kRationalBSplineCurve,
-
-    /// @brief サーフェス境界エッジシェーダー
-    /// @note 面の境界を線として描画する (汎用曲線シェーダーを再利用する).
-    ///       光源を使わない線描画のため、必ずkGeneralSurfaceより前に配置すること
-    ///       (UsesLightingがkGeneralSurface以降をtrueと判定するため)
-    kSurfaceEdge,
-
-    /// @brief 汎用曲面シェーダー
-    /// @note これ以降のすべてのシェーダーは、Lightを使用する
-    kGeneralSurface,
-
-    /// @brief NURBS曲面シェーダー (Type: 128; Rational B-Spline Surface)
-    kRationalBSplineSurface,
-
-    /// @brief 複数のシェーダーを使用する
-    /// @note 子要素(child_graphics_)を持つEntityGraphics(複合ノード)で使用される.
-    ///       Composite Curveなど、複数の子要素を持ち、それぞれの子要素で
-    ///       異なるシェーダーを使用する場合に使用される.
-    kComposite,
-    /// @brief シェーダーなし
-    /// @note 最大値として使用される
-    kNone,
-};
-
-/// @brief 特定のシェーダーコードを持つShaderTypeか
-/// @param shader_type ShaderTypeの値
-/// @return kCompositeやkNoneなど、shader_typeが特定のシェーダーコード
-///         を持たない場合はfalseを返す
-inline bool HasSpecificShaderCode(const ShaderType shader_type) {
-    return shader_type != ShaderType::kNone &&
-           shader_type != ShaderType::kComposite;
-}
-
-/// @brief 面塗り (三角形描画) のシェーダー型か
-/// @param st シェーダー型
+/// @brief 面塗り (三角形描画) のシェーダーか
+/// @param shader_id シェーダーの識別子
 /// @return 面塗りの場合はtrue
-inline bool IsSurfaceFill(const ShaderType st) {
-    return st == ShaderType::kGeneralSurface ||
-           st == ShaderType::kRationalBSplineSurface;
-}
+/// @note ShaderRegistryのメタ情報 (ShaderDrawCategory) を参照する
+bool IsSurfaceFill(const ShaderId);
 
-/// @brief ShaderTypeの値を文字列に変換する
-/// @param shader_type ShaderTypeの値
-/// @return ShaderTypeの値に対応する文字列
-std::string ToString(const ShaderType);
+/// @brief ShaderIdの値を文字列に変換する
+/// @param shader_id ShaderIdの値
+/// @return ShaderRegistryに登録された名前. 未登録IDの場合は"Unknown"
+std::string ToString(const ShaderId);
 
 /// @brief シェーダーの計算が光源を使用するか
-/// @param shader_type ShaderTypeの値
+/// @param shader_id ShaderIdの値
 /// @return 光源を使用する場合はtrue, そうでない場合はfalse
-/// @note kGeneralSurface以降のシェーダーは光源を使用する
-///       (kCompositeとkNoneは除く)
-bool UsesLighting(const ShaderType);
+/// @note ShaderRegistryのメタ情報 (uses_lighting) を参照する
+bool UsesLighting(const ShaderId);
 
 
 /// @brief 範囲選択用のジオメトリサンプル（ワールド座標）
@@ -221,7 +166,7 @@ class IEntityGraphics {
     /// @param gl OpenGL関数のラッパー
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
-    /// @note 派生クラスのコンストラクタは同一性の確立 (entity_/gl_/shader_type_・
+    /// @note 派生クラスのコンストラクタは同一性の確立 (entity_/gl_/shader_id_・
     ///       自前バッファ) のみ行うこと。`Synchronize`を呼ばず、GLリソース生成や重い
     ///       CPU処理も行わない (同期はレンダラ/ファクトリが駆動する)。
     explicit IEntityGraphics(const std::shared_ptr<IOpenGL>&, bool);
@@ -257,13 +202,13 @@ class IEntityGraphics {
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
-    /// @param shader_type 描画に使用するシェーダーのタイプ
+    /// @param shader_id 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
-    /// @note shader_typeに合致する要素がない場合は何もしない
+    /// @note shader_idに合致する要素がない場合は何もしない
     /// @note 描画コマンドの発行とctxからの状態適用のみを行う。バケットに登録されていても
     ///       バッファが空・未構築なら自衛する (IsDrawable等)。論理状態は変更しない。
-    virtual void Draw(gl::Uint, const ShaderType, const std::pair<float, float>&,
+    virtual void Draw(gl::Uint, const ShaderId, const std::pair<float, float>&,
                       const DrawContext&) const = 0;
 
     /// @brief エンティティの描画を行う
@@ -384,19 +329,19 @@ class IEntityGraphics {
 
     /// @brief 描画用のシェーダーのタイプを取得する
     /// @return 描画用のシェーダーのタイプ
-    virtual ShaderType GetShaderType() const = 0;
+    virtual ShaderId GetShaderId() const = 0;
 
     /// @brief 全ての可能なシェーダータイプを取得する
     /// @return 全ての可能なシェーダータイプのリスト
-    /// @note 例えば子要素がある場合、`GetShaderType`のShaderTypeに加えて、
-    ///       各子要素のShaderTypeも含まれる.
+    /// @note 例えば子要素がある場合、`GetShaderId`のShaderIdに加えて、
+    ///       各子要素のShaderIdも含まれる.
     /// @note 描きうるシェーダー型 (能力) を返し、GPU生成物 (vbo_/edge_buffer_) に
     ///       依存させないこと。バケット構築 (RebuildDrawBuckets) はGPU転送前・
     ///       `PrewarmCpu`後に本関数を呼ぶ。GPUバッファで決まる能力 (面エッジ) は
     ///       無条件に報告し (空ならDrawが早期return)、CPUで確定する型 (遅延する子の型)
     ///       は`PrewarmCpu`で子を生成して反映する。
-    virtual std::unordered_set<ShaderType> GetShaderTypes() const {
-        return {GetShaderType()};
+    virtual std::unordered_set<ShaderId> GetShaderIds() const {
+        return {GetShaderId()};
     }
 
     /// @brief OpenGLリソースを解放する

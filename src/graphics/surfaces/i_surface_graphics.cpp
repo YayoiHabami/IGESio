@@ -33,7 +33,7 @@ constexpr int kDefaultDiv = 20;
 ISurfaceGraphics::ISurfaceGraphics(
         const std::shared_ptr<const entities::ISurface>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
+        : EntityGraphics(entity, gl, ShaderId::kGeneralSurface, true),
           edge_buffer_(gl) {
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }

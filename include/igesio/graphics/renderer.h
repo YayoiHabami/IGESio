@@ -28,6 +28,7 @@
 #include "igesio/graphics/core/texture.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
 #include "igesio/graphics/core/ray.h"
+#include "igesio/graphics/core/shader_code.h"
 #include "igesio/graphics/factory.h"
 
 
@@ -115,10 +116,17 @@ class EntityRenderer {
     std::shared_ptr<IOpenGL> gl_;
 
     /// @brief シェーダープログラム
-    /// @note キーはShaderType、値はシェーダープログラムのID
-    /// @note コンパイルとリンクが成功した、各ShaderTypeに対応する
+    /// @note キーはShaderId、値はシェーダープログラムのID
+    /// @note コンパイルとリンクが成功した、各ShaderIdに対応する
     ///       シェーダープログラムを保持する
-    std::unordered_map<ShaderType, gl::Uint> shader_programs_;
+    /// @note mutable: ShaderRegistryへの登録はDraw (const) 冒頭の
+    ///       遅延コンパイル (CompilePendingShaders) で反映される
+    mutable std::unordered_map<ShaderId, gl::Uint> shader_programs_;
+
+    /// @brief 最後に同期したシェーダーレジストリ (ShaderRegistry) のリビジョン
+    /// @note 変化を検知したら未コンパイルのシェーダーのみ追加コンパイルする
+    ///       (コンパイル済みプログラムは温存する)
+    mutable std::uint64_t synced_shader_registry_revision_ = 0;
 
     /// @brief 描画オブジェクトのキャッシュ (Sceneツリーの派生キャッシュ)
     /// @note EnsureSyncedの遅延生成で作られ、ツリーから削除されたエントリは
@@ -184,7 +192,7 @@ class EntityRenderer {
     /// @brief キャッシュした描画リスト (シェーダー別の描画オブジェクト. 非所有ポインタ)
     /// @note EnsureSyncedのツリー走査で構築し、フレームを越えて再利用する.
     ///       graphics_cache_の要素を指す
-    mutable std::unordered_map<ShaderType, std::vector<IEntityGraphics*>> draw_list_;
+    mutable std::unordered_map<ShaderId, std::vector<IEntityGraphics*>> draw_list_;
     /// @brief 可視エンティティの平坦リスト (ピック用. エンティティ毎に一意)
     /// @note draw_list_は複合エンティティを複数シェーダーへ重複登録するため、
     ///       ピックはこちらを走査して二重判定を避ける. 削除済み・非表示・抑制中・
@@ -459,24 +467,28 @@ class EntityRenderer {
 
 
  private:
-    /// @brief シェーダープログラムの初期化
-    /// @note シェーダーのコンパイルとリンクを行う
-    /// @throw igesio::ImplementationError シェーダーの初期化に失敗した場合
-    void InitShaders();
+    /// @brief 未コンパイルの登録済みシェーダーをコンパイルする (遅延コンパイル)
+    /// @note ShaderRegistryのリビジョンが前回同期時から変化した場合 (または
+    ///       プログラムが空の場合) に、未コンパイルのIDのみ追加コンパイルする.
+    ///       Initialize()とDraw()冒頭から呼ばれ、Initialize後に登録された
+    ///       シェーダーも次のDrawで有効になる.
+    /// @throw igesio::ImplementationError コンパイル/リンクに失敗した場合、
+    ///        またはインクルード展開のGLSLファイルが見つからない場合
+    void CompilePendingShaders() const;
 
     /// @brief 頂点シェーダーをコンパイルする
     /// @param vertex_source 頂点シェーダーのソースコード
     /// @return コンパイルされたシェーダーのID
     /// @throw igesio::ImplementationError コンパイルに失敗した場合、
     ///         vertex_sourceが空の場合
-    gl::Uint CompileVertexShader(const std::string&);
+    gl::Uint CompileVertexShader(const std::string&) const;
 
     /// @brief ジオメトリシェーダーをコンパイルする
     /// @param geometry_source ジオメトリシェーダーのソースコード
     /// @return コンパイルされたシェーダーのID、
     ///         geometry_sourceが空の場合は0を返す
     /// @throw igesio::ImplementationError コンパイルに失敗した場合
-    gl::Uint CompileGeometryShader(const std::string&);
+    gl::Uint CompileGeometryShader(const std::string&) const;
 
     /// @brief TCS & TESシェーダーをコンパイルする
     /// @param tcs_source TCSシェーダーのソースコード
@@ -485,14 +497,14 @@ class EntityRenderer {
     ///         TCSまたはTESが空の場合は両方とも0を返す
     /// @throw igesio::ImplementationError コンパイルに失敗した場合
     std::pair<float, float> CompileTCSAndTES(const std::string&,
-                                             const std::string&);
+                                             const std::string&) const;
 
     /// @brief フラグメントシェーダーをコンパイルする
     /// @param fragment_source フラグメントシェーダーのソースコード
     /// @return コンパイルされたシェーダーのID
     /// @throw igesio::ImplementationError コンパイルに失敗した場合、
     ///         fragment_sourceが空の場合
-    gl::Uint CompileFragmentShader(const std::string&);
+    gl::Uint CompileFragmentShader(const std::string&) const;
 
     /// @brief シェーダープログラム作成する
     /// @param vertex_shader 頂点シェーダーのID
@@ -505,7 +517,14 @@ class EntityRenderer {
     ///        頂点シェーダーまたはフラグメントシェーダーが提供されていない場合
     /// @note IDに0を指定した場合は、そのシェーダーはリンクされない
     gl::Uint CreateShaderProgram(gl::Uint, gl::Uint,
-                                 gl::Uint = 0, gl::Uint = 0, gl::Uint = 0);
+                                 gl::Uint = 0, gl::Uint = 0, gl::Uint = 0) const;
+
+    /// @brief 展開済みのShaderCode一式からシェーダープログラムを作成する
+    /// @param code 各ステージのGLSLソースコード (インクルード展開済みであること)
+    /// @return 作成されたシェーダープログラムのID
+    /// @throw igesio::ImplementationError コンパイル/リンクに失敗した場合
+    /// @note 失敗時は途中まで生成したシェーダーオブジェクトを解放して再スローする
+    gl::Uint CompileShaderProgram(const ShaderCode&) const;
 
     /// @brief 描画キャッシュ・可視リストをSceneツリーと突き合わせる (Reconcile; 構造相)
     /// @note Draw/PickEntities/PickEntitiesInRectの冒頭で呼ぶ. モデルリビジョン
@@ -527,7 +546,7 @@ class EntityRenderer {
     /// @note Draw/Pickの冒頭 (EnsureSynced後) で呼ぶ. visible_list_のうち
     ///       NeedsResyncな要素へ並列にPrewarmCpu()を呼ぶ (GL呼び出しを含まない).
     ///       これにより遅延生成 (142の子C(t)) ・テッセレーション等のCPU状態が確定し、
-    ///       GetShaderTypes/Intersectが同期前でも正しく機能する.
+    ///       GetShaderIds/Intersectが同期前でも正しく機能する.
     ///       準備対象があればdraw_buckets_dirty_を立てる.
     void PrepareCpuGeometries() const;
 
@@ -540,7 +559,7 @@ class EntityRenderer {
 
     /// @brief visible_list_からシェーダー別バケット (draw_list_) を再構築する
     /// @note PrepareCpuGeometries後 (CPU状態確定後) に、draw_buckets_dirty_の時のみ呼ぶ.
-    ///       各オブジェクトのGetShaderTypes()でバケットへ振り分ける (複合は各子型へ).
+    ///       各オブジェクトのGetShaderIds()でバケットへ振り分ける (複合は各子型へ).
     void RebuildDrawBuckets() const;
 
     /// @brief 指定IDの描画オブジェクトを取得し、未在席なら遅延生成する

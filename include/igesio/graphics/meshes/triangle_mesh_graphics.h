@@ -4,7 +4,7 @@
  * @author Yayoi Habami
  * @date 2026-06-10
  * @copyright 2026 Yayoi Habami
- * @note 既存の汎用曲面シェーダー (ShaderType::kGeneralSurface) を再利用して
+ * @note 既存の汎用曲面シェーダー (ShaderId::kGeneralSurface) を再利用して
  *       三角形メッシュを描画する. 独自シェーダーは要求しない.
  */
 #ifndef IGESIO_GRAPHICS_MESHES_TRIANGLE_MESH_GRAPHICS_H_
@@ -56,7 +56,7 @@ class TriangleMeshGraphics
     ///       (kWireFrame=全エッジ、それ以外=特徴エッジ) を線描画し、
     ///       他は基底に委譲する. kNoEdgeはレンダラ側でkSurfaceEdgeバケット
     ///       ごとスキップされるためここへは到達しない.
-    void Draw(gl::Uint shader, const ShaderType shader_type,
+    void Draw(gl::Uint shader, const ShaderId shader_id,
               const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override;
 
@@ -65,7 +65,7 @@ class TriangleMeshGraphics
     ///       描画バケットは同期前 (エッジバッファ未構築) のreconcile段で
     ///       構築されるため、構築状態に依存させてはならない
     ///       (実際に空ならDrawがIsEmptyで早期return)。
-    std::unordered_set<ShaderType> GetShaderTypes() const override;
+    std::unordered_set<ShaderId> GetShaderIds() const override;
 
     /// @brief 描画用CPUデータ (interleavedステージング) を事前構築する
     /// @note GLを呼ばない. 同期キーで冪等化されており、レンダラの並列

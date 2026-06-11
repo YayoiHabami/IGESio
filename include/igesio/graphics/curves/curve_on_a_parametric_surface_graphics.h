@@ -48,7 +48,7 @@ class CurveOnAParametricSurfaceGraphics
 
     /// @brief 描画用CPUデータを事前構築する (子C(t)の描画オブジェクトを生成する)
     /// @note GL転送を伴わないCPU相. 子を生成しておくことで、同期前でも
-    ///       GetShaderTypes/Intersect/色伝播が正しく機能する。生成時に親の
+    ///       GetShaderIds/Intersect/色伝播が正しく機能する。生成時に親の
     ///       変換・色を子へ伝播する。GPU転送はDoSynchronizeが行う。
     void PrewarmCpu() override;
 
@@ -69,18 +69,18 @@ class CurveOnAParametricSurfaceGraphics
 
     /// @brief 全ての可能なシェーダータイプを取得する
     /// @return 全ての可能なシェーダータイプのリスト
-    /// @note 例えば子要素がある場合、`GetShaderType`のShaderTypeに加えて、
-    ///       各子要素のShaderTypeも含まれる.
-    std::unordered_set<ShaderType> GetShaderTypes() const override;
+    /// @note 例えば子要素がある場合、`GetShaderId`のShaderIdに加えて、
+    ///       各子要素のShaderIdも含まれる.
+    std::unordered_set<ShaderId> GetShaderIds() const override;
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
-    /// @param shader_type 描画に使用するシェーダーのタイプ
+    /// @param shader_id 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
-    /// @note shader_typeの子要素のみを描画する. 子要素の描画は
+    /// @note shader_idの子要素のみを描画する. 子要素の描画は
     ///       子要素に移譲する.
-    void Draw(gl::Uint, const ShaderType, const std::pair<float, float>&,
+    void Draw(gl::Uint, const ShaderId, const std::pair<float, float>&,
               const DrawContext&) const override;
 
     /// @brief レイとの交差判定が可能か

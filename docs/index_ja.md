@@ -74,7 +74,7 @@
 ### graphicsモジュール
 
 - **[描画システム概要](graphics/overview.md)**
-  - 描画システムの全体構成、`ShaderType`列挙体、描画フローの説明
+  - 描画システムの全体構成、`ShaderId`とシェーダーレジストリ、描画フローの説明
 - **[描画システム クラスリファレンス](graphics/class_reference.md)**
   - `IEntityGraphics`/`EntityRenderer`/`Scene`連携など描画関連クラスのメンバ一覧
 

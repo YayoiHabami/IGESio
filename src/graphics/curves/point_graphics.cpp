@@ -24,7 +24,7 @@ using igesio::graphics::PointGraphics;
 PointGraphics::PointGraphics(
         const std::shared_ptr<const entities::Point>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kPoint, false) {
+        : EntityGraphics(entity, gl, ShaderId::kPoint, false) {
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 

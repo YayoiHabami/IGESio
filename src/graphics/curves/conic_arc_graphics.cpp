@@ -25,7 +25,7 @@ using EllipseGraphics = igesio::graphics::EllipseGraphics;
 EllipseGraphics::EllipseGraphics(
         const std::shared_ptr<const entities::ConicArc>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kEllipse, true) {
+        : EntityGraphics(entity, gl, ShaderId::kEllipse, true) {
     if (entity->GetConicType() != entities::ConicType::kEllipse) {
         throw std::invalid_argument("Entity is not an ellipse.");
     }

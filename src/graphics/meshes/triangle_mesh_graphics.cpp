@@ -54,7 +54,7 @@ std::vector<float> FlattenEdgeSegments(
 i_graph::TriangleMeshGraphics::TriangleMeshGraphics(
         const std::shared_ptr<const entities::MeshEntity>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, false),
+        : EntityGraphics(entity, gl, ShaderId::kGeneralSurface, false),
           all_edge_buffer_(gl), feature_edge_buffer_(gl) {
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
@@ -64,10 +64,10 @@ i_graph::TriangleMeshGraphics::~TriangleMeshGraphics() {
 }
 
 void i_graph::TriangleMeshGraphics::Draw(
-        gl::Uint shader, const ShaderType shader_type,
+        gl::Uint shader, const ShaderId shader_id,
         const std::pair<float, float>& viewport,
         const DrawContext& ctx) const {
-    if (shader_type == ShaderType::kSurfaceEdge) {
+    if (shader_id == ShaderId::kSurfaceEdge) {
         const auto& buffer = (ctx.display_mode == DisplayMode::kWireFrame)
                 ? all_edge_buffer_ : feature_edge_buffer_;
         if (buffer.IsEmpty()) return;
@@ -78,13 +78,13 @@ void i_graph::TriangleMeshGraphics::Draw(
                                 color, GetLineWidth(), highlighted);
         return;
     }
-    EntityGraphics::Draw(shader, shader_type, viewport, ctx);
+    EntityGraphics::Draw(shader, shader_id, viewport, ctx);
 }
 
-std::unordered_set<i_graph::ShaderType>
-i_graph::TriangleMeshGraphics::GetShaderTypes() const {
-    auto types = EntityGraphics::GetShaderTypes();
-    types.insert(ShaderType::kSurfaceEdge);
+std::unordered_set<i_graph::ShaderId>
+i_graph::TriangleMeshGraphics::GetShaderIds() const {
+    auto types = EntityGraphics::GetShaderIds();
+    types.insert(ShaderId::kSurfaceEdge);
     return types;
 }
 

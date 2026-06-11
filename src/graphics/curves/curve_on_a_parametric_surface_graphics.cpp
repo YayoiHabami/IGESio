@@ -32,7 +32,7 @@ using CurveOnSurfaceGraphics = i_graph::CurveOnAParametricSurfaceGraphics;
 CurveOnSurfaceGraphics::CurveOnAParametricSurfaceGraphics(
         const std::shared_ptr<const i_ent::CurveOnAParametricSurface>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kComposite, true) {
+        : EntityGraphics(entity, gl, ShaderId::kComposite, true) {
     // 同期 (子曲線の生成+CPU構築+GL転送) はレンダラのreconcile経路が駆動する
     // (ctorでは行わない)。DoSynchronizeが子を生成・同期する。
 }
@@ -114,24 +114,24 @@ bool CurveOnSurfaceGraphics::IsDrawable() const {
     return curve_graphics_ != nullptr && curve_graphics_->IsDrawable();
 }
 
-std::unordered_set<i_graph::ShaderType> CurveOnSurfaceGraphics::GetShaderTypes() const {
-    std::unordered_set<ShaderType> shader_types = {GetShaderType()};
+std::unordered_set<i_graph::ShaderId> CurveOnSurfaceGraphics::GetShaderIds() const {
+    std::unordered_set<ShaderId> shader_ids = {GetShaderId()};
 
     if (curve_graphics_ != nullptr) {
         // 曲線のシェーダータイプを追加
-        shader_types.insert(curve_graphics_->GetShaderType());
+        shader_ids.insert(curve_graphics_->GetShaderId());
     }
 
-    return shader_types;
+    return shader_ids;
 }
 
 void CurveOnSurfaceGraphics::Draw(
-        gl::Uint shader, const ShaderType shader_type,
+        gl::Uint shader, const ShaderId shader_id,
         const std::pair<float, float>& viewport,
         const DrawContext& ctx) const {
     if (curve_graphics_ == nullptr) return;
 
-    if (shader_type == curve_graphics_->GetShaderType()) {
+    if (shader_id == curve_graphics_->GetShaderId()) {
         // 142自身が選択中なら、委譲先の子(別ID)へハイライトを強制する
         DrawContext child_ctx = ctx;
         if (ctx.IsHighlighted(GetEntityID())) child_ctx.force_highlight = true;
