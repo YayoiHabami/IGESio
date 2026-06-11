@@ -7,7 +7,7 @@
  * @note 対象は公開関数 entities::TessellateRestrictedSurface(const IRestrictedSurface&,
  *       params)。具象 TrimmedSurface を IRestrictedSurface として与えて検証する。
  *       検証する不変量:
- *       - 出力構造 (8行・インデックスは3の倍数・範囲内)
+ *       - 出力構造 (全チャンネル同列数・インデックスは3の倍数・範囲内)
  *       - 制約遵守 (凸な外周トリムでは全三角形の重心が領域内 /
  *         凸な穴では被覆面積が「定義域−穴」に一致 = 穴を覆わない)
  *       - クラックフリー (辺は高々2回使用 / メッシュ境界辺が閉ループ)
@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/mesh/triangle_mesh.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"
@@ -51,8 +52,8 @@ using igesio::Vector2d;
 using igesio::Vector3d;
 using i_ent::TrimmedSurface;
 using i_ent::CurveOnAParametricSurface;
-using i_ent::RestrictedSurfaceMesh;
 using i_ent::RestrictedSurfaceMeshParams;
+using igesio::numerics::TriangleMeshf;
 
 /// @brief 位置・法線の許容誤差 (float精度)
 constexpr float kGeomTol = 1e-3f;
@@ -122,16 +123,16 @@ std::shared_ptr<TrimmedSurface> BuildTrimmed(
 
 /// @brief 頂点列のtu,tvから実パラメータ (u,v) を復元する
 std::pair<double, double> VertexUV(
-        const RestrictedSurfaceMesh& mesh, const std::uint32_t col,
+        const TriangleMeshf& mesh, const std::uint32_t col,
         const std::array<double, 4>& range) {
-    const double tu = mesh.vertices(6, col);
-    const double tv = mesh.vertices(7, col);
+    const double tu = mesh.uvs(0, col);
+    const double tv = mesh.uvs(1, col);
     return {range[0] + tu * (range[1] - range[0]),
             range[2] + tv * (range[3] - range[2])};
 }
 
 /// @brief メッシュ全三角形のUV面積の総和を返す
-double MeshUVArea(const RestrictedSurfaceMesh& mesh,
+double MeshUVArea(const TriangleMeshf& mesh,
                   const std::array<double, 4>& range) {
     double area = 0.0;
     for (size_t k = 0; k + 3 <= mesh.indices.size(); k += 3) {
@@ -146,7 +147,7 @@ double MeshUVArea(const RestrictedSurfaceMesh& mesh,
 
 /// @brief 無向辺 (頂点インデックス対) ごとの使用三角形数を集計する
 std::map<std::pair<std::uint32_t, std::uint32_t>, int> EdgeUseCount(
-        const RestrictedSurfaceMesh& mesh) {
+        const TriangleMeshf& mesh) {
     std::map<std::pair<std::uint32_t, std::uint32_t>, int> count;
     const auto add = [&](const std::uint32_t a, const std::uint32_t b) {
         count[{std::min(a, b), std::max(a, b)}]++;
@@ -161,11 +162,13 @@ std::map<std::pair<std::uint32_t, std::uint32_t>, int> EdgeUseCount(
 }
 
 /// @brief 出力構造の基本的妥当性を検査する
-/// @note 頂点は8行、インデックスは3の倍数、全インデックスは列数未満
-void AssertValidMeshShape(const RestrictedSurfaceMesh& mesh) {
-    EXPECT_EQ(mesh.vertices.rows(), 8);
+/// @note 法線・UVチャンネルが頂点数と同列数で存在し、インデックスは3の倍数、
+///       全インデックスは頂点数未満であること
+void AssertValidMeshShape(const TriangleMeshf& mesh) {
+    EXPECT_EQ(mesh.normals.cols(), mesh.positions.cols());
+    EXPECT_EQ(mesh.uvs.cols(), mesh.positions.cols());
     EXPECT_EQ(mesh.indices.size() % 3, 0u);
-    const auto cols = static_cast<std::uint32_t>(mesh.vertices.cols());
+    const auto cols = static_cast<std::uint32_t>(mesh.positions.cols());
     for (const auto idx : mesh.indices) {
         EXPECT_LT(idx, cols);
     }
@@ -292,7 +295,7 @@ TEST(TessellateRestrictedSurface, Untrimmed_EqualsUniformBaseGrid) {
     const auto mesh = i_ent::TessellateRestrictedSurface(*ts, params);
 
     // 細分は一切起きず、(8+1)² 頂点・8²×2 三角形の一様グリッドとなる
-    EXPECT_EQ(mesh.vertices.cols(), 81);
+    EXPECT_EQ(mesh.positions.cols(), 81);
     EXPECT_EQ(mesh.indices.size(), static_cast<size_t>(8 * 8 * 2 * 3));
 }
 
@@ -344,11 +347,11 @@ TEST(TessellateRestrictedSurface, Params_ClampsNonPositiveArgs) {
     auto ts = BuildTrimmed(plane, nullptr);  // 未トリム
 
     // base_div=0 → 1, max_depth=-1 → 0 にクランプされ、1セル(2三角形)になる
-    RestrictedSurfaceMesh mesh;
+    TriangleMeshf mesh;
     ASSERT_NO_THROW(mesh = i_ent::TessellateRestrictedSurface(
             *ts, {/*base_div=*/0, /*max_depth=*/-1}));
     AssertValidMeshShape(mesh);
-    EXPECT_EQ(mesh.vertices.cols(), 4);
+    EXPECT_EQ(mesh.positions.cols(), 4);
     EXPECT_EQ(mesh.indices.size(), 6u);
 }
 
@@ -392,14 +395,14 @@ TEST(TessellateRestrictedSurface, PlanarBase_VerticesOnPlaneWithConsistentNormal
 
     const auto mesh = i_ent::TessellateRestrictedSurface(*ts);
 
-    ASSERT_GT(mesh.vertices.cols(), 0);
-    for (int c = 0; c < mesh.vertices.cols(); ++c) {
+    ASSERT_GT(mesh.positions.cols(), 0);
+    for (int c = 0; c < mesh.positions.cols(); ++c) {
         // 全頂点が平面 y=5 上にある
-        EXPECT_NEAR(mesh.vertices(1, c), 5.0f, kGeomTol);
+        EXPECT_NEAR(mesh.positions(1, c), 5.0f, kGeomTol);
         // 法線が平面法線 (0,±1,0) に平行
-        const float nx = mesh.vertices(3, c);
-        const float ny = mesh.vertices(4, c);
-        const float nz = mesh.vertices(5, c);
+        const float nx = mesh.normals(0, c);
+        const float ny = mesh.normals(1, c);
+        const float nz = mesh.normals(2, c);
         EXPECT_NEAR(std::abs(ny), 1.0f, kGeomTol);
         EXPECT_NEAR(nx, 0.0f, kGeomTol);
         EXPECT_NEAR(nz, 0.0f, kGeomTol);
@@ -414,11 +417,15 @@ TEST(TessellateRestrictedSurface, Deterministic_SameInputProducesSameMesh) {
     const auto mesh1 = i_ent::TessellateRestrictedSurface(*ts);
     const auto mesh2 = i_ent::TessellateRestrictedSurface(*ts);
 
-    EXPECT_EQ(mesh1.vertices.cols(), mesh2.vertices.cols());
+    EXPECT_EQ(mesh1.positions.cols(), mesh2.positions.cols());
     EXPECT_EQ(mesh1.indices, mesh2.indices);
-    if (mesh1.vertices.cols() == mesh2.vertices.cols() &&
-        mesh1.vertices.cols() > 0) {
-        EXPECT_NEAR((mesh1.vertices - mesh2.vertices).cwiseAbs().maxCoeff(),
+    if (mesh1.positions.cols() == mesh2.positions.cols() &&
+        mesh1.positions.cols() > 0) {
+        EXPECT_NEAR((mesh1.positions - mesh2.positions).cwiseAbs().maxCoeff(),
+                    0.0f, kAreaTol);
+        EXPECT_NEAR((mesh1.normals - mesh2.normals).cwiseAbs().maxCoeff(),
+                    0.0f, kAreaTol);
+        EXPECT_NEAR((mesh1.uvs - mesh2.uvs).cwiseAbs().maxCoeff(),
                     0.0f, kAreaTol);
     }
 }

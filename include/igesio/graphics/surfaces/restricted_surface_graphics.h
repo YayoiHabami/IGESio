@@ -16,7 +16,6 @@
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_restricted_surface.h"
-#include "igesio/entities/surfaces/algorithms/restricted_surface_mesh.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
 
@@ -36,18 +35,20 @@ class RestrictedSurfaceGraphics
     /// @brief 面のEBO
     gl::Uint ebo_ = 0;
 
-    /// @brief 面の頂点・法線・テクスチャ座標データ
-    /// @note 各列が {x, y, z, nx, ny, nz, tu, tv} の形式
-    MatrixXf vertices_;
+    /// @brief 面のinterleaved頂点列 (頂点あたり {x, y, z, nx, ny, nz, tu, tv})
+    std::vector<float> vertices_;
     /// @brief 面のインデックスデータ
     std::vector<gl::Uint> indices_;
     /// @brief 境界エッジ (外周/内周トリム境界) の線分バッファ
     SurfaceEdgeBuffer edge_buffer_;
 
     /// @brief 描画用CPUデータのステージング (PrewarmCpuが構築、DoSynchronizeが消費)
-    /// @note GL転送前のCPU側メッシュ。前倒しテッセレーション結果をここへ置き、
-    ///       DoSynchronize (GLスレッド) がvertices_/indices_へ移してGPUへ転送する。
-    entities::RestrictedSurfaceMesh pending_mesh_;
+    /// @note GL転送前のCPU側データ。前倒しテッセレーション結果をシェーダー
+    ///       レイアウトへinterleaveしてここへ置き、DoSynchronize (GLスレッド) が
+    ///       vertices_/indices_へ移してGPUへ転送する。
+    std::vector<float> pending_vertices_;
+    /// @brief 三角形インデックスのステージング
+    std::vector<gl::Uint> pending_indices_;
     /// @brief 境界エッジループ (モデル空間の折れ線群) のステージング
     std::vector<std::vector<Vector3d>> pending_edge_loops_;
     /// @brief pending_*が現在の幾何キーで構築済みか (冪等判定用)
@@ -105,9 +106,10 @@ class RestrictedSurfaceGraphics
         return types;
     }
 
-    /// @brief 描画用CPUデータ (テッセレーション・境界エッジ) を事前構築する
+    /// @brief 描画用CPUデータ (テッセレーション+interleave・境界エッジ) を事前構築する
     /// @note GL呼び出しを含まないため、レンダラから並列に呼べる。結果は
-    ///       pending_mesh_/pending_edge_loops_へ格納する。同一同期キーでは再構築しない。
+    ///       pending_vertices_/pending_indices_/pending_edge_loops_へ格納する。
+    ///       同一同期キーでは再構築しない。
     void PrewarmCpu() override;
 
     /// @brief エンティティをセットアップする (GL転送)

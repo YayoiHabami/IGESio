@@ -15,6 +15,7 @@
 
 #include "igesio/entities/surfaces/algorithms/restricted_surface_mesh.h"
 #include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
+#include "igesio/graphics/core/mesh_staging.h"
 
 
 
@@ -63,7 +64,10 @@ void igesio::graphics::RestrictedSurfaceGraphics::PrewarmCpu() {
     if (cpu_ready_ && cpu_key_ == key) return;
 
     // テッセレーションは制限付き曲面(143/144/108有界)共通のアルゴリズムへ委譲する
-    pending_mesh_ = entities::TessellateRestrictedSurface(*entity_);
+    auto mesh = entities::TessellateRestrictedSurface(*entity_);
+    // GPU転送用にシェーダーレイアウトへinterleaveする (GL非依存のCPU処理)
+    pending_vertices_ = BuildInterleavedVertices(mesh);
+    pending_indices_ = std::move(mesh.indices);
     // 境界エッジ (外周/内周トリム境界) をモデル空間の折れ線として計算する
     pending_edge_loops_ = entities::ComputeRestrictedSurfaceEdges(*entity_).loops;
     cpu_ready_ = true;
@@ -79,8 +83,8 @@ void igesio::graphics::RestrictedSurfaceGraphics::DoSynchronize() {
     PrewarmCpu();
 
     // ステージングを消費してGPUへ転送する
-    vertices_ = std::move(pending_mesh_.vertices);
-    indices_ = std::move(pending_mesh_.indices);
+    vertices_ = std::move(pending_vertices_);
+    indices_ = std::move(pending_indices_);
     edge_buffer_.Build(pending_edge_loops_);
 
     gl_->GenVertexArrays(1, &vao_);
@@ -131,7 +135,7 @@ void igesio::graphics::RestrictedSurfaceGraphics::Cleanup() {
     // 境界エッジのバッファを解放
     edge_buffer_.Cleanup();
 
-    vertices_.resize(0, 0);
+    vertices_.clear();
     indices_.clear();
 }
 

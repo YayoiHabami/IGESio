@@ -13,7 +13,6 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
@@ -29,9 +28,8 @@ class ISurfaceGraphics
     /// @brief 面のEBO
     gl::Uint ebo_ = 0;
 
-    /// @brief 面の頂点・法線データ
-    /// @note 各列が {x, y, z, nx, ny, nz} の形式
-    MatrixXf vertices_;
+    /// @brief 面のinterleaved頂点列 (頂点あたり {x, y, z, nx, ny, nz, u, v})
+    std::vector<float> vertices_;
     /// @brief 面のインデックスデータ
     std::vector<gl::Uint> indices_;
     /// @brief 境界エッジ (パラメータ矩形の4アイソ辺) の線分バッファ

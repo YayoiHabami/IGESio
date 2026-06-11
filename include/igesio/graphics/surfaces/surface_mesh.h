@@ -5,28 +5,24 @@
  * @date 2026-06-08
  * @copyright 2026 Yayoi Habami
  * @note GLに依存しない純粋な生成処理として切り出し、単体テスト可能にしている.
- *       ISurfaceGraphicsはここで生成したデータをGPUへ転送するだけ.
+ *       ISurfaceGraphicsはここで生成したメッシュをBuildInterleavedVerticesで
+ *       整形してGPUへ転送するだけ.
  */
 #ifndef IGESIO_GRAPHICS_SURFACES_SURFACE_MESH_H_
 #define IGESIO_GRAPHICS_SURFACES_SURFACE_MESH_H_
 
-#include <vector>
-
-#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/mesh/triangle_mesh.h"
 #include "igesio/entities/interfaces/i_surface.h"
-#include "igesio/graphics/core/gl_types.h"
 
 
 
 namespace igesio::graphics {
 
-/// @brief 汎用曲面の三角形メッシュ
-/// @note 頂点は位置・法線・テクスチャ座標を1列にまとめて保持する
+/// @brief 汎用曲面の三角形メッシュ (グリッド情報付き)
 struct GeneralSurfaceMesh {
-    /// @brief 頂点データ (8行N列; 各列 {x, y, z, nx, ny, nz, u, v})
-    MatrixXf vertices;
-    /// @brief 三角形インデックス (3要素で1三角形; verticesの列番号)
-    std::vector<gl::Uint> indices;
+    /// @brief 三角形メッシュ (positions/normals/uvsの全チャンネルを持つ.
+    ///        uvsはパラメータ範囲を [0,1] に正規化したテクスチャ座標)
+    numerics::TriangleMeshf mesh;
     /// @brief uサンプル行数 (折れ目の二重化を含む実際の行数)
     int u_row_count = 0;
     /// @brief v方向分割数

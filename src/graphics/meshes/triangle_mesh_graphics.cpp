@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "igesio/numerics/mesh/algorithms.h"
+#include "igesio/graphics/core/mesh_staging.h"
 
 namespace {
 
@@ -53,22 +54,7 @@ void i_graph::TriangleMeshGraphics::PrewarmCpu() {
 
     // 汎用曲面シェーダーのレイアウト (位置3+法線3+UV2) へinterleaveする.
     // GPU境界のためここで単精度へ変換する (CPU正準値はdoubleのまま)
-    const auto vertex_count = source->VertexCount();
-    staging_vertices_.assign(vertex_count * 8, 0.0f);
-    for (std::size_t c = 0; c < vertex_count; ++c) {
-        const auto col = static_cast<Eigen::Index>(c);
-        float* v = staging_vertices_.data() + c * 8;
-        v[0] = static_cast<float>(source->positions(0, col));
-        v[1] = static_cast<float>(source->positions(1, col));
-        v[2] = static_cast<float>(source->positions(2, col));
-        v[3] = static_cast<float>(source->normals(0, col));
-        v[4] = static_cast<float>(source->normals(1, col));
-        v[5] = static_cast<float>(source->normals(2, col));
-        if (source->HasUVs()) {
-            v[6] = static_cast<float>(source->uvs(0, col));
-            v[7] = static_cast<float>(source->uvs(1, col));
-        }
-    }
+    staging_vertices_ = BuildInterleavedVertices(*source);
     staging_indices_.assign(source->indices.begin(), source->indices.end());
 
     staged_geometry_key_ = CurrentGeometryKey();

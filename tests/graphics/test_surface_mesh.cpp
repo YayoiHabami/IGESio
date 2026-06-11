@@ -107,10 +107,7 @@ GeneralSurfaceMesh BuildLTabCylMesh() {
 
 /// @brief 頂点列colの法線の長さを返す
 float NormalLength(const GeneralSurfaceMesh& m, const int col) {
-    const float nx = m.vertices(3, col);
-    const float ny = m.vertices(4, col);
-    const float nz = m.vertices(5, col);
-    return std::sqrt(nx * nx + ny * ny + nz * nz);
+    return m.mesh.normals.col(col).norm();
 }
 
 /// @brief 「位置がほぼ一致するが法線が有意に異なる」頂点ペアの数を数える
@@ -126,13 +123,11 @@ int CountHardEdgePairs(const GeneralSurfaceMesh& m) {
     int count = 0;
     for (int a = 0; a < n; ++a) {
         for (int b = a + 1; b < n; ++b) {
-            const float dx = m.vertices(0, a) - m.vertices(0, b);
-            const float dy = m.vertices(1, a) - m.vertices(1, b);
-            const float dz = m.vertices(2, a) - m.vertices(2, b);
-            if (dx * dx + dy * dy + dz * dz > kPosSq) continue;
-            const float dot = m.vertices(3, a) * m.vertices(3, b)
-                            + m.vertices(4, a) * m.vertices(4, b)
-                            + m.vertices(5, a) * m.vertices(5, b);
+            const float dist_sq =
+                (m.mesh.positions.col(a) - m.mesh.positions.col(b))
+                    .squaredNorm();
+            if (dist_sq > kPosSq) continue;
+            const float dot = m.mesh.normals.col(a).dot(m.mesh.normals.col(b));
             if (dot < kCosThresh) ++count;
         }
     }
@@ -154,14 +149,14 @@ TEST(SurfaceMeshTest, FullTriangulationNoHoleAtApex_ForCone) {
     EXPECT_EQ(mesh.u_row_count, kUDiv + 1);
     const std::size_t expected_tris =
         static_cast<std::size_t>(2 * (mesh.u_row_count - 1) * mesh.v_div);
-    EXPECT_EQ(mesh.indices.size(), expected_tris * 3);
+    EXPECT_EQ(mesh.mesh.indices.size(), expected_tris * 3);
 }
 
 // 球(両極apex): 参照される全頂点の法線が長さ≈1 (ゼロ法線が混入しない)
 TEST(SurfaceMeshTest, AllReferencedNormalsAreUnit_ForSphere) {
     const auto mesh = BuildSphereMesh();
-    ASSERT_FALSE(mesh.indices.empty());
-    for (const auto idx : mesh.indices) {
+    ASSERT_FALSE(mesh.mesh.indices.empty());
+    for (const auto idx : mesh.mesh.indices) {
         EXPECT_NEAR(NormalLength(mesh, static_cast<int>(idx)), 1.0f, 1e-3f);
     }
 }
@@ -172,7 +167,7 @@ TEST(SurfaceMeshTest, FullTriangulationNoHoleAtApex_ForSphere) {
     EXPECT_EQ(mesh.u_row_count, kUDiv + 1);  // 半円母線は角なし
     const std::size_t expected_tris =
         static_cast<std::size_t>(2 * (mesh.u_row_count - 1) * mesh.v_div);
-    EXPECT_EQ(mesh.indices.size(), expected_tris * 3);
+    EXPECT_EQ(mesh.mesh.indices.size(), expected_tris * 3);
 }
 
 
@@ -209,5 +204,5 @@ TEST(SurfaceMeshTest, SmoothCylinderHasNoHardEdgeAndFullMesh) {
     EXPECT_EQ(CountHardEdgePairs(mesh), 0);
     const std::size_t expected_tris =
         static_cast<std::size_t>(2 * (mesh.u_row_count - 1) * mesh.v_div);
-    EXPECT_EQ(mesh.indices.size(), expected_tris * 3);
+    EXPECT_EQ(mesh.mesh.indices.size(), expected_tris * 3);
 }
