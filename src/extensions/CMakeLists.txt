@@ -8,6 +8,12 @@ if(IGESIO_ENABLE_STL_EXTENSION)
     )
 endif()
 
+if(IGESIO_ENABLE_OBJ_EXTENSION)
+    list(APPEND EXTENSIONS_SOURCES
+        obj/obj_io.cpp
+    )
+endif()
+
 add_library(igesio_extensions STATIC ${EXTENSIONS_SOURCES})
 
 # Set the source and include directories

@@ -10,7 +10,7 @@ if(IGESIO_ENABLE_GRAPHICS)
 endif()
 
 # extensionsテストは対応する拡張が有効な場合のみ
-if(IGESIO_ENABLE_STL_EXTENSION)
+if(IGESIO_EXTENSIONS_ENABLED)
     add_subdirectory(extensions)
 endif()
 

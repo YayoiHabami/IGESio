@@ -149,17 +149,15 @@ class IgesViewerGUI {
     ///       それ以外はIGESとして読み込む
     void LoadFile(const std::string& filename, bool replace);
 
-    /// @brief IGESファイルを読み込み、Root直下の子Assemblyとして組み込む
-    /// @param filename 読み込むIGESファイルのパス
+    /// @brief 指定された型のファイルを読み込み、Root直下の子Assemblyとして組み込む
+    /// @param filename 読み込むファイルのパス
     /// @param replace trueの場合は読込済みモデルを全て置き換える
-    void LoadIgesFile(const std::string& filename, bool replace);
-
-#ifdef IGESIO_STL_EXTENSION_ENABLED
-    /// @brief STLファイルを読み込み、Root直下の子Assemblyとして組み込む
-    /// @param filename 読み込むSTLファイルのパス
-    /// @param replace trueの場合は読込済みモデルを全て置き換える
-    void LoadStlFile(const std::string& filename, bool replace);
-#endif  // IGESIO_STL_EXTENSION_ENABLED
+    /// @param type_name ファイルの型を表す文字列 (例: "IGES", "STL")
+    /// @param loader ファイルの型に応じた読み込み関数 (LoadIgesFileやLoadStlFileなど)
+    void LoadFileByType(
+        const std::string& filename, bool replace,
+        const std::string& type_name,
+        const std::function<std::shared_ptr<models::Assembly>(const std::string&)>& loader);
 
     /// @brief 読み込んだ子Assemblyをシーンへ組み込む (読込経路共通の後処理)
     /// @param child 追加する子Assembly (Metadata().nameは設定済みであること)

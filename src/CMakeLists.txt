@@ -8,7 +8,7 @@ if(IGESIO_ENABLE_GRAPHICS)
     add_subdirectory(graphics)
 endif()
 # 拡張モジュール (いずれかの拡張が有効な場合のみ)
-if(IGESIO_ENABLE_STL_EXTENSION)
+if(IGESIO_EXTENSIONS_ENABLED)
     add_subdirectory(extensions)
 endif()
 
@@ -36,7 +36,7 @@ target_link_libraries(igesio PUBLIC
 if(IGESIO_ENABLE_GRAPHICS)
     target_link_libraries(igesio PUBLIC IGESio::graphics)
 endif()
-if(IGESIO_ENABLE_STL_EXTENSION)
+if(IGESIO_EXTENSIONS_ENABLED)
     target_link_libraries(igesio PUBLIC IGESio::extensions)
 endif()
 

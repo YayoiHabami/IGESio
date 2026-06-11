@@ -17,10 +17,12 @@
 # Extension options:
 #   - IGESIO_ENABLE_ALL_EXTENSIONS: Enable all extensions (default: OFF)
 #   - IGESIO_ENABLE_STL_EXTENSION: Enable the STL (stereolithography) file I/O extension (default: OFF)
+#   - IGESIO_ENABLE_OBJ_EXTENSION: Enable the OBJ (Wavefront OBJ) file I/O extension (default: OFF)
 #
 # Defined macros:
 #   - IGESIO_ENABLE_BOOST: Defined when Boost support is enabled
 #   - IGESIO_STL_EXTENSION_ENABLED: Defined when the STL extension is enabled
+#   - IGESIO_OBJ_EXTENSION_ENABLED: Defined when the OBJ extension is enabled
 cmake_minimum_required(VERSION 3.14)
 
 # Set CMP0135 policy to control timestamp handling for FetchContent archive extraction
@@ -225,14 +227,27 @@ option(IGESIO_ENABLE_TEXTURE_IO "Enable texture I/O support" OFF)
 # Options to enable extensions
 # Option to enable the STL (stereolithography) file I/O extension
 option(IGESIO_ENABLE_STL_EXTENSION "Enable STL file I/O extension" OFF)
-if(IGESIO_ENABLE_STL_EXTENSION)
-  add_compile_definitions(IGESIO_STL_EXTENSION_ENABLED)
-endif()
-
+# Option to enable the OBJ (Wavefront OBJ) file I/O extension
+option(IGESIO_ENABLE_OBJ_EXTENSION "Enable OBJ file I/O extension" OFF)
+# Option to enable all extensions at once
 option(IGESIO_ENABLE_ALL_EXTENSIONS "Enable all extensions" OFF)
 if(IGESIO_ENABLE_ALL_EXTENSIONS)
   set(IGESIO_ENABLE_STL_EXTENSION ON)
+  set(IGESIO_ENABLE_OBJ_EXTENSION ON)
   message(STATUS "All IGESio extensions enabled")
+endif()
+if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION)
+  set(IGESIO_EXTENSIONS_ENABLED ON)
+else()
+  set(IGESIO_EXTENSIONS_ENABLED OFF)
+endif()
+
+# Define macros for enabled extensions
+if(IGESIO_ENABLE_OBJ_EXTENSION)
+  add_compile_definitions(IGESIO_OBJ_EXTENSION_ENABLED)
+endif()
+if(IGESIO_ENABLE_STL_EXTENSION)
+  add_compile_definitions(IGESIO_STL_EXTENSION_ENABLED)
 endif()
 
 
@@ -427,7 +442,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     endif()
 
     # Install the extensions library if any extension is enabled
-    if(IGESIO_ENABLE_STL_EXTENSION)
+    if(IGESIO_EXTENSIONS_ENABLED)
         install(TARGETS igesio_extensions
             EXPORT IGESioTargets
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

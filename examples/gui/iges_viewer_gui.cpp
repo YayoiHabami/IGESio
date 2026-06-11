@@ -23,9 +23,13 @@
 #include <igesio/reader.h>
 #include <igesio/entities/interfaces/i_surface.h>
 #include <igesio/graphics/core/material_property.h>
+
 #ifdef IGESIO_STL_EXTENSION_ENABLED
 #include <igesio/extensions/stl.h>
-#endif
+#endif  // IGESIO_STL_EXTENSION_ENABLED
+#ifdef IGESIO_OBJ_EXTENSION_ENABLED
+#include <igesio/extensions/obj.h>
+#endif  // IGESIO_OBJ_EXTENSION_ENABLED
 
 namespace {
 
@@ -77,17 +81,27 @@ std::string FileDisplayName(const std::string& path) {
     return std::filesystem::path(path).filename().string();
 }
 
-#ifdef IGESIO_STL_EXTENSION_ENABLED
-/// @brief パスの拡張子が.stlか (大文字小文字は区別しない)
-bool HasStlExtension(const std::string& path) {
+/// @brief パスの拡張子が指定されたもののいずれかか
+/// @param path 対象のファイルパス
+/// @param extensions 判別する拡張子のリスト (大文字小文字は区別しない)
+bool HasAnyExtension(const std::string& path,
+                     const std::vector<std::string>& extensions) {
     std::string ext = std::filesystem::path(path).extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](unsigned char c) {
                        return static_cast<char>(std::tolower(c));
                    });
-    return ext == ".stl";
+    for (const auto& target_ext : extensions) {
+        std::string lower_target_ext = target_ext;
+        std::transform(lower_target_ext.begin(), lower_target_ext.end(),
+                       lower_target_ext.begin(),
+                       [](unsigned char c) {
+                           return static_cast<char>(std::tolower(c));
+                       });
+        if (ext == lower_target_ext) return true;
+    }
+    return false;
 }
-#endif  // IGESIO_STL_EXTENSION_ENABLED
 
 /// @brief GLFWのマウスボタン定数をMouseButtonへ変換する
 MouseButton ToMouseButton(const int glfw_button) {
@@ -288,48 +302,65 @@ void IgesViewerGUI::CaptureScreenshot(const std::string& filename) {
  */
 
 void IgesViewerGUI::LoadFile(const std::string& filename, const bool replace) {
+    std::string type_name = "IGES";
+    std::function<std::shared_ptr<models::Assembly>(const std::string&)> loader;
 #ifdef IGESIO_STL_EXTENSION_ENABLED
-    if (HasStlExtension(filename)) {
-        LoadStlFile(filename, replace);
-        return;
+    if (HasAnyExtension(filename, {".stl"})) {
+        type_name = "STL";
+        loader = [this](const std::string& path) {
+            const auto mesh = extensions::ReadStlAsEntity(path);
+            const auto child = models::MakeAssembly();
+            child->AddEntity(mesh);
+            return child;
+        };
     }
-#endif
-    LoadIgesFile(filename, replace);
-}
-
-void IgesViewerGUI::LoadIgesFile(const std::string& filename,
-                                 const bool replace) {
-    try {
-        // 読み込んだモデルのrootをそのまま子Assemblyとして組み込む
-        // (エンティティは子Assemblyのshared_ptrが保持するため、
-        //  IgesData自体を保持し続ける必要はない)
-        const auto data = igesio::ReadIges(filename);
-        const auto child = data.RootPtr();
-        child->Metadata().name = FileDisplayName(filename);
-        AttachLoadedAssembly(child, replace);
-        last_edit_status_ = "Loaded IGES: " + filename;
-    } catch (const std::exception& e) {
-        std::cerr << "Error loading IGES file: " << e.what() << std::endl;
-        last_edit_status_ = std::string("Load error: ") + e.what();
-    }
-}
-
-#ifdef IGESIO_STL_EXTENSION_ENABLED
-void IgesViewerGUI::LoadStlFile(const std::string& filename,
-                                const bool replace) {
-    try {
-        const auto mesh = extensions::ReadStlAsEntity(filename);
-        const auto child = models::MakeAssembly();
-        child->Metadata().name = FileDisplayName(filename);
-        child->AddEntity(mesh);
-        AttachLoadedAssembly(child, replace);
-        last_edit_status_ = "Loaded STL: " + filename;
-    } catch (const std::exception& e) {
-        std::cerr << "Error loading STL file: " << e.what() << std::endl;
-        last_edit_status_ = std::string("Load error: ") + e.what();
-    }
-}
 #endif  // IGESIO_STL_EXTENSION_ENABLED
+
+#ifdef IGESIO_OBJ_EXTENSION_ENABLED
+    if (HasAnyExtension(filename, {".obj"})) {
+        type_name = "OBJ";
+        loader = [this](const std::string& path) {
+            const auto mesh = extensions::ReadObjAsEntity(path);
+            const auto child = models::MakeAssembly();
+            child->AddEntity(mesh);
+            return child;
+        };
+    }
+#endif  // IGESIO_OBJ_EXTENSION_ENABLED
+
+    if (!loader) {
+        type_name = "IGES";
+        loader = [this](const std::string& path) {
+            const auto iges = igesio::ReadIges(path);
+            return iges.RootPtr();
+        };
+    }
+
+    LoadFileByType(filename, replace, type_name, loader);
+}
+
+void IgesViewerGUI::LoadFileByType(
+        const std::string& filename, bool replace,
+        const std::string& type_name,
+        const std::function<std::shared_ptr<models::Assembly>(const std::string&)>& loader) {
+    try {
+        const auto child = loader(filename);
+        if (!child) {
+            // 不明なエラー
+            std::cerr << "Failed to load " << type_name << " file: Unknown error"
+                      << std::endl;
+            last_edit_status_ = "Load error: Unknown error";
+            return;
+        }
+
+        child->Metadata().name = FileDisplayName(filename);
+        AttachLoadedAssembly(child, replace);
+        last_edit_status_ = "Loaded " + type_name + ": " + filename;
+    } catch (const std::exception& e) {
+        std::cerr << "Error loading " << type_name << " file: " << e.what() << std::endl;
+        last_edit_status_ = std::string("Load error: ") + e.what();
+    }
+}
 
 void IgesViewerGUI::AttachLoadedAssembly(
         const std::shared_ptr<models::Assembly>& child, const bool replace) {
