@@ -119,21 +119,21 @@ class EntityRenderer {
     /// @note キーはShaderId、値はシェーダープログラムのID
     /// @note コンパイルとリンクが成功した、各ShaderIdに対応する
     ///       シェーダープログラムを保持する
-    /// @note mutable: ShaderRegistryへの登録はDraw (const) 冒頭の
-    ///       遅延コンパイル (CompilePendingShaders) で反映される
-    mutable std::unordered_map<ShaderId, gl::Uint> shader_programs_;
+    /// @note ShaderRegistryへの登録はDraw冒頭の遅延コンパイル
+    ///       (CompilePendingShaders) で反映される
+    std::unordered_map<ShaderId, gl::Uint> shader_programs_;
 
     /// @brief 最後に同期したシェーダーレジストリ (ShaderRegistry) のリビジョン
     /// @note 変化を検知したら未コンパイルのシェーダーのみ追加コンパイルする
     ///       (コンパイル済みプログラムは温存する)
-    mutable std::uint64_t synced_shader_registry_revision_ = 0;
+    std::uint64_t synced_shader_registry_revision_ = 0;
 
     /// @brief 描画オブジェクトのキャッシュ (Sceneツリーの派生キャッシュ)
     /// @note EnsureSyncedの遅延生成で作られ、ツリーから削除されたエントリは
     ///       Sweepで破棄される. 値がnullptrのエントリは「生成失敗 (型起因)」の
     ///       負キャッシュで、再試行を抑止する (factory.hの不変条件を参照).
     ///       描画オブジェクトは外側には公開しない
-    mutable std::unordered_map<ObjectID, std::unique_ptr<IEntityGraphics>>
+    std::unordered_map<ObjectID, std::unique_ptr<IEntityGraphics>>
             graphics_cache_;
 
     /// @brief 描画対象のサイズ [px]
@@ -151,9 +151,9 @@ class EntityRenderer {
     std::array<float, 3> ambient_color_ = {0.1f, 0.1f, 0.1f};
 
     /// @brief カメラクラス
-    /// @note mutable: 自動クリップ球はシーンの派生キャッシュであり、
-    ///       constな同期経路 (EnsureSynced/ResyncGeometries) から更新される
-    mutable graphics::Camera camera_;
+    /// @note 自動クリップ球はシーンの派生キャッシュであり、
+    ///       同期経路 (EnsureSynced/ResyncGeometries) から更新される
+    graphics::Camera camera_;
 
     /// @brief 光源リスト
     /// @note 既定では方向光を1個保持する. 描画時はkMaxLightsまで送信される.
@@ -174,46 +174,46 @@ class EntityRenderer {
     /// @brief 最後に同期したSceneのモデルリビジョン
     /// @note リビジョン値は同一rootに対してのみ比較可能 (synced_root_とペアで
     ///       初めて意味を持つ)
-    mutable uint64_t synced_revision_ = 0;
+    uint64_t synced_revision_ = 0;
     /// @brief 最後に同期したルートAssemblyの同一性 (ObjectID)
     /// @note root差し替え時の等値衝突 (別rootが偶然同じリビジョン値を持つ) を
     ///       構造的に防ぐ. EnsureSyncedはリビジョンと同一性の両方を比較する
-    mutable ObjectID synced_root_;
+    ObjectID synced_root_;
     /// @brief レンダラ内部要因による再同期要求
     /// @note SetScene/SetDisplayFilter等、ツリー側のリビジョンに現れない
     ///       レンダラ自身の状態変更で立てる
-    mutable bool local_dirty_ = true;
+    bool local_dirty_ = true;
     /// @brief 最後に同期した描画レジストリ (GraphicsRegistry) のリビジョン
     /// @note 変化を検知したら負キャッシュ (生成失敗のnullptrエントリ) のみ破棄し、
     ///       新規登録された型の描画オブジェクト生成を再試行させる.
     ///       生成済みオブジェクトは温存する (差し替え登録を既存個体へ反映するには
     ///       シーンの再設定等で再生成すること)
-    mutable std::uint64_t synced_graphics_registry_revision_ = 0;
+    std::uint64_t synced_graphics_registry_revision_ = 0;
     /// @brief キャッシュした描画リスト (シェーダー別の描画オブジェクト. 非所有ポインタ)
     /// @note EnsureSyncedのツリー走査で構築し、フレームを越えて再利用する.
     ///       graphics_cache_の要素を指す
-    mutable std::unordered_map<ShaderId, std::vector<IEntityGraphics*>> draw_list_;
+    std::unordered_map<ShaderId, std::vector<IEntityGraphics*>> draw_list_;
     /// @brief 可視エンティティの平坦リスト (ピック用. エンティティ毎に一意)
     /// @note draw_list_は複合エンティティを複数シェーダーへ重複登録するため、
     ///       ピックはこちらを走査して二重判定を避ける. 削除済み・非表示・抑制中・
     ///       フィルタ除外のエンティティは構造的に含まれない
-    mutable std::vector<std::pair<ObjectID, IEntityGraphics*>> visible_list_;
+    std::vector<std::pair<ObjectID, IEntityGraphics*>> visible_list_;
     /// @brief draw_list_ (シェーダー別バケット) の再構築が必要か
     /// @note 構造再構築 (visible_list_変化) またはCPU準備 (PrewarmCpu) で
     ///       シェーダー型集合が変わりうる時に立てる. 変化が無い間はバケットを再利用する
-    mutable bool draw_buckets_dirty_ = true;
+    bool draw_buckets_dirty_ = true;
     /// @brief 表示フィルタ (ビュー状態)
     DisplayFilter display_filter_;
     /// @brief エンティティ毎の描画プロパティのオーバーライド
     /// @note 生成時に適用するほか、設定変更はEnsureSyncedの走査で遅延適用する
     ///       (setterはGLを触らない). Sweepで所有者を失ったエントリは破棄する
-    mutable std::unordered_map<ObjectID, graphics::MaterialProperty>
+    std::unordered_map<ObjectID, graphics::MaterialProperty>
             material_overrides_;
     /// @brief マテリアル適用待ちのID集合
     /// @note SetMaterialProperty/ClearMaterialPropertyで追加され、走査で適用
     ///       (SyncTexture含む) して除去される遅延キュー. SyncTexture (GL操作) を
     ///       setter内で行わないための機構
-    mutable std::unordered_set<ObjectID> pending_material_ids_;
+    std::unordered_set<ObjectID> pending_material_ids_;
 
  public:
     /// @brief コンストラクタ
@@ -415,10 +415,10 @@ class EntityRenderer {
     ///       `PrepareCpuGeometries` (CPU準備) → `RebuildDrawBuckets` (型確定後・変化時
     ///       のみ) → `ResyncGeometries` (GPU転送) → `ExecuteDrawList`。
     ///       GLコンテキストをカレントにしたスレッドから呼ぶこと。
-    void Draw() const;
+    void Draw();
 
     /// @brief 現在の描画状態をキャプチャする
-    Texture CaptureScreenshot() const;
+    Texture CaptureScreenshot();
 
 
 
@@ -442,7 +442,7 @@ class EntityRenderer {
     /// @note 曲線ヒット許容量はエンティティ毎の代表深度でピクセル換算される
     std::vector<EntityHit> PickEntities(
             const Ray&, double screen_x, double screen_y,
-            const RayIntersectionParams& = {}) const;
+            const RayIntersectionParams& = {});
 
     /// @brief スクリーン矩形領域内のエンティティを取得する
     /// @param rect スクリーン矩形 [px]（左上原点・GLFW準拠）
@@ -453,7 +453,7 @@ class EntityRenderer {
     /// @note kOblique投影モードでは正しい結果を返さない (TODO: 未対応)
     std::vector<ObjectID> PickEntitiesInRect(
             const ScreenRect&, BoxSelectionMode,
-            const SelectionSampleParams& = {}) const;
+            const SelectionSampleParams& = {});
 
 
 
@@ -474,7 +474,7 @@ class EntityRenderer {
     ///       シェーダーも次のDrawで有効になる.
     /// @throw igesio::ImplementationError コンパイル/リンクに失敗した場合、
     ///        またはインクルード展開のGLSLファイルが見つからない場合
-    void CompilePendingShaders() const;
+    void CompilePendingShaders();
 
     /// @brief 頂点シェーダーをコンパイルする
     /// @param vertex_source 頂点シェーダーのソースコード
@@ -534,13 +534,13 @@ class EntityRenderer {
     ///       RebuildDrawBucketsが構築する). Sweepのcleanupやマテリアル適用のSyncTextureで
     ///       GLに触れるため、GLコンテキストがカレントなスレッドから呼ぶこと.
     ///       scene_またはgl_が未設定なら何もしない
-    void EnsureSynced() const;
+    void EnsureSynced();
 
     /// @brief ツリーから削除されたエンティティの描画キャッシュを破棄する (Sweep)
     /// @param root 所属判定に用いるルートAssembly
     /// @note FindOwner(id)==nullptrのエントリをCleanup()して除去する (O(1)/件).
     ///       material_overrides_/pending_material_ids_も同条件で掃除する
-    void SweepStaleGraphics(const models::Assembly& root) const;
+    void SweepStaleGraphics(const models::Assembly& root);
 
     /// @brief 可視エンティティの描画用CPUデータを並列に事前構築する (CPU相)
     /// @note Draw/Pickの冒頭 (EnsureSynced後) で呼ぶ. visible_list_のうち
@@ -548,19 +548,19 @@ class EntityRenderer {
     ///       これにより遅延生成 (142の子C(t)) ・テッセレーション等のCPU状態が確定し、
     ///       GetShaderIds/Intersectが同期前でも正しく機能する.
     ///       準備対象があればdraw_buckets_dirty_を立てる.
-    void PrepareCpuGeometries() const;
+    void PrepareCpuGeometries();
 
     /// @brief 可視エンティティのジオメトリをGPUへ再同期する (GPU相)
     /// @note Drawの冒頭 (PrepareCpuGeometries後) で呼ぶ. visible_list_の各要素について
     ///       同期キーの不一致 (NeedsResync) を検査し、Synchronize()でGPU転送する.
     ///       形状変更はBBoxも変えるため、再同期があれば自動クリップ球も更新する.
     ///       ピッキングはエンティティを解析的に読むためGPU相は不要 (CPU相のみ呼ぶ)
-    void ResyncGeometries() const;
+    void ResyncGeometries();
 
     /// @brief visible_list_からシェーダー別バケット (draw_list_) を再構築する
     /// @note PrepareCpuGeometries後 (CPU状態確定後) に、draw_buckets_dirty_の時のみ呼ぶ.
     ///       各オブジェクトのGetShaderIds()でバケットへ振り分ける (複合は各子型へ).
-    void RebuildDrawBuckets() const;
+    void RebuildDrawBuckets();
 
     /// @brief 指定IDの描画オブジェクトを取得し、未在席なら遅延生成する
     /// @param id エンティティのID
@@ -572,24 +572,24 @@ class EntityRenderer {
     ///       (CreateEntityGraphics(synchronize=false))
     IEntityGraphics* FindOrCreateGraphics(
             const ObjectID& id,
-            const std::shared_ptr<entities::IEntityIdentifier>& entity) const;
+            const std::shared_ptr<entities::IEntityIdentifier>& entity);
 
     /// @brief 指定IDの描画オブジェクトを取得する
     /// @param id エンティティのID
     /// @return 描画オブジェクトのポインタ. 存在しない場合はnullptr
     /// @note 所有権は移譲しない (graphics_cache_が保持し続ける)
-    IEntityGraphics* FindGraphics(const ObjectID&) const;
+    IEntityGraphics* FindGraphics(const ObjectID&);
 
     /// @brief シーンのワールドBBoxから外接球を計算し、カメラの自動クリップ球を更新する
     /// @note カメラ操作でシーンがクリップされないよう、同期経路から呼ぶ.
     ///       シーン未設定またはBBoxが空の場合は自動クリッピングを解除する
-    void UpdateAutoClipSphere() const;
+    void UpdateAutoClipSphere();
 
     /// @brief scene_を走査して可視リスト (visible_list_) を再構築し、ワールド変換と
     ///        色をリフレッシュする (EnsureSyncedのWalkステップ)
     /// @note draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが構築するため
     ///       ここでは扱わない
-    void RebuildDrawList() const;
+    void RebuildDrawList();
 
     /// @brief Assemblyツリーを再帰走査する (RebuildDrawListの実体)
     /// @param node 走査中のノード
@@ -605,11 +605,11 @@ class EntityRenderer {
     void WalkAssembly(const models::Assembly& node,
                       const igesio::Matrix4d& parent_accum,
                       const std::optional<std::array<float, 3>>& inherited_color,
-                      const std::optional<float>& inherited_opacity) const;
+                      const std::optional<float>& inherited_opacity);
 
     /// @brief キャッシュした描画リストをシェーダー単位で描画する
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)
-    void ExecuteDrawList(const DrawContext& ctx) const;
+    void ExecuteDrawList(const DrawContext& ctx);
 };
 
 }  // namespace igesio::graphics

@@ -365,7 +365,7 @@ void EntityRenderer::Cleanup() {
  * シーン同期 (Reconcile)
  */
 
-void EntityRenderer::EnsureSynced() const {
+void EntityRenderer::EnsureSynced() {
     if (scene_ == nullptr || gl_ == nullptr) return;
     const auto& root = scene_->Root();
 
@@ -401,7 +401,7 @@ void EntityRenderer::EnsureSynced() const {
     local_dirty_ = false;
 }
 
-void EntityRenderer::SweepStaleGraphics(const models::Assembly& root) const {
+void EntityRenderer::SweepStaleGraphics(const models::Assembly& root) {
     // 逆引きインデックスでO(1)/件. 追加のツリー走査は不要
     for (auto it = graphics_cache_.begin(); it != graphics_cache_.end();) {
         if (root.FindOwner(it->first) == nullptr) {
@@ -430,7 +430,7 @@ void EntityRenderer::SweepStaleGraphics(const models::Assembly& root) const {
     }
 }
 
-void EntityRenderer::PrepareCpuGeometries() const {
+void EntityRenderer::PrepareCpuGeometries() {
     // 再同期が必要な描画オブジェクトを集める
     std::vector<i_graph::IEntityGraphics*> dirty;
     for (const auto& [id, graphics] : visible_list_) {
@@ -447,7 +447,7 @@ void EntityRenderer::PrepareCpuGeometries() const {
     draw_buckets_dirty_ = true;
 }
 
-void EntityRenderer::ResyncGeometries() const {
+void EntityRenderer::ResyncGeometries() {
     // GPUへの転送 (Synchronize→DoSynchronize). PrepareCpuGeometriesで前倒し済みなら
     // 即転送される. 単一GLコンテキスト前提でこのスレッドで直列に行う.
     bool resynced = false;
@@ -461,7 +461,7 @@ void EntityRenderer::ResyncGeometries() const {
     if (resynced) UpdateAutoClipSphere();
 }
 
-void EntityRenderer::RebuildDrawBuckets() const {
+void EntityRenderer::RebuildDrawBuckets() {
     draw_list_.clear();
     for (const auto& [id, graphics] : visible_list_) {
         if (!graphics) continue;
@@ -476,7 +476,7 @@ void EntityRenderer::RebuildDrawBuckets() const {
 
 i_graph::IEntityGraphics* EntityRenderer::FindOrCreateGraphics(
         const ObjectID& id,
-        const std::shared_ptr<entities::IEntityIdentifier>& entity) const {
+        const std::shared_ptr<entities::IEntityIdentifier>& entity) {
     auto it = graphics_cache_.find(id);
     if (it != graphics_cache_.end()) {
         return it->second.get();  // nullptrは負キャッシュ (再試行しない)
@@ -594,7 +594,7 @@ i_graph::DisplayMode EntityRenderer::GetDisplayMode() const {
  * 描画
  */
 
-void EntityRenderer::Draw() const {
+void EntityRenderer::Draw() {
     // 描画対象のサイズが0なら何もしない
     if (display_width_ <= 0 || display_height_ <= 0) return;
 
@@ -647,7 +647,7 @@ void EntityRenderer::SetScene(const models::Scene* scene) {
     UpdateAutoClipSphere();
 }
 
-void EntityRenderer::UpdateAutoClipSphere() const {
+void EntityRenderer::UpdateAutoClipSphere() {
     if (scene_ != nullptr) {
         if (const auto bbox = scene_->Root().GetWorldBoundingBox()) {
             if (const auto sphere = ComputeBoundingSphere(*bbox)) {
@@ -671,7 +671,7 @@ void EntityRenderer::FitView() {
     camera_.FitToBoundingBox(*bbox, aspect);
 }
 
-void EntityRenderer::RebuildDrawList() const {
+void EntityRenderer::RebuildDrawList() {
     // draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが管理する.
     // ここでは可視リストのみ再構築する
     visible_list_.clear();
@@ -683,7 +683,7 @@ void EntityRenderer::RebuildDrawList() const {
 void EntityRenderer::WalkAssembly(
         const models::Assembly& node, const igesio::Matrix4d& parent_accum,
         const std::optional<std::array<float, 3>>& inherited_color,
-        const std::optional<float>& inherited_opacity) const {
+        const std::optional<float>& inherited_opacity) {
     const auto& disp = node.Display();
     // 非表示・抑制のサブツリーは描画対象から除外する
     if (!disp.visible || disp.suppressed) return;
@@ -752,7 +752,7 @@ void EntityRenderer::WalkAssembly(
     }
 }
 
-void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
+void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {
     const auto view_matrix = camera_.GetViewMatrix();
     const auto projection_matrix = camera_.GetProjectionMatrix(
         static_cast<float>(display_width_) / display_height_);
@@ -815,7 +815,7 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) const {
     }
 }
 
-i_graph::Texture EntityRenderer::CaptureScreenshot() const {
+i_graph::Texture EntityRenderer::CaptureScreenshot() {
     auto [width, height] = GetDisplaySize();
     if (width <= 0 || height <= 0) {
         return {};  // サイズが無効な場合は空のベクターを返す
@@ -885,7 +885,7 @@ i_graph::Ray EntityRenderer::GetRayFromScreen(
 
 std::vector<i_graph::EntityHit> EntityRenderer::PickEntities(
         const Ray& ray, double screen_x, double screen_y,
-        const RayIntersectionParams& params) const {
+        const RayIntersectionParams& params) {
     std::vector<EntityHit> hits;
     const int w = display_width_, h = display_height_;
     if (w <= 0 || h <= 0) return hits;
@@ -956,7 +956,7 @@ std::vector<i_graph::EntityHit> EntityRenderer::PickEntities(
 
 std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
         const ScreenRect& rect, BoxSelectionMode mode,
-        const SelectionSampleParams& params) const {
+        const SelectionSampleParams& params) {
     std::vector<igesio::ObjectID> result;
     const int w = display_width_, h = display_height_;
     if (w <= 0 || h <= 0) return result;
@@ -998,7 +998,7 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
     return result;
 }
 
-i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) const {
+i_graph::IEntityGraphics* EntityRenderer::FindGraphics(const ObjectID& id) {
     auto it = graphics_cache_.find(id);
     if (it != graphics_cache_.end()) {
         return it->second.get();
@@ -1206,7 +1206,7 @@ gl::Uint EntityRenderer::CompileShaderProgram(const ShaderCode& code) const {
     return program_id;
 }
 
-void EntityRenderer::CompilePendingShaders() const {
+void EntityRenderer::CompilePendingShaders() {
     // リビジョンが一致し、かつコンパイル済みプログラムがある間は何もしない
     // (空の場合は初回 (Initialize) のため、リビジョンに依らずコンパイルする)
     const auto revision = ShaderRegistry::Revision();
