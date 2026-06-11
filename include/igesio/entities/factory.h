@@ -34,21 +34,20 @@ class EntityFactory {
             const pointer2ID&, const ObjectID&)>;
 
  private:
-    /// @brief エンティティタイプと作成関数のマッピング (組み込み実装)
-    inline static std::unordered_map<EntityType, CreateFunction> creators_;
+    /// @brief 組み込みエンティティ作成関数のマッピングを取得する
+    /// @return エンティティタイプと作成関数のマッピング (組み込み実装)
+    /// @note 初回呼び出し時に全組み込み実装を登録する (関数内static).
+    ///       静的初期化子からの登録・参照 (自動登録) でも初期化順に依存せず安全
+    static std::unordered_map<EntityType, CreateFunction>& BuiltinCreators();
 
-    /// @brief ユーザー登録の作成関数のマッピング
-    /// @note キーはエンティティのtype番号. `RegisterEntityCreator`で登録される.
-    ///       組み込みの`creators_`とは分離し、登録・解除が組み込み実装へ影響
-    ///       しないようにする. キーを`int`とするのは、将来のユーザー定義type番号
-    ///       (enum外の番号) の登録と同一マップを共用するため
-    inline static std::unordered_map<int, CreateFunction> user_creators_;
-
-    /// @brief 初期化されたか
-    inline static bool initialized_ = false;
-
-    /// @brief エンティティタイプと作成関数のマッピングを初期化する
-    static void Initialize();
+    /// @brief ユーザー登録のエンティティ作成関数のマッピングを取得する
+    /// @return type番号と作成関数のマッピング (ユーザー登録)
+    /// @note キーはエンティティのtype番号. `RegisterEntityCreator`/
+    ///       `RegisterUserEntityCreator`で登録される. 組み込みとは分離し、
+    ///       登録・解除が組み込み実装へ影響しないようにする. キーを`int`と
+    ///       するのは、enum定義済み番号とユーザー定義番号 (enum外) の登録で
+    ///       同一マップを共用するため
+    static std::unordered_map<int, CreateFunction>& UserCreators();
 
 
 

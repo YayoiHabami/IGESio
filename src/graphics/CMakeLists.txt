@@ -23,6 +23,7 @@ add_library(igesio_graphics STATIC
     surfaces/restricted_surface_graphics.cpp           # 143/144/108(bounded)
 
     factory.cpp
+    graphics_registry.cpp
 
     renderer.cpp
 )

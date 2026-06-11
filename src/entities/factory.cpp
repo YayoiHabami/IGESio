@@ -48,117 +48,130 @@ namespace i_ent = igesio::entities;
 
 
 
-void i_ent::EntityFactory::Initialize() {
-    if (initialized_) return;
+std::unordered_map<ET, i_ent::EntityFactory::CreateFunction>&
+i_ent::EntityFactory::BuiltinCreators() {
+    // 関数内static: 初回呼び出し時に一度だけ構築される. 静的初期化子からの
+    // 参照 (自動登録) でも初期化順に依存しない
+    static std::unordered_map<ET, CreateFunction> creators = [] {
+        std::unordered_map<ET, CreateFunction> m;
 
-    // エンティティタイプと作成関数のマッピングを設定
-    // 0 - Null Entity
-    creators_[ET::kNull] = [](const DE& de, const IVec& p,
-                              const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::NullEntity>(de, p, d2i, iid);
-    };
-    // 100 - Circular Arc
-    creators_[ET::kCircularArc] = [](const DE& de, const IVec& p,
-                                     const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::CircularArc>(de, p, d2i, iid);
-    };
-    // 102 - Composite Curve
-    creators_[ET::kCompositeCurve] = [](const DE& de, const IVec& p,
-                                        const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::CompositeCurve>(de, p, d2i, iid);
-    };
-    // 104 - Conic Arc
-    creators_[ET::kConicArc] = [](const DE& de, const IVec& p,
+        // エンティティタイプと作成関数のマッピングを設定
+        // 0 - Null Entity
+        m[ET::kNull] = [](const DE& de, const IVec& p,
                                   const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::ConicArc>(de, p, d2i, iid);
-    };
-    // 106 - Copious Data (CopiousDataBaseとして返す)
-    creators_[ET::kCopiousData] = [](const DE& de, const IVec& p,
-                                     const p2I& d2i, const ObjectID& iid) {
-        if (de.form_number <= static_cast<int>(i_ent::CopiousDataType::kSextuples)) {
-            return std::static_pointer_cast<i_ent::CopiousDataBase>(
-                std::make_shared<i_ent::CopiousData>(de, p, d2i, iid));
-        } else if (de.form_number <= static_cast<int>(
-                    i_ent::CopiousDataType::kPolylineAndVectors)) {
-            return std::static_pointer_cast<i_ent::CopiousDataBase>(
-                std::make_shared<i_ent::LinearPath>(de, p, d2i, iid));
-        }
-        return std::make_shared<i_ent::CopiousDataBase>(de, p, d2i, iid);
-    };
-
-    // 108 - Plane (form 0: 無限平面 Plane, form ±1: 有界平面 BoundedPlane)
-    creators_[ET::kPlane] = [](const DE& de, const IVec& p, const p2I& d2i,
-                               const ObjectID& iid)
-            -> std::shared_ptr<i_ent::EntityBase> {
-        if (de.form_number == 0) {
-            return std::make_shared<i_ent::Plane>(de, p, d2i, iid);
-        }
-        return std::make_shared<i_ent::BoundedPlane>(de, p, d2i, iid);
-    };
-    // 110 - Line
-    creators_[ET::kLine] = [](const DE& de, const IVec& p,
-                              const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::Line>(de, p, d2i, iid);
-    };
-    // 112 - Parametric Spline Curve
-    creators_[ET::kParametricSplineCurve] = [](const DE& de, const IVec& p,
-                                               const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::ParametricSplineCurve>(de, p, d2i, iid);
-    };
-    // 116 - Point
-    creators_[ET::kPoint] = [](const DE& de, const IVec& p,
-                               const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::Point>(de, p, d2i, iid);
-    };
-    // 118 - Ruled Surface
-    creators_[ET::kRuledSurface] = [](const DE& de, const IVec& p,
-                                      const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::RuledSurface>(de, p, d2i, iid);
-    };
-    // 120 - Surface of Revolution
-    creators_[ET::kSurfaceOfRevolution] = [](const DE& de, const IVec& p,
-                                             const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::SurfaceOfRevolution>(de, p, d2i, iid);
-    };
-    // 122 - Tabulated Cylinder
-    creators_[ET::kTabulatedCylinder] = [](const DE& de, const IVec& p,
-                                           const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::TabulatedCylinder>(de, p, d2i, iid);
-    };
-    // 124 - Transformation Matrix
-    creators_[ET::kTransformationMatrix] = [](const DE& de, const IVec& p,
-                                              const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::TransformationMatrix>(de, p, d2i, iid);
-    };
-    // 126 - Rational B-Spline Curve
-    creators_[ET::kRationalBSplineCurve] = [](const DE& de, const IVec& p,
-                                              const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::RationalBSplineCurve>(de, p, d2i, iid);
-    };
-    // 128 - Rational B-Spline Surface
-    creators_[ET::kRationalBSplineSurface] = [](const DE& de, const IVec& p,
-                                                const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::RationalBSplineSurface>(de, p, d2i, iid);
-    };
-    // 142 - Curve on A Parametric Surface
-    creators_[ET::kCurveOnAParametricSurface] = [](const DE& de, const IVec& p,
-                                                   const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::CurveOnAParametricSurface>(de, p, d2i, iid);
-    };
-    // 144 - Trimmed Surface
-    creators_[ET::kTrimmedSurface] = [](const DE& de, const IVec& p,
-                                        const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::TrimmedSurface>(de, p, d2i, iid);
-    };
-
-
-    // 314 - Color Definition
-    creators_[ET::kColorDefinition] = [](const DE& de, const IVec& p,
+            return std::make_shared<i_ent::NullEntity>(de, p, d2i, iid);
+        };
+        // 100 - Circular Arc
+        m[ET::kCircularArc] = [](const DE& de, const IVec& p,
                                          const p2I& d2i, const ObjectID& iid) {
-        return std::make_shared<i_ent::ColorDefinition>(de, p, d2i, iid);
-    };
+            return std::make_shared<i_ent::CircularArc>(de, p, d2i, iid);
+        };
+        // 102 - Composite Curve
+        m[ET::kCompositeCurve] = [](const DE& de, const IVec& p,
+                                            const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::CompositeCurve>(de, p, d2i, iid);
+        };
+        // 104 - Conic Arc
+        m[ET::kConicArc] = [](const DE& de, const IVec& p,
+                                      const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::ConicArc>(de, p, d2i, iid);
+        };
+        // 106 - Copious Data (CopiousDataBaseとして返す)
+        m[ET::kCopiousData] = [](const DE& de, const IVec& p,
+                                         const p2I& d2i, const ObjectID& iid) {
+            if (de.form_number <= static_cast<int>(i_ent::CopiousDataType::kSextuples)) {
+                return std::static_pointer_cast<i_ent::CopiousDataBase>(
+                    std::make_shared<i_ent::CopiousData>(de, p, d2i, iid));
+            } else if (de.form_number <= static_cast<int>(
+                        i_ent::CopiousDataType::kPolylineAndVectors)) {
+                return std::static_pointer_cast<i_ent::CopiousDataBase>(
+                    std::make_shared<i_ent::LinearPath>(de, p, d2i, iid));
+            }
+            return std::make_shared<i_ent::CopiousDataBase>(de, p, d2i, iid);
+        };
 
-    initialized_ = true;
+        // 108 - Plane (form 0: 無限平面 Plane, form ±1: 有界平面 BoundedPlane)
+        m[ET::kPlane] = [](const DE& de, const IVec& p, const p2I& d2i,
+                                   const ObjectID& iid)
+                -> std::shared_ptr<i_ent::EntityBase> {
+            if (de.form_number == 0) {
+                return std::make_shared<i_ent::Plane>(de, p, d2i, iid);
+            }
+            return std::make_shared<i_ent::BoundedPlane>(de, p, d2i, iid);
+        };
+        // 110 - Line
+        m[ET::kLine] = [](const DE& de, const IVec& p,
+                                  const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::Line>(de, p, d2i, iid);
+        };
+        // 112 - Parametric Spline Curve
+        m[ET::kParametricSplineCurve] = [](const DE& de, const IVec& p,
+                                                   const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::ParametricSplineCurve>(de, p, d2i, iid);
+        };
+        // 116 - Point
+        m[ET::kPoint] = [](const DE& de, const IVec& p,
+                                   const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::Point>(de, p, d2i, iid);
+        };
+        // 118 - Ruled Surface
+        m[ET::kRuledSurface] = [](const DE& de, const IVec& p,
+                                          const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::RuledSurface>(de, p, d2i, iid);
+        };
+        // 120 - Surface of Revolution
+        m[ET::kSurfaceOfRevolution] = [](const DE& de, const IVec& p,
+                                                 const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::SurfaceOfRevolution>(de, p, d2i, iid);
+        };
+        // 122 - Tabulated Cylinder
+        m[ET::kTabulatedCylinder] = [](const DE& de, const IVec& p,
+                                               const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::TabulatedCylinder>(de, p, d2i, iid);
+        };
+        // 124 - Transformation Matrix
+        m[ET::kTransformationMatrix] = [](const DE& de, const IVec& p,
+                                                  const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::TransformationMatrix>(de, p, d2i, iid);
+        };
+        // 126 - Rational B-Spline Curve
+        m[ET::kRationalBSplineCurve] = [](const DE& de, const IVec& p,
+                                                  const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::RationalBSplineCurve>(de, p, d2i, iid);
+        };
+        // 128 - Rational B-Spline Surface
+        m[ET::kRationalBSplineSurface] = [](const DE& de, const IVec& p,
+                                                    const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::RationalBSplineSurface>(de, p, d2i, iid);
+        };
+        // 142 - Curve on A Parametric Surface
+        m[ET::kCurveOnAParametricSurface] = [](const DE& de, const IVec& p,
+                                                       const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::CurveOnAParametricSurface>(de, p, d2i, iid);
+        };
+        // 144 - Trimmed Surface
+        m[ET::kTrimmedSurface] = [](const DE& de, const IVec& p,
+                                            const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::TrimmedSurface>(de, p, d2i, iid);
+        };
+
+
+        // 314 - Color Definition
+        m[ET::kColorDefinition] = [](const DE& de, const IVec& p,
+                                             const p2I& d2i, const ObjectID& iid) {
+            return std::make_shared<i_ent::ColorDefinition>(de, p, d2i, iid);
+        };
+
+        return m;
+    }();
+    return creators;
+}
+
+std::unordered_map<int, i_ent::EntityFactory::CreateFunction>&
+i_ent::EntityFactory::UserCreators() {
+    // 関数内static: 静的初期化子からの登録でも初期化順に依存しない
+    static std::unordered_map<int, CreateFunction> creators;
+    return creators;
 }
 
 
@@ -166,26 +179,27 @@ void i_ent::EntityFactory::Initialize() {
 std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
         const RawEntityDE& de, const IVec& parameters,
         const pointer2ID& de2id, const ObjectID& iges_id) {
-    Initialize();  // 初期化
+    auto& builtins = BuiltinCreators();
+    auto& users = UserCreators();
 
     // ユーザー定義エンティティ (kUserDefined) は実番号で引く
     if (de.entity_type == ET::kUserDefined) {
-        auto user_it = user_creators_.find(de.user_type_number);
-        if (user_it != user_creators_.end()) {
+        auto user_it = users.find(de.user_type_number);
+        if (user_it != users.end()) {
             return user_it->second(de, parameters, de2id, iges_id);
         }
         // 未登録のユーザー定義番号は生データを保持し、往復出力可能とする
         return std::make_shared<i_ent::UnsupportedEntity>(de, parameters, de2id);
     }
 
-    auto it = creators_.find(de.entity_type);
-    if (it != creators_.end()) {
+    auto it = builtins.find(de.entity_type);
+    if (it != builtins.end()) {
         return it->second(de, parameters, de2id, iges_id);
     }
 
     // ユーザー登録の作成関数を探す (キーはtype番号)
-    auto user_it = user_creators_.find(static_cast<int>(de.entity_type));
-    if (user_it != user_creators_.end()) {
+    auto user_it = users.find(static_cast<int>(de.entity_type));
+    if (user_it != users.end()) {
         return user_it->second(de, parameters, de2id, iges_id);
     }
 
@@ -201,9 +215,6 @@ std::shared_ptr<i_ent::EntityBase> i_ent::EntityFactory::CreateEntity(
 
 void i_ent::EntityFactory::RegisterEntityCreator(
         const EntityType type, CreateFunction creator) {
-    // 組み込みcreatorの充填前に重複チェックが素通りするのを防ぐ
-    Initialize();
-
     if (!creator) {
         throw std::invalid_argument(
                 "Creator function must not be empty (entity type " +
@@ -222,26 +233,29 @@ void i_ent::EntityFactory::RegisterEntityCreator(
                 std::to_string(static_cast<int>(type)));
     }
     // 上書き禁止 (組み込み実装・ユーザー登録とも)
-    if (creators_.find(type) != creators_.end() ||
-        user_creators_.find(static_cast<int>(type)) != user_creators_.end()) {
+    auto& builtins = BuiltinCreators();
+    auto& users = UserCreators();
+    if (builtins.find(type) != builtins.end() ||
+        users.find(static_cast<int>(type)) != users.end()) {
         throw std::invalid_argument(
                 "Creator for entity type " +
                 std::to_string(static_cast<int>(type)) +
                 " is already registered");
     }
 
-    user_creators_[static_cast<int>(type)] = std::move(creator);
+    users[static_cast<int>(type)] = std::move(creator);
 }
 
 bool i_ent::EntityFactory::UnregisterEntityCreator(const EntityType type) {
-    // 組み込み実装 (creators_) には触れない
-    return user_creators_.erase(static_cast<int>(type)) > 0;
+    // 組み込み実装 (BuiltinCreators) には触れない
+    return UserCreators().erase(static_cast<int>(type)) > 0;
 }
 
 bool i_ent::EntityFactory::IsEntityCreatorRegistered(const EntityType type) {
-    Initialize();
-    return creators_.find(type) != creators_.end() ||
-           user_creators_.find(static_cast<int>(type)) != user_creators_.end();
+    auto& builtins = BuiltinCreators();
+    auto& users = UserCreators();
+    return builtins.find(type) != builtins.end() ||
+           users.find(static_cast<int>(type)) != users.end();
 }
 
 void i_ent::EntityFactory::RegisterUserEntityCreator(
@@ -257,21 +271,22 @@ void i_ent::EntityFactory::RegisterUserEntityCreator(
                 "(600-699, 10000-99999): " + std::to_string(type_number));
     }
     // 上書き禁止
-    if (user_creators_.find(type_number) != user_creators_.end()) {
+    auto& users = UserCreators();
+    if (users.find(type_number) != users.end()) {
         throw std::invalid_argument(
                 "Creator for entity type " + std::to_string(type_number) +
                 " is already registered");
     }
 
-    user_creators_[type_number] = std::move(creator);
+    users[type_number] = std::move(creator);
 }
 
 bool i_ent::EntityFactory::UnregisterUserEntityCreator(const int type_number) {
-    return user_creators_.erase(type_number) > 0;
+    return UserCreators().erase(type_number) > 0;
 }
 
 bool i_ent::EntityFactory::IsUserEntityCreatorRegistered(const int type_number) {
-    return user_creators_.find(type_number) != user_creators_.end();
+    return UserCreators().find(type_number) != UserCreators().end();
 }
 
 std::shared_ptr<i_ent::EntityBase> i_ent::CloneEntity(const EntityBase& entity) {

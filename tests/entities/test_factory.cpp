@@ -398,6 +398,25 @@ TEST(EntityFactoryUserDefinedTest,
                  std::invalid_argument);
 }
 
+namespace {
+
+/// @brief 静的初期化子からの登録 (自動登録パターン)
+/// @note ストレージが関数内static (BuiltinCreators/UserCreators) のため、
+///       静的初期化順に依存せず安全に登録できることの検証. 番号699は
+///       他のテストと干渉しない (プロセス終了まで登録されたままとなる)
+const bool kStaticallyRegistered = [] {
+    EntityFactory::RegisterUserEntityCreator(699, MakeDummyCreator());
+    return true;
+}();
+
+}  // namespace
+
+// 正常系: 静的初期化子からの登録が安全に成立している
+TEST(EntityFactoryUserDefinedTest, StaticInitializationRegistrationIsSafe) {
+    EXPECT_TRUE(kStaticallyRegistered);
+    EXPECT_TRUE(EntityFactory::IsUserEntityCreatorRegistered(699));
+}
+
 // 正常系: EntityBaseのユーザー定義番号コンストラクタでコードから直接構築できる
 TEST(EntityFactoryUserDefinedTest, ProgrammaticConstruction) {
     MinimalUserEntity entity(kUserTypeNumber, IGESParameterVector{1.0, 2.0});

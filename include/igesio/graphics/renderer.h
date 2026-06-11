@@ -185,6 +185,12 @@ class EntityRenderer {
     /// @note SetScene/SetDisplayFilter等、ツリー側のリビジョンに現れない
     ///       レンダラ自身の状態変更で立てる
     mutable bool local_dirty_ = true;
+    /// @brief 最後に同期した描画レジストリ (GraphicsRegistry) のリビジョン
+    /// @note 変化を検知したら負キャッシュ (生成失敗のnullptrエントリ) のみ破棄し、
+    ///       新規登録された型の描画オブジェクト生成を再試行させる.
+    ///       生成済みオブジェクトは温存する (差し替え登録を既存個体へ反映するには
+    ///       シーンの再設定等で再生成すること)
+    mutable std::uint64_t synced_graphics_registry_revision_ = 0;
     /// @brief キャッシュした描画リスト (シェーダー別の描画オブジェクト. 非所有ポインタ)
     /// @note EnsureSyncedのツリー走査で構築し、フレームを越えて再利用する.
     ///       graphics_cache_の要素を指す

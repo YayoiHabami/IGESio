@@ -8,7 +8,10 @@
 #include "igesio/graphics/factory.h"
 
 #include <memory>
+#include <typeindex>
 #include <utility>
+
+#include "igesio/graphics/graphics_registry.h"
 
 #include "igesio/graphics/curves/i_curve_graphics.h"
 #include "igesio/graphics/curves/circular_arc_graphics.h"
@@ -133,6 +136,19 @@ std::unique_ptr<i_graph::IEntityGraphics> i_graph::CreateEntityGraphics(
     if (!entity) return nullptr;
     // UnsupportedEntityの場合は無効なポインタを返す
     if (!entity->IsSupported()) return nullptr;
+
+    // レジストリ登録 (GraphicsRegistry) を動的型の完全一致で最優先する.
+    // 登録がある型はその結果を最終とする (nullptrの返却は「型起因の恒久的失敗」
+    // として負キャッシュされる. 下の不変条件と同じ扱い)
+    // (typeidのオペランドに関数呼び出し (operator*) を直接置くと
+    //  -Wpotentially-evaluated-expression となるため、参照へ束縛してから渡す)
+    const i_ent::IEntityIdentifier& entity_ref = *entity;
+    if (auto creator = i_graph::GraphicsRegistry::FindCreator(
+            std::type_index(typeid(entity_ref)))) {
+        auto registered = creator(entity, gl);
+        if (registered && synchronize) registered->Synchronize();
+        return registered;
+    }
 
     std::unique_ptr<i_graph::IEntityGraphics> graphics;
     if (auto curve = std::dynamic_pointer_cast<const i_ent::ICurve>(entity)) {

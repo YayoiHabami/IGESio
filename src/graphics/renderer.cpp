@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "igesio/common/parallel.h"
+#include "igesio/graphics/graphics_registry.h"
 
 #include "./shaders.h"
 
@@ -331,6 +332,22 @@ void EntityRenderer::Cleanup() {
 void EntityRenderer::EnsureSynced() const {
     if (scene_ == nullptr || gl_ == nullptr) return;
     const auto& root = scene_->Root();
+
+    // 描画レジストリの変化を検知したら負キャッシュ (生成失敗のnullptrエントリ)
+    // のみ破棄し、新規登録された型の生成を再試行させる (生成済みは温存)
+    const auto registry_revision = GraphicsRegistry::Revision();
+    if (registry_revision != synced_graphics_registry_revision_) {
+        for (auto it = graphics_cache_.begin(); it != graphics_cache_.end();) {
+            if (it->second == nullptr) {
+                it = graphics_cache_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        synced_graphics_registry_revision_ = registry_revision;
+        local_dirty_ = true;
+    }
+
     // リビジョン値は同一rootに対してのみ比較可能なため、同一性とペアで比較する
     if (!local_dirty_ && synced_root_ == root.GetID()
             && synced_revision_ == root.Revision()) {

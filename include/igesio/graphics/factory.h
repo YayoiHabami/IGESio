@@ -41,6 +41,9 @@ CreateSurfaceGraphics(const std::shared_ptr<const entities::ISurface>&,
 /// @param gl OpenGL関数のラッパー
 /// @param synchronize 生成時に同期 (CPU構築+GL転送) まで行うか (既定: true)
 /// @return 作成された描画オブジェクト、無効な場合はnullptr
+/// @note ディスパッチ順: ①GraphicsRegistry (動的型の完全一致. 登録があれば
+///       その結果を最終とする) → ②組み込みの能力ディスパッチ
+///       (ICurve/ISurface/Point) → ③nullptr
 /// @note 既定では生成時にSynchronizeまで行い、即描画可能な状態で返す. レンダラは
 ///       reconcile経路でCPU相を並列に前倒ししてからGL転送を直列に行うため、
 ///       synchronize=falseを指定して生成時の同期を省く (子孫も未同期で返る)。
