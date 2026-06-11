@@ -21,8 +21,8 @@
 #include "mock_open_gl.h"
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/mesh/algorithms.h"
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/numerics/meshes/algorithms.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 #include "igesio/models/assembly.h"
 #include "igesio/models/scene.h"
 #include "igesio/graphics/factory.h"

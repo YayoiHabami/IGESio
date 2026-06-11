@@ -23,8 +23,8 @@
 #include "igesio/numerics/geometric/polygon.h"
 
 // メッシュ (三角形メッシュと基本アルゴリズム)
-#include "igesio/numerics/mesh/triangle_mesh.h"
-#include "igesio/numerics/mesh/algorithms.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
+#include "igesio/numerics/meshes/algorithms.h"
 
 namespace igesio {
 

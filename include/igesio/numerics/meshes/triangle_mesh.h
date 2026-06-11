@@ -1,5 +1,5 @@
 /**
- * @file numerics/mesh/triangle_mesh.h
+ * @file numerics/meshes/triangle_mesh.h
  * @brief インデックス付き三角形メッシュ (純粋データ)
  * @author Yayoi Habami
  * @date 2026-06-10
@@ -8,8 +8,8 @@
  *       メッシュの正準データ構造. アルゴリズムは同階層のalgorithms.hに
  *       関数として置く (関数指向).
  */
-#ifndef IGESIO_NUMERICS_MESH_TRIANGLE_MESH_H_
-#define IGESIO_NUMERICS_MESH_TRIANGLE_MESH_H_
+#ifndef IGESIO_NUMERICS_MESHES_TRIANGLE_MESH_H_
+#define IGESIO_NUMERICS_MESHES_TRIANGLE_MESH_H_
 
 #include <cstdint>
 #include <string>
@@ -82,4 +82,4 @@ using TriangleMeshf = TriangleMeshT<float>;
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_MESH_TRIANGLE_MESH_H_
+#endif  // IGESIO_NUMERICS_MESHES_TRIANGLE_MESH_H_

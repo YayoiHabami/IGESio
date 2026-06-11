@@ -1,14 +1,14 @@
 /**
- * @file numerics/mesh/algorithms/conversion.h
+ * @file numerics/meshes/algorithms/conversion.h
  * @brief 三角形メッシュ (TriangleMeshT) のスカラー型を変換するアルゴリズム
  * @author Yayoi Habami
  * @date 2026-06-11
  * @copyright 2026 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_MESH_ALGORITHMS_CONVERSION_H_
-#define IGESIO_NUMERICS_MESH_ALGORITHMS_CONVERSION_H_
+#ifndef IGESIO_NUMERICS_MESHES_ALGORITHMS_CONVERSION_H_
+#define IGESIO_NUMERICS_MESHES_ALGORITHMS_CONVERSION_H_
 
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 
 
 
@@ -31,4 +31,4 @@ TriangleMeshT<To> CastScalar(const TriangleMeshT<From>& mesh) {
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_MESH_ALGORITHMS_CONVERSION_H_
+#endif  // IGESIO_NUMERICS_MESHES_ALGORITHMS_CONVERSION_H_

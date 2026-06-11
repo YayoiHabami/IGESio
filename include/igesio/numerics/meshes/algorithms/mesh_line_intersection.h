@@ -1,5 +1,5 @@
 /**
- * @file numerics/mesh/algorithms/mesh_line_intersection.h
+ * @file numerics/meshes/algorithms/mesh_line_intersection.h
  * @brief 三角形メッシュ (TriangleMeshT) と直線/半直線/線分の交差判定
  * @author Yayoi Habami
  * @date 2026-06-11
@@ -8,8 +8,8 @@
  *       単発のクエリには十分な性能のため、加速構造 (BVH等) は必要になった
  *       時点で本階層へ追加する (将来課題).
  */
-#ifndef IGESIO_NUMERICS_MESH_ALGORITHMS_MESH_LINE_INTERSECTION_H_
-#define IGESIO_NUMERICS_MESH_ALGORITHMS_MESH_LINE_INTERSECTION_H_
+#ifndef IGESIO_NUMERICS_MESHES_ALGORITHMS_MESH_LINE_INTERSECTION_H_
+#define IGESIO_NUMERICS_MESHES_ALGORITHMS_MESH_LINE_INTERSECTION_H_
 
 #include <algorithm>
 #include <cmath>
@@ -18,7 +18,7 @@
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/numerics/geometric/bounding_box.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 
 
 
@@ -139,4 +139,4 @@ std::vector<MeshRayHit> IntersectMeshWithLine(
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_MESH_ALGORITHMS_MESH_LINE_INTERSECTION_H_
+#endif  // IGESIO_NUMERICS_MESHES_ALGORITHMS_MESH_LINE_INTERSECTION_H_

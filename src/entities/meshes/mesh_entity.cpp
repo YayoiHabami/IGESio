@@ -1,16 +1,16 @@
 /**
- * @file entities/mesh_entity.cpp
+ * @file entities/meshes/mesh_entity.cpp
  * @brief 三角形メッシュを保持する非IGESエンティティ
  * @author Yayoi Habami
  * @date 2026-06-10
  * @copyright 2026 Yayoi Habami
  */
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 
 #include <stdexcept>
 #include <utility>
 
-#include "igesio/numerics/mesh/algorithms.h"
+#include "igesio/numerics/meshes/algorithms.h"
 
 namespace {
 

@@ -29,7 +29,7 @@
 #ifndef IGESIO_ENTITIES_SURFACES_ALGORITHMS_RESTRICTED_SURFACE_MESH_H_
 #define IGESIO_ENTITIES_SURFACES_ALGORITHMS_RESTRICTED_SURFACE_MESH_H_
 
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/entities/interfaces/i_restricted_surface.h"
 
 

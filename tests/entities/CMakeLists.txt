@@ -20,7 +20,7 @@ set(TEST_SOURCES
     test_factory.cpp
 
     # Non-IGES entities
-    test_mesh_entity.cpp
+    meshes/test_mesh_entity.cpp
 
     # Curves
     curves/test_i_curve.cpp

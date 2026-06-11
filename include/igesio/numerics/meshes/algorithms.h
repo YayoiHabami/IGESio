@@ -1,5 +1,5 @@
 /**
- * @file numerics/mesh/algorithms.h
+ * @file numerics/meshes/algorithms.h
  * @brief 三角形メッシュ (TriangleMeshT) に対する基本アルゴリズムの集約ヘッダ
  * @author Yayoi Habami
  * @date 2026-06-10
@@ -9,13 +9,13 @@
  *       束ねる. メッシュの溶接・簡略化等の追加アルゴリズムも将来は本階層
  *       (algorithms/) へ置く.
  */
-#ifndef IGESIO_NUMERICS_MESH_ALGORITHMS_H_
-#define IGESIO_NUMERICS_MESH_ALGORITHMS_H_
+#ifndef IGESIO_NUMERICS_MESHES_ALGORITHMS_H_
+#define IGESIO_NUMERICS_MESHES_ALGORITHMS_H_
 
-#include "igesio/numerics/mesh/algorithms/inspection.h"
-#include "igesio/numerics/mesh/algorithms/normals.h"
-#include "igesio/numerics/mesh/algorithms/edges.h"
-#include "igesio/numerics/mesh/algorithms/conversion.h"
-#include "igesio/numerics/mesh/algorithms/mesh_line_intersection.h"
+#include "igesio/numerics/meshes/algorithms/inspection.h"
+#include "igesio/numerics/meshes/algorithms/normals.h"
+#include "igesio/numerics/meshes/algorithms/edges.h"
+#include "igesio/numerics/meshes/algorithms/conversion.h"
+#include "igesio/numerics/meshes/algorithms/mesh_line_intersection.h"
 
-#endif  // IGESIO_NUMERICS_MESH_ALGORITHMS_H_
+#endif  // IGESIO_NUMERICS_MESHES_ALGORITHMS_H_

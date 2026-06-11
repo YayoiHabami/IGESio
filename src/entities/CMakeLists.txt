@@ -31,7 +31,7 @@ add_library(igesio_entities STATIC
     structures/unsupported_entity.cpp
 
     # Non-IGES entities
-    mesh_entity.cpp
+    meshes/mesh_entity.cpp
 
     # Entities
     structures/null_entity.cpp                 # 000

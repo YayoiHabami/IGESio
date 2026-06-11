@@ -21,7 +21,7 @@
 #include "igesio/entities/non_iges_entity_base.h"
 
 // 非IGESエンティティ (計算・描画専用)
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 
 // 具象エンティティ (カテゴリ別集約)
 #include "igesio/entities/curves.h"

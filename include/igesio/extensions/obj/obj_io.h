@@ -17,8 +17,8 @@
 #include <memory>
 #include <string>
 
-#include "igesio/numerics/mesh/triangle_mesh.h"
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 
 /// @brief IGESio本体の拡張モジュール (外部フォーマット入出力等)
 namespace igesio::extensions {

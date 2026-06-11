@@ -1,6 +1,6 @@
 /**
- * @file entities/test_mesh_entity.cpp
- * @brief entities/mesh_entity.h (MeshEntity) のテスト
+ * @file entities/meshes/test_mesh_entity.cpp
+ * @brief entities/meshes/mesh_entity.h (MeshEntity) のテスト
  * @author Yayoi Habami
  * @date 2026-06-10
  * @copyright 2026 Yayoi Habami
@@ -17,8 +17,8 @@
 #include <stdexcept>
 #include <utility>
 
-#include "igesio/numerics/mesh/triangle_mesh.h"
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 
 namespace {
 

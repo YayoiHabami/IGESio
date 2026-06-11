@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/mesh/algorithms.h"
+#include "igesio/numerics/meshes/algorithms.h"
 
 namespace {
 

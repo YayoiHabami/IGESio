@@ -1,12 +1,12 @@
 /**
- * @file numerics/mesh/algorithms/edges.h
+ * @file numerics/meshes/algorithms/edges.h
  * @brief 三角形メッシュ (TriangleMeshT) のエッジ・特徴エッジを抽出するアルゴリズム
  * @author Yayoi Habami
  * @date 2026-06-11
  * @copyright 2026 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_MESH_ALGORITHMS_EDGES_H_
-#define IGESIO_NUMERICS_MESH_ALGORITHMS_EDGES_H_
+#ifndef IGESIO_NUMERICS_MESHES_ALGORITHMS_EDGES_H_
+#define IGESIO_NUMERICS_MESHES_ALGORITHMS_EDGES_H_
 
 #include <algorithm>
 #include <array>
@@ -14,8 +14,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "igesio/numerics/mesh/algorithms/normals.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/algorithms/normals.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 
 
 
@@ -137,4 +137,4 @@ std::vector<std::array<std::uint32_t, 2>> ExtractUniqueEdges(
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_MESH_ALGORITHMS_EDGES_H_
+#endif  // IGESIO_NUMERICS_MESHES_ALGORITHMS_EDGES_H_

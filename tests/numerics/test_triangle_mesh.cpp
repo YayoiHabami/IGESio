@@ -22,8 +22,8 @@
 #include <cmath>
 #include <cstdint>
 
-#include "igesio/numerics/mesh/triangle_mesh.h"
-#include "igesio/numerics/mesh/algorithms.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
+#include "igesio/numerics/meshes/algorithms.h"
 
 namespace {
 

@@ -26,12 +26,12 @@
 
 #include "mock_open_gl.h"
 
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 #include "igesio/entities/non_iges_entity_base.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/models/assembly.h"
 #include "igesio/models/scene.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/graphics/core/pick_registry.h"
 #include "igesio/graphics/factory.h"
 #include "igesio/graphics/meshes/triangle_mesh_graphics.h"

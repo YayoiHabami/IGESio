@@ -1,17 +1,17 @@
 /**
- * @file numerics/mesh/algorithms/normals.h
+ * @file numerics/meshes/algorithms/normals.h
  * @brief 三角形メッシュ (TriangleMeshT) の頂点法線・面法線を計算するアルゴリズム
  * @author Yayoi Habami
  * @date 2026-06-11
  * @copyright 2026 Yayoi Habami
  */
-#ifndef IGESIO_NUMERICS_MESH_ALGORITHMS_NORMALS_H_
-#define IGESIO_NUMERICS_MESH_ALGORITHMS_NORMALS_H_
+#ifndef IGESIO_NUMERICS_MESHES_ALGORITHMS_NORMALS_H_
+#define IGESIO_NUMERICS_MESHES_ALGORITHMS_NORMALS_H_
 
 #include <cstddef>
 
 #include "igesio/numerics/core/matrix.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 
 
 
@@ -74,4 +74,4 @@ Eigen::Matrix<Scalar, 3, Eigen::Dynamic> ComputeFaceNormals(
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_MESH_ALGORITHMS_NORMALS_H_
+#endif  // IGESIO_NUMERICS_MESHES_ALGORITHMS_NORMALS_H_

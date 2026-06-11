@@ -36,7 +36,7 @@
 #include <vector>
 
 #include "igesio/numerics/core/matrix.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/linear_path.h"
 #include "igesio/entities/curves/curve_on_a_parametric_surface.h"

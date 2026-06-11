@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
 

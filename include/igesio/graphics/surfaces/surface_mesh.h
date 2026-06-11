@@ -11,7 +11,7 @@
 #ifndef IGESIO_GRAPHICS_SURFACES_SURFACE_MESH_H_
 #define IGESIO_GRAPHICS_SURFACES_SURFACE_MESH_H_
 
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/entities/interfaces/i_surface.h"
 
 

@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 #include "igesio/graphics/meshes/triangle_mesh_graphics.h"
 
 namespace {

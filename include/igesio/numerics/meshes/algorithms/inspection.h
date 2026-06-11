@@ -1,13 +1,13 @@
 /**
- * @file numerics/mesh/algorithms/inspection.h
+ * @file numerics/meshes/algorithms/inspection.h
  * @brief 三角形メッシュ (TriangleMeshT) を検査して要約値を返すアルゴリズム
  * @author Yayoi Habami
  * @date 2026-06-11
  * @copyright 2026 Yayoi Habami
  * @note メッシュを変更せず, 検証結果やバウンディングボックスを返す関数を置く.
  */
-#ifndef IGESIO_NUMERICS_MESH_ALGORITHMS_INSPECTION_H_
-#define IGESIO_NUMERICS_MESH_ALGORITHMS_INSPECTION_H_
+#ifndef IGESIO_NUMERICS_MESHES_ALGORITHMS_INSPECTION_H_
+#define IGESIO_NUMERICS_MESHES_ALGORITHMS_INSPECTION_H_
 
 #include <cstddef>
 #include <string>
@@ -15,7 +15,7 @@
 #include "igesio/common/validation_result.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/numerics/geometric/bounding_box.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 
 
 
@@ -91,4 +91,4 @@ BoundingBox ComputeBoundingBox(const TriangleMeshT<Scalar>& mesh) {
 
 }  // namespace igesio::numerics
 
-#endif  // IGESIO_NUMERICS_MESH_ALGORITHMS_INSPECTION_H_
+#endif  // IGESIO_NUMERICS_MESHES_ALGORITHMS_INSPECTION_H_

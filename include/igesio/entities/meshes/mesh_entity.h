@@ -1,5 +1,5 @@
 /**
- * @file entities/mesh_entity.h
+ * @file entities/meshes/mesh_entity.h
  * @brief 三角形メッシュを保持する非IGESエンティティ
  * @author Yayoi Habami
  * @date 2026-06-10
@@ -8,15 +8,15 @@
  *       STL等の外部フォーマット読み込み結果やプログラム生成メッシュを
  *       Assemblyツリー・描画パイプラインへ載せるために用いる.
  */
-#ifndef IGESIO_ENTITIES_MESH_ENTITY_H_
-#define IGESIO_ENTITIES_MESH_ENTITY_H_
+#ifndef IGESIO_ENTITIES_MESHES_MESH_ENTITY_H_
+#define IGESIO_ENTITIES_MESHES_MESH_ENTITY_H_
 
 #include <optional>
 #include <utility>
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/numerics/geometric/bounding_box.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/entities/non_iges_entity_base.h"
 #include "igesio/entities/interfaces/i_geometry.h"
 
@@ -72,4 +72,4 @@ class MeshEntity : public NonIgesEntityBase, public IGeometry {
 
 }  // namespace igesio::entities
 
-#endif  // IGESIO_ENTITIES_MESH_ENTITY_H_
+#endif  // IGESIO_ENTITIES_MESHES_MESH_ENTITY_H_

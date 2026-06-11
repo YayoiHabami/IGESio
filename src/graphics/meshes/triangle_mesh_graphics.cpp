@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/mesh/algorithms.h"
+#include "igesio/numerics/meshes/algorithms.h"
 #include "igesio/graphics/core/mesh_staging.h"
 
 namespace {

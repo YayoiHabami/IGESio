@@ -13,9 +13,9 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/mesh/algorithms/edges.h"
-#include "igesio/numerics/mesh/algorithms/mesh_line_intersection.h"
-#include "igesio/entities/mesh_entity.h"
+#include "igesio/numerics/meshes/algorithms/edges.h"
+#include "igesio/numerics/meshes/algorithms/mesh_line_intersection.h"
+#include "igesio/entities/meshes/mesh_entity.h"
 
 namespace {
 

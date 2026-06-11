@@ -24,8 +24,8 @@
 #include <string>
 
 #include "igesio/common/errors.h"
-#include "igesio/numerics/mesh/triangle_mesh.h"
-#include "igesio/numerics/mesh/algorithms.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
+#include "igesio/numerics/meshes/algorithms.h"
 #include "igesio/extensions/obj/obj_io.h"
 
 namespace {
