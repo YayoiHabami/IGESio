@@ -24,8 +24,8 @@ using CDType = igesio::entities::CopiousDataType;
 CopiousDataGraphics::CopiousDataGraphics(
         const std::shared_ptr<const entities::CopiousDataBase>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kCopiousData, true) {
-    Synchronize();
+        : EntityGraphics(entity, gl, ShaderId::kCopiousData, true) {
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 CopiousDataGraphics::~CopiousDataGraphics() {

@@ -18,6 +18,7 @@
 
 #include "igesio/entities/curves/rational_b_spline_curve.h"
 
+#include "igesio/entities/surfaces/plane.h"
 #include "igesio/entities/surfaces/ruled_surface.h"
 #include "igesio/entities/surfaces/surface_of_revolution.h"
 #include "igesio/entities/surfaces/tabulated_cylinder.h"
@@ -195,6 +196,19 @@ inline surface_vec CreateTrimmedSurfaces() {
 
 
 
+/// @brief Plane (Type 108, Form 0) エンティティの作成
+/// @note 無限平面のため、汎用ISurfaceテストの面積系 (全範囲面積が無限) は
+///       IsFinite()でスキップされる。偏導関数の数値微分は±1e8までクランプ
+///       されて評価されるため、桁落ちを避けられるよう軸平行平面 (Y=5; フレームの
+///       各成分が厳密表現可能) を用いる。
+inline surface_vec CreatePlanes() {
+    TestSurface plane("Plane (unbounded, Y = 5)");
+    plane.surface = entities::MakePlane(0.0, 1.0, 0.0, 5.0);
+    return {plane};
+}
+
+
+
 inline surface_vec CreateAllTestSurfaces() {
     surface_vec all_surfaces;
 
@@ -222,6 +236,10 @@ inline surface_vec CreateAllTestSurfaces() {
     auto trimmed_surfaces = CreateTrimmedSurfaces();
     all_surfaces.insert(all_surfaces.end(),
                         trimmed_surfaces.begin(), trimmed_surfaces.end());
+
+    // Planes (unbounded; infinite extent — area checks skip via IsFinite())
+    auto planes = CreatePlanes();
+    all_surfaces.insert(all_surfaces.end(), planes.begin(), planes.end());
 
     return all_surfaces;
 }

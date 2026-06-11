@@ -29,8 +29,8 @@ namespace i_ent = igesio::entities;
 SegmentGraphics::SegmentGraphics(
         const std::shared_ptr<const entities::Line>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kSegment, true) {
-    Synchronize();
+        : EntityGraphics(entity, gl, ShaderId::kSegment, true) {
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 SegmentGraphics::~SegmentGraphics() {
@@ -139,8 +139,8 @@ void SegmentGraphics::DoSynchronize() {
 LineGraphics::LineGraphics(
         const std::shared_ptr<const entities::Line>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kLine, true) {
-    Synchronize();
+        : EntityGraphics(entity, gl, ShaderId::kLine, true) {
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 LineGraphics::~LineGraphics() {

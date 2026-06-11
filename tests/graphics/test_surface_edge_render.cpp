@@ -6,7 +6,7 @@
  * @copyright 2026 Yayoi Habami
  *
  * 対象:
- * - 層A (オブジェクト単位): サーフェスグラフィックスがGetShaderTypesにkSurfaceEdgeを
+ * - 層A (オブジェクト単位): サーフェスグラフィックスがGetShaderIdsにkSurfaceEdgeを
  *   含み、kSurfaceEdge指定時に線(DrawArrays)とエッジ色を発行すること.
  * - 層B (レンダラ単位・要Initialize): DisplayModeに応じてExecuteDrawListが面塗り
  *   (DrawElements) と面エッジ (DrawArrays) を取捨すること.
@@ -42,7 +42,7 @@ namespace i_ent = igesio::entities;
 namespace i_mod = igesio::models;
 namespace i_test = igesio::tests;
 using i_graph::test::MockOpenGL;
-using i_graph::ShaderType;
+using i_graph::ShaderId;
 
 /// @brief 未トリムのTrimmedSurface (フリーフォームNURBS基底) を生成する
 /// @note 面はメッシュ(DrawElements)、エッジは線分(DrawArrays)で発行されるため、
@@ -61,17 +61,17 @@ std::shared_ptr<i_ent::TrimmedSurface> MakeUntrimmedSurface() {
  * 層A: オブジェクト単位
  */
 
-TEST(SurfaceEdgeRenderTest, GetShaderTypes_IncludesSurfaceEdge) {
+TEST(SurfaceEdgeRenderTest, GetShaderIds_IncludesSurfaceEdge) {
     auto gl = std::make_shared<MockOpenGL>();
     auto graphics = i_graph::CreateEntityGraphics(MakeUntrimmedSurface(), gl);
     ASSERT_NE(graphics, nullptr);
 
-    const auto types = graphics->GetShaderTypes();
-    EXPECT_EQ(types.count(ShaderType::kGeneralSurface), 1u);
-    EXPECT_EQ(types.count(ShaderType::kSurfaceEdge), 1u);
+    const auto types = graphics->GetShaderIds();
+    EXPECT_EQ(types.count(ShaderId::kGeneralSurface), 1u);
+    EXPECT_EQ(types.count(ShaderId::kSurfaceEdge), 1u);
 }
 
-TEST(SurfaceEdgeRenderTest, Draw_DispatchesMeshAndEdgeByShaderType) {
+TEST(SurfaceEdgeRenderTest, Draw_DispatchesMeshAndEdgeByShaderId) {
     auto gl = std::make_shared<MockOpenGL>();
     auto graphics = i_graph::CreateEntityGraphics(MakeUntrimmedSurface(), gl);
     ASSERT_NE(graphics, nullptr);
@@ -79,14 +79,14 @@ TEST(SurfaceEdgeRenderTest, Draw_DispatchesMeshAndEdgeByShaderType) {
     const std::pair<float, float> vp{800.0f, 600.0f};
 
     // 面シェーダー: メッシュ(DrawElements)のみ、線は発行しない
-    graphics->Draw(1u, ShaderType::kGeneralSurface, vp, ctx);
+    graphics->Draw(1u, ShaderId::kGeneralSurface, vp, ctx);
     EXPECT_GT(gl->draw_elements_calls, 0);
     EXPECT_EQ(gl->draw_arrays_calls, 0);
 
     // エッジシェーダー: 線(DrawArrays)のみ
     gl->draw_arrays_calls = 0;
     gl->draw_elements_calls = 0;
-    graphics->Draw(1u, ShaderType::kSurfaceEdge, vp, ctx);
+    graphics->Draw(1u, ShaderId::kSurfaceEdge, vp, ctx);
     EXPECT_GT(gl->draw_arrays_calls, 0);
     EXPECT_EQ(gl->draw_elements_calls, 0);
 

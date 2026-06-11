@@ -155,8 +155,9 @@ SerializePdSection(const std::vector<igesio::entities::RawEntityPD>& pd_sections
             types = ProvisionalParameterTypes(pd.data);
 
         // パラメータデータの先頭にエンティティタイプを追加
+        // (TypeNumber: ユーザー定義エンティティは実番号を出力する)
         auto data = pd.data;
-        data.insert(data.begin(), std::to_string(static_cast<int>(pd.type)));
+        data.insert(data.begin(), std::to_string(pd.TypeNumber()));
         types.insert(types.begin(), igesio::IGESParameterType::kInteger);
 
         auto lines = igesio::utils::ToFreeFormattedLines(
@@ -339,12 +340,18 @@ namespace {
 /// @param node 対象ノード
 /// @param[out] out 収集した(ID, エンティティ)の格納先
 /// @note Assemblyは非永続のため、出力時は全子孫の所有エンティティをフラットに束ねる
+/// @note IGESへシリアライズできるのはEntityBaseのみ. 非IGESエンティティ
+///       (計算・描画専用のユーザー定義型) はIGESファイルに現れないのが正常系の
+///       ため、エラーとせずスキップする (ビューが出力されないのと同じ扱い)
 void CollectAllEntities(
         const igesio::models::Assembly& node,
         std::vector<std::pair<igesio::ObjectID,
                 std::shared_ptr<igesio::entities::EntityBase>>>& out) {
     for (const auto& [id, entity] : node.GetEntities()) {
-        out.emplace_back(id, entity);
+        if (auto eb = std::dynamic_pointer_cast<igesio::entities::EntityBase>(
+                entity)) {
+            out.emplace_back(id, eb);
+        }
     }
     for (const auto& child : node.GetChildAssemblies()) {
         if (child) CollectAllEntities(*child, out);
@@ -389,8 +396,9 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
         intermediate.directory_entry_section.push_back(de);
 
         try {
+            // GetTypeNumber: ユーザー定義エンティティ (kUserDefined) は実番号で構築する
             auto pd = entities::ToRawEntityPD(
-                entity->GetType(), id, entity->GetParameters(), id2de);
+                entity->GetTypeNumber(), id, entity->GetParameters(), id2de);
             intermediate.parameter_data_section.push_back(pd);
         } catch (std::out_of_range& e) {
             // dataが持たないエンティティへの参照を含む場合

@@ -74,7 +74,7 @@ if "%ENABLE_SOURCE_BUILD%"=="ON" (
         )
         if "%BUILD_EXAMPLE%"=="ON" (
             rem If the example is enabled, OpenGL and GUI are also enabled
-            set EXAMPLE_OPTION="-DIGESIO_BUILD_EXAMPLE=ON" "-DIGESIO_ENABLE_GRAPHICS=ON" "-DIGESIO_BUILD_GUI=ON"
+            set EXAMPLE_OPTION="-DIGESIO_BUILD_EXAMPLE=ON" "-DIGESIO_ENABLE_GRAPHICS=ON" "-DIGESIO_BUILD_GUI=ON" "-DIGESIO_ENABLE_ALL_EXTENSIONS=ON"
         ) else (
             set EXAMPLE_OPTION="-DIGESIO_BUILD_EXAMPLE=OFF"
         )

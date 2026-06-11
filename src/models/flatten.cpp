@@ -10,6 +10,7 @@
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "igesio/entities/factory.h"
 
@@ -28,9 +29,13 @@ using EntityIndex = std::unordered_map<ObjectID, EntityPtr>;
 /// @brief Assembly以下の所有エンティティをID->ポインタの索引へ集約する
 /// @param node 対象ノード
 /// @param[out] index 集約先の索引
+/// @note 索引は被参照closureの解決用のため、IGESエンティティ(EntityBase)のみを
+///       集約する (EntityBaseが非IGESエンティティを参照することはない)
 void CollectIndex(const Assembly& node, EntityIndex& index) {
     for (const auto& [id, entity] : node.GetEntities()) {
-        if (entity) index[id] = entity;
+        if (auto eb = std::dynamic_pointer_cast<i_ent::EntityBase>(entity)) {
+            index[id] = eb;
+        }
     }
     for (const auto& child : node.GetChildAssemblies()) {
         if (child) CollectIndex(*child, index);
@@ -90,27 +95,37 @@ void AddCloneClosure(const EntityPtr& clone, Assembly& out_root,
 /// @param[in,out] out_root 出力先ルートAssembly
 /// @param index 複製元の全エンティティ索引
 /// @param[in,out] visited 追加済みIDの集合
+/// @param[in,out] skipped_non_iges スキップした非IGESエンティティのIDの格納先
+///                (不要な場合はnullptr)
 void FlattenAssembly(const Assembly& node, const Matrix4d& node_world,
                      Assembly& out_root, const EntityIndex& index,
-                     std::unordered_set<ObjectID>& visited) {
+                     std::unordered_set<ObjectID>& visited,
+                     std::vector<ObjectID>* skipped_non_iges) {
     for (const auto& [id, entity] : node.GetEntities()) {
         if (!entity) continue;
+        // フラット化はIGES出力(DE変換への畳み込み)前提のため、IGESエンティティ
+        // (EntityBase)のみを対象とする. 非IGESエンティティはスキップし、IDを報告する
+        const auto eb = std::dynamic_pointer_cast<i_ent::EntityBase>(entity);
+        if (!eb) {
+            if (skipped_non_iges != nullptr) skipped_non_iges->push_back(id);
+            continue;
+        }
         // 物理従属の子は親の畳み込んだ変換を介して追従する(被参照closureで追加される)
-        if (entity->GetSubordinateEntitySwitch()
+        if (eb->GetSubordinateEntitySwitch()
                 == i_ent::SubordinateEntitySwitch::kPhysicallyDependent) {
             continue;
         }
         // 変換行列(124)自体は参照経由で扱う
-        if (entity->GetType() == i_ent::EntityType::kTransformationMatrix) continue;
+        if (eb->GetType() == i_ent::EntityType::kTransformationMatrix) continue;
 
-        auto res = i_models::Materialize(*entity, node_world);
+        auto res = i_models::Materialize(*eb, node_world);
         AddOnce(res.transform, out_root, visited);
         AddCloneClosure(res.entity, out_root, index, visited);
     }
     for (const auto& child : node.GetChildAssemblies()) {
         if (child) {
             FlattenAssembly(*child, node_world * child->GetGlobalTransform(),
-                            out_root, index, visited);
+                            out_root, index, visited, skipped_non_iges);
         }
     }
 }
@@ -147,6 +162,21 @@ i_models::IgesData i_models::Flatten(const IgesData& src) {
 
     std::unordered_set<ObjectID> visited;
     FlattenAssembly(src.Root(), src.Root().GetGlobalTransform(),
-                    out.Root(), index, visited);
+                    out.Root(), index, visited, nullptr);
+    return out;
+}
+
+i_models::IgesData i_models::Flatten(const IgesData& src,
+                                     std::vector<ObjectID>& skipped_non_iges) {
+    IgesData out;
+    out.description = src.description;
+    out.global_section = src.global_section;
+
+    EntityIndex index;
+    CollectIndex(src.Root(), index);
+
+    std::unordered_set<ObjectID> visited;
+    FlattenAssembly(src.Root(), src.Root().GetGlobalTransform(),
+                    out.Root(), index, visited, &skipped_non_iges);
     return out;
 }

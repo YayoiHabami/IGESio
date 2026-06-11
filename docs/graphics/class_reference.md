@@ -10,13 +10,13 @@
 
 | 関数 | 説明 |
 |---|---|
-| `Draw(shader, shader_type, viewport, ctx)` | 指定したShaderTypeに一致する場合に描画する(選択等はctxからPULL) |
-| `Draw(shader, viewport, ctx)` | ShaderTypeを問わず描画する |
+| `Draw(shader, shader_id, viewport, ctx)` | 指定したShaderIdに一致する場合に描画する(選択等はctxからPULL) |
+| `Draw(shader, viewport, ctx)` | ShaderIdを問わず描画する |
 | `Synchronize()` | エンティティの状態に基づいてOpenGLリソースを再構築する(非virtual)。実体の`DoSynchronize()`(protected純粋仮想)を実行し、末尾で同期キーを記録する |
 | `CurrentGeometryKey()` | テッセレーションが読む全エンティティの`(ObjectID, GeometryRevision)`をハッシュ結合した同期キーを返す |
 | `NeedsResync()` | 最後の`Synchronize()`以降に同期キーが変化したか(再同期が必要か)を返す |
 | `SyncTexture()` | テクスチャリソースを同期する |
-| `GetShaderTypes()` | このオブジェクト(と子)が使用するShaderTypeの集合を返す |
+| `GetShaderIds()` | このオブジェクト(と子)が使用するShaderIdの集合を返す |
 | `Cleanup()` | OpenGLリソースを解放する |
 | `IsDrawable()` | 描画可能な状態かを返す |
 
@@ -35,9 +35,7 @@
 
 ### `EntityGraphics<T, has_surfaces>` (`include/igesio/graphics/core/entity_graphics.h`)
 
-`IEntityGraphics`の汎用テンプレート実装。具体的なGraphicsクラスはこれを継承する。子のGraphicsを
-持てば複合ノードも担う。使用する`ShaderType`はテンプレート引数ではなく、コンストラクタ引数として
-渡してメンバ`shader_type_`に保持する。
+`IEntityGraphics`の汎用テンプレート実装。具体的なGraphicsクラスはこれを継承する。子のGraphicsを持てば複合ノードも担う。使用する`ShaderId`はテンプレート引数ではなく、コンストラクタ引数として渡してメンバ`shader_id_`に保持する。
 
 **テンプレートパラメータ**
 
@@ -69,19 +67,17 @@
 | `use_entity_transform_` | `GetWorldTransform()` でエンティティ変換行列を合成するか |
 | `global_param_` | 描画グローバルパラメータ |
 | `material_property_` | マテリアルプロパティ |
-| `shader_type_` | このオブジェクトの主ShaderType (コンストラクタで指定) |
-| `child_graphics_` | 子GraphicsをShaderType別に保持する (複合ノード時) |
+| `shader_id_` | このオブジェクトの主ShaderId (コンストラクタで指定) |
+| `child_graphics_` | 子GraphicsをShaderId別に保持する (複合ノード時) |
 
 ### 複合ノード (子要素を持つ `EntityGraphics`)
 
-複数の子要素を独立して描画するエンティティ(`CompositeCurve`(Type 102)等)は、専用基底ではなく
-統合`EntityGraphics`が子のGraphicsを`child_graphics_`(ShaderType別)で保持して表現する。主ShaderTypeは
-`kComposite`で、自身は固有のシェーダーコードを持たず、描画を子へ委譲する。
+複数の子要素を独立して描画するエンティティ(`CompositeCurve`(Type 102)等)は、専用基底ではなく統合`EntityGraphics`が子のGraphicsを`child_graphics_`(ShaderId別)で保持して表現する。主ShaderIdは`kComposite`で、自身は固有のシェーダーコードを持たず、描画を子へ委譲する。
 
 | 関数 | 説明 |
 |---|---|
 | `AddChildGraphics(graphics)` | 子要素のGraphicsオブジェクトを追加する |
-| `GetShaderTypes()` | 自身と全子要素のShaderTypeの集合を返す |
+| `GetShaderIds()` | 自身と全子要素のShaderIdの集合を返す |
 
 `SetWorldTransform()` / `SetColor()` / `ResetColor()` は子要素にも伝播する。
 
@@ -105,15 +101,9 @@
 | `SetMaterialProperty(id, material)` / `ClearMaterialProperty(id)` | エンティティ毎の描画プロパティのオーバーライドを設定・解除する(GLコンテキスト前提を持たず、適用は次回の描画/ピック時) |
 | `PickEntities(...)` / `PickEntitiesInRect(...)` | レイ/矩形でヒットしたエンティティIDを返す(可視リスト走査のため、削除済み・非表示・抑制中・フィルタ除外のエンティティはヒットしない) |
 
-描画オブジェクトはSceneツリーの派生キャッシュとして管理される。描画/ピックの冒頭でツリーと
-突き合わせ(Reconcile)、未在席の描画オブジェクトを遅延生成し、ツリーから削除されたものをSweepで
-破棄する。ツリーの編集(構造・大域変換・表示状態)は`Assembly`のモデルリビジョンで、エンティティの
-形状編集はジオメトリリビジョン(同期キー)で自動検知されるため、編集後にレンダラへ通知するAPIは
-存在しない。詳細は`overview.md`§4-5を参照。
+描画オブジェクトはSceneツリーの派生キャッシュとして管理される。描画/ピックの冒頭でツリーと突き合わせ(Reconcile)、未在席の描画オブジェクトを遅延生成し、ツリーから削除されたものをSweepで破棄する。ツリーの編集(構造・大域変換・表示状態)は`Assembly`のモデルリビジョンで、エンティティの形状編集はジオメトリリビジョン(同期キー)で自動検知されるため、編集後にレンダラへ通知するAPIは存在しない。詳細は`overview.md`§4-5を参照。
 
-`DisplayFilter`は非表示にするエンティティ型の集合(`hidden_types`)を保持する構造体で、
-`ShouldRender(type)`で描画対象かを判定する。除外された型の描画オブジェクトは温存され、
-解除時に再利用される。
+`DisplayFilter`は非表示にするエンティティ型の集合(`hidden_types`)を保持する構造体で、`ShouldRender(type)`で描画対象かを判定する。除外された型の描画オブジェクトは温存され、解除時に再利用される。
 
 選択状態はレンダラではなく`models::Scene`/`SelectionSet`が保持する。レンダラはピッキングでIDを返すのみで、選択の確定は`Scene`(対話では`TrySelectWithLock`)が行う。
 
@@ -149,6 +139,7 @@
 |---|---|
 | `selection` | 参照する`SelectionSet`(非所有) |
 | `highlight_color` | 選択ハイライト色 (RGBA) |
+| `display_mode` | 表示モード(`DisplayMode`; 面/面エッジの描画組み合わせ)。メッシュ系グラフィックスがエッジ集合(全エッジ/特徴エッジ)の選択に使用する |
 | `IsHighlighted(id)` | 指定IDが選択中(ハイライト対象)かを返す |
 
 ## ファクトリ関数 (`include/igesio/graphics/factory.h`)
@@ -163,7 +154,7 @@
 
 ### 曲線系
 
-| クラス | 対象 | ShaderType | 方式 |
+| クラス | 対象 | ShaderId | 方式 |
 |---|---|---|---|
 | `ICurveGraphics` | ICurve 汎用 | `kGeneralCurve` | CPU離散化, VBO |
 | `CircularArcGraphics` | Type 100 | `kCircularArc` | GPUパラメトリック, テッセレーション |
@@ -178,7 +169,7 @@
 
 ### 曲面系
 
-| クラス | 対象 | ShaderType | 方式 |
+| クラス | 対象 | ShaderId | 方式 |
 |---|---|---|---|
 | `ISurfaceGraphics` | ISurface 汎用 | `kGeneralSurface` | CPU離散化, VBO + EBO, 光源計算あり |
 | `RationalBSplineSurfaceGraphics` | Type 128 | `kRationalBSplineSurface` | GPUパラメトリック, テッセレーション + SSBO, 光源計算あり |

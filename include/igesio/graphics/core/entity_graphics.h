@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <typeindex>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -27,6 +28,7 @@
 #include "igesio/entities/curves/algorithms/curve_line_intersection.h"
 #include "igesio/entities/surfaces/algorithms/surface_line_intersection.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
+#include "igesio/graphics/core/pick_registry.h"
 
 
 
@@ -78,8 +80,8 @@ inline uint64_t CombineGeometryKeyRecursive(
 /// @brief エンティティの描画情報を管理するクラス
 /// @tparam T エンティティの型
 /// @tparam has_surfaces Tがサーフェスを持つか (デフォルト: false)
-/// @note このクラスが対応するShaderTypeはコンストラクタ引数で受け取り、
-///       実行時メンバ`shader_type_`に保持する.
+/// @note このクラスが対応するShaderIdはコンストラクタ引数で受け取り、
+///       実行時メンバ`shader_id_`に保持する.
 /// @note 葉ノードは自前のVAOを`DrawImpl`で描画する. 複合ノード(`child_graphics_`に
 ///       子を持つ)は描画を子へ委譲し、`DrawImpl`は空実装でよい (CompositeCurve等).
 /// @note 以下のメンバ関数のオーバーライドが必要
@@ -104,30 +106,30 @@ class EntityGraphics : public IEntityGraphics {
     /// @brief テクスチャのID (サーフェスを持つ場合に使用)
     gl::Uint texture_id_ = 0;
     /// @brief このクラスが対応するシェーダーのタイプ
-    ShaderType shader_type_;
+    ShaderId shader_id_;
     /// @brief 子要素の描画オブジェクト (複合ノードの場合に使用. 葉では空)
-    /// @note キーはShaderType. CompositeCurve(102)等、複数の子を異なるシェーダーで
+    /// @note キーはShaderId. CompositeCurve(102)等、複数の子を異なるシェーダーで
     ///       描画する場合に使用する. 子を持つノードは自前VAOを持たない.
-    std::unordered_map<ShaderType, std::vector<std::unique_ptr<IEntityGraphics>>>
+    std::unordered_map<ShaderId, std::vector<std::unique_ptr<IEntityGraphics>>>
             child_graphics_;
 
     /// @brief コンストラクタ
     /// @param entity 描画するエンティティのポインタ
     /// @param gl OpenGL関数のラッパー
-    /// @param shader_type このクラスが対応するシェーダーのタイプ
+    /// @param shader_id このクラスが対応するシェーダーのタイプ
     /// @param use_entity_transform シェーダーのmodel変数に
     ///        entity_が参照する変換行列を掛け合わせるか
     /// @throw std::invalid_argument entityがnullptrの場合
     EntityGraphics(const std::shared_ptr<const T>& entity,
                    const std::shared_ptr<IOpenGL>& gl,
-                   ShaderType shader_type,
+                   ShaderId shader_id,
                    bool use_entity_transform)
             : IEntityGraphics(gl, use_entity_transform),
               entity_(entity),
               graphics_id_(IDGenerator::Generate(
                     ObjectType::kEntityGraphics,
                     (entity != nullptr) ? static_cast<uint16_t>(entity->GetType()) : 0)),
-              shader_type_(shader_type) {
+              shader_id_(shader_id) {
         if (!entity_) {
             throw std::invalid_argument("Entity pointer cannot be null");
         }
@@ -151,7 +153,7 @@ class EntityGraphics : public IEntityGraphics {
           draw_mode_(other.draw_mode_),
           texture_id_(other.texture_id_),
           graphics_id_(std::move(other.graphics_id_)),
-          shader_type_(other.shader_type_),
+          shader_id_(other.shader_id_),
           child_graphics_(std::move(other.child_graphics_)) {
         // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
         other.entity_ = nullptr;
@@ -176,7 +178,7 @@ class EntityGraphics : public IEntityGraphics {
             draw_mode_ = other.draw_mode_;
             texture_id_ = other.texture_id_;
             graphics_id_ = std::move(other.graphics_id_);
-            shader_type_ = other.shader_type_;
+            shader_id_ = other.shader_id_;
             child_graphics_ = std::move(other.child_graphics_);
 
             // ムーブ元のポインタをnullptrにし、リソースの二重解放を防ぐ
@@ -214,18 +216,18 @@ class EntityGraphics : public IEntityGraphics {
 
     /// @brief エンティティの描画を行う
     /// @param shader プログラムシェーダーのID
-    /// @param shader_type 描画に使用するシェーダーのタイプ
+    /// @param shader_id 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
-    /// @note shader_typeに合致する要素がない場合は何もしない
-    void Draw(gl::Uint shader, const ShaderType shader_type,
+    /// @note shader_idに合致する要素がない場合は何もしない
+    void Draw(gl::Uint shader, const ShaderId shader_id,
               const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override {
         // 葉ノード: 固有シェーダーが一致する場合に自己描画する
-        if (HasSpecificShaderCode(shader_type_) && shader_type == shader_type_) {
+        if (HasSpecificShaderCode(shader_id_) && shader_id == shader_id_) {
             Draw(shader, viewport, ctx);
         }
         // 複合ノード: 子要素を持つ場合は指定型の子へ委譲する
-        DrawChildGraphics(shader, shader_type, viewport, ctx);
+        DrawChildGraphics(shader, shader_id, viewport, ctx);
     }
 
     /// @brief エンティティの描画を行う (Drawフェーズ)
@@ -272,33 +274,45 @@ class EntityGraphics : public IEntityGraphics {
 
     /// @brief 描画用のシェーダーのタイプを取得する
     /// @return 描画用のシェーダーのタイプ
-    ShaderType GetShaderType() const override {
-        return shader_type_;
+    ShaderId GetShaderId() const override {
+        return shader_id_;
     }
 
     /// @brief 全ての可能なシェーダータイプを取得する
-    /// @return 自身のShaderTypeと、子要素 (複合ノード) のShaderTypeの和集合
-    std::unordered_set<ShaderType> GetShaderTypes() const override {
-        std::unordered_set<ShaderType> types = {shader_type_};
+    /// @return 自身のShaderIdと、子要素 (複合ノード) のShaderIdの和集合
+    std::unordered_set<ShaderId> GetShaderIds() const override {
+        std::unordered_set<ShaderId> types = {shader_id_};
         for (const auto& [st, children] : child_graphics_) {
-            if (st != ShaderType::kComposite && !children.empty()) {
+            if (st != ShaderId::kComposite && !children.empty()) {
                 types.insert(st);
             } else {
-                // 子要素自身がkCompositeの場合は、その子のShaderTypeも取得
+                // 子要素自身がkCompositeの場合は、その子のShaderIdも取得
                 for (const auto& child : children) {
-                    if (child) types.merge(child->GetShaderTypes());
+                    if (child) types.merge(child->GetShaderIds());
                 }
             }
         }
         return types;
     }
 
+    /// @brief 描画用CPUデータを事前構築する (既定: 子要素へカスケード)
+    /// @note 複合ノードは子要素 (child_graphics_) のPrewarmCpuを呼び、子に内包された
+    ///       遅延生成・テッセレーション等のCPU準備を伝播する。葉ノードは子を持たない
+    ///       ためno-op (重いCPU処理を持つ葉は本メソッドを個別にオーバーライドする)。
+    void PrewarmCpu() override {
+        for (auto& [st, list] : child_graphics_) {
+            for (auto& child : list) {
+                if (child) child->PrewarmCpu();
+            }
+        }
+    }
+
     /// @brief 子要素の描画オブジェクトを追加する (複合ノード化)
     /// @param graphics 追加する描画オブジェクト
-    /// @note graphicsがnullptrの場合は何もしない. 子のShaderTypeでバケットへ格納する.
+    /// @note graphicsがnullptrの場合は何もしない. 子のShaderIdでバケットへ格納する.
     void AddChildGraphics(std::unique_ptr<IEntityGraphics>&& graphics) {
         if (!graphics) return;
-        const auto st = graphics->GetShaderType();
+        const auto st = graphics->GetShaderId();
         child_graphics_[st].emplace_back(std::move(graphics));
     }
 
@@ -474,9 +488,15 @@ class EntityGraphics : public IEntityGraphics {
      */
 
     /// @brief レイとの交差判定が可能か
-    /// @return entity_がISurfaceまたはICurveを参照する場合はtrue
+    /// @return PickRegistryにレイ交差関数の登録がある場合、または
+    ///         entity_がISurfaceまたはICurveを参照する場合はtrue
     bool CanIntersect() const override {
         if (!entity_) return false;
+        // ①PickRegistry (動的型の完全一致) — レイ交差関数の登録があれば可能
+        if (PickRegistry::Find(std::type_index(typeid(*entity_))).intersect) {
+            return true;
+        }
+        // ②能力ディスパッチ (ICurve/ISurface)
         const auto* p = entity_.get();
         return dynamic_cast<const entities::ISurface*>(p) != nullptr
             || dynamic_cast<const entities::ICurve*>(p) != nullptr;
@@ -486,11 +506,23 @@ class EntityGraphics : public IEntityGraphics {
     /// @param ray ワールド空間のレイ (kRayとして扱う)
     /// @param params 探索制御パラメータ
     /// @return 交差点のリスト (distance昇順). 交差判定不可の場合は空リスト
+    /// @note ルックアップ順は①PickRegistry (動的型の完全一致) →
+    ///       ②能力ディスパッチ (ISurface/ICurve). 本関数をオーバーライドする
+    ///       描画クラスにはレジストリは適用されない
     std::vector<RayHit> Intersect(
             const Ray& ray,
             const RayIntersectionParams& params) const override {
         if (!entity_) return {};
 
+        // ①PickRegistry (動的型の完全一致). 登録関数はworld_transform_
+        //    (親空間→ワールド) を受け取り、ワールド座標のヒットを返す規約
+        if (const auto picks =
+                    PickRegistry::Find(std::type_index(typeid(*entity_)));
+            picks.intersect) {
+            return picks.intersect(*entity_, world_transform_, ray, params);
+        }
+
+        // ②能力ディスパッチ (ISurface/ICurve)
         // ray.directionが単位ベクトルのため、線パラメータが原点からの距離に等しい
         const Vector3d p1 = ray.origin + ray.direction;
         constexpr auto kRay = numerics::BoundingBox::DirectionType::kRay;
@@ -531,10 +563,24 @@ class EntityGraphics : public IEntityGraphics {
 
     /// @brief 範囲選択用にエンティティをサンプリングした点列を返す
     /// @param params サンプリング制御パラメータ
-    /// @return ワールド座標のサンプル. ISurface/ICurveでなければ空
+    /// @return ワールド座標のサンプル. 判定不可なら空
+    /// @note ルックアップ順は①PickRegistry (動的型の完全一致) → ②子集約 →
+    ///       ③能力ディスパッチ (ISurface/ICurve). 本関数をオーバーライドする
+    ///       描画クラスにはレジストリは適用されない
     SelectionSamples GetSelectionSamples(
             const SelectionSampleParams& params) const override {
-        // 複合ノード: 子要素のサンプルを集約する (子はSetWorldTransform伝播済みの
+        // ①PickRegistry (動的型の完全一致). 子集約・能力ディスパッチより
+        //    優先する (CreateEntityGraphicsのレジストリ最優先と同じ規則)
+        if (entity_) {
+            if (const auto picks =
+                        PickRegistry::Find(std::type_index(typeid(*entity_)));
+                picks.selection_samples) {
+                return picks.selection_samples(*entity_, world_transform_,
+                                               params);
+            }
+        }
+
+        // ②複合ノード: 子要素のサンプルを集約する (子はSetWorldTransform伝播済みの
         // ためワールド座標で得られる. ここでworld_transform_を再適用しないこと)
         if (!child_graphics_.empty()) {
             SelectionSamples result;
@@ -818,11 +864,11 @@ class EntityGraphics : public IEntityGraphics {
 
     /// @brief 子要素 (複合ノード) を指定シェーダータイプで描画する
     /// @param shader プログラムシェーダーのID
-    /// @param shader_type 描画に使用するシェーダーのタイプ
+    /// @param shader_id 描画に使用するシェーダーのタイプ
     /// @param viewport ビューポートのサイズ (width, height)
     /// @param ctx 表示コンテキスト
     /// @note 指定型の直接の子に加え、kCompositeの子へも再帰委譲する. 子が無ければ何もしない.
-    void DrawChildGraphics(gl::Uint shader, const ShaderType shader_type,
+    void DrawChildGraphics(gl::Uint shader, const ShaderId shader_id,
                            const std::pair<float, float>& viewport,
                            const DrawContext& ctx) const {
         if (child_graphics_.empty()) return;
@@ -830,19 +876,19 @@ class EntityGraphics : public IEntityGraphics {
         DrawContext child_ctx = ctx;
         if (ctx.IsHighlighted(GetEntityID())) child_ctx.force_highlight = true;
 
-        auto it = child_graphics_.find(shader_type);
+        auto it = child_graphics_.find(shader_id);
         if (it != child_graphics_.end()) {
             for (const auto& child : it->second) {
                 if (child && child->IsDrawable()) {
-                    child->Draw(shader, shader_type, viewport, child_ctx);
+                    child->Draw(shader, shader_id, viewport, child_ctx);
                 }
             }
         }
-        auto cit = child_graphics_.find(ShaderType::kComposite);
+        auto cit = child_graphics_.find(ShaderId::kComposite);
         if (cit != child_graphics_.end()) {
             for (const auto& child : cit->second) {
                 if (child && child->IsDrawable()) {
-                    child->Draw(shader, shader_type, viewport, child_ctx);
+                    child->Draw(shader, shader_id, viewport, child_ctx);
                 }
             }
         }

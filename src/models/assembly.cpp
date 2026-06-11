@@ -81,7 +81,10 @@ void CollectWorldVertices(const Assembly& node, const Matrix4d& node_world,
     for (const auto& [id, entity] : node.GetEntities()) {
         if (!entity) continue;
         // 物理従属のメンバは親経由で辿るため、ここでは対象としない
-        if (entity->GetSubordinateEntitySwitch()
+        // (従属スイッチはDEステータス由来のためEntityBaseのみが持つ.
+        //  非IGESエンティティは常に独立扱い)
+        const auto eb = std::dynamic_pointer_cast<const i_ent::EntityBase>(entity);
+        if (eb && eb->GetSubordinateEntitySwitch()
                 == i_ent::SubordinateEntitySwitch::kPhysicallyDependent) {
             continue;
         }
@@ -146,27 +149,38 @@ void Assembly::ReindexInto(Assembly* root) {
  * エンティティの管理 (IgesDataから移設. 対象はこのノードのentities_のみ)
  */
 
-void Assembly::SetPointerIfUnset(const std::shared_ptr<entities::EntityBase>& entity) {
+void Assembly::SetPointerIfUnset(
+        const std::shared_ptr<entities::IEntityIdentifier>& entity) {
     // nullptrチェック
     if (!entity) return;
 
-    // entityが参照するエンティティのうち、ポインタが未設定のもののIDを取得
-    for (auto& id : entity->GetUnresolvedReferences()) {
-        auto it = entities_.find(id);
-        if (it != entities_.end()) {
+    // ポインタ解決はIGESエンティティ(EntityBase)固有の機構.
+    // 非EntityBaseは未解決参照を持たず、EntityBaseから参照されることもない
+    const auto target = std::dynamic_pointer_cast<entities::EntityBase>(entity);
+
+    if (target) {
+        // entityが参照するエンティティのうち、ポインタが未設定のもののIDを取得
+        for (auto& id : target->GetUnresolvedReferences()) {
+            auto it = entities_.find(id);
+            if (it == entities_.end()) continue;
             // その未設定のエンティティを自身が持っている場合は、
             // entityにそのエンティティのポインタを設定する
-            entity->SetUnresolvedReference(it->second);
+            if (auto ref = std::dynamic_pointer_cast<entities::EntityBase>(
+                    it->second)) {
+                target->SetUnresolvedReference(ref);
+            }
         }
-    }
 
-    // entities_に登録されている各要素について、entityを参照していて
-    // entityへのポインタが未設定の場合は設定
-    for (const auto& [id, ent] : entities_) {
-        for (auto& ptr : ent->GetUnresolvedReferences()) {
-            if (ptr == entity->GetID()) {
-                // entityへの参照ポインタを設定
-                ent->SetUnresolvedReference(entity);
+        // entities_に登録されている各要素について、entityを参照していて
+        // entityへのポインタが未設定の場合は設定
+        for (const auto& [id, ent] : entities_) {
+            const auto eb = std::dynamic_pointer_cast<entities::EntityBase>(ent);
+            if (!eb) continue;
+            for (auto& ptr : eb->GetUnresolvedReferences()) {
+                if (ptr == target->GetID()) {
+                    // entityへの参照ポインタを設定
+                    eb->SetUnresolvedReference(target);
+                }
             }
         }
     }
@@ -174,33 +188,7 @@ void Assembly::SetPointerIfUnset(const std::shared_ptr<entities::EntityBase>& en
 
 void Assembly::AddEntities(
         const std::vector<std::shared_ptr<entities::EntityBase>>& entities) {
-    // 事前にreserveしてリハッシュを抑える
-    entities_.reserve(entities_.size() + entities.size());
-
-    // まず全エンティティをマップとルート逆引きインデックスへ登録する
-    for (const auto& entity : entities) {
-        if (!entity) {
-            throw std::invalid_argument("Entity pointer is null");
-        }
-        const auto id = entity->GetID();
-        entities_[id] = entity;
-        RegisterInIndex(id, this);
-    }
-    // 構造変更としてモデルリビジョンをバンプする (一括追加で1回)
-    BumpRevision();
-
-    // 全件登録後に参照解決を1回だけ行う (O(エンティティ数+参照数)).
-    // 各エンティティの未解決参照のうち、このノードが持つものを解決することで、
-    // 前方参照・後方参照の双方が一括で解決される. 1件ずつAddEntityを呼ぶ場合に
-    // 生じる挿入ごとの全件走査 (O(N^2)) を回避するための経路.
-    for (const auto& [id, ent] : entities_) {
-        for (const auto& rid : ent->GetUnresolvedReferences()) {
-            auto it = entities_.find(rid);
-            if (it != entities_.end()) {
-                ent->SetUnresolvedReference(it->second);
-            }
-        }
-    }
+    AddEntitiesImpl(entities);
 }
 
 bool Assembly::AreAllReferencesSet() const {
@@ -213,10 +201,15 @@ Assembly::GetUnresolvedReferences() const {
     std::unordered_set<ObjectID> unresolved_ids;
 
     for (const auto& [id, entity] : entities_) {
-        auto unset = entity->GetUnresolvedReferences();
-        unresolved_ids.insert(unset.begin(), unset.end());
+        // 未解決ポインタはIGESエンティティ(EntityBase)のみが持つ
+        if (const auto eb =
+                std::dynamic_pointer_cast<entities::EntityBase>(entity)) {
+            auto unset = eb->GetUnresolvedReferences();
+            unresolved_ids.insert(unset.begin(), unset.end());
+        }
 
         // entityは保持するが、このノードに登録されていないポインタがないか確認
+        // (参照グラフは識別子APIのため全型を対象とする)
         for (const auto& ptr_id : entity->GetReferencedEntityIDs()) {
             if (entities_.find(ptr_id) == entities_.end()) {
                 // このノードに登録されていないポインタ
@@ -227,7 +220,7 @@ Assembly::GetUnresolvedReferences() const {
     return unresolved_ids;
 }
 
-std::shared_ptr<igesio::entities::EntityBase>
+std::shared_ptr<igesio::entities::IEntityIdentifier>
 Assembly::GetEntity(const ObjectID& id) const {
     auto it = entities_.find(id);
     if (it != entities_.end()) {
@@ -243,8 +236,10 @@ bool Assembly::IsReady() const {
     }
 
     // すべてのエンティティが有効であることを確認
+    // (検証はIGESエンティティのみ対象. 非IGESエンティティは常に有効扱い)
     for (const auto& [id, entity] : entities_) {
-        if (!entity->IsValid()) {
+        const auto eb = std::dynamic_pointer_cast<entities::EntityBase>(entity);
+        if (eb && !eb->IsValid()) {
             return false;  // 無効なエンティティがある場合は`false`
         }
     }
@@ -263,8 +258,11 @@ igesio::ValidationResult Assembly::Validate() const {
     }
 
     // すべてのエンティティの検証を実行
+    // (検証はIGESエンティティのみ対象. 非IGESエンティティは常に有効扱い)
     for (const auto& [id, entity] : entities_) {
-        auto validation = entity->Validate();
+        const auto eb = std::dynamic_pointer_cast<entities::EntityBase>(entity);
+        if (!eb) continue;
+        auto validation = eb->Validate();
         if (!validation.is_valid) {
             result.Merge(validation);
         }
@@ -348,11 +346,11 @@ Assembly::GetEntityIDs(const bool recursive) const {
     return ids;
 }
 
-std::vector<std::shared_ptr<igesio::entities::EntityBase>>
+std::vector<std::shared_ptr<igesio::entities::IEntityIdentifier>>
 Assembly::FindEntities(
-        const std::function<bool(const entities::EntityBase&)>& predicate,
+        const std::function<bool(const entities::IEntityIdentifier&)>& predicate,
         const bool recursive) const {
-    std::vector<std::shared_ptr<entities::EntityBase>> result;
+    std::vector<std::shared_ptr<entities::IEntityIdentifier>> result;
     for (const auto& [id, entity] : entities_) {
         if (predicate(*entity)) {
             result.push_back(entity);
@@ -367,10 +365,10 @@ Assembly::FindEntities(
     return result;
 }
 
-std::vector<std::shared_ptr<igesio::entities::EntityBase>>
+std::vector<std::shared_ptr<igesio::entities::IEntityIdentifier>>
 Assembly::FindEntitiesByType(const entities::EntityType type,
                              const bool recursive) const {
-    return FindEntities([type](const entities::EntityBase& entity) {
+    return FindEntities([type](const entities::IEntityIdentifier& entity) {
         return entity.GetType() == type;
     }, recursive);
 }
@@ -378,9 +376,21 @@ Assembly::FindEntitiesByType(const entities::EntityType type,
 std::vector<std::shared_ptr<igesio::entities::EntityBase>>
 Assembly::FindEntitiesByUseFlag(const entities::EntityUseFlag flag,
                                 const bool recursive) const {
-    return FindEntities([flag](const entities::EntityBase& entity) {
-        return entity.GetEntityUseFlag() == flag;
-    }, recursive);
+    // 用途フラグはDEステータス由来のため、IGESエンティティのみを対象とする
+    std::vector<std::shared_ptr<entities::EntityBase>> result;
+    for (const auto& [id, entity] : entities_) {
+        const auto eb = std::dynamic_pointer_cast<entities::EntityBase>(entity);
+        if (eb && eb->GetEntityUseFlag() == flag) {
+            result.push_back(eb);
+        }
+    }
+    if (recursive) {
+        for (const auto& child : children_) {
+            auto sub = child->FindEntitiesByUseFlag(flag, true);
+            result.insert(result.end(), sub.begin(), sub.end());
+        }
+    }
+    return result;
 }
 
 
@@ -718,11 +728,14 @@ void Assembly::PrepareGeometryCaches(const bool recursive) const {
     // 自ノード(必要なら全子孫)のエンティティをフラットに収集する.
     // 各PrepareGeometryCacheは互いに独立 (それぞれ自身のキャッシュのみ書き込む) なので、
     // ロックなしで並列実行できる. ParallelForEachが戻る前に全ワーカーを待ち合わせる.
+    // 遅延キャッシュ機構はIGESエンティティ(EntityBase)のみが持つ
     const auto entities = FindEntities(
-            [](const i_ent::EntityBase&) { return true; }, recursive);
+            [](const i_ent::IEntityIdentifier&) { return true; }, recursive);
     igesio::ParallelForEach(
-            entities, [](const std::shared_ptr<i_ent::EntityBase>& e) {
-        e->PrepareGeometryCache();
+            entities, [](const std::shared_ptr<i_ent::IEntityIdentifier>& e) {
+        if (const auto eb = std::dynamic_pointer_cast<i_ent::EntityBase>(e)) {
+            eb->PrepareGeometryCache();
+        }
     });
 }
 

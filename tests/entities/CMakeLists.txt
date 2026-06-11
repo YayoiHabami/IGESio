@@ -16,6 +16,12 @@ set(TEST_SOURCES
     test_pointer_container.cpp
     test_geometry_revision.cpp
 
+    # Factory
+    test_factory.cpp
+
+    # Non-IGES entities
+    meshes/test_mesh_entity.cpp
+
     # Curves
     curves/test_i_curve.cpp
     curves/test_circular_arc.cpp
@@ -45,6 +51,7 @@ set(TEST_SOURCES
 
     # Surfaces
     surfaces/test_i_surface.cpp
+    surfaces/test_plane.cpp
     surfaces/test_rational_b_spline_surface.cpp
     surfaces/test_rational_b_spline_surface_edit.cpp
     surfaces/test_ruled_surface.cpp

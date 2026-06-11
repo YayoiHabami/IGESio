@@ -11,6 +11,7 @@
 #define IGESIO_MODELS_FLATTEN_H_
 
 #include <memory>
+#include <vector>
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/entity_base.h"
@@ -47,7 +48,17 @@ MaterializeResult Materialize(const entities::EntityBase& entity,
 /// @note 独立(非物理従属)エンティティのみMaterializeし、物理従属の子は親の畳み込んだ124を
 ///       介して追従する. 被参照の子・色定義等は複製元を共有してフラットマップへ集約する.
 ///       スケールなし(124相当)を前提とする.
+/// @note 非IGESエンティティ (EntityType::kNonIges) はフラット化の対象外であり、
+///       結果に含まれない. スキップされたIDを知りたい場合は2引数版を使用する.
 IgesData Flatten(const IgesData& src);
+
+/// @brief Assembly階層の配置を畳み込み、フラットなIgesDataを生成する
+///        (非IGESエンティティのスキップ報告つき)
+/// @param src フラット化対象のIgesData
+/// @param[out] skipped_non_iges スキップされた非IGESエンティティのIDの格納先
+///             (呼び出し時の内容はクリアされず、末尾へ追記される)
+/// @return 1引数版と同じ
+IgesData Flatten(const IgesData& src, std::vector<ObjectID>& skipped_non_iges);
 
 }  // namespace igesio::models
 

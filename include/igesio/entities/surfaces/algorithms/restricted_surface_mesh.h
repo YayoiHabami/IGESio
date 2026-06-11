@@ -29,24 +29,12 @@
 #ifndef IGESIO_ENTITIES_SURFACES_ALGORITHMS_RESTRICTED_SURFACE_MESH_H_
 #define IGESIO_ENTITIES_SURFACES_ALGORITHMS_RESTRICTED_SURFACE_MESH_H_
 
-#include <cstdint>
-#include <vector>
-
-#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/entities/interfaces/i_restricted_surface.h"
 
 
 
 namespace igesio::entities {
-
-/// @brief 制限付き曲面の三角形メッシュ (頂点属性 + インデックス)
-struct RestrictedSurfaceMesh {
-    /// @brief 頂点属性(8 x N)。各列が {x, y, z, nx, ny, nz, tu, tv}
-    /// @note tu, tvはパラメータ範囲を [0,1] に正規化したテクスチャ座標
-    MatrixXf vertices;
-    /// @brief 三角形インデックス (3個で1三角形を構成)
-    std::vector<std::uint32_t> indices;
-};
 
 /// @brief TessellateRestrictedSurface のテッセレーション制御パラメータ
 struct RestrictedSurfaceMeshParams {
@@ -64,14 +52,14 @@ struct RestrictedSurfaceMeshParams {
 /// 境界駆動の制限付き四分木により、トリム境界近傍を適応的に細分しつつ、
 /// 境界が通らない領域はbase_divの一様グリッドで分割する。出力頂点は
 /// 基底曲面のモデル空間 (M_base適用済み) の座標・法線と、パラメータ範囲を
-/// [0,1] に正規化したテクスチャ座標を持つ。
+/// [0,1] に正規化したテクスチャ座標 (uvsチャンネル) を持つ。
 ///
 /// @param surface テッセレーション対象の制限付き曲面
 /// @param params  テッセレーション制御パラメータ
-/// @return 三角形メッシュ (頂点属性とインデックス)
+/// @return 三角形メッシュ (positions/normals/uvsの全チャンネルを持つ)
 /// @note 境界曲線が未解決・退化等で包含多角形が構築できない場合、当該境界の
 ///       細分はスキップされ、基底グリッドのMarching-Squaresにフォールバックする
-RestrictedSurfaceMesh TessellateRestrictedSurface(
+numerics::TriangleMeshf TessellateRestrictedSurface(
         const IRestrictedSurface& surface,
         const RestrictedSurfaceMeshParams& params = {});
 

@@ -4,15 +4,14 @@
  * @author Yayoi Habami
  * @date 2025-08-07
  * @copyright 2025 Yayoi Habami
- * @note このヘッダーファイルは、シェーダープログラムのソースコードを
- *       まとめるために使用する. 各シェーダーコードは、①C++の文字列リテラルとして
- *       直接定義する方法か、②外部のGLSLファイルをインクルードする方法で
- *       定義できる. どちらの方法でも、呼び出しは`graphics/shaders/xxx.h`の
- *       中で行う. 各`xxx.h`においては、xxx（例えばcurves, surfacesなど）に
- *       関連するシェーダーコードを定義し、`GetXXXShaderCode`関数を通じて
- *       取得できるようにする. ①の指定方法では、`glsl/`で始まるシェーダーコードの
- *       相対パスを指定する. ②の指定方法では、実際にGLSLコードを文字列リテラルとして
- *       定義する.
+ * @note このヘッダーファイルは、シェーダーコードのインクルード展開機構を提供する.
+ *       各シェーダーコードは、①C++の文字列リテラルとして直接定義する方法か、
+ *       ②外部のGLSLファイルをインクルードする方法で定義できる. どちらの方法でも、
+ *       定義は`graphics/shaders/xxx.h`の中で行う. 各`xxx.h`においては、
+ *       xxx（例えばcurves, surfacesなど）に関連するシェーダーコードを定義し、
+ *       `GetBuiltinXXXShaderInfos`関数を通じて`ShaderRegistry`へ設定する.
+ *       ①の指定方法では、`glsl/`で始まるシェーダーコードの相対パスを指定する.
+ *       ②の指定方法では、実際にGLSLコードを文字列リテラルとして定義する.
  * @note C++ソース上にないシェーダーコードは、`src/graphics/shaders/glsl/`
  *       以下に保存されている. `#include "glsl/..."` の形で参照できるコードは、
  *       `src/graphics/shaders/glsl`フォルダ以下の各ファイル.
@@ -32,7 +31,6 @@
 #include <fstream>
 #include <functional>
 #include <mutex>
-#include <optional>
 #include <regex>
 #include <string>
 #include <unordered_map>
@@ -40,9 +38,8 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/graphics/core/i_entity_graphics.h"
-#include "./shaders/curves.h"
-#include "./shaders/surfaces.h"
+#include "igesio/common/errors.h"
+#include "igesio/graphics/core/shader_code.h"
 
 namespace igesio::graphics::shaders {
 
@@ -266,34 +263,6 @@ inline ShaderCode ExpandShaderCodeIncludes(const ShaderCode& code) {
         expanded_code.tes = ExpandShaderIncludes(code.tes);
     }
     return expanded_code;
-}
-
-/// @brief シェーダーのソースコードを取得する
-/// @param shader_type シェーダーのタイプ
-/// @return シェーダーのソースコード、
-///         指定されたタイプのシェーダーがない場合はnullopt
-/// @throw igesio::FileError インクルードするファイルが見つからない場合
-std::optional<ShaderCode> GetShaderCode(const ShaderType shader_type) {
-    // 特定のシェーダーを持たないタイプの場合はnullopt
-    if (!HasSpecificShaderCode(shader_type)) return std::nullopt;
-
-    try {
-        // 曲線シェーダーを優先して取得
-        if (auto code = GetCurveShaderCode(shader_type)) {
-            return ExpandShaderCodeIncludes(*code);
-        }
-
-        // なければ曲面シェーダーを取得
-        if (auto code = GetSurfaceShaderCode(shader_type)) {
-            return ExpandShaderCodeIncludes(*code);
-        }
-    } catch (const igesio::FileError& e) {
-        auto suffix = " in shader type " + ToString(shader_type);
-        throw igesio::FileError(std::string(e.what()) + suffix);
-    }
-
-    // 対応するシェーダーコードが見つからない場合はnullopt
-    return std::nullopt;
 }
 
 }  // namespace igesio::graphics::shaders

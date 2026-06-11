@@ -7,7 +7,7 @@
  *
  * 対象: CompositeEntityGraphicsをEntityGraphicsへ統合(P3b)した後の、複合ノード
  *       (CompositeCurve 102) の挙動:
- *       - GetShaderType=kComposite、GetShaderTypesが子(Line→Segment)の型を含む
+ *       - GetShaderId=kComposite、GetShaderIdsが子(Line→Segment)の型を含む
  *       - IsDrawableが全子要素の描画可否を反映する
  *       - Draw(子の型)で子へ描画委譲され、非該当の型では何も描画しない
  * TODO: 祖先Assembly/複合選択による子ハイライトはP4以降 (本テストは描画委譲のみ).
@@ -33,10 +33,10 @@ namespace {
 namespace i_graph = igesio::graphics;
 namespace i_ent = igesio::entities;
 using i_graph::test::MockOpenGL;
-using i_graph::ShaderType;
+using i_graph::ShaderId;
 
 /// @brief 2本の線分(直角折れ)からなるCompositeCurveを生成する
-/// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderType::kSegment
+/// @note 各Lineは線分(kSegment)のため、子描画オブジェクトはShaderId::kSegment
 std::shared_ptr<i_ent::CompositeCurve> MakeCompositeOfSegments() {
     return i_ent::MakeCompositeCurve({
         i_ent::MakeLine(
@@ -49,16 +49,16 @@ std::shared_ptr<i_ent::CompositeCurve> MakeCompositeOfSegments() {
 
 
 
-// 複合ノードはkComposite型で、GetShaderTypesに子(Segment)の型を含み描画可能
-TEST(CompositeRenderTest, ShaderTypesIncludeChildTypesAndDrawable) {
+// 複合ノードはkComposite型で、GetShaderIdsに子(Segment)の型を含み描画可能
+TEST(CompositeRenderTest, ShaderIdsIncludeChildTypesAndDrawable) {
     auto gl = std::make_shared<MockOpenGL>();
     auto graphics = i_graph::CreateEntityGraphics(MakeCompositeOfSegments(), gl);
     ASSERT_NE(graphics, nullptr);
 
-    EXPECT_EQ(graphics->GetShaderType(), ShaderType::kComposite);
+    EXPECT_EQ(graphics->GetShaderId(), ShaderId::kComposite);
 
-    const auto types = graphics->GetShaderTypes();
-    EXPECT_EQ(types.count(ShaderType::kSegment), 1u);
+    const auto types = graphics->GetShaderIds();
+    EXPECT_EQ(types.count(ShaderId::kSegment), 1u);
 
     // 全子要素のVAOが生成済み (factoryで子のSynchronizeが走る) のため描画可能
     EXPECT_TRUE(graphics->IsDrawable());
@@ -71,7 +71,7 @@ TEST(CompositeRenderTest, Draw_DelegatesToChildrenForMatchingType) {
     ASSERT_NE(graphics, nullptr);
 
     const i_graph::DrawContext ctx{};
-    graphics->Draw(/*shader=*/1u, ShaderType::kSegment,
+    graphics->Draw(/*shader=*/1u, ShaderId::kSegment,
                    std::pair<float, float>{800.0f, 600.0f}, ctx);
 
     // 子(2本の線分)が描画され、draw呼び出しが発行された
@@ -85,7 +85,7 @@ TEST(CompositeRenderTest, Draw_NoOutputForNonChildType) {
     ASSERT_NE(graphics, nullptr);
 
     const i_graph::DrawContext ctx{};
-    graphics->Draw(/*shader=*/1u, ShaderType::kCircularArc,
+    graphics->Draw(/*shader=*/1u, ShaderId::kCircularArc,
                    std::pair<float, float>{800.0f, 600.0f}, ctx);
 
     EXPECT_EQ(gl->draw_arrays_calls + gl->draw_elements_calls, 0);

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "igesio/entities/surfaces/algorithms/surface_boundary_edges.h"
+#include "igesio/graphics/core/mesh_staging.h"
 #include "igesio/graphics/surfaces/surface_mesh.h"
 
 namespace {
@@ -32,9 +33,9 @@ constexpr int kDefaultDiv = 20;
 ISurfaceGraphics::ISurfaceGraphics(
         const std::shared_ptr<const entities::ISurface>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderType::kGeneralSurface, true),
+        : EntityGraphics(entity, gl, ShaderId::kGeneralSurface, true),
           edge_buffer_(gl) {
-    Synchronize();
+    // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 
 ISurfaceGraphics::~ISurfaceGraphics() {
@@ -119,13 +120,14 @@ void ISurfaceGraphics::Cleanup() {
     edge_buffer_.Cleanup();
 
     // 頂点・法線データとインデックスデータをクリア
-    vertices_.resize(0, 0);
+    vertices_.clear();
     indices_.clear();
 }
 
 void ISurfaceGraphics::GenerateSurfaceData() {
     // メッシュ生成本体はGL非依存の自由関数へ委譲する (単体テスト可能)
     auto mesh = BuildGeneralSurfaceMesh(*entity_, kDefaultDiv, kDefaultDiv);
-    vertices_ = std::move(mesh.vertices);
-    indices_ = std::move(mesh.indices);
+    // SoAメッシュをシェーダーレイアウトへinterleaveする (GPU転送用ステージング)
+    vertices_ = BuildInterleavedVertices(mesh.mesh);
+    indices_ = std::move(mesh.mesh.indices);
 }

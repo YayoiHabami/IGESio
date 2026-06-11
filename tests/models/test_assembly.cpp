@@ -71,9 +71,13 @@ const std::string kCubePath =
 using EntityPtr = std::shared_ptr<EntityBase>;
 
 /// @brief ロード済みエンティティのマップを平坦なベクトルへ変換する
+/// @note IGESファイル由来のエンティティのみのため、EntityBaseへのキャストは
+///       常に成功する (テストはDE関連APIを使用するためEntityBase型で保持する)
 std::vector<EntityPtr> ToVector(const Assembly& root) {
     std::vector<EntityPtr> v;
-    for (const auto& [id, e] : root.GetEntities()) v.push_back(e);
+    for (const auto& [id, e] : root.GetEntities()) {
+        if (auto eb = std::dynamic_pointer_cast<EntityBase>(e)) v.push_back(eb);
+    }
     return v;
 }
 
@@ -443,7 +447,9 @@ TEST_F(AssemblyTest, FindEntities_RecursiveCountsMatchSubsets) {
     };
 
     std::vector<EntityPtr> root_ents(ents.begin(), ents.begin() + split);
-    const auto type_pred = [&](const EntityBase& e) {
+    // FindEntitiesの述語は識別子(IEntityIdentifier)を受ける
+    // (EntityBase&は暗黙変換されるためcount_inでも共用できる)
+    const auto type_pred = [&](const i_ent::IEntityIdentifier& e) {
         return e.GetType() == target_type;
     };
     const auto flag_pred = [&](const EntityBase& e) {

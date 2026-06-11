@@ -29,7 +29,6 @@
 #include <imgui_impl_opengl3.h>
 
 #include <igesio/entities/entity_base.h>
-#include <igesio/models/iges_data.h>
 #include <igesio/models/scene.h>
 #include <igesio/graphics/renderer.h>
 
@@ -40,9 +39,10 @@
 namespace igesio::graphics {
 
 /// @brief IGESデータを表示・編集する単一GUIクラス
-/// @note GLFWとImGuiを使用する. モデル(IgesData)の所有・読み込み、Sceneによる選択/
-///       編集、Assemblyツリーの操作までを一手に担う. 旧来の基底/派生の分割は廃し、
-///       本クラスのみで完結する(起動はiges_viewer.cppのmainが行う).
+/// @note GLFWとImGuiを使用する. ファイルの読み込み(IGES、およびSTL拡張有効時は
+///       STL)、Sceneによる選択/編集、Assemblyツリーの操作までを一手に担う.
+///       読み込んだファイルは固定のRoot直下の子Assemblyとして保持し、複数ファイル
+///       の同時表示(追加読込)に対応する(起動はiges_viewer.cppのmainが行う).
 class IgesViewerGUI {
  private:
     /// @brief ウィンドウ
@@ -51,9 +51,9 @@ class IgesViewerGUI {
     EntityRenderer renderer_;
     /// @brief セッション状態(root + 選択セット群 + ピックフィルタ)
     ///        を一元管理するオブジェクト
+    /// @note Rootは構築時に固定し、以後差し替えない. 読み込んだファイルは
+    ///       Root直下の子Assemblyとして追加・置き換えする.
     std::unique_ptr<models::Scene> scene_;
-    /// @brief 表示中のIGESモデル(rootをSceneと共有する)
-    models::IgesData iges_data_;
     /// @brief MSAA (マルチサンプリング) のサンプル数 (0で無効)
     int msaa_samples_ = 0;
 
@@ -92,12 +92,12 @@ class IgesViewerGUI {
 
     /// @brief エンティティタイプごとの(表示対象)エンティティリスト
     std::map<entities::EntityType,
-             std::vector<std::shared_ptr<entities::EntityBase>>> entities_;
+             std::vector<std::shared_ptr<entities::IEntityIdentifier>>> entities_;
     /// @brief エンティティタイプごとの表示フラグ
     std::map<entities::EntityType, bool> show_entity_;
     /// @brief 全エンティティを表示するフラグ
     bool show_all_ = true;
-    /// @brief 起動時に一度だけ読み込むIGESファイル
+    /// @brief 起動時に一度だけ読み込むファイル (IGES/STL)
     std::string initial_iges_file_;
 
  public:
@@ -105,7 +105,7 @@ class IgesViewerGUI {
     /// @param width ウィンドウ幅の初期値 [px]
     /// @param height ウィンドウ高さの初期値 [px]
     /// @param msaa_samples マルチサンプリングのサンプル数 (0で無効)
-    /// @param initial_iges_file 起動時に読み込むIGESファイル (空で無し)
+    /// @param initial_iges_file 起動時に読み込むファイル (空で無し)
     /// @throw std::runtime_error ウィンドウの初期化に失敗した場合
     explicit IgesViewerGUI(const int = kDefaultDisplayWidth,
                            const int = kDefaultDisplayHeight,
@@ -142,13 +142,35 @@ class IgesViewerGUI {
      * モデルの読み込み・同期
      */
 
-    /// @brief IGESファイルを読み込み、シーン・描画・キャッシュを再構築する
-    void LoadIgesFile(const std::string& filename);
+    /// @brief ファイルを拡張子で判別して読み込む (読込経路のエントリポイント)
+    /// @param filename 読み込むファイルのパス
+    /// @param replace trueの場合は読込済みモデルを全て置き換える
+    /// @note STL拡張有効時は.stl(大文字小文字無視)をSTLとして読み込み、
+    ///       それ以外はIGESとして読み込む
+    void LoadFile(const std::string& filename, bool replace);
+
+    /// @brief 指定された型のファイルを読み込み、Root直下の子Assemblyとして組み込む
+    /// @param filename 読み込むファイルのパス
+    /// @param replace trueの場合は読込済みモデルを全て置き換える
+    /// @param type_name ファイルの型を表す文字列 (例: "IGES", "STL")
+    /// @param loader ファイルの型に応じた読み込み関数 (LoadIgesFileやLoadStlFileなど)
+    void LoadFileByType(
+        const std::string& filename, bool replace,
+        const std::string& type_name,
+        const std::function<std::shared_ptr<models::Assembly>(const std::string&)>& loader);
+
+    /// @brief 読み込んだ子Assemblyをシーンへ組み込む (読込経路共通の後処理)
+    /// @param child 追加する子Assembly (Metadata().nameは設定済みであること)
+    /// @param replace trueの場合は既存の全エンティティ・子Assemblyを先に除去する
+    /// @note Rootは固定のまま、子Assemblyの追加/一掃のみを行う
+    ///       (SceneとRootの束ねを維持し、選択状態や色オーバーライドを保つ)
+    void AttachLoadedAssembly(const std::shared_ptr<models::Assembly>& child,
+                              bool replace);
 
     /// @brief 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
     /// @note 描画オブジェクト自体はレンダラがSceneツリーとの突き合わせで
     ///       遅延生成するため、ここではUI状態のみを構築する
-    void CacheEntityType(const std::shared_ptr<entities::EntityBase>& entity);
+    void CacheEntityType(const std::shared_ptr<entities::IEntityIdentifier>& entity);
 
     /// @brief 型別表示フラグ(show_entity_)をレンダラの表示フィルタへ反映する
     void ApplyDisplayFilter();
@@ -157,9 +179,6 @@ class IgesViewerGUI {
     /// @note 物体色はrootのColorOverrideとして設定し(個別ノード色は最近接優先で温存)、
     ///       材質は表示対象の面エンティティへ個別にSetMaterialPropertyする
     void ApplyColorScheme();
-
-    /// @brief 描画対象のシーンをモデルのrootへ束ね直す (選択はリセットされる)
-    void BindSceneRoot(std::shared_ptr<models::Assembly> root);
 
     /// @brief モデル(Assemblyツリー)編集後の同期処理
     /// @note 消えたIDを選択/hit座標と型別キャッシュ (UI用) から除去する.

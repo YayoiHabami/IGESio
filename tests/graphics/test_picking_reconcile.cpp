@@ -53,7 +53,7 @@ i_graph::Ray MakeRayThroughArc() {
 }
 
 /// @brief 指定レンダラで固定レイのピックを実行する
-std::vector<i_graph::EntityHit> Pick(const i_graph::EntityRenderer& renderer) {
+std::vector<i_graph::EntityHit> Pick(i_graph::EntityRenderer& renderer) {
     // スクリーン座標はヒット許容量のピクセル換算にのみ使われるため画面中央を渡す
     return renderer.PickEntities(MakeRayThroughArc(), 640.0, 360.0);
 }

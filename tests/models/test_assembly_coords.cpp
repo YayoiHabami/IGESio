@@ -161,7 +161,9 @@ class AssemblyCoordsTest : public ::testing::Test {
     static std::shared_ptr<i_ent::EntityBase> LoadedSurface() {
         auto surfaces = data_->Root().FindEntitiesByType(
                 i_ent::EntityType::kTrimmedSurface);
-        return surfaces.empty() ? nullptr : surfaces.front();
+        return surfaces.empty()
+                ? nullptr
+                : std::dynamic_pointer_cast<i_ent::EntityBase>(surfaces.front());
     }
 
     /// @brief パラメータ中央で点が得られる、トリムなしのISurfaceを返す
@@ -174,20 +176,26 @@ class AssemblyCoordsTest : public ::testing::Test {
             const auto r = surf->GetParameterRange();
             const double u = 0.5 * (r[0] + r[1]);
             const double v = 0.5 * (r[2] + r[3]);
-            if (surf->TryGetPointAt(u, v).has_value()) return e;
+            if (surf->TryGetPointAt(u, v).has_value()) {
+                return std::dynamic_pointer_cast<i_ent::EntityBase>(e);
+            }
         }
         return nullptr;
     }
 
     /// @brief ロード済みエンティティから、物理従属かつ幾何を持つメンバを返す
     static std::shared_ptr<i_ent::EntityBase> LoadedDependentGeometry() {
+        // 従属スイッチはDEステータス由来のため、EntityBaseへキャストして判定する
         auto found = data_->Root().FindEntities(
-                [](const i_ent::EntityBase& e) {
-                    return e.GetSubordinateEntitySwitch()
+                [](const i_ent::IEntityIdentifier& e) {
+                    const auto* eb = dynamic_cast<const i_ent::EntityBase*>(&e);
+                    return eb != nullptr && eb->GetSubordinateEntitySwitch()
                             == i_ent::SubordinateEntitySwitch::kPhysicallyDependent;
                 });
         for (const auto& e : found) {
-            if (std::dynamic_pointer_cast<const i_ent::IGeometry>(e)) return e;
+            if (std::dynamic_pointer_cast<const i_ent::IGeometry>(e)) {
+                return std::dynamic_pointer_cast<i_ent::EntityBase>(e);
+            }
         }
         return nullptr;
     }

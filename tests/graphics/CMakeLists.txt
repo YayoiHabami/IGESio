@@ -1,4 +1,8 @@
 set(TEST_SOURCES
+    test_graphics_registry.cpp
+    test_shader_registry.cpp
+    test_pick_registry.cpp
+    test_triangle_mesh_render.cpp
     test_renderer_smoke.cpp
     test_selection_pull.cpp
     test_composite_render.cpp
@@ -8,6 +12,7 @@ set(TEST_SOURCES
     test_override_pull.cpp
     test_surface_edge_render.cpp
     test_surface_mesh.cpp
+    test_mesh_staging.cpp
 )
 
 add_executable(test_graphics ${TEST_SOURCES})

@@ -386,6 +386,8 @@ TEST(ISurfaceTest, Area) {
         SCOPED_TRACE("Surface: " + surface.name);
         ASSERT_TRUE(surface.surface != nullptr)
             << "Surface object is null for surface: " << surface.name;
+        // 無限平面など全範囲面積が無限の曲面はスキップ (有限面積を前提とする検証)
+        if (!surface.surface->IsFinite()) continue;
 
         double area = -1.0;
         ASSERT_NO_THROW({
@@ -420,6 +422,8 @@ TEST(ISurfaceTest, AreaParameterized) {
         SCOPED_TRACE("Surface: " + surface.name);
         ASSERT_TRUE(surface.surface != nullptr)
             << "Surface object is null for surface: " << surface.name;
+        // 無限平面など全範囲面積が無限の曲面はスキップ (全範囲面積との一致を前提とする検証)
+        if (!surface.surface->IsFinite()) continue;
 
         // パラメータ範囲を取得
         auto param_range = surface.surface->GetParameterRange();

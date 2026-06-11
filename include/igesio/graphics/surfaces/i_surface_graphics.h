@@ -13,7 +13,6 @@
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_surface.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/graphics/core/surface_edge_buffer.h"
@@ -29,9 +28,8 @@ class ISurfaceGraphics
     /// @brief 面のEBO
     gl::Uint ebo_ = 0;
 
-    /// @brief 面の頂点・法線データ
-    /// @note 各列が {x, y, z, nx, ny, nz} の形式
-    MatrixXf vertices_;
+    /// @brief 面のinterleaved頂点列 (頂点あたり {x, y, z, nx, ny, nz, u, v})
+    std::vector<float> vertices_;
     /// @brief 面のインデックスデータ
     std::vector<gl::Uint> indices_;
     /// @brief 境界エッジ (パラメータ矩形の4アイソ辺) の線分バッファ
@@ -64,10 +62,10 @@ class ISurfaceGraphics
 
     /// @brief エンティティの描画を行う (シェーダー型で分岐)
     /// @note kSurfaceEdgeでは境界エッジを線描画し、それ以外は基底に委譲する
-    void Draw(gl::Uint shader, const ShaderType shader_type,
+    void Draw(gl::Uint shader, const ShaderId shader_id,
               const std::pair<float, float>& viewport,
               const DrawContext& ctx) const override {
-        if (shader_type == ShaderType::kSurfaceEdge) {
+        if (shader_id == ShaderId::kSurfaceEdge) {
             if (edge_buffer_.IsEmpty()) return;
             const bool highlighted = ctx.IsHighlighted(GetEntityID());
             const auto& color = highlighted
@@ -76,14 +74,16 @@ class ISurfaceGraphics
                                        color, GetLineWidth(), highlighted);
             return;
         }
-        EntityGraphics::Draw(shader, shader_type, viewport, ctx);
+        EntityGraphics::Draw(shader, shader_id, viewport, ctx);
     }
 
     /// @brief 全ての可能なシェーダータイプを取得する
-    /// @note 面シェーダーに加え、エッジがあればkSurfaceEdgeを含める
-    std::unordered_set<ShaderType> GetShaderTypes() const override {
-        auto types = EntityGraphics::GetShaderTypes();
-        if (!edge_buffer_.IsEmpty()) types.insert(ShaderType::kSurfaceEdge);
+    /// @note 面シェーダーに加え、境界エッジ用のkSurfaceEdgeを常に含める。
+    ///       描画バケットは同期前 (edge_buffer_未構築) のreconcile段で構築されるため、
+    ///       構築状態に依存させてはならない (実際に空ならDrawがIsEmptyで早期return)。
+    std::unordered_set<ShaderId> GetShaderIds() const override {
+        auto types = EntityGraphics::GetShaderIds();
+        types.insert(ShaderId::kSurfaceEdge);
         return types;
     }
 

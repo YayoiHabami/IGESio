@@ -71,7 +71,7 @@ Individual entity class documents are as follows. Currently, they include mathem
 ### graphics module
 
 - **[Rendering System Overview (ja)](graphics/overview.md)**
-    - Overall structure of the rendering system, the `ShaderType` enum, and the rendering flow
+    - Overall structure of the rendering system, the `ShaderId` identifier with its shader registry, and the rendering flow
 - **[Rendering System Class Reference (ja)](graphics/class_reference.md)**
     - Member listings of rendering-related classes such as `IEntityGraphics` / `EntityRenderer` / `Scene` integration
 

@@ -10,8 +10,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <utility>
 #include <vector>
+
+#include "igesio/graphics/core/i_entity_graphics.h"  // kInfiniteParamClamp
 
 
 
@@ -48,8 +51,9 @@ struct USampleRow {
 /// @param entity 対象の曲面
 /// @param u_div u方向の一様分割数
 /// @return uサンプル行のリスト (u昇順)
-std::vector<USampleRow> BuildUSampleRows(const ISurface& entity, const int u_div) {
-    const auto u_range = entity.GetURange();
+std::vector<USampleRow> BuildUSampleRows(const ISurface& entity,
+                                         const std::array<double, 2>& u_range,
+                                         const int u_div) {
     const double umin = u_range[0], umax = u_range[1];
 
     // 無限・退化範囲は従来通り一様サンプルのみ (折れ目挿入は行わない)
@@ -112,15 +116,15 @@ std::vector<USampleRow> BuildUSampleRows(const ISurface& entity, const int u_div
 }
 
 /// @brief 退化点(点は有効だが法線が取得できない)の法線を隣接頂点から補完する
-/// @param vertices 頂点・法線データ (8行N列; 行3-5が法線)
+/// @param normals 頂点法線 (3行N列)
 /// @param valid 各頂点の有効フラグ (点が取得できたか)
 /// @param has_normal 各頂点の法線取得フラグ
 /// @param n_rows uサンプル行数
 /// @param v_div v方向分割数
 /// @note apex(母線末端が軸上)等で法線が定義できない頂点の穴抜けを防ぐ
-void FillMissingNormals(MatrixXf& vertices, const MatrixXf& valid,
-                        const MatrixXf& has_normal, const int n_rows,
-                        const int v_div) {
+void FillMissingNormals(igesio::numerics::TriangleMeshf::Matrix3X& normals,
+                        const MatrixXf& valid, const MatrixXf& has_normal,
+                        const int n_rows, const int v_div) {
     const int stride = v_div + 1;
     const std::array<std::pair<int, int>, 4> offsets = {{
             {-1, 0}, {1, 0}, {0, -1}, {0, 1}}};
@@ -133,9 +137,7 @@ void FillMissingNormals(MatrixXf& vertices, const MatrixXf& valid,
                 if (ni < 0 || ni >= n_rows || nj < 0 || nj > v_div) continue;
                 if (has_normal(ni, nj) < 0.5f) continue;
                 const int dst = i * stride + j, src = ni * stride + nj;
-                vertices(3, dst) = vertices(3, src);
-                vertices(4, dst) = vertices(4, src);
-                vertices(5, dst) = vertices(5, src);
+                normals.col(dst) = normals.col(src);
                 break;
             }
         }
@@ -149,10 +151,10 @@ void FillMissingNormals(MatrixXf& vertices, const MatrixXf& valid,
 /// @param indices 生成したインデックスの格納先 (追記する)
 void BuildSurfaceIndices(const std::vector<USampleRow>& rows,
                          const MatrixXf& valid, const int v_div,
-                         std::vector<gl::Uint>& indices) {
+                         std::vector<std::uint32_t>& indices) {
     const int stride = v_div + 1;
     auto idx = [stride](int i, int j) {
-        return static_cast<gl::Uint>(i * stride + j);
+        return static_cast<std::uint32_t>(i * stride + j);
     };
     const int n_rows = static_cast<int>(rows.size());
     // 全頂点が有効 or 左上/右下の三角形が有効なら左上/右下の三角形を描画
@@ -204,17 +206,26 @@ GeneralSurfaceMesh BuildGeneralSurfaceMesh(
     GeneralSurfaceMesh mesh;
     mesh.v_div = v_div;
 
-    const auto u_range = surface.GetURange();
-    const auto v_range = surface.GetVRange();
+    auto u_range = surface.GetURange();
+    auto v_range = surface.GetVRange();
+    // 無限範囲はエッジ生成 (ComputeParametricSurfaceEdges) と同じ±kInfiniteParamClamp
+    // へクランプし、有限な可視メッシュを生成する (有限範囲はそのまま素通り)
+    if (std::isinf(u_range[0])) u_range[0] = -kInfiniteParamClamp;
+    if (std::isinf(u_range[1])) u_range[1] =  kInfiniteParamClamp;
+    if (std::isinf(v_range[0])) v_range[0] = -kInfiniteParamClamp;
+    if (std::isinf(v_range[1])) v_range[1] =  kInfiniteParamClamp;
 
     // uサンプル行 (折れ目二重化済み) を構築する
-    const auto rows = BuildUSampleRows(surface, u_div);
+    const auto rows = BuildUSampleRows(surface, u_range, u_div);
     const int n_rows = static_cast<int>(rows.size());
     mesh.u_row_count = n_rows;
 
     // 頂点・法線データとインデックスデータの初期化
-    mesh.vertices.resize(8, n_rows * (v_div + 1));
-    mesh.indices.reserve(n_rows * v_div * 6);
+    const int n_cols = n_rows * (v_div + 1);
+    mesh.mesh.positions.resize(3, n_cols);
+    mesh.mesh.normals.resize(3, n_cols);
+    mesh.mesh.uvs.resize(2, n_cols);
+    mesh.mesh.indices.reserve(n_rows * v_div * 6);
     // 各頂点が有効か (点が取得できたか) と、法線が取得できたか
     // NOTE: IGESioのMatrixがbool型をサポートしていないため、float型で代用
     MatrixXf is_vertex_valid(n_rows, v_div + 1);
@@ -245,21 +256,22 @@ GeneralSurfaceMesh BuildGeneralSurfaceMesh(
                 }
             }
             const int col = i * (v_div + 1) + j;
-            mesh.vertices.block<3, 1>(0, col) = pos.cast<float>();
-            mesh.vertices.block<3, 1>(3, col) = normal.cast<float>();
+            mesh.mesh.positions.col(col) = pos.cast<float>();
+            mesh.mesh.normals.col(col) = normal.cast<float>();
             // 0-1に正規化した(u, v)をテクスチャ座標として設定
-            mesh.vertices(6, col) = (u_span != 0.0)
+            mesh.mesh.uvs(0, col) = (u_span != 0.0)
                     ? static_cast<float>((rows[i].u - u_range[0]) / u_span) : 0.0f;
-            mesh.vertices(7, col) = (v_span != 0.0)
+            mesh.mesh.uvs(1, col) = (v_span != 0.0)
                     ? static_cast<float>((v - v_range[0]) / v_span) : 0.0f;
         }
     }
 
     // 退化点 (apex等) の法線を隣接頂点から補完し、穴の発生を防ぐ
-    FillMissingNormals(mesh.vertices, is_vertex_valid, has_normal, n_rows, v_div);
+    FillMissingNormals(mesh.mesh.normals, is_vertex_valid, has_normal,
+                       n_rows, v_div);
 
     // インデックスデータを生成
-    BuildSurfaceIndices(rows, is_vertex_valid, v_div, mesh.indices);
+    BuildSurfaceIndices(rows, is_vertex_valid, v_div, mesh.mesh.indices);
     return mesh;
 }
 
