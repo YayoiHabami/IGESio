@@ -8,6 +8,7 @@
 #ifndef IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 #define IGESIO_GRAPHICS_CORE_I_ENTITY_GRAPHICS_H_
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -131,6 +132,24 @@ struct SelectionSamples {
     /// @brief polylinesが閉じた境界ループか（点内外判定に利用可能か）
     /// @note 分割が起きた場合は閉ループ性が保証されないためfalseとする
     bool polylines_closed = false;
+
+    /// @brief 線分群の共有頂点プール (ワールド座標)
+    /// @note メッシュのエッジのように多数の線分が頂点を共有する場合用.
+    ///       判定側は各頂点を1回だけ射影すればよく、線分ごとの点列
+    ///       (polylines) より大幅に軽い. 内包判定ではpointsと同様に
+    ///       「全点が矩形内」の対象になる (線分に属さない頂点も含む)
+    std::vector<Vector3d> segment_vertices;
+    /// @brief segment_verticesへのインデックスペア (各ペアが1線分)
+    /// @note 交差判定で線分として評価される. 折れ線と異なり連続性を
+    ///       仮定しないため、エッジ集合をそのまま表現できる
+    std::vector<std::array<std::uint32_t, 2>> segments;
+
+    /// @brief サンプルが空か
+    /// @note 範囲選択の早期リジェクトに利用可能
+    bool IsEmpty() const {
+        return points.empty() && polylines.empty() &&
+               segment_vertices.empty() && segments.empty();
+    }
 };
 
 /// @brief EntityGraphicsの型消去クラス

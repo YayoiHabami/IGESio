@@ -31,7 +31,8 @@ namespace igesio::entities {
 /// @note メッシュはCPU正準値の方針に従い倍精度 (TriangleMeshd) で保持する.
 ///       GPUへは描画側が転送時に単精度へ変換する.
 /// @note 変換行列は持たない (恒等). 配置はAssemblyの大域変換で行う.
-/// @note ピッキング (レイ交差) は現状非対応 (将来課題).
+/// @note ピッキング (レイ交差) と範囲選択は、graphics側のPickRegistryの
+///       組み込みseedにより対応する (IGESIO_ENABLE_GRAPHICS時).
 class MeshEntity : public NonIgesEntityBase, public IGeometry {
  public:
     /// @brief コンストラクタ

@@ -32,8 +32,9 @@ namespace igesio::graphics {
 /// @note エッジ描画 (kSurfaceEdge) に対応する. 表示モードに応じて
 ///       kWireFrameでは全ユニークエッジ、kShadedでは特徴エッジ
 ///       (境界・非多様体・折り目) を線分として描画する.
-/// @note ピッキング (レイ交差) は現状非対応 (EntityGraphicsの既定動作.
-///       MeshEntityはICurve/ISurfaceでないためCanIntersect=false).
+/// @note ピッキング (レイ交差) と範囲選択はPickRegistryの組み込みseed
+///       (MeshEntity→メッシュ用ピック関数) が担うため、本クラスでの
+///       オーバーライドは不要 (EntityGraphicsの既定実装がレジストリを引く).
 class TriangleMeshGraphics
         : public EntityGraphics<entities::MeshEntity, true> {
  public:

@@ -11,6 +11,7 @@
  *       - `RecomputeNormals`
  *       - `ComputeFaceNormals`
  *       - `ExtractMeshEdges` (全エッジ/特徴エッジの分類)
+ *       - `ExtractUniqueEdges` (分類なしの軽量版)
  *       - `CastScalar`
  * @note TODO: 大規模メッシュの性能は対象外 (機能検証のみ).
  */
@@ -359,6 +360,52 @@ TEST(TriangleMeshExtractEdgesTest, EmptyMeshYieldsNoEdges) {
     const auto edges = i_num::ExtractMeshEdges(TriangleMeshd{}, kCos30Deg);
     EXPECT_TRUE(edges.all_edges.empty());
     EXPECT_TRUE(edges.feature_edges.empty());
+}
+
+
+
+/**
+ * ExtractUniqueEdges
+ */
+
+// 正常系: 共有辺を持つ平面正方形は5本のユニークエッジ (4辺+対角線) を返す
+TEST(TriangleMeshExtractUniqueEdgesTest, FlatQuadHasFiveUniqueEdges) {
+    const auto edges = i_num::ExtractUniqueEdges(MakeUnitQuad());
+    ASSERT_EQ(edges.size(), 5u);
+    EXPECT_TRUE(ContainsEdge(edges, 0, 1));
+    EXPECT_TRUE(ContainsEdge(edges, 1, 2));
+    EXPECT_TRUE(ContainsEdge(edges, 2, 3));
+    EXPECT_TRUE(ContainsEdge(edges, 0, 3));
+    EXPECT_TRUE(ContainsEdge(edges, 0, 2));  // 対角線 (共有辺は1本に集約)
+}
+
+// 正常系: ExtractMeshEdgesのall_edgesと同じ集合・同じ順序を返す
+TEST(TriangleMeshExtractUniqueEdgesTest, MatchesExtractMeshEdgesAllEdges) {
+    const auto mesh = MakeTetrahedron();
+    const auto unique_edges = i_num::ExtractUniqueEdges(mesh);
+    const auto classified = i_num::ExtractMeshEdges(mesh, kCos30Deg);
+    // 両者とも (小頂点, 大頂点) の辞書順で列挙するため完全一致する
+    EXPECT_EQ(unique_edges, classified.all_edges);
+    EXPECT_EQ(unique_edges.size(), 6u);  // 四面体のエッジ数
+}
+
+// 正常系 (退化): 同一頂点を結ぶ長さゼロのエッジは列挙されない
+TEST(TriangleMeshExtractUniqueEdgesTest, ZeroLengthEdgeIsExcluded) {
+    TriangleMeshd mesh;
+    mesh.positions.resize(3, 2);
+    mesh.positions << 0.0, 1.0,
+                      0.0, 0.0,
+                      0.0, 0.0;
+    mesh.indices = {0, 0, 1};  // 頂点0を重複参照する退化三角形
+
+    const auto edges = i_num::ExtractUniqueEdges(mesh);
+    ASSERT_EQ(edges.size(), 1u);  // (0,1)のみ ((0,0)は除外)
+    EXPECT_TRUE(ContainsEdge(edges, 0, 1));
+}
+
+// 正常系 (退化): 空メッシュは空のエッジ集合を返す
+TEST(TriangleMeshExtractUniqueEdgesTest, EmptyMeshYieldsNoEdges) {
+    EXPECT_TRUE(i_num::ExtractUniqueEdges(TriangleMeshd{}).empty());
 }
 
 

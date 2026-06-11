@@ -200,6 +200,13 @@ bool ContainedInRect(const i_graph::SelectionSamples& s,
         if (!sp || !PointInRect((*sp)[0], (*sp)[1], rect)) return false;
         any = true;
     }
+    // 線分頂点プール: 線分の形状は端点の凸結合のため、頂点のみで正確に
+    // 内包判定できる (線分自体の評価は不要)
+    for (const auto& v : s.segment_vertices) {
+        const auto sp = ClipToPixel(i_graph::WorldToClip(vp, v), w, h);
+        if (!sp || !PointInRect((*sp)[0], (*sp)[1], rect)) return false;
+        any = true;
+    }
     for (const auto& polyline : s.polylines) {
         for (const auto& v : polyline) {
             const auto sp = ClipToPixel(i_graph::WorldToClip(vp, v), w, h);
@@ -218,6 +225,29 @@ bool CrossesRect(const i_graph::SelectionSamples& s,
     for (const auto& pt : s.points) {
         const auto sp = ClipToPixel(i_graph::WorldToClip(vp, pt), w, h);
         if (sp && PointInRect((*sp)[0], (*sp)[1], rect)) return true;
+    }
+    // 線分頂点プール: 各頂点を1回だけ射影してキャッシュする. 射影中に
+    // 矩形内の頂点が見つかれば即座にヒット (実際のヒットの大半はここで決まる)
+    if (!s.segments.empty() || !s.segment_vertices.empty()) {
+        std::vector<igesio::Vector4d> clips;
+        clips.reserve(s.segment_vertices.size());
+        for (const auto& v : s.segment_vertices) {
+            clips.push_back(i_graph::WorldToClip(vp, v));
+            const auto sp = ClipToPixel(clips.back(), w, h);
+            if (sp && PointInRect((*sp)[0], (*sp)[1], rect)) return true;
+        }
+        // 全頂点が矩形外の場合のみ、線分が矩形をかすめるケースを判定する
+        for (const auto& seg : s.segments) {
+            // 範囲外インデックスは無視する (ユーザー定義サンプラへの自衛)
+            if (seg[0] >= clips.size() || seg[1] >= clips.size()) continue;
+            const auto projected = ClipSegmentNearAndProject(
+                    clips[seg[0]], clips[seg[1]], w, h);
+            if (!projected) continue;
+            const auto& [pa, pb] = *projected;
+            if (SegmentIntersectsRect(pa[0], pa[1], pb[0], pb[1], rect)) {
+                return true;
+            }
+        }
     }
     // 折れ線（各セグメントをnear面でクリップして判定する）
     for (const auto& polyline : s.polylines) {
@@ -948,7 +978,7 @@ std::vector<igesio::ObjectID> EntityRenderer::PickEntitiesInRect(
         }
 
         const auto samples = object->GetSelectionSamples(sp);
-        if (samples.polylines.empty() && samples.points.empty()) continue;
+        if (samples.IsEmpty()) continue;
 
         const bool hit = (mode == BoxSelectionMode::kContained)
                 ? ContainedInRect(samples, rect, vp, w, h)

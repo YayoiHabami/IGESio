@@ -8,6 +8,7 @@ set (TEST_SOURCES
     test_optimization.cpp
     test_polygon.cpp
     test_triangle_mesh.cpp
+    test_mesh_line_intersection.cpp
 )
 
 add_executable(test_numerics ${TEST_SOURCES})

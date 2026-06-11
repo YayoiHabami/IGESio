@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <typeindex>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -27,6 +28,7 @@
 #include "igesio/entities/curves/algorithms/curve_line_intersection.h"
 #include "igesio/entities/surfaces/algorithms/surface_line_intersection.h"
 #include "igesio/graphics/core/i_entity_graphics.h"
+#include "igesio/graphics/core/pick_registry.h"
 
 
 
@@ -486,9 +488,15 @@ class EntityGraphics : public IEntityGraphics {
      */
 
     /// @brief レイとの交差判定が可能か
-    /// @return entity_がISurfaceまたはICurveを参照する場合はtrue
+    /// @return PickRegistryにレイ交差関数の登録がある場合、または
+    ///         entity_がISurfaceまたはICurveを参照する場合はtrue
     bool CanIntersect() const override {
         if (!entity_) return false;
+        // ①PickRegistry (動的型の完全一致) — レイ交差関数の登録があれば可能
+        if (PickRegistry::Find(std::type_index(typeid(*entity_))).intersect) {
+            return true;
+        }
+        // ②能力ディスパッチ (ICurve/ISurface)
         const auto* p = entity_.get();
         return dynamic_cast<const entities::ISurface*>(p) != nullptr
             || dynamic_cast<const entities::ICurve*>(p) != nullptr;
@@ -498,11 +506,23 @@ class EntityGraphics : public IEntityGraphics {
     /// @param ray ワールド空間のレイ (kRayとして扱う)
     /// @param params 探索制御パラメータ
     /// @return 交差点のリスト (distance昇順). 交差判定不可の場合は空リスト
+    /// @note ルックアップ順は①PickRegistry (動的型の完全一致) →
+    ///       ②能力ディスパッチ (ISurface/ICurve). 本関数をオーバーライドする
+    ///       描画クラスにはレジストリは適用されない
     std::vector<RayHit> Intersect(
             const Ray& ray,
             const RayIntersectionParams& params) const override {
         if (!entity_) return {};
 
+        // ①PickRegistry (動的型の完全一致). 登録関数はworld_transform_
+        //    (親空間→ワールド) を受け取り、ワールド座標のヒットを返す規約
+        if (const auto picks =
+                    PickRegistry::Find(std::type_index(typeid(*entity_)));
+            picks.intersect) {
+            return picks.intersect(*entity_, world_transform_, ray, params);
+        }
+
+        // ②能力ディスパッチ (ISurface/ICurve)
         // ray.directionが単位ベクトルのため、線パラメータが原点からの距離に等しい
         const Vector3d p1 = ray.origin + ray.direction;
         constexpr auto kRay = numerics::BoundingBox::DirectionType::kRay;
@@ -543,10 +563,24 @@ class EntityGraphics : public IEntityGraphics {
 
     /// @brief 範囲選択用にエンティティをサンプリングした点列を返す
     /// @param params サンプリング制御パラメータ
-    /// @return ワールド座標のサンプル. ISurface/ICurveでなければ空
+    /// @return ワールド座標のサンプル. 判定不可なら空
+    /// @note ルックアップ順は①PickRegistry (動的型の完全一致) → ②子集約 →
+    ///       ③能力ディスパッチ (ISurface/ICurve). 本関数をオーバーライドする
+    ///       描画クラスにはレジストリは適用されない
     SelectionSamples GetSelectionSamples(
             const SelectionSampleParams& params) const override {
-        // 複合ノード: 子要素のサンプルを集約する (子はSetWorldTransform伝播済みの
+        // ①PickRegistry (動的型の完全一致). 子集約・能力ディスパッチより
+        //    優先する (CreateEntityGraphicsのレジストリ最優先と同じ規則)
+        if (entity_) {
+            if (const auto picks =
+                        PickRegistry::Find(std::type_index(typeid(*entity_)));
+                picks.selection_samples) {
+                return picks.selection_samples(*entity_, world_transform_,
+                                               params);
+            }
+        }
+
+        // ②複合ノード: 子要素のサンプルを集約する (子はSetWorldTransform伝播済みの
         // ためワールド座標で得られる. ここでworld_transform_を再適用しないこと)
         if (!child_graphics_.empty()) {
             SelectionSamples result;

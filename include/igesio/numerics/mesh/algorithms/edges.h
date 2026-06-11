@@ -96,6 +96,45 @@ MeshEdgeSet ExtractMeshEdges(const TriangleMeshT<Scalar>& mesh,
     return result;
 }
 
+/// @brief メッシュの全ユニークエッジを抽出する (分類なしの軽量版)
+/// @param mesh 対象のメッシュ (Validateを通る整合したメッシュであること)
+/// @return 全ユニークエッジ (各ペアは昇順; [0] < [1]).
+///         ExtractMeshEdgesのall_edgesと同じ集合
+/// @note 特徴エッジの分類 (面法線計算・隣接数の評価) を行わないため、
+///       エッジ集合だけが必要な用途 (範囲選択サンプリング等) では
+///       ExtractMeshEdgesより大幅に軽い. エッジを64bit整数へパックして
+///       PODソートでユニーク化する
+/// @note 同一頂点を結ぶ長さゼロのエッジ (退化三角形の重複インデックス) は
+///       列挙から除外する
+template <typename Scalar>
+std::vector<std::array<std::uint32_t, 2>> ExtractUniqueEdges(
+        const TriangleMeshT<Scalar>& mesh) {
+    // (小頂点番号 << 32) | 大頂点番号 へパックして全エッジを列挙する
+    std::vector<std::uint64_t> packed;
+    packed.reserve(mesh.indices.size());
+    const auto triangle_count = mesh.TriangleCount();
+    for (std::size_t t = 0; t < triangle_count; ++t) {
+        for (int k = 0; k < 3; ++k) {
+            const auto a = mesh.indices[3 * t + k];
+            const auto b = mesh.indices[3 * t + (k + 1) % 3];
+            if (a == b) continue;  // 長さゼロのエッジは除外
+            packed.push_back(
+                    (static_cast<std::uint64_t>(std::min(a, b)) << 32) |
+                    static_cast<std::uint64_t>(std::max(a, b)));
+        }
+    }
+    std::sort(packed.begin(), packed.end());
+    packed.erase(std::unique(packed.begin(), packed.end()), packed.end());
+
+    std::vector<std::array<std::uint32_t, 2>> edges;
+    edges.reserve(packed.size());
+    for (const auto key : packed) {
+        edges.push_back({static_cast<std::uint32_t>(key >> 32),
+                         static_cast<std::uint32_t>(key & 0xffffffffULL)});
+    }
+    return edges;
+}
+
 }  // namespace igesio::numerics
 
 #endif  // IGESIO_NUMERICS_MESH_ALGORITHMS_EDGES_H_

@@ -4,6 +4,7 @@ add_library(igesio_graphics STATIC
     core/texture.cpp
     core/i_entity_graphics.cpp
     core/open_gl.cpp
+    core/pick_registry.cpp
     core/ray.cpp
     core/surface_edge_buffer.cpp
 
