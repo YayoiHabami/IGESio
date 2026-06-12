@@ -8,11 +8,13 @@
  *       細かい検査表示の追加エンティティ群 (座標系群等) をまとめる.
  * @note 描画クラスはgraphics有効時にのみ提供される. 描画を行う場合は以下を呼ぶこと:
  *       - `RegisterCoordinateFrameGroupGraphics()`: CoordinateFrameGroup描画用
+ *       - `RegisterInstancedEntityGraphics()`: InstancedEntity (複製表示) 描画用
  */
 #ifndef IGESIO_EXTENSIONS_INSPECTION_H_
 #define IGESIO_EXTENSIONS_INSPECTION_H_
 
 #include "igesio/extensions/inspection/coordinate_frame_group.h"
+#include "igesio/extensions/inspection/instanced_entity.h"
 
 
 

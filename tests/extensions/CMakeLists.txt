@@ -15,6 +15,7 @@ endif()
 if(IGESIO_ENABLE_INSPECTION_EXTENSION)
     list(APPEND TEST_SOURCES
         inspection/test_coordinate_frame_group.cpp
+        inspection/test_instanced_entity.cpp
     )
 endif()
 
