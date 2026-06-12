@@ -19,12 +19,29 @@ namespace {
 using CopiousDataGraphics = igesio::graphics::CopiousDataGraphics;
 using CDType = igesio::entities::CopiousDataType;
 
+/// @brief Copious Dataのフォームに応じた描画シェーダーIDを選ぶ
+/// @param entity 対象エンティティ (nullptr可)
+/// @return 点列(form 1-3)はkPoint、折れ線(form 11-13)等はkCopiousData
+/// @note 点列はGL_POINTSで描画するため、lines入力の太線化GSを持つkCopiousData
+///       (折れ線用)とはプリミティブが不一致になり何も描画されない. GSを持たない
+///       点シェーダー(kPoint; 実体は汎用曲線のVS+FSと同一)へ振り分ける.
+igesio::graphics::ShaderId PickShaderId(
+        const std::shared_ptr<const igesio::entities::CopiousDataBase>& entity) {
+    using igesio::graphics::ShaderId;
+    if (!entity) return ShaderId::kCopiousData;
+    const auto type = entity->GetDataType();
+    if (CDType::kPlanarPoints <= type && type <= CDType::kSextuples) {
+        return ShaderId::kPoint;
+    }
+    return ShaderId::kCopiousData;
+}
+
 }  // namespace
 
 CopiousDataGraphics::CopiousDataGraphics(
         const std::shared_ptr<const entities::CopiousDataBase>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderId::kCopiousData, true) {
+        : EntityGraphics(entity, gl, PickShaderId(entity), true) {
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 

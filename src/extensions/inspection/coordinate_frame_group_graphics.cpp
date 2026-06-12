@@ -61,35 +61,11 @@ void main() {
 }
 )";
 
-/// @brief 軸描画用カスタムシェーダーのジオメトリシェーダー
-/// @note 各線分をスクリーン空間でuLineWidth [px] 幅のクアッド (三角形ストリップ)
-///       へ展開する. Core Profileでは glLineWidth による太線が無効なため、
-///       深度に依らずpx幅一定の太線をここで生成する.
-const char* kFrameLineGeom = R"(#version 430 core
-layout (lines) in;
-layout (triangle_strip, max_vertices = 4) out;
-uniform vec2 viewportSize;
-uniform float uLineWidth;
-void main() {
-    vec4 p0 = gl_in[0].gl_Position;
-    vec4 p1 = gl_in[1].gl_Position;
-    vec2 ndc0 = p0.xy / p0.w;
-    vec2 ndc1 = p1.xy / p1.w;
-    // スクリーン空間(px)での進行方向と法線
-    vec2 dirPx = (ndc1 - ndc0) * viewportSize;
-    float len = length(dirPx);
-    vec2 dir = (len > 0.0) ? dirPx / len : vec2(1.0, 0.0);
-    vec2 normalPx = vec2(-dir.y, dir.x);
-    // 半幅(uLineWidth*0.5)px を NDC へ. NDC[-1,1]=viewport px のため係数2/viewport.
-    // → (uLineWidth*0.5)*2/viewport = uLineWidth/viewport
-    vec2 offset = normalPx * uLineWidth / viewportSize;
-    gl_Position = vec4((ndc0 + offset) * p0.w, p0.z, p0.w); EmitVertex();
-    gl_Position = vec4((ndc0 - offset) * p0.w, p0.z, p0.w); EmitVertex();
-    gl_Position = vec4((ndc1 + offset) * p1.w, p1.z, p1.w); EmitVertex();
-    gl_Position = vec4((ndc1 - offset) * p1.w, p1.z, p1.w); EmitVertex();
-    EndPrimitive();
-}
-)";
+/// @brief 太線化ジオメトリシェーダーの相対パス
+/// @note 組み込み線描画系と共有する太線化GS (glsl/curves/wide_line.geom).
+///       uniformは viewportSize (レンダラが設定) と lineWidth (SurfaceEdgeBuffer
+///       の DrawWithState が設定). レンダラがコンパイル時にファイル内容へ展開する.
+const char* kFrameLineGeom = "glsl/curves/wide_line.geom";
 
 /// @brief 点描画用カスタムシェーダーのShaderIdを取得する (未登録なら登録する)
 /// @return CamFramePointシェーダーのShaderId
@@ -177,17 +153,14 @@ CoordinateFrameGroupGraphics::~CoordinateFrameGroupGraphics() {
 
 void CoordinateFrameGroupGraphics::Draw(
         gl::Uint shader, const graphics::ShaderId shader_id,
-        const std::pair<float, float>& viewport,
+        [[maybe_unused]] const std::pair<float, float>& viewport,
         [[maybe_unused]] const graphics::DrawContext& ctx) const {
     // 軸 (色分けした3本の太線) をCamFrameLineプログラムで描画する
     if (shader_id == GetFrameLineShaderId()) {
         const igesio::Matrix4f model = GetWorldTransform();
         const double width = GetLineWidth();
-        // GSで太線(px幅)を生成するため、画素サイズと線幅を渡す
-        gl_->Uniform2f(gl_->GetUniformLocation(shader, "viewportSize"),
-                       viewport.first, viewport.second);
-        gl_->Uniform1f(gl_->GetUniformLocation(shader, "uLineWidth"),
-                       static_cast<float>(width));
+        // 太線化はGS (kFrameLineGeom) が行う. viewportSizeはレンダラが、線幅[px]は
+        // 各DrawWithState (引数widthからlineWidth uniform) が設定する.
         if (!x_axis_buffer_.IsEmpty()) {
             x_axis_buffer_.DrawWithState(shader, model, entity_->XColor(), width);
         }

@@ -829,7 +829,10 @@ class EntityGraphics : public IEntityGraphics {
     /// @note model(変換)・mainColor(選択ハイライト or エンティティ色)・線幅を設定し、
     ///       has_surfaces時は材質/テクスチャを設定する. 論理状態は保持しない.
     void ApplyRenderState(gl::Uint shader, const DrawContext& ctx) const {
-        gl_->LineWidth(GetLineWidth());
+        // Core Profileでは glLineWidth が無効なため、線幅[px]を太線化GSへ渡す
+        // (viewportSizeはレンダラが設定; 当該uniform非保持シェーダーでは無害に無視).
+        gl_->Uniform1f(gl_->GetUniformLocation(shader, "lineWidth"),
+                       static_cast<float>(GetLineWidth()));
 
         // 全シェーダーで共通のuniform変数を設定
         igesio::Matrix4f model = GetWorldTransform();

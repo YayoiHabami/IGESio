@@ -63,7 +63,10 @@ void SurfaceEdgeBuffer::DrawWithState(
         const bool highlighted) const {
     if (vertex_count_ == 0 || !gl_) return;
 
-    gl_->LineWidth(static_cast<gl::Float>(line_width));
+    // Core Profileでは glLineWidth が無効なため、線幅[px]を太線化GSへ渡す
+    // (viewportSizeはレンダラが設定; bind中のシェーダーがGS非保持なら無害に無視).
+    gl_->Uniform1f(gl_->GetUniformLocation(shader, "lineWidth"),
+                   static_cast<gl::Float>(line_width));
     gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
                           1, gl::kFalse, model.data());
     gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),

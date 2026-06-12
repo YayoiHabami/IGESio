@@ -19,6 +19,13 @@
 
 namespace igesio::graphics::shaders {
 
+/// @brief 太線化ジオメトリシェーダーの相対パス
+/// @note Core Profileでは glLineWidth が無効なため、線分をスクリーン空間で
+///       lineWidth [px] 幅のクアッドへ展開して太線を生成する. 線描画系の
+///       シェーダー (汎用曲線/楕円/円弧/NURBS曲線/サーフェスエッジ等) で共有する.
+///       uniformは viewportSize (レンダラが設定) と lineWidth (描画クラスが設定).
+constexpr const char* kWideLineGeometry = "glsl/curves/wide_line.geom";
+
 /// @brief kGeneralCurve用のシェーダー
 constexpr std::array<const char*, 2> kGeneralCurveShader = {
     "glsl/curves/general_curve.vert",
@@ -87,8 +94,8 @@ void main() {
 #version 400 core
 // input: start point
 layout (points) in;
-// output: line segments
-layout (line_strip, max_vertices = 4) out;
+// output: 太線化したクアッド (各線分を三角形ストリップへ展開)
+layout (triangle_strip, max_vertices = 8) out;
 
 in VS_OUT {
     vec3 pos;
@@ -100,35 +107,43 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform float farLength;
 uniform int lineType;
+// 太線化用 (Core Profileでは glLineWidth が無効なためGSで幅を持たせる)
+uniform vec2 viewportSize;  // 描画領域のサイズ [px] (レンダラが設定)
+uniform float lineWidth;    // 線幅 [px] (描画クラスが設定)
+
+// クリップ空間の2点を結ぶ線分を lineWidth [px] 幅のクアッドへ展開する.
+// 詳細は glsl/curves/wide_line.geom と同一の手法.
+void emitWideSegment(vec4 a, vec4 b) {
+    vec2 ndcA = a.xy / a.w;
+    vec2 ndcB = b.xy / b.w;
+    vec2 dirPx = (ndcB - ndcA) * viewportSize;
+    float len = length(dirPx);
+    if (len < 1e-6) return;  // 退化線分は描かない
+    vec2 normalPx = vec2(-dirPx.y, dirPx.x) / len;
+    vec2 offset = normalPx * lineWidth / viewportSize;
+    gl_Position = vec4((ndcA + offset) * a.w, a.z, a.w); EmitVertex();
+    gl_Position = vec4((ndcA - offset) * a.w, a.z, a.w); EmitVertex();
+    gl_Position = vec4((ndcB + offset) * b.w, b.z, b.w); EmitVertex();
+    gl_Position = vec4((ndcB - offset) * b.w, b.z, b.w); EmitVertex();
+    EndPrimitive();
+}
 
 void main() {
     // Apply model transformation
     vec3 startPos = (model * vec4(gs_in[0].pos, 1.0)).xyz;
     vec3 startDir = mat3(model) * gs_in[0].dir;
+    mat4 vp = projection * view;
 
     if (lineType == 1) {  // kRay
         vec3 endPos = startPos + startDir * farLength;
-        gl_Position = projection * view * vec4(startPos, 1.0);
-        EmitVertex();
-        gl_Position = projection * view * vec4(endPos, 1.0);
-        EmitVertex();
-        EndPrimitive();
+        emitWideSegment(vp * vec4(startPos, 1.0), vp * vec4(endPos, 1.0));
     } else if (lineType == 2) {  // kLine
         // Semi-infinite line (forward direction)
         vec3 endPos1 = startPos + startDir * farLength;
-        gl_Position = projection * view * vec4(startPos, 1.0);
-        EmitVertex();
-        gl_Position = projection * view * vec4(endPos1, 1.0);
-        EmitVertex();
-        EndPrimitive();  // first line segment completed
-
+        emitWideSegment(vp * vec4(startPos, 1.0), vp * vec4(endPos1, 1.0));
         // Semi-infinite line (backward direction)
         vec3 endPos2 = startPos - startDir * farLength;
-        gl_Position = projection * view * vec4(startPos, 1.0);
-        EmitVertex();
-        gl_Position = projection * view * vec4(endPos2, 1.0);
-        EmitVertex();
-        EndPrimitive();  // second line segment completed
+        emitWideSegment(vp * vec4(startPos, 1.0), vp * vec4(endPos2, 1.0));
     }
 }
 )",
@@ -161,28 +176,39 @@ constexpr std::array<const char*, 4> kRationalBSplineCurveShader = {
 ///       kSurfaceEdgeのみ表示モードで取捨される (kNoEdgeで非表示)
 inline std::vector<std::pair<ShaderId, ShaderInfo>> GetBuiltinCurveShaderInfos() {
     constexpr auto kAlways = ShaderDrawCategory::kAlways;
+    // 線描画系シェーダーには太線化GS (kWideLineGeometry) を挿入する.
+    // 2要素 (vert/frag) は ShaderCode(vert, frag, geom)、4要素 (vert/tcs/tes/frag)
+    // は ShaderCode(vert, frag, geom, tcs, tes) の順で構築する.
     return {
         {ShaderId::kGeneralCurve,           // Type ---
-         {"GeneralCurve", ShaderCode(kGeneralCurveShader), false, kAlways}},
+         {"GeneralCurve", ShaderCode(kGeneralCurveShader[0], kGeneralCurveShader[1],
+          kWideLineGeometry), false, kAlways}},
         {ShaderId::kCircularArc,            // Type 100
-         {"CircularArc", ShaderCode(kCircularArcShader), false, kAlways}},
+         {"CircularArc", ShaderCode(kCircularArcShader[0], kCircularArcShader[3],
+          kWideLineGeometry, kCircularArcShader[1], kCircularArcShader[2]),
+          false, kAlways}},
         {ShaderId::kEllipse,                // Type 104, Form 1
-         {"Ellipse", ShaderCode(kEllipseShader), false, kAlways}},
+         {"Ellipse", ShaderCode(kEllipseShader[0], kEllipseShader[1],
+          kWideLineGeometry), false, kAlways}},
         {ShaderId::kCopiousData,            // Type 106, Forms 1-13
-         {"CopiousData", ShaderCode(kCopiousDataShader), false, kAlways}},
+         {"CopiousData", ShaderCode(kCopiousDataShader[0], kCopiousDataShader[1],
+          kWideLineGeometry), false, kAlways}},
         {ShaderId::kSegment,                // Type 110, Form 0
-         {"Segment", ShaderCode(kSegmentShader), false, kAlways}},
+         {"Segment", ShaderCode(kSegmentShader[0], kSegmentShader[1],
+          kWideLineGeometry), false, kAlways}},
         {ShaderId::kLine,                   // Type 110, Forms 1-2
          {"Line", ShaderCode(kLineShader), false, kAlways}},
         {ShaderId::kPoint,                  // Type 116
          {"Point", ShaderCode(kPointShader), false, kAlways}},
         {ShaderId::kRationalBSplineCurve,   // Type 126
-         {"RationalBSplineCurve", ShaderCode(kRationalBSplineCurveShader),
+         {"RationalBSplineCurve", ShaderCode(kRationalBSplineCurveShader[0],
+          kRationalBSplineCurveShader[3], kWideLineGeometry,
+          kRationalBSplineCurveShader[1], kRationalBSplineCurveShader[2]),
           false, kAlways}},
         // サーフェス境界エッジ (汎用曲線シェーダーを再利用)
         {ShaderId::kSurfaceEdge,
-         {"SurfaceEdge", ShaderCode(kGeneralCurveShader), false,
-          ShaderDrawCategory::kSurfaceEdge}},
+         {"SurfaceEdge", ShaderCode(kGeneralCurveShader[0], kGeneralCurveShader[1],
+          kWideLineGeometry), false, ShaderDrawCategory::kSurfaceEdge}},
     };
 }
 

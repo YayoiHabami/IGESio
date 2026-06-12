@@ -783,6 +783,10 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {
                               1, gl::kFalse, view_matrix.data());
         gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
                               1, gl::kFalse, projection_matrix.data());
+        // 太線化GS用の描画領域サイズ [px] (線幅をスクリーン空間で展開するため).
+        // 当該uniformを持たないシェーダーでは location=-1 で無害に無視される.
+        gl_->Uniform2f(gl_->GetUniformLocation(program_id, "viewportSize"),
+                       viewport.first, viewport.second);
 
         // 面塗りは真の深度のまま描く (奥へオフセットしない). 面上に乗る曲線・
         // エッジは曲線フラグメントシェーダ側で局所深度勾配に比例した分だけ手前へ

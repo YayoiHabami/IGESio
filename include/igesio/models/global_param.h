@@ -137,8 +137,8 @@ constexpr double kDefaultModelSpaceScale = 1.0;
 /// @brief 単位フラグ (グローバルパラメータ14) のデフォルト値
 constexpr UnitFlag kDefaultUnitFlag = UnitFlag::kInch;
 /// @brief 線の太さの最大数 (グローバルパラメータ16) のデフォルト値
-/// @note IGES仕様では1だが、実用上の理由から5に拡張している
-constexpr int kDefaultLineWeightGradations = 5;
+/// @note IGES仕様では1だが、実用上の理由から6に拡張している
+constexpr int kDefaultLineWeightGradations = 6;
 /// @brief 最大線の太さ (グローバルパラメータ17) のデフォルト値
 /// @note IGES仕様では規定されていないが、本ライブラリでは10をデフォルト値として設定している
 constexpr double kDefaultMaxLineWeight = 10.0;
