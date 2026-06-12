@@ -63,7 +63,10 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
     get_filename_component(EXAMPLE_NAME ${EXAMPLE_SOURCE} NAME_WE)
     add_executable(${EXAMPLE_NAME}
         ${EXAMPLE_SOURCE}
-        iges_viewer_gui.cpp   # Include the GUI viewer source
+        # Include the GUI viewer source
+        iges_viewer_gui.cpp
+        # Algorithm verification GUI (derived)
+        surface_algorithm_verifier_gui.cpp
     )
 
     target_link_options(${EXAMPLE_NAME} PRIVATE

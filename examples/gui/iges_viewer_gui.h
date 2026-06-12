@@ -137,6 +137,43 @@ class IgesViewerGUI {
     /// @param filename 画像ファイルのパス
     void CaptureScreenshot(const std::string&);
 
+ protected:
+    /**
+     * 拡張用フック・アクセサ (アルゴリズム検証等の派生クラス用)
+     */
+
+    /// @brief メニューバーへ独自メニューを追加する (RenderMenuBar末尾で呼ばれる)
+    /// @note 既定では何もしない. 派生クラスでImGui::BeginMenu等を発行する.
+    virtual void RenderExtraMenus() {}
+    /// @brief 独自のフローティングウィンドウを描画する (フレーム毎に呼ばれる)
+    /// @note 既定では何もしない. 平時非表示の検証ウィンドウ等を派生で描画する.
+    virtual void RenderExtraWindows() {}
+    /// @brief ビューポートのクリックを横取りする
+    /// @param x, y フレームバッファ座標のクリック位置
+    /// @param mods 修飾キー (GLFWのビットマスク)
+    /// @return クリックを消費した場合はtrue (既定の選択処理を抑止する).
+    ///         既定ではfalseを返し、通常のエンティティ選択を行う.
+    virtual bool OnViewportClick(double x, double y, int mods) { return false; }
+
+    /// @brief セッション状態 (Scene) を取得する (派生クラス用)
+    models::Scene& GetScene() { return *scene_; }
+    /// @brief 再描画を要求する (派生クラス用)
+    void RequestRedraw() { needs_redraw_ = true; }
+
+    /// @brief 読み込んだ子Assemblyをシーンへ組み込む (読込経路共通の後処理)
+    /// @param child 追加する子Assembly (Metadata().nameは設定済みであること)
+    /// @param replace trueの場合は既存の全エンティティ・子Assemblyを先に除去する
+    /// @note Rootは固定のまま、子Assemblyの追加/一掃のみを行う
+    ///       (SceneとRootの束ねを維持し、選択状態や色オーバーライドを保つ).
+    ///       検証用エンティティ群をまとめて投入する派生クラスからも利用する.
+    void AttachLoadedAssembly(const std::shared_ptr<models::Assembly>& child,
+                              bool replace);
+
+    /// @brief モデル(Assemblyツリー)編集後の同期処理
+    /// @note 消えたIDを選択/hit座標と型別キャッシュ (UI用) から除去する.
+    ///       描画オブジェクトの破棄はレンダラのSweepが自動で行う.
+    void OnModelEdited();
+
  private:
     /**
      * モデルの読み込み・同期
@@ -159,14 +196,6 @@ class IgesViewerGUI {
         const std::string& type_name,
         const std::function<std::shared_ptr<models::Assembly>(const std::string&)>& loader);
 
-    /// @brief 読み込んだ子Assemblyをシーンへ組み込む (読込経路共通の後処理)
-    /// @param child 追加する子Assembly (Metadata().nameは設定済みであること)
-    /// @param replace trueの場合は既存の全エンティティ・子Assemblyを先に除去する
-    /// @note Rootは固定のまま、子Assemblyの追加/一掃のみを行う
-    ///       (SceneとRootの束ねを維持し、選択状態や色オーバーライドを保つ)
-    void AttachLoadedAssembly(const std::shared_ptr<models::Assembly>& child,
-                              bool replace);
-
     /// @brief 型別フィルタUI用のキャッシュへ登録する (検証診断の表示を含む)
     /// @note 描画オブジェクト自体はレンダラがSceneツリーとの突き合わせで
     ///       遅延生成するため、ここではUI状態のみを構築する
@@ -179,11 +208,6 @@ class IgesViewerGUI {
     /// @note 物体色はrootのColorOverrideとして設定し(個別ノード色は最近接優先で温存)、
     ///       材質は表示対象の面エンティティへ個別にSetMaterialPropertyする
     void ApplyColorScheme();
-
-    /// @brief モデル(Assemblyツリー)編集後の同期処理
-    /// @note 消えたIDを選択/hit座標と型別キャッシュ (UI用) から除去する.
-    ///       描画オブジェクトの破棄はレンダラのSweepが自動で行う.
-    void OnModelEdited();
 
     /**
      * パネル描画 (固定レイアウト)

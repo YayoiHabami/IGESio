@@ -274,6 +274,8 @@ void IgesViewerGUI::Run(const bool vsync) {
         RenderInspector();
         RenderStatusBar();
         RenderViewportOverlay();
+        // 派生クラスの独自ウィンドウ (既定では何もしない)
+        RenderExtraWindows();
 
         // 全パネル描画後に、遅延した構造編集を1回だけ実行する
         // (ツリー走査中の変更によるダングリングを避ける)
@@ -652,6 +654,9 @@ void IgesViewerGUI::RenderMenuBar() {
         ImGui::TextDisabled("  Esc: Deselect   F: Fit view");
         ImGui::EndMenu();
     }
+
+    // 派生クラスの独自メニュー (既定では何もしない)
+    RenderExtraMenus();
 
     ImGui::EndMainMenuBar();
 }
@@ -1226,6 +1231,11 @@ void IgesViewerGUI::MouseButtonCallback(
                     ? static_cast<double>(fb_w) / win_w : 1.0;
             const double sy = (win_h > 0)
                     ? static_cast<double>(fb_h) / win_h : 1.0;
+            // 派生クラスがクリックを消費した場合は通常の選択処理を行わない
+            if (OnViewportClick(x * sx, y * sy, mods)) {
+                needs_redraw_ = true;
+                return;
+            }
             HandleClickSelection(x * sx, y * sy, mods);
         } else {
             HandleBoxSelection(x, y, mods);

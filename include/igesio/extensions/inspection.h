@@ -22,6 +22,7 @@
 #ifdef IGESIO_ENABLE_GRAPHICS
 
 #include "igesio/extensions/inspection/coordinate_frame_group_graphics.h"
+#include "igesio/extensions/inspection/instanced_entity_graphics.h"
 
 #endif  // IGESIO_ENABLE_GRAPHICS
 

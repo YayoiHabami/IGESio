@@ -10,14 +10,14 @@
 #include <string>
 
 // Include this file before other GLFW headers
-// (This file includes 'GLFW/glfw3.h')
-#include "./iges_viewer_gui.h"
+// (This file includes 'GLFW/glfw3.h' via iges_viewer_gui.h)
+#include "./surface_algorithm_verifier_gui.h"
 
 
 
 namespace {
 
-using igesio::graphics::IgesViewerGUI;
+using igesio::graphics::SurfaceAlgorithmVerifierGUI;
 
 /// @brief コマンドライン引数から取得したデータ
 struct CommandLineOptions {
@@ -26,7 +26,7 @@ struct CommandLineOptions {
     /// @brief IGESファイルのパス
     std::string iges_file;
     /// @brief MSAAのサンプル数 (0で無効)
-    int msaa_samples = 0;
+    int msaa_samples = 4;
 };
 
 /// @brief コマンドライン引数を解析する関数
@@ -82,8 +82,17 @@ int main(int argc, char** argv) {
 
     try {
         // ウィンドウサイズ 1280x720、MSAAサンプル数・初期ファイルは引数から
-        IgesViewerGUI viewer(1280, 720, options.msaa_samples, options.iges_file);
+#ifdef IGESIO_INSPECTION_EXTENSION_ENABLED
+        // 検証ツール付きの派生GUI（「Verify」メニューから検証ウィンドウを開く)
+        SurfaceAlgorithmVerifierGUI viewer(
+                1280, 720, options.msaa_samples, options.iges_file);
         viewer.Run();
+#else  // IGESIO_INSPECTION_EXTENSION_ENABLED
+        // 基底GUI (検証機能無し)
+        IgesViewerGUI viewer(
+                1280, 720, options.msaa_samples, options.iges_file);
+        viewer.Run();
+#endif  // IGESIO_INSPECTION_EXTENSION_ENABLED
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
