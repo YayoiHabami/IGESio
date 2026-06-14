@@ -54,15 +54,20 @@ class SurfaceAlgorithmVerifierGUI : public IgesViewerGUI {
 
     /// @brief 複製表示の検証ウィンドウ
     void RenderDuplicationWindow();
-    /// @brief 選択中エンティティを複製したInstancedEntityを生成して描画へ投入する
-    /// @note UIの複製個数・スパン (直線配列) ・角度変化から各複製の配置行列を組み立て、
-    ///       基準1つを共有メッシュとして描く複製表示エンティティを生成する
+    /// @brief 選択中エンティティ (または所有Assembly) を複製したInstancedEntityを
+    ///        生成して描画へ投入する
+    /// @note UIの複製単位 (選択エンティティ/所有Assembly)・複製個数・スパン (直線配列)・
+    ///       角度変化から各複製の配置行列を組み立て、共有メッシュで描く複製表示
+    ///       エンティティを生成する. Assembly単位では`MakeInstancedAssembly`で
+    ///       サブツリーを平坦化する.
     void RunDuplication();
     /// @brief 生成済みの複製 (子Assembly) を除去する
     void ClearDuplicates();
 
     /// @brief 複製検証ウィンドウを表示中か
     bool dup_window_open_ = false;
+    /// @brief 複製の単位 (0=選択エンティティ, 1=所有Assembly)
+    int dup_unit_ = 0;
     /// @brief 複製個数 N (>=1)
     int dup_count_ = 5;
     /// @brief 隣接複製間の距離 [モデル長]

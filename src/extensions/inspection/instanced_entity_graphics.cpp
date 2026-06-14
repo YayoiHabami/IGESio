@@ -8,10 +8,12 @@
 #include "igesio/extensions/inspection/instanced_entity_graphics.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "igesio/graphics/factory.h"
 #include "igesio/graphics/graphics_registry.h"
@@ -40,11 +42,13 @@ InstancedEntityGraphics::InstancedEntityGraphics(
         const std::shared_ptr<const InstancedEntity>& entity,
         const std::shared_ptr<graphics::IOpenGL>& gl)
         : EntityGraphics(entity, gl, graphics::ShaderId::kComposite, false) {
-    // 基準エンティティの描画オブジェクトを1つだけ生成する (全複製で共有する単一メッシュ).
+    // 各メンバの描画オブジェクトを1つずつ生成する (全複製で共有する単一メッシュ).
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動するため、生成時は同期しない.
-    if (entity_ && entity_->Source()) {
-        source_graphics_ = graphics::CreateEntityGraphics(
-                entity_->Source(), gl, /*synchronize=*/false);
+    if (!entity_) return;
+    member_graphics_.reserve(entity_->Members().size());
+    for (const auto& member : entity_->Members()) {
+        member_graphics_.push_back(graphics::CreateEntityGraphics(
+                member.source, gl, /*synchronize=*/false));
     }
 }
 
@@ -52,87 +56,140 @@ InstancedEntityGraphics::~InstancedEntityGraphics() {
     Cleanup();
 }
 
+void InstancedEntityGraphics::RebuildInstanceTransforms() {
+    instance_world_.clear();
+    if (!entity_) return;
+    const auto& members = entity_->Members();
+    const auto& transforms = entity_->Transforms();
+    instance_world_.resize(members.size());
+    for (std::size_t i = 0; i < members.size(); ++i) {
+        auto& worlds = instance_world_[i];
+        worlds.reserve(transforms.size());
+        for (const auto& t : transforms) {
+            // world · 複製先行列 · 局所配置 を1回だけ合成する (M_entityはメンバ側が適用)
+            worlds.push_back(world_transform_ * t * members[i].local_placement);
+        }
+    }
+}
+
+void InstancedEntityGraphics::SetWorldTransform(const igesio::Matrix4d& matrix) {
+    world_transform_ = matrix;
+    RebuildInstanceTransforms();
+}
+
 void InstancedEntityGraphics::Draw(
         gl::Uint shader, const graphics::ShaderId shader_id,
         const std::pair<float, float>& viewport,
         const graphics::DrawContext& ctx) const {
-    if (!source_graphics_ || !entity_) return;
+    if (member_graphics_.empty() || !entity_) return;
 
-    // 複製表示自身が選択中なら、基準 (別ID) の描画にハイライトを強制する
+    // 複製表示自身が選択中なら、各メンバ (別ID) の描画にハイライトを強制する
     graphics::DrawContext child_ctx = ctx;
     if (ctx.IsHighlighted(GetEntityID())) child_ctx.force_highlight = true;
 
-    // 各複製先行列について、基準のworld変換を差し替えてから描画を委譲する.
-    // 同一のVAO/GPUバッファをmodel行列のみ変えて使い回すため、テッセレーション・
-    // 転送は発生しない (描画コールのみが複製数ぶん走る).
-    for (const auto& transform : entity_->Transforms()) {
-        source_graphics_->SetWorldTransform(world_transform_ * transform);
-        source_graphics_->Draw(shader, shader_id, viewport, child_ctx);
+    // 各メンバを、事前合成済みのworld行列 (instance_world_) で複製数ぶん描き分ける.
+    // 同一のVAO/GPUバッファをmodel行列だけ差し替えて使い回すため、テッセレーション・
+    // 転送は発生せず、描画フェーズでの行列乗算も無い (キャッシュを流すのみ).
+    for (std::size_t i = 0; i < member_graphics_.size(); ++i) {
+        const auto& g = member_graphics_[i];
+        if (!g || i >= instance_world_.size()) continue;
+        for (const auto& w : instance_world_[i]) {
+            g->SetWorldTransform(w);
+            g->Draw(shader, shader_id, viewport, child_ctx);
+        }
     }
 }
 
 std::unordered_set<igesio::graphics::ShaderId>
 InstancedEntityGraphics::GetShaderIds() const {
-    if (!source_graphics_) return {};
-    return source_graphics_->GetShaderIds();
+    std::unordered_set<graphics::ShaderId> ids;
+    for (const auto& g : member_graphics_) {
+        if (!g) continue;
+        auto s = g->GetShaderIds();
+        ids.merge(s);
+    }
+    return ids;
 }
 
 void InstancedEntityGraphics::PrewarmCpu() {
-    if (source_graphics_) source_graphics_->PrewarmCpu();
+    for (auto& g : member_graphics_) {
+        if (g) g->PrewarmCpu();
+    }
 }
 
 void InstancedEntityGraphics::SyncTexture() {
-    if (source_graphics_) source_graphics_->SyncTexture();
+    for (auto& g : member_graphics_) {
+        if (g) g->SyncTexture();
+    }
 }
 
 bool InstancedEntityGraphics::IsDrawable() const {
-    if (!source_graphics_ || !entity_) return false;
-    return source_graphics_->IsDrawable() && !entity_->Transforms().empty();
+    if (!entity_ || entity_->Transforms().empty()) return false;
+    // 描画可能なメンバが1つでもあれば描画可 (描画不能な型のメンバはスキップして描く)
+    for (const auto& g : member_graphics_) {
+        if (g && g->IsDrawable()) return true;
+    }
+    return false;
 }
 
 double InstancedEntityGraphics::GetLineWidth() const {
-    if (source_graphics_) return source_graphics_->GetLineWidth();
+    for (const auto& g : member_graphics_) {
+        if (g) return g->GetLineWidth();
+    }
     return EntityGraphics::GetLineWidth();
 }
 
 std::uint64_t InstancedEntityGraphics::CurrentGeometryKey() const {
     std::uint64_t key = 0;
+    if (!entity_) return key;
     // 自身の(ID,リビジョン) — 複製先行列の編集 (リビジョン変化) を検知する
-    if (entity_) key = graphics::CombineGeometryKey(key, *entity_);
-    // 基準の再帰キー — 基準形状の変更で複製も再同期させる
-    if (entity_ && entity_->Source()) {
-        key = graphics::CombineGeometryKeyRecursive(key, *entity_->Source());
+    key = graphics::CombineGeometryKey(key, *entity_);
+    // 各メンバの再帰キー — メンバ形状の変更で複製も再同期させる
+    for (const auto& member : entity_->Members()) {
+        if (member.source) {
+            key = graphics::CombineGeometryKeyRecursive(key, *member.source);
+        }
     }
     return key;
 }
 
 void InstancedEntityGraphics::SetColor(const std::array<float, 4>& color) {
     EntityGraphics::SetColor(color);
-    if (source_graphics_) source_graphics_->SetColor(color);
+    for (auto& g : member_graphics_) {
+        if (g) g->SetColor(color);
+    }
 }
 
 void InstancedEntityGraphics::ResetColor() {
     EntityGraphics::ResetColor();
-    if (source_graphics_) source_graphics_->ResetColor();
+    for (auto& g : member_graphics_) {
+        if (g) g->ResetColor();
+    }
 }
 
 void InstancedEntityGraphics::DoSynchronize() {
-    if (!source_graphics_) return;
-    // 線幅・材質の既定に用いるグローバルパラメータを基準へ転送する
-    // (基準は単独でレンダラに収集されないため、本クラスが肩代わりする)
-    if (global_param_) source_graphics_->SetGlobalParam(*global_param_);
-    // 基準を一度だけ同期する (CPU構築はPrewarmCpuで前倒し済みならGL転送のみ)
-    source_graphics_->Synchronize();
+    for (auto& g : member_graphics_) {
+        if (!g) continue;
+        // 線幅・材質の既定に用いるグローバルパラメータをメンバへ転送する
+        // (メンバは単独でレンダラに収集されないため、本クラスが肩代わりする)
+        if (global_param_) g->SetGlobalParam(*global_param_);
+        // 各メンバを一度だけ同期する (CPU構築はPrewarmCpuで前倒し済みならGL転送のみ)
+        g->Synchronize();
+    }
+    // 複製先行列の編集等を合成world行列キャッシュへ反映する
+    RebuildInstanceTransforms();
 }
 
 void InstancedEntityGraphics::Cleanup() {
-    if (source_graphics_) source_graphics_->Cleanup();
+    for (auto& g : member_graphics_) {
+        if (g) g->Cleanup();
+    }
     EntityGraphics::Cleanup();
 }
 
 void RegisterInstancedEntityGraphics() {
     // 描画オブジェクト作成関数を登録する (冪等; 二重登録は無害).
-    // 基準エンティティの既存シェーダーを利用するためカスタムシェーダーは不要.
+    // 各メンバの既存シェーダーを利用するためカスタムシェーダーは不要.
     graphics::GraphicsRegistry::TryRegister<InstancedEntity>(&CreateGraphics);
 }
 

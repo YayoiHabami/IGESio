@@ -18,11 +18,13 @@ if(IGESIO_ENABLE_INSPECTION_EXTENSION)
     # エンティティと橋渡し関数はgraphics非依存 (常に追加)
     list(APPEND EXTENSIONS_SOURCES
         inspection/coordinate_frame_group.cpp
+        inspection/instanced_entity.cpp
     )
     # 描画クラス・カスタムシェーダー登録はgraphics有効時のみ
     if(IGESIO_ENABLE_GRAPHICS)
         list(APPEND EXTENSIONS_SOURCES
             inspection/coordinate_frame_group_graphics.cpp
+            inspection/instanced_entity_graphics.cpp
         )
     endif()
 endif()

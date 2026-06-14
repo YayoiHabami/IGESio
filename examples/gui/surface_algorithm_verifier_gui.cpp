@@ -129,6 +129,15 @@ void SurfaceAlgorithmVerifierGUI::RenderDuplicationWindow() {
         const auto active = GetScene().ActiveSelection().Active();
         ImGui::Text("Source: %s", active.has_value()
                 ? std::to_string(active->ToInt()).c_str() : "(none)");
+        ImGui::Combo("Unit", &dup_unit_, "Selected entity\0Owning assembly\0");
+        // Assembly単位では所有Assemblyを表示し、ルート (シーン全体) を注意喚起する
+        if (dup_unit_ == 1 && active.has_value()) {
+            const auto* owner = GetScene().Root().FindOwner(*active);
+            const bool is_root = owner && owner->GetParent().expired();
+            const char* name = (owner && !owner->Metadata().name.empty())
+                    ? owner->Metadata().name.c_str() : "(unnamed)";
+            ImGui::Text("  Assembly: %s%s", name, is_root ? " [root]" : "");
+        }
         ImGui::Checkbox("Include copy at original position",
                         &dup_include_origin_);
         ImGui::InputInt("Count", &dup_count_);
@@ -187,8 +196,26 @@ void SurfaceAlgorithmVerifierGUI::RunDuplication() {
         transforms.push_back(move * spin * base);
     }
 
-    auto instanced = extensions::inspection::MakeInstancedEntity(
-            entity, std::move(transforms));
+    // 複製単位に応じてInstancedEntityを生成する.
+    // entityモード: 選択エンティティ1つ. assemblyモード: 所有Assemblyを丸ごと.
+    std::shared_ptr<extensions::inspection::InstancedEntity> instanced;
+    if (dup_unit_ == 1) {
+        // ルート (シーン全体) の複製は意図しないため拒否する
+        if (owner->GetParent().expired()) {
+            dup_status_ = "Owning assembly is the root; "
+                    "select an entity inside a sub-assembly.";
+            return;
+        }
+        instanced = extensions::inspection::MakeInstancedAssembly(
+                *owner, std::move(transforms));
+        if (instanced->MemberCount() == 0) {
+            dup_status_ = "Owning assembly has no geometric entities.";
+            return;
+        }
+    } else {
+        instanced = extensions::inspection::MakeInstancedEntity(
+                entity, std::move(transforms));
+    }
 
     // 既存の複製を除去してから、新しい子Assemblyへ投入する
     ClearDuplicates();
@@ -196,7 +223,10 @@ void SurfaceAlgorithmVerifierGUI::RunDuplication() {
     child->AddEntity(instanced);
     duplicates_assembly_id_ = child->GetID();
     AttachLoadedAssembly(child, /*replace=*/false);
-    dup_status_ = "Created " + std::to_string(count) + " instances.";
+    dup_status_ = "Created " + std::to_string(count) + " instances"
+            + (dup_unit_ == 1
+               ? " of " + std::to_string(instanced->MemberCount()) + " members"
+               : "") + ".";
     RequestRedraw();
 }
 
