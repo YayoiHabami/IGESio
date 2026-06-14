@@ -76,7 +76,11 @@ class InstancedEntityGraphics
     /// @note 各メンバ描画オブジェクトのPrewarmCpuへ委譲する (メンバ数ぶんのみ)
     void PrewarmCpu() override;
 
-    /// @brief テクスチャ用の描画リソースを同期する (各メンバへ委譲)
+    /// @brief 材質をメンバへ複写し、テクスチャ用の描画リソースを同期する
+    /// @note 材質 (metallic/roughness/ao/opacity/テクスチャ) は描画時に各メンバ自身の
+    ///       material_property_ が読まれるため、本クラスへ設定された材質を各メンバへ
+    ///       複写したうえでメンバの同期へ委譲する. レンダラは材質適用の直後に本関数を
+    ///       呼ぶため、これにより材質オーバーライドが複製描画へ反映される.
     void SyncTexture() override;
 
     /// @brief 描画可能な状態かどうかを確認する

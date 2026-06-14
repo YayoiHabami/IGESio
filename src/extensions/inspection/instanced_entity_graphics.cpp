@@ -118,8 +118,14 @@ void InstancedEntityGraphics::PrewarmCpu() {
 }
 
 void InstancedEntityGraphics::SyncTexture() {
+    // 材質 (metallic/roughness/ao/opacity/テクスチャ) は描画時に各メンバ自身の
+    // material_property_ が読まれるため、本クラスへ設定された材質をメンバへ複写する.
+    // レンダラは材質オーバーライドの適用直後に本関数を呼ぶ (材質適用のチョークポイント)
+    // ため、ここで複写すればテクスチャのGL転送も同一呼び出し内で完結する.
     for (auto& g : member_graphics_) {
-        if (g) g->SyncTexture();
+        if (!g) continue;
+        g->MaterialProperty() = material_property_;
+        g->SyncTexture();
     }
 }
 
