@@ -22,9 +22,10 @@ namespace igesio::graphics {
 ///       (4) vertex → tcs → tes → geometry → fragment
 /// @note computeシェーダーには非対応
 /// @note 各ステージは完結したGLSL文字列のほか、組み込みGLSLスニペットの
-///       `#include "glsl/..."`参照を含められる (コンパイル直前にレンダラが
-///       展開する)。展開はライブラリのソースディレクトリを実行時に読むため、
-///       ソースを配置しない環境では完結したGLSL文字列のみ使用できる
+///       `#include "glsl/..."`参照や`glsl/...`パス参照を含められる
+///       (コンパイル直前にレンダラが展開する)。参照先のGLSLソースは
+///       ビルド時にライブラリへ埋め込まれるため、ソースを配置しない
+///       環境でも利用できる
 struct ShaderCode {
     /// @brief 頂点シェーダーのソースコード
     std::string vertex;

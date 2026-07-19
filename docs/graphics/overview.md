@@ -71,10 +71,11 @@ include/igesio/graphics/
 └── renderer.h                    ← EntityRenderer
 
 src/graphics/
-├── shaders.h                     ← シェーダーコード読み込み・インクルード展開
+├── shaders.h                     ← 埋め込みシェーダーの読み込み・インクルード展開
 ├── shaders/
 │   ├── curves.h                  ← 各曲線シェーダーのパス/ソース定義
 │   ├── surfaces.h                ← 各曲面シェーダーのパス/ソース定義
+│   ├── embedded_sources.h        ← 埋め込みGLSLソースへのアクセス (実体は生成)
 │   └── glsl/
 │       ├── common/               ← 共通GLSLコード (NURBS補間ロジック等)
 │       ├── curves/               ← 曲線用GLSLファイル
@@ -184,7 +185,7 @@ GLSLコードの指定方法は2通りある。
 2. **インライン文字列方式**: C++生文字列リテラル (`R"(...)"`) としてシェーダーコードを `curves.h` / `surfaces.h` に直接記述する。
    例: `kLineShader` の頂点シェーダー・ジオメトリシェーダー
 
-GLSLファイルは `#include "glsl/common/xxx.glsl"` の形で共通コードをインクルードできる。インクルード展開は `shaders.h` の `ExpandShaderIncludes()` が実行時に自動処理する。この展開機構は`__FILE__`を基準にライブラリのソースディレクトリを実行時に読むため、ソースを配置しない環境では使用できない(完結したGLSL文字列のみ使用できる)。
+GLSLファイルは `#include "glsl/common/xxx.glsl"` の形で共通コードをインクルードできる。インクルード展開は `shaders.h` の `ExpandShaderIncludes()` がコンパイル直前に自動処理する。参照先のGLSLソースは、CMakeの`add_custom_command`(`cmake/embed_shaders.cmake`)がビルド時に`shader_sources_generated.cpp`へ文字列定数として埋め込むため、ソースを配置しない環境でも動作する。埋め込むファイルは`src/graphics/CMakeLists.txt`の`GRAPHICS_SHADER_SOURCES`に列挙する(パス参照・`#include`参照される全ファイルを漏れなく列挙すること)。
 
 組み込みシェーダーの定義(パス/ソース+メタ情報)は`curves.h`/`surfaces.h`の`GetBuiltinXXXShaderInfos()`が列挙し、`ShaderRegistry`の初期化時に固定IDで設定される。`EntityRenderer`は`Initialize()`と`Draw()`冒頭の`CompilePendingShaders()`で、レジストリ中の未コンパイルのシェーダーをインクルード展開してコンパイル・リンクする。
 

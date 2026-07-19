@@ -27,8 +27,6 @@
 #ifndef SRC_GRAPHICS_SHADERS_H_
 #define SRC_GRAPHICS_SHADERS_H_
 
-#include <filesystem>
-#include <fstream>
 #include <functional>
 #include <mutex>
 #include <regex>
@@ -40,6 +38,8 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/graphics/core/shader_code.h"
+
+#include "shaders/embedded_sources.h"
 
 namespace igesio::graphics::shaders {
 
@@ -57,8 +57,6 @@ inline std::string MakeIncludeString(const std::string& relative_path) {
 
 /// @brief 置換用のシェーダーコード
 struct IncludeShaderCode {
-    /// @brief インクルードするファイルのパス
-    std::filesystem::path path;
     /// @brief インクルード用のGLSLコード
     std::string glsl_code;
 
@@ -173,36 +171,21 @@ ExpandAllIncludes(const std::unordered_map<std::string, IncludeShaderCode>& shad
 ///         キーは相対パス、値はIncludeShaderCode構造体
 /// @note 相対パスは、glslフォルダをルートとした`glsl/common/nurbs_surface_prop.glsl`
 ///       のような文字列. この部分を含む行がファイル内の文字列で置換される.
-/// @note プログラム起動時に一度だけ初期化される. 以降の呼び出しでは
-///       その際に読み込まれたコードが返される.
+/// @note シェーダーソースはビルド時にライブラリへ埋め込まれる
+///       (shader_sources_generated.cpp). 初回呼び出し時に一度だけ展開され、
+///       以降の呼び出しでは展開済みのコードが返される.
 inline const std::unordered_map<std::string, IncludeShaderCode>&
 GetIncludeShaderCodes() {
     static std::unordered_map<std::string, IncludeShaderCode> codes;
     static std::once_flag init_flag;
 
     std::call_once(init_flag, [&]() {
-        // このファイルの場所を基準にする
-        auto root_path = std::filesystem::path(__FILE__).parent_path() /
-                         "shaders/glsl";
-
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(root_path)) {
-            if (entry.is_regular_file()) {
-                IncludeShaderCode code;
-
-                // ファイル名からインクルード用文字列を生成
-                auto relative_path = std::filesystem::relative(entry.path(), root_path);
-                auto include_string = std::string("glsl/") + relative_path.generic_string();
-
-                // GLSLコードを読み込み
-                std::ifstream file(entry.path());
-                if (file) {
-                    // 読み込みに成功した場合のみ格納
-                    code.path = entry.path();
-                    code.glsl_code = std::string((std::istreambuf_iterator<char>(file)),
-                                                  std::istreambuf_iterator<char>());
-                    codes[include_string] = std::move(code);
-                }
-            }
+        // ビルド時に埋め込まれたシェーダーソースからインクルード用コードを構築する.
+        // キーはglslフォルダをルートとした`glsl/...`形式で、そのまま参照キーになる
+        for (const auto& [include_string, source] : GetEmbeddedShaderSources()) {
+            IncludeShaderCode code;
+            code.glsl_code = source;
+            codes[include_string] = std::move(code);
         }
 
         // すべてのインクルードを展開

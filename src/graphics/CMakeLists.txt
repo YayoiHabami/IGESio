@@ -1,5 +1,68 @@
+# ---------------------------------------------------------------
+# シェーダーソースのビルド時埋め込み
+# ---------------------------------------------------------------
+# 埋め込むGLSLソースを shaders/ からの相対パス (glsl/...) で列挙する。
+# ここに列挙した相対パス文字列がそのまま実行時の参照キーとなる
+# (例: ShaderCode("glsl/curves/general_curve.vert")、
+#      GLSL中の #include "glsl/common/nurbs_surface_prop.glsl")。
+# パス参照される全ステージファイルと共通スニペットを漏れなく列挙すること。
+set(GRAPHICS_SHADER_SOURCES
+    glsl/common/nurbs_curve_prop.glsl
+    glsl/common/nurbs_surface_prop.glsl
+    glsl/curves/100_circular_arc.vert
+    glsl/curves/100_circular_arc.tesc
+    glsl/curves/100_circular_arc.tese
+    glsl/curves/100_circular_arc.frag
+    glsl/curves/104_form0_ellipse.vert
+    glsl/curves/104_form0_ellipse.frag
+    glsl/curves/116_point.vert
+    glsl/curves/116_point.frag
+    glsl/curves/126_nurbs_curve.vert
+    glsl/curves/126_nurbs_curve.tesc
+    glsl/curves/126_nurbs_curve.tese
+    glsl/curves/126_nurbs_curve.frag
+    glsl/curves/general_curve.vert
+    glsl/curves/general_curve.frag
+    glsl/curves/wide_line.geom
+    glsl/surfaces/general_surface.vert
+    glsl/surfaces/general_surface.frag
+    glsl/surfaces/128_nurbs_surface.vert
+    glsl/surfaces/128_nurbs_surface.tesc
+    glsl/surfaces/128_nurbs_surface.tese
+    glsl/surfaces/128_nurbs_surface.frag
+)
+
+# シェーダーの基準ディレクトリ、生成先.cpp、依存関係指定用の絶対パス群を求める
+set(_graphics_shader_root ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+set(_graphics_shader_generated
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/shader_sources_generated.cpp)
+set(_graphics_shader_abs_paths "")
+foreach(_shader IN LISTS GRAPHICS_SHADER_SOURCES)
+    list(APPEND _graphics_shader_abs_paths ${_graphics_shader_root}/${_shader})
+endforeach()
+
+# 上記シェーダーを文字列定数として埋め込む.cppを生成する
+# (いずれかのシェーダー、または生成スクリプトが変化した場合に再生成する)
+add_custom_command(
+    OUTPUT ${_graphics_shader_generated}
+    COMMAND ${CMAKE_COMMAND}
+        -DSHADER_ROOT=${_graphics_shader_root}
+        -DOUTPUT_FILE=${_graphics_shader_generated}
+        "-DSHADER_KEYS=${GRAPHICS_SHADER_SOURCES}"
+        -P ${PROJECT_SOURCE_DIR}/cmake/embed_shaders.cmake
+    DEPENDS
+        ${_graphics_shader_abs_paths}
+        ${PROJECT_SOURCE_DIR}/cmake/embed_shaders.cmake
+    COMMENT "Embedding graphics shader sources into shader_sources_generated.cpp"
+    VERBATIM
+)
+set_source_files_properties(${_graphics_shader_generated}
+    PROPERTIES GENERATED TRUE)
+
 # Graphics module
 add_library(igesio_graphics STATIC
+    ${_graphics_shader_generated}
+
     core/camera.cpp
     core/texture.cpp
     core/i_entity_graphics.cpp

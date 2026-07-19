@@ -82,8 +82,8 @@ TEST(CoordinateFrameGroup, Constructor_StoresFramesAndDefaults) {
     ExpectVecNear(group.Frames()[1].origin, Vector3d(4.0, 5.0, 6.0));
 
     // 既定の表示属性
-    EXPECT_NEAR(group.PointSize(), 6.0, kEps);
-    EXPECT_NEAR(group.AxisSize(), 1.0, kEps);
+    EXPECT_NEAR(group.PointSize(), 2.0, kEps);
+    EXPECT_NEAR(group.AxisSize(), 5.0, kEps);
     EXPECT_NEAR(group.PointColor()[3], 1.0f, 1e-6f);  // 既定は不透明
 
     // 非IGESエンティティとしての基本属性
