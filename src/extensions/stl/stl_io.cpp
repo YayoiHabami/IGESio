@@ -36,7 +36,7 @@ constexpr std::size_t kBinaryHeaderSize = 84;
 /// @brief バイナリSTLの1三角形あたりのバイト数 (法線3f + 頂点9f + 属性uint16)
 constexpr std::size_t kBinaryTriangleSize = 50;
 
-/// @brief 読み込んだ三角形スープ (3頂点/三角形 + 面法線/三角形)
+/// @brief 読み込んだポリゴンスープ (3頂点/三角形 + 面法線/三角形)
 struct StlSoup {
     /// @brief 頂点座標 (3頂点 × 三角形数)
     std::vector<Vec3f> vertices;
@@ -85,9 +85,9 @@ bool IsBinaryStl(const std::vector<char>& bytes) {
            kBinaryHeaderSize + kBinaryTriangleSize * static_cast<std::size_t>(count);
 }
 
-/// @brief バイナリSTLを三角形スープへ読み込む
+/// @brief バイナリSTLをポリゴンスープへ読み込む
 /// @param bytes ファイルの内容 (IsBinaryStlで判定済み)
-/// @return 三角形スープ
+/// @return ポリゴンスープ
 StlSoup ReadBinarySoup(const std::vector<char>& bytes) {
     const auto count = ReadLE<std::uint32_t>(bytes, 80);
     StlSoup soup;
@@ -114,10 +114,10 @@ StlSoup ReadBinarySoup(const std::vector<char>& bytes) {
     return soup;
 }
 
-/// @brief ASCII STLを三角形スープへ読み込む
+/// @brief ASCII STLをポリゴンスープへ読み込む
 /// @param bytes ファイルの内容
 /// @param path エラーメッセージ用のファイルパス
-/// @return 三角形スープ
+/// @return ポリゴンスープ
 /// @throw igesio::ParseError ASCII STLとして不正な場合
 StlSoup ReadAsciiSoup(const std::vector<char>& bytes, const std::string& path) {
     std::istringstream stream(std::string(bytes.begin(), bytes.end()));
@@ -200,8 +200,32 @@ WeldKey MakeWeldKey(const Vec3f& vertex, const double tolerance) {
     return key;
 }
 
-/// @brief 三角形スープを溶接してインデックスメッシュへ変換する
-/// @param soup 三角形スープ
+/// @brief 溶接に用いる許容距離を決定する
+/// @param soup ポリゴンスープ
+/// @param params 読み込みの制御パラメータ
+/// @return 溶接の許容距離. 0以下の場合はビット単位の完全一致で溶接する
+/// @note 絶対値 (weld_tolerance) の指定を優先し、未指定の場合はバウンディングボックスの
+///       対角長に相対値を掛けた値とする. 頂点が無い場合や全頂点が一致して
+///       対角長がゼロになる場合は完全一致へ退避する
+double ResolveWeldTolerance(const StlSoup& soup,
+                            const i_ext::StlReadParams& params) {
+    if (params.weld_tolerance > 0.0) return params.weld_tolerance;
+    if (params.weld_relative_tolerance <= 0.0 || soup.vertices.empty()) {
+        return 0.0;
+    }
+
+    Vec3f lower = soup.vertices.front();
+    Vec3f upper = lower;
+    for (const auto& vertex : soup.vertices) {
+        lower = lower.cwiseMin(vertex);
+        upper = upper.cwiseMax(vertex);
+    }
+    return static_cast<double>((upper - lower).norm())
+           * params.weld_relative_tolerance;
+}
+
+/// @brief ポリゴンスープを溶接してインデックスメッシュへ変換する
+/// @param soup ポリゴンスープ
 /// @param tolerance 溶接の許容距離
 /// @return 共有頂点化したメッシュ (法線チャンネルなし)
 i_num::TriangleMeshf WeldSoup(const StlSoup& soup, const double tolerance) {
@@ -230,8 +254,8 @@ i_num::TriangleMeshf WeldSoup(const StlSoup& soup, const double tolerance) {
     return mesh;
 }
 
-/// @brief 三角形スープを溶接せずにインデックスメッシュへ変換する
-/// @param soup 三角形スープ
+/// @brief ポリゴンスープを溶接せずにインデックスメッシュへ変換する
+/// @param soup ポリゴンスープ
 /// @return 3頂点/三角形のままのメッシュ (面法線を各頂点へ展開する)
 i_num::TriangleMeshf ExpandSoup(const StlSoup& soup) {
     i_num::TriangleMeshf mesh;
@@ -327,8 +351,9 @@ igesio::numerics::TriangleMeshf i_ext::ReadStl(const std::string& path,
 
     const auto soup = IsBinaryStl(bytes) ? ReadBinarySoup(bytes)
                                          : ReadAsciiSoup(bytes, path);
-    return params.weld_vertices ? WeldSoup(soup, params.weld_tolerance)
-                                : ExpandSoup(soup);
+    return params.weld_vertices
+            ? WeldSoup(soup, ResolveWeldTolerance(soup, params))
+            : ExpandSoup(soup);
 }
 
 std::shared_ptr<igesio::entities::MeshEntity>

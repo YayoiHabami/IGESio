@@ -9,6 +9,7 @@
  *       - `Validate` (正常系・各異常系)
  *       - `ComputeBoundingBox`
  *       - `RecomputeNormals`
+ *       - `RecomputeNormalsWithCrease` (折り目での頂点分割と法線)
  *       - `ComputeFaceNormals`
  *       - `ExtractMeshEdges` (全エッジ/特徴エッジの分類)
  *       - `ExtractUniqueEdges` (分類なしの軽量版)
@@ -20,7 +21,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/numerics/meshes/algorithms.h"
@@ -234,6 +237,155 @@ TEST(TriangleMeshRecomputeNormalsTest, IsolatedVertexGetsZeroNormal) {
 
     EXPECT_NEAR(mesh.normals.col(4).norm(), 0.0, kTol);
     EXPECT_NEAR(mesh.normals(2, 0), 1.0, kTol);  // 既存頂点は影響なし
+}
+
+
+
+/**
+ * RecomputeNormalsWithCrease
+ */
+
+// 正常系: 同一平面の2三角形は分割されず、全頂点で+z法線になる
+TEST(TriangleMeshCreaseNormalsTest, PlanarQuadIsNotSplit) {
+    auto mesh = MakeUnitQuad();
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    ASSERT_EQ(mesh.VertexCount(), 4u);  // 複製なし
+    EXPECT_EQ(mesh.indices,
+              std::vector<std::uint32_t>({0, 1, 2, 0, 2, 3}));  // 張り替えなし
+    for (int c = 0; c < 4; ++c) {
+        EXPECT_NEAR(mesh.normals(0, c), 0.0, kTol);
+        EXPECT_NEAR(mesh.normals(1, c), 0.0, kTol);
+        EXPECT_NEAR(mesh.normals(2, c), 1.0, kTol);
+    }
+}
+
+// 正常系 (境界値): しきい値をわずかに下回る折り角では法線が共有される
+TEST(TriangleMeshCreaseNormalsTest, FoldJustBelowThresholdKeepsSharedNormals) {
+    auto mesh = MakeFoldedQuad(29.0 * igesio::kPi / 180.0);
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    ASSERT_EQ(mesh.VertexCount(), 4u);
+    // 2三角形は同面積のため、共有辺の頂点は両面法線のちょうど中間を向く
+    const auto faces = i_num::ComputeFaceNormals(mesh);
+    const igesio::Vector3d average = (faces.col(0) + faces.col(1)).normalized();
+    EXPECT_NEAR((mesh.normals.col(0) - average).norm(), 0.0, kTol);
+    EXPECT_NEAR((mesh.normals.col(1) - average).norm(), 0.0, kTol);
+}
+
+// 正常系 (境界値): しきい値をわずかに超える折り角では共有辺の頂点が分割される
+TEST(TriangleMeshCreaseNormalsTest, FoldJustAboveThresholdSplitsSharedVertices) {
+    auto mesh = MakeFoldedQuad(31.0 * igesio::kPi / 180.0);
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    // 共有辺の2頂点が2クラスタへ分かれ、頂点が2つ増える
+    ASSERT_EQ(mesh.VertexCount(), 6u);
+    ASSERT_EQ(mesh.TriangleCount(), 2u);
+
+    // 各コーナーの法線は、そのコーナーが属する三角形の面法線に一致する
+    const auto faces = i_num::ComputeFaceNormals(mesh);
+    for (std::size_t t = 0; t < 2; ++t) {
+        for (std::size_t k = 0; k < 3; ++k) {
+            const auto column = mesh.indices[3 * t + k];
+            EXPECT_NEAR((mesh.normals.col(column) - faces.col(t)).norm(),
+                        0.0, kTol);
+        }
+    }
+}
+
+// 正常系: 閉メッシュ (四面体) は全稜線が折り目のため頂点が面毎に分かれる
+TEST(TriangleMeshCreaseNormalsTest, TetrahedronSplitsIntoPerFaceCorners) {
+    auto mesh = MakeTetrahedron();
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    ASSERT_EQ(mesh.VertexCount(), 12u);  // 4頂点 × 各3面
+    ASSERT_EQ(mesh.TriangleCount(), 4u);
+    EXPECT_TRUE(i_num::Validate(mesh).is_valid);  // 分割後も整合している
+
+    const auto faces = i_num::ComputeFaceNormals(mesh);
+    for (std::size_t t = 0; t < 4; ++t) {
+        for (std::size_t k = 0; k < 3; ++k) {
+            const auto column = mesh.indices[3 * t + k];
+            EXPECT_NEAR((mesh.normals.col(column) - faces.col(t)).norm(),
+                        0.0, kTol);
+        }
+    }
+}
+
+// 正常系 (境界値): しきい値-1では全稜線で併合され、RecomputeNormalsと一致する
+TEST(TriangleMeshCreaseNormalsTest, ThresholdMinusOneMatchesRecomputeNormals) {
+    auto expected = MakeTetrahedron();
+    i_num::RecomputeNormals(expected);
+    auto mesh = MakeTetrahedron();
+    i_num::RecomputeNormalsWithCrease(mesh, -1.0);
+
+    ASSERT_EQ(mesh.VertexCount(), expected.VertexCount());
+    EXPECT_EQ(mesh.indices, expected.indices);
+    for (int c = 0; c < 4; ++c) {
+        EXPECT_NEAR((mesh.normals.col(c) - expected.normals.col(c)).norm(),
+                    0.0, kTol);
+    }
+}
+
+// 正常系: 分割で複製した頂点はUVを引き継ぎ、groupsの三角形範囲は変わらない
+TEST(TriangleMeshCreaseNormalsTest, SplitCopiesUVsAndKeepsGroups) {
+    auto mesh = MakeFoldedQuad(90.0 * igesio::kPi / 180.0);
+    mesh.uvs.resize(2, 4);
+    mesh.uvs << 0.0, 1.0, 0.5, 0.5,
+                0.0, 0.0, 1.0, 1.0;
+    mesh.groups.push_back({"fold", "mat", 0, 2});
+
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    ASSERT_EQ(mesh.VertexCount(), 6u);
+    ASSERT_EQ(mesh.uvs.cols(), 6);
+    // 複製した列4・5は、複製元である頂点0・1のUVを引き継ぐ
+    EXPECT_NEAR((mesh.uvs.col(4) - mesh.uvs.col(0)).norm(), 0.0, kTol);
+    EXPECT_NEAR((mesh.uvs.col(5) - mesh.uvs.col(1)).norm(), 0.0, kTol);
+
+    ASSERT_EQ(mesh.groups.size(), 1u);
+    EXPECT_EQ(mesh.groups[0].first_triangle, 0u);
+    EXPECT_EQ(mesh.groups[0].triangle_count, 2u);
+}
+
+// 正常系 (退化): どの面にも属さない頂点は列が残り、法線はゼロベクトルになる
+TEST(TriangleMeshCreaseNormalsTest, IsolatedVertexIsKeptWithZeroNormal) {
+    auto mesh = MakeUnitQuad();
+    mesh.positions.conservativeResize(3, 5);
+    mesh.positions.col(4) << 5.0, 5.0, 5.0;  // 孤立頂点
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    ASSERT_EQ(mesh.VertexCount(), 5u);
+    EXPECT_NEAR(mesh.normals.col(4).norm(), 0.0, kTol);
+    EXPECT_NEAR(mesh.normals(2, 0), 1.0, kTol);  // 既存頂点は影響なし
+}
+
+// 正常系 (退化): 三角形を持たないメッシュの法線は全てゼロベクトルになる
+TEST(TriangleMeshCreaseNormalsTest, MeshWithoutTrianglesGetsZeroNormals) {
+    TriangleMeshd mesh;
+    mesh.positions.resize(3, 2);
+    mesh.positions << 0.0, 1.0,
+                      0.0, 0.0,
+                      0.0, 0.0;
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    ASSERT_EQ(mesh.normals.cols(), 2);
+    EXPECT_NEAR(mesh.normals.norm(), 0.0, kTol);
+}
+
+// 正常系 (退化): 退化三角形が絡む稜線では併合せず、法線にも寄与しない
+TEST(TriangleMeshCreaseNormalsTest, DegenerateTriangleDoesNotContribute) {
+    auto mesh = MakeUnitQuad();
+    mesh.positions.conservativeResize(3, 5);
+    mesh.positions.col(4) << 2.0, 0.0, 0.0;  // 頂点1・2と一直線上ではない位置
+    mesh.indices.insert(mesh.indices.end(), {1, 1, 4});  // 面積ゼロの三角形
+
+    i_num::RecomputeNormalsWithCrease(mesh, kCos30Deg);
+
+    // 退化三角形のみに属する頂点4の法線はゼロベクトル
+    EXPECT_NEAR(mesh.normals.col(4).norm(), 0.0, kTol);
+    // 頂点1は退化三角形の寄与を受けず、平面の+z法線を保つ
+    EXPECT_NEAR(mesh.normals(2, 1), 1.0, kTol);
 }
 
 

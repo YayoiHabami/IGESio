@@ -28,7 +28,8 @@ namespace igesio::graphics {
 /// @return 各頂点 {x, y, z, nx, ny, nz, u, v} を連結したfloat列
 /// @note 汎用曲面シェーダーの頂点属性レイアウト (位置3+法線3+UV2) に対応する。
 ///       法線・UVチャンネルが無い場合はゼロ埋めする (照明が必要なメッシュは
-///       呼び出し側でnumerics::RecomputeNormals等により法線を補うこと)。
+///       呼び出し側でnumerics::RecomputeNormalsWithCrease (折り目の維持) や
+///       numerics::RecomputeNormals (全周平均) により法線を補うこと)。
 ///       GPU境界のためここで単精度へ変換する (CPU正準値はdoubleのまま)
 template <typename Scalar>
 std::vector<float> BuildInterleavedVertices(

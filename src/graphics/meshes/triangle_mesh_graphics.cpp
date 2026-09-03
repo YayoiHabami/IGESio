@@ -23,8 +23,9 @@ namespace i_num = igesio::numerics;
 namespace gl = igesio::graphics::gl;
 
 /// @brief 折り目判定の二面角しきい値 (cos(30°))
-/// @note 隣接2面の単位面法線の内積がこの値を下回るエッジを折り目として
-///       kShadedの特徴エッジに含める
+/// @note 隣接2面の単位面法線の内積がこの値を下回るエッジを折り目とする.
+///       kShadedの特徴エッジに含めるかの判定と、頂点法線を分割するかの判定の
+///       双方で用いる (陰影の分割位置と描画される特徴エッジの位置を一致させる)
 constexpr double kCreaseAngleCos = 0.8660254037844386;
 
 /// @brief 頂点インデックスペア列を線分頂点列 (x,y,z×2/線分) へ平坦化する
@@ -95,13 +96,15 @@ void i_graph::TriangleMeshGraphics::PrewarmCpu() {
 
     const auto& mesh = entity_->Mesh();
 
-    // 法線が無い場合は面積重み平均で補う (コピーに対して計算する.
-    // entity_は読み取り専用のため書き戻さない)
+    // 法線が無い場合は折り目で分割した面積重み平均で補う
+    // (コピーに対して計算する. entity_は読み取り専用のため書き戻さない).
+    // 全周平均では平らな面の角まで丸められ、大きな三角形の上で法線が大きく
+    // 傾いて放射状の縞が出るため、折り目では法線を分割する
     i_num::TriangleMeshd recomputed;
     const i_num::TriangleMeshd* source = &mesh;
     if (!mesh.HasNormals()) {
         recomputed = mesh;
-        i_num::RecomputeNormals(recomputed);
+        i_num::RecomputeNormalsWithCrease(recomputed, kCreaseAngleCos);
         source = &recomputed;
     }
 
@@ -111,7 +114,9 @@ void i_graph::TriangleMeshGraphics::PrewarmCpu() {
     staging_indices_.assign(source->indices.begin(), source->indices.end());
 
     // エッジ抽出 (kWireFrame用の全エッジとkShaded用の特徴エッジ.
-    // 面法線は頂点位置から計算されるため、法線補完前のmeshで良い)
+    // 面法線は頂点位置から計算されるため、法線補完前のmeshを渡す.
+    // 補完後 (*source) は折り目で頂点が複製されており稜線の連結が切れるため、
+    // ここをsourceへ変えないこと)
     const auto edges = i_num::ExtractMeshEdges(mesh, kCreaseAngleCos);
     staging_all_edges_ = FlattenEdgeSegments(mesh.positions, edges.all_edges);
     staging_feature_edges_ =

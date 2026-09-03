@@ -7,7 +7,7 @@
  * @note テスト対象:
  *       - `WriteStl` / `ReadStl` の往復 (バイナリ・ASCII)
  *       - バイナリ/ASCIIの自動判別
- *       - 溶接 (weld_vertices / weld_tolerance) の挙動
+ *       - 溶接 (weld_vertices / weld_tolerance / weld_relative_tolerance) の挙動
  *       - `ReadStlAsEntity`
  *       - 異常系 (ファイルなし・不正ファイル・不正メッシュ)
  * @note TODO: ビッグエンディアン環境は対象外 (実装がリトルエンディアン前提).
@@ -70,6 +70,24 @@ void ExpectUnitQuad(const i_num::TriangleMeshf& mesh) {
     EXPECT_NEAR(mesh.positions.row(1).maxCoeff(), 1.0f, kTol);
     EXPECT_NEAR(mesh.positions.row(2).minCoeff(), 0.0f, kTol);
     EXPECT_NEAR(mesh.positions.row(2).maxCoeff(), 0.0f, kTol);
+}
+
+/// @brief 対角頂点の一方にfloatの丸め誤差程度のずれを持たせた2三角形の
+///        スープを生成する (一辺300の正方形; 完全一致では5頂点になる)
+/// @return 生成したポリゴンスープ
+/// @note 他ツールが出力したSTLで、幾何的には同一だが末尾ビットが異なる頂点が
+///       現れる状況を模した入力. バウンディングボックスの対角長は約424のため、
+///       既定の相対許容距離 (1e-6) では約4.2e-4となりずれが吸収される
+i_num::TriangleMeshf MakeQuadSoupWithRoundingNoise() {
+    // 座標0付近に現れる丸め誤差 (実際のSTLで観測される桁)
+    constexpr float kNoise = 2.744137e-14f;
+    i_num::TriangleMeshf soup;
+    soup.positions.resize(3, 6);
+    soup.positions << 0.0f, 300.0f, 300.0f,   0.0f, 300.0f, 0.0f,
+                      0.0f, 0.0f,   300.0f,   0.0f, 300.0f, 300.0f,
+                      0.0f, 0.0f,   0.0f,     0.0f, kNoise, 0.0f;
+    soup.indices = {0, 1, 2, 3, 4, 5};
+    return soup;
 }
 
 }  // namespace
@@ -141,15 +159,47 @@ TEST(StlIOTest, WeldToleranceMergesNearbyVertices) {
     const auto path = OutputPath("stl_weld_tolerance.stl");
     ASSERT_TRUE(i_ext::WriteStl(soup, path));
 
-    // 完全一致のみ (tolerance=0): ずれた頂点は溶接されない
+    // 完全一致のみ (絶対・相対とも0): ずれた頂点は溶接されない
     i_ext::StlReadParams exact;
     exact.weld_tolerance = 0.0;
+    exact.weld_relative_tolerance = 0.0;
     EXPECT_EQ(i_ext::ReadStl(path, exact).VertexCount(), 5u);  // (0,0,0)のみ共有
 
     // tolerance=1e-3: ずれた頂点も溶接される
     i_ext::StlReadParams tolerant;
     tolerant.weld_tolerance = 1e-3;
     EXPECT_EQ(i_ext::ReadStl(path, tolerant).VertexCount(), 4u);
+}
+
+// 既定の相対許容距離は、幾何的に同一だが末尾ビットが異なる頂点を溶接する
+TEST(StlIOTest, RelativeToleranceMergesRoundingNoise) {
+    const auto path = OutputPath("stl_weld_relative_tolerance.stl");
+    ASSERT_TRUE(i_ext::WriteStl(MakeQuadSoupWithRoundingNoise(), path));
+
+    // 既定 (相対1e-6; バウンディングボックスの対角長約424に対し約4.2e-4) では溶接される
+    EXPECT_EQ(i_ext::ReadStl(path).VertexCount(), 4u);
+}
+
+// 相対許容距離を0にすると、従来どおりビット単位の完全一致のみを溶接する
+TEST(StlIOTest, ZeroRelativeToleranceKeepsBitExactWelding) {
+    const auto path = OutputPath("stl_weld_relative_zero.stl");
+    ASSERT_TRUE(i_ext::WriteStl(MakeQuadSoupWithRoundingNoise(), path));
+
+    i_ext::StlReadParams exact;
+    exact.weld_relative_tolerance = 0.0;
+    EXPECT_EQ(i_ext::ReadStl(path, exact).VertexCount(), 5u);
+}
+
+// 絶対許容距離 (weld_tolerance) の指定は相対許容距離より優先される
+TEST(StlIOTest, AbsoluteToleranceTakesPrecedenceOverRelative) {
+    const auto path = OutputPath("stl_weld_absolute_precedence.stl");
+    ASSERT_TRUE(i_ext::WriteStl(MakeQuadSoupWithRoundingNoise(), path));
+
+    // 相対を0 (完全一致) にしても、絶対値の指定が使われて全頂点が溶接される
+    i_ext::StlReadParams coarse;
+    coarse.weld_tolerance = 1000.0;  // 一辺300より粗い量子化
+    coarse.weld_relative_tolerance = 0.0;
+    EXPECT_EQ(i_ext::ReadStl(path, coarse).VertexCount(), 1u);
 }
 
 

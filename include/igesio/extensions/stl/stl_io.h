@@ -22,18 +22,28 @@ namespace igesio::extensions {
 
 /// @brief STL読み込みの制御パラメータ
 struct StlReadParams {
-    /// @brief 三角形スープを溶接して共有頂点化するか
+    /// @brief ポリゴンスープを溶接して共有頂点化するか
     /// @note true: 一致する頂点を共有化したインデックスメッシュを返す.
     ///       ファイルの面法線は破棄される (法線チャンネルなし. 必要なら
-    ///       numerics::RecomputeNormalsで滑らか法線を再計算する.
+    ///       numerics::RecomputeNormalsWithCreaseで折り目を保った法線を,
+    ///       numerics::RecomputeNormalsで全周平均の法線を再計算する.
     ///       描画 (TriangleMeshGraphics) は法線なしを自動で補う).
     /// @note false: 三角形毎に独立な頂点 (3頂点/三角形) のまま返し、
     ///       ファイルの面法線を各頂点へ展開する (ハードエッジが保たれる)
     bool weld_vertices = true;
-    /// @brief 溶接時の許容距離
+    /// @brief 溶接時の絶対許容距離
     /// @note 各座標成分をこの値で量子化して一致判定する.
-    ///       0以下の場合はビット単位の完全一致のみを溶接する
+    ///       正の値を指定した場合はこの値を優先する.
+    ///       0以下の場合はweld_relative_toleranceから許容距離を決める
     double weld_tolerance = 0.0;
+    /// @brief 溶接時の相対許容距離 (モデルのバウンディングボックスの対角長に対する比)
+    /// @note weld_toleranceが0以下のとき、バウンディングボックスの対角長×本値を許容距離とする.
+    ///       0以下にするとビット単位の完全一致のみを溶接する.
+    ///       既定の1e-6は単精度の丸め誤差 (対角長に対して約8 ULP) を吸収し、
+    ///       かつ実形状の最小辺長より十分小さい値.
+    ///       これにより、他ツールが出力した、幾何的には同一だが末尾ビットが異なる
+    ///       頂点が溶接されずに裂け目 (境界エッジ) となるのを防ぐ
+    double weld_relative_tolerance = 1e-6;
 };
 
 /// @brief STLファイルを読み込む

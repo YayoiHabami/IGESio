@@ -101,7 +101,7 @@ TEST(TriangleMeshRenderTest, RendererDrawsMeshEntity) {
     EXPECT_GT(gl->draw_elements_calls, 0);
 }
 
-// 法線なしメッシュも描画できる (PrewarmCpuが面積重み平均で補う)
+// 法線なしメッシュも描画できる (PrewarmCpuが折り目を保った面積重み平均で補う)
 TEST(TriangleMeshRenderTest, RendererDrawsMeshWithoutNormals) {
     auto gl = std::make_shared<MockOpenGL>();
     i_graph::EntityRenderer renderer(gl);
