@@ -29,6 +29,14 @@ if(IGESIO_ENABLE_INSPECTION_EXTENSION)
     endif()
 endif()
 
+if(IGESIO_ENABLE_ANIMATION_EXTENSION)
+    # 姿勢適用はAssembly::SetGlobalTransform経由のためGL非依存 (常に追加)
+    list(APPEND EXTENSIONS_SOURCES
+        animation/animation_clip.cpp
+        animation/animation_player.cpp
+    )
+endif()
+
 add_library(igesio_extensions STATIC ${EXTENSIONS_SOURCES})
 
 # Set the source and include directories

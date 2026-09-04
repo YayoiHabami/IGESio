@@ -257,8 +257,22 @@ void IgesViewerGUI::Run(const bool vsync) {
         initial_iges_file_.clear();
     }
 
+    last_frame_time_ = glfwGetTime();
     while (!glfwWindowShouldClose(window_)) {
-        glfwWaitEvents();
+        if (continuous_redraw_) {
+            // 連続描画中もイベントは通常どおり処理する (カメラ操作は併用可能).
+            // vsync無効時のビジーループを避けるため短いタイムアウト付きで待機する
+            // (vsync有効時はglfwSwapBuffersがフレームレートを決める)
+            glfwWaitEventsTimeout(1.0 / 240.0);
+            needs_redraw_ = true;
+        } else {
+            glfwWaitEvents();
+        }
+
+        // フレーム毎の時間駆動更新 (派生クラスのアニメーション再生等)
+        const double now = glfwGetTime();
+        OnFrameUpdate(now - last_frame_time_);
+        last_frame_time_ = now;
 
         if (ImGui::IsAnyItemActive()) needs_redraw_ = true;
         if (!needs_redraw_) continue;

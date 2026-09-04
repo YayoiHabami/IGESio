@@ -19,12 +19,14 @@
 #   - IGESIO_ENABLE_STL_EXTENSION: Enable the STL (stereolithography) file I/O extension (default: OFF)
 #   - IGESIO_ENABLE_OBJ_EXTENSION: Enable the OBJ (Wavefront OBJ) file I/O extension (default: OFF)
 #   - IGESIO_ENABLE_INSPECTION_EXTENSION: Enable the inspection extension (coordinate frame groups etc.) (default: OFF)
+#   - IGESIO_ENABLE_ANIMATION_EXTENSION: Enable the keyframe animation extension (default: OFF)
 #
 # Defined macros:
 #   - IGESIO_ENABLE_BOOST: Defined when Boost support is enabled
 #   - IGESIO_STL_EXTENSION_ENABLED: Defined when the STL extension is enabled
 #   - IGESIO_OBJ_EXTENSION_ENABLED: Defined when the OBJ extension is enabled
 #   - IGESIO_INSPECTION_EXTENSION_ENABLED: Defined when the inspection extension is enabled
+#   - IGESIO_ANIMATION_EXTENSION_ENABLED: Defined when the animation extension is enabled
 cmake_minimum_required(VERSION 3.14)
 
 # Set CMP0135 policy to control timestamp handling for FetchContent archive extraction
@@ -233,16 +235,19 @@ option(IGESIO_ENABLE_STL_EXTENSION "Enable STL file I/O extension" OFF)
 option(IGESIO_ENABLE_OBJ_EXTENSION "Enable OBJ file I/O extension" OFF)
 # Option to enable the inspection extension (coordinate frame groups etc.)
 option(IGESIO_ENABLE_INSPECTION_EXTENSION "Enable inspection extension" OFF)
+# Option to enable the keyframe animation extension
+option(IGESIO_ENABLE_ANIMATION_EXTENSION "Enable keyframe animation extension" OFF)
 # Option to enable all extensions at once
 option(IGESIO_ENABLE_ALL_EXTENSIONS "Enable all extensions" OFF)
 if(IGESIO_ENABLE_ALL_EXTENSIONS)
   set(IGESIO_ENABLE_STL_EXTENSION ON)
   set(IGESIO_ENABLE_OBJ_EXTENSION ON)
   set(IGESIO_ENABLE_INSPECTION_EXTENSION ON)
+  set(IGESIO_ENABLE_ANIMATION_EXTENSION ON)
   message(STATUS "All IGESio extensions enabled")
 endif()
 if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION
-    OR IGESIO_ENABLE_INSPECTION_EXTENSION)
+    OR IGESIO_ENABLE_INSPECTION_EXTENSION OR IGESIO_ENABLE_ANIMATION_EXTENSION)
   set(IGESIO_EXTENSIONS_ENABLED ON)
 else()
   set(IGESIO_EXTENSIONS_ENABLED OFF)
@@ -257,6 +262,9 @@ if(IGESIO_ENABLE_STL_EXTENSION)
 endif()
 if(IGESIO_ENABLE_INSPECTION_EXTENSION)
   add_compile_definitions(IGESIO_INSPECTION_EXTENSION_ENABLED)
+endif()
+if(IGESIO_ENABLE_ANIMATION_EXTENSION)
+  add_compile_definitions(IGESIO_ANIMATION_EXTENSION_ENABLED)
 endif()
 
 

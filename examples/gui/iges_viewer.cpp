@@ -11,13 +11,21 @@
 
 // Include this file before other GLFW headers
 // (This file includes 'GLFW/glfw3.h' via iges_viewer_gui.h)
+#include "./animation_viewer_gui.h"
 #include "./surface_algorithm_verifier_gui.h"
+#include "./iges_viewer_gui.h"
 
 
 
 namespace {
 
+#if defined(IGESIO_ANIMATION_EXTENSION_ENABLED)
+using igesio::graphics::AnimationViewerGUI;
+#elif defined(IGESIO_INSPECTION_EXTENSION_ENABLED)
 using igesio::graphics::SurfaceAlgorithmVerifierGUI;
+#else
+using igesio::graphics::IgesViewerGUI;
+#endif
 
 /// @brief コマンドライン引数から取得したデータ
 struct CommandLineOptions {
@@ -82,7 +90,13 @@ int main(int argc, char** argv) {
 
     try {
         // ウィンドウサイズ 1280x720、MSAAサンプル数・初期ファイルは引数から
-#ifdef IGESIO_INSPECTION_EXTENSION_ENABLED
+#if defined(IGESIO_ANIMATION_EXTENSION_ENABLED)
+        // アニメーション再生付きの派生GUI (「Animation」メニューからパネルを開く.
+        // inspection拡張も有効なら「Verify」メニューの検証ツールも同居する)
+        AnimationViewerGUI viewer(
+                1280, 720, options.msaa_samples, options.iges_file);
+        viewer.Run();
+#elif defined(IGESIO_INSPECTION_EXTENSION_ENABLED)
         // 検証ツール付きの派生GUI（「Verify」メニューから検証ウィンドウを開く)
         SurfaceAlgorithmVerifierGUI viewer(
                 1280, 720, options.msaa_samples, options.iges_file);

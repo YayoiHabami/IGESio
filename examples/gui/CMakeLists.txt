@@ -67,6 +67,8 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
         iges_viewer_gui.cpp
         # Algorithm verification GUI (derived)
         surface_algorithm_verifier_gui.cpp
+        # Keyframe animation GUI (derived)
+        animation_viewer_gui.cpp
     )
 
     target_link_options(${EXAMPLE_NAME} PRIVATE

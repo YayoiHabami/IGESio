@@ -11,6 +11,7 @@ This section provides an overview of the sample code included in the `examples` 
     - [Loading IGES Files](#loading-iges-files)
     - [Viewer Controls](#viewer-controls)
     - [Assembly Operations and Structural Editing](#assembly-operations-and-structural-editing)
+    - [Animation Playback](#animation-playback)
 - [CUI Applications](#cui-applications)
   - [iges\_data\_from\_scratch.cpp](#iges_data_from_scratchcpp)
   - [iges\_data\_io.cpp](#iges_data_iocpp)
@@ -107,6 +108,29 @@ Structural editing is available from the context menu opened by right-clicking a
     - F: Adjust the camera so the whole model fits in the view.
 
 > Currently, all entities are owned directly by the root assembly at load time (no child assemblies are generated automatically). As a result, the "Assembly" selection granularity effectively selects everything. This is a forward-compatible implementation that becomes meaningful once child assemblies are generated automatically (with typed support for grouping entities).
+
+#### Animation Playback
+
+When built with the animation extension (`IGESIO_ENABLE_ANIMATION_EXTENSION`), an "Animation" menu is added to the menu bar. It plays keyframe animations that switch the poses of the loaded models (the child assemblies directly under the root).
+
+Keyframes switch stepwise without interpolation: each key's transform (rotation + translation) is held until the time of the next key, and the last key is held until the end of the animation. The animation feature itself is provided as a GUI-independent library (`AnimationClip`/`AnimationPlayer` in `igesio/extensions/animation.h`); this panel is a practical example of it.
+
+- Open the panel via "Animation" → "Animation Panel".
+- "Build & Bind Demo Clip" builds a demo keyframe sequence for each target child assembly and makes it ready to play. The demo is a single rigid motion from the base pose to the end pose (total translation + total rotation), configurable with:
+    - Motion: movement amount (Move span, a ratio of the largest world bounding box size), movement axis (Move axis), total rotation angle (Rotation), rotation axis (Rotation axis), rotation center (Rotation center: each assembly's BBox center / the whole model's BBox center / the world origin), whether to alternate the direction per child assembly (Alternate direction), and whether to append the return leg (Ping-pong).
+    - Smoothness: the number of subdivisions (Steps). The motion is split into this many keys. 1 moves in a single jump; higher values look continuous (about 60 per second of travel is already smooth at 60 fps).
+    - Timing: the delay before the first key (Start delay), the one-way travel time (Travel), the per-assembly start offset (Stagger), and how long the final pose is held (Hold).
+    - Targets: whether to animate only the selected assemblies (Selected assemblies only). The targets are the child assemblies directly under the root that own the selected elements.
+    - The end of the settings shows the size of the clip to be generated (target count, keys per track, and total duration).
+- Playback controls:
+    - Play/Pause/Stop: Start, pause, and stop playback (stopping restores the original poses).
+    - Time slider: Seek to an arbitrary time (can be dragged during playback).
+    - Speed slider: Change the playback speed (0.1x to 4.0x).
+    - Loop: Toggle looped playback.
+    - Release: Detach the animation and restore the original poses.
+- After binding, the settings can still be changed under "Demo settings" and applied with Rebuild (playback continues from the beginning if it was playing).
+- The bottom of the panel lists the target assembly names, their key counts, and their key time ranges.
+- Camera controls (rotate, pan, zoom) work as usual during playback.
 
 ## CUI Applications
 

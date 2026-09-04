@@ -19,6 +19,13 @@ if(IGESIO_ENABLE_INSPECTION_EXTENSION)
     )
 endif()
 
+if(IGESIO_ENABLE_ANIMATION_EXTENSION)
+    list(APPEND TEST_SOURCES
+        animation/test_animation_clip.cpp
+        animation/test_animation_player.cpp
+    )
+endif()
+
 add_executable(test_extensions ${TEST_SOURCES})
 target_link_libraries(test_extensions PRIVATE gtest gtest_main igesio)
 

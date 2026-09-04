@@ -73,6 +73,10 @@ class IgesViewerGUI {
     std::unordered_map<ObjectID, Vector3d> selected_hit_positions_;
     /// @brief 再描画が必要か
     bool needs_redraw_ = true;
+    /// @brief 連続描画モード (アニメーション等でイベントが無くても毎フレーム描画)
+    bool continuous_redraw_ = false;
+    /// @brief 前フレームの時刻 [s] (OnFrameUpdateのdt計算用; glfwGetTime基準)
+    double last_frame_time_ = 0.0;
     /// @brief 起動後の初回ファイル読み込みでfit view済みか
     bool initial_fit_done_ = false;
 
@@ -155,10 +159,24 @@ class IgesViewerGUI {
     ///         既定ではfalseを返し、通常のエンティティ選択を行う.
     virtual bool OnViewportClick(double x, double y, int mods) { return false; }
 
+    /// @brief フレーム毎の時間駆動更新フック (イベント処理直後・描画判定前に呼ばれる)
+    /// @param dt_sec 前フレームからの実経過時間 [s]
+    /// @note 既定では何もしない. アニメーション再生等の時間駆動の更新を派生で行う.
+    ///       イベント待機でブロックした時間もdt_secに含まれる点に注意
+    ///       (連続描画モード外では大きな値になりうる).
+    virtual void OnFrameUpdate(double dt_sec) {}
+
     /// @brief セッション状態 (Scene) を取得する (派生クラス用)
     models::Scene& GetScene() { return *scene_; }
     /// @brief 再描画を要求する (派生クラス用)
     void RequestRedraw() { needs_redraw_ = true; }
+    /// @brief 連続描画モードを設定する (派生クラス用)
+    /// @param enable trueの間はイベント待機をやめ毎フレーム描画する
+    /// @note アニメーション再生中など、入力イベントが無くても画面更新が必要な
+    ///       場合に有効化する. 連続駆動中もGLFWイベント処理は通常どおり走るため、
+    ///       カメラ操作 (パン/ズーム等) は併用できる. falseに戻すと省電力な
+    ///       イベント待機 (glfwWaitEvents) へ復帰する.
+    void SetContinuousRedraw(const bool enable) { continuous_redraw_ = enable; }
 
     /// @brief 読み込んだ子Assemblyをシーンへ組み込む (読込経路共通の後処理)
     /// @param child 追加する子Assembly (Metadata().nameは設定済みであること)
