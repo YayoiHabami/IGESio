@@ -113,11 +113,11 @@ Structural editing is available from the context menu opened by right-clicking a
 
 When built with the animation extension (`IGESIO_ENABLE_ANIMATION_EXTENSION`), an "Animation" menu is added to the menu bar. It plays keyframe animations that switch the poses of the loaded models (the child assemblies directly under the root).
 
-Keyframes switch stepwise without interpolation: each key's transform (rotation + translation) is held until the time of the next key, and the last key is held until the end of the animation. The animation feature itself is provided as a GUI-independent library (`AnimationClip`/`AnimationPlayer` in `igesio/extensions/animation.h`); this panel is a practical example of it.
+Keyframes switch stepwise without interpolation: each key's value is held until the time of the next key, and the last key is held until the end of the animation. A clip holds three kinds of keys. Transform keys (rotation + translation) switch the pose of a target assembly, visibility keys show or hide a target assembly, and event keys form named integer sequences with no target; they do not act on the scene but let the caller query the value at the current time. The animation feature itself is provided as a GUI-independent library (`AnimationClip`/`AnimationPlayer` in `igesio/extensions/animation.h`); this panel is a practical example of it.
 
 - Open the panel via "Animation" → "Animation Panel".
 - "Build & Bind Demo Clip" builds a demo keyframe sequence for each target child assembly and makes it ready to play. The demo is a single rigid motion from the base pose to the end pose (total translation + total rotation), configurable with:
-    - Motion: movement amount (Move span, a ratio of the largest world bounding box size), movement axis (Move axis), total rotation angle (Rotation), rotation axis (Rotation axis), rotation center (Rotation center: each assembly's BBox center / the whole model's BBox center / the world origin), whether to alternate the direction per child assembly (Alternate direction), and whether to append the return leg (Ping-pong).
+    - Motion: movement amount (Move span, a ratio of the largest world bounding box size), movement axis (Move axis), total rotation angle (Rotation), rotation axis (Rotation axis), rotation center (Rotation center: each assembly's BBox center / the whole model's BBox center / the world origin), whether to alternate the direction per child assembly (Alternate direction), whether to append the return leg (Ping-pong), and whether to hide each target after its outbound travel (Hide after travel). The last option adds visibility keys: the target is hidden at its arrival time and shown again when the return leg (Ping-pong) or the hold ends.
     - Smoothness: the number of subdivisions (Steps). The motion is split into this many keys. 1 moves in a single jump; higher values look continuous (about 60 per second of travel is already smooth at 60 fps).
     - Timing: the delay before the first key (Start delay), the one-way travel time (Travel), the per-assembly start offset (Stagger), and how long the final pose is held (Hold).
     - Targets: whether to animate only the selected assemblies (Selected assemblies only). The targets are the child assemblies directly under the root that own the selected elements.
@@ -127,9 +127,11 @@ Keyframes switch stepwise without interpolation: each key's transform (rotation 
     - Time slider: Seek to an arbitrary time (can be dragged during playback).
     - Speed slider: Change the playback speed (0.1x to 4.0x).
     - Loop: Toggle looped playback.
-    - Release: Detach the animation and restore the original poses.
+    - Release: Detach the animation and restore the original poses and visibility.
+    - Stage: The current value of the demo clip's `"stage"` event track (0 = idle, 1 = outbound, 2 = return, 3 = hold; the first target's timing is used as the representative).
+    - Time change: Where the time last moved from and to, and whether that movement was monotone (forward only). This is the result of the player's `TakeTimeChange`, called every frame after `Advance`.
 - After binding, the settings can still be changed under "Demo settings" and applied with Rebuild (playback continues from the beginning if it was playing).
-- The bottom of the panel lists the target assembly names, their key counts, and their key time ranges.
+- The bottom of the panel lists the tracks: transform and visibility tracks show the target assembly name, key count, and key time range; event tracks show the name and key count.
 - Camera controls (rotate, pan, zoom) work as usual during playback.
 
 ## CUI Applications

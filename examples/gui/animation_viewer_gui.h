@@ -15,6 +15,7 @@
 #ifdef IGESIO_ANIMATION_EXTENSION_ENABLED
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -79,6 +80,10 @@ struct DemoClipParams {
     bool alternate_direction = true;
     /// @brief 復路 (終端姿勢から基準姿勢へ戻る運動) を続けて追加するか
     bool ping_pong = false;
+    /// @brief 片道到着後に対象を非表示にするか (可視性トラックの動作確認用)
+    /// @note trueのとき各対象に、片道到着時刻でfalse、復路終了 (ping_pong時)
+    ///       または保持終了でtrueの可視性キーを打つ
+    bool hide_after_travel = false;
     /// @brief 片道の分割数 (1で分割なし=一気に動く)
     int steps = 20;
     /// @brief 最初のキーまでの待機時間 [s]
@@ -123,11 +128,15 @@ class AnimationViewerGUI : public AnimationViewerBase {
     /// @brief アニメーションパネル本体を描画する
     void RenderAnimationWindow();
     /// @brief 再生操作部 (Play/Pause/Stop・シーク・速度・ループ) を描画する
+    /// @note 末尾に"stage"イベントトラックの現在値と、直近の時刻変化
+    ///       (`TakeTimeChange`の結果) を表示する
     void RenderPlaybackControls();
     /// @brief デモクリップの生成パラメータの編集部を描画する
     /// @note 末尾に生成結果 (対象数・キー数・総時間) のプレビューを表示する
     void RenderDemoSettings();
-    /// @brief トラック一覧 (対象Assembly名+キー数+時刻範囲) を描画する
+    /// @brief トラック一覧を描画する
+    /// @note 変換・可視性トラックは対象Assembly名+キー数+時刻範囲、
+    ///       イベントトラックは名前+キー数を示す
     void RenderTrackList();
     /// @brief アニメーション対象の子Assemblyを収集する
     /// @return root直下の子Assembly. `selected_only`が有効な場合は、
@@ -135,7 +144,9 @@ class AnimationViewerGUI : public AnimationViewerBase {
     std::vector<std::shared_ptr<models::Assembly>> CollectTargets();
     /// @brief 読み込み済みの子Assemblyからデモクリップを構築してBindする
     /// @note 子Assembly毎に、基準姿勢から終端姿勢へ向かう剛体運動を
-    ///       `DemoClipParams::steps`分割したキー列を生成する.
+    ///       `DemoClipParams::steps`分割したキー列を生成する. `hide_after_travel`
+    ///       有効時は可視性キーも打つ. 先頭対象の時刻を代表として"stage"イベント
+    ///       トラック (0=待機, 1=往路, 2=復路, 3=保持) を打つ.
     ///       バインド済みの場合は再構築 (再生中だった場合は先頭から再生を継続)
     void BuildAndBindDemoClip();
     /// @brief アニメーションを解除する (基準姿勢へ復元)
@@ -153,6 +164,9 @@ class AnimationViewerGUI : public AnimationViewerBase {
     bool loop_ui_ = false;
     /// @brief 直近の操作の結果メッセージ
     std::string anim_status_;
+    /// @brief 直近に時刻が動いたときの`TakeTimeChange`の結果 (未取得なら無し)
+    /// @note 毎フレーム`Advance`の後に`TakeTimeChange`を呼び、changedのものを保持
+    std::optional<extensions::animation::TimeChange> last_time_change_;
 };
 
 }  // namespace igesio::graphics

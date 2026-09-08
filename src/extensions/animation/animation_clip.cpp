@@ -10,46 +10,106 @@
 #include <algorithm>
 #include <iterator>
 #include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace igesio::extensions::animation {
 
+namespace {
+
+/// @brief 時刻について昇順を維持してキーを挿入する
+/// @tparam Key `KeyframeBase`を継承したキー型
+/// @param[out] keys 挿入先のキー列 (時刻昇順)
+/// @param key 挿入するキー
+/// @param duplicate_message 同時刻のキーが既に存在する場合の例外メッセージ
+/// @throw std::invalid_argument 同時刻のキーが既に存在する場合
+template <class Key>
+void InsertKeySorted(std::vector<Key>* keys, Key key,
+                     const char* duplicate_message) {
+    // upper_boundの直前要素と同時刻なら重複
+    const auto pos = detail::UpperBoundByTime(*keys, key.time_sec);
+    if (pos != keys->begin() && std::prev(pos)->time_sec == key.time_sec) {
+        throw std::invalid_argument(duplicate_message);
+    }
+    keys->insert(pos, std::move(key));
+}
+
+/// @brief 指定されたトラックに一致するものを探し、無ければ末尾に新規作成して返す
+/// @tparam Track トラック型
+/// @tparam Pred トラックを受け取りboolを返す関数
+/// @tparam Make 新規トラックを生成する関数
+/// @param[out] tracks トラックの集合
+/// @param pred 既存トラックの一致判定
+/// @param make 新規トラックの生成
+/// @return 一致した (または新規作成した) トラックへの参照
+/// @note トラック数は少数として線形探索する
+template <class Track, class Pred, class Make>
+Track& FindOrCreateTrack(std::vector<Track>* tracks, Pred pred, Make make) {
+    auto it = std::find_if(tracks->begin(), tracks->end(), pred);
+    if (it != tracks->end()) return *it;
+    tracks->push_back(make());
+    return tracks->back();
+}
+
+}  // namespace
+
+
+
 void AnimationClip::AddKey(const ObjectID& target, const double time_sec,
                            const igesio::Matrix4d& transform) {
-    if (time_sec < 0.0) {
-        throw std::invalid_argument("Keyframe time must be non-negative");
-    }
-    if (explicit_duration_ && time_sec > *explicit_duration_) {
-        throw std::invalid_argument(
-                "Keyframe time exceeds the explicit clip duration");
-    }
+    ValidateKeyTime(time_sec);
     if (!IsRigidTransform(transform)) {
         throw std::invalid_argument(
                 "Keyframe transform must be a rigid transform "
                 "(rotation + translation only)");
     }
 
-    // ターゲット毎に1トラックへ集約する (トラック数は少数として線形探索)
-    auto it = std::find_if(tracks_.begin(), tracks_.end(),
-                           [&target](const AnimationTrack& t) {
-                               return t.target == target;
-                           });
-    if (it == tracks_.end()) {
-        tracks_.push_back(AnimationTrack{target, {}});
-        it = std::prev(tracks_.end());
-    }
-
-    // 時刻昇順を維持して挿入する. upper_boundの直前要素と同時刻なら重複
-    auto& keys = it->keys;
-    const auto pos = std::upper_bound(
-            keys.begin(), keys.end(), time_sec,
-            [](const double t, const TransformKeyframe& key) {
-                return t < key.time_sec;
+    // ターゲット毎に1トラックへ集約する
+    auto& track = FindOrCreateTrack(
+            &tracks_,
+            [&target](const AnimationTrack& t) { return t.target == target; },
+            [&target]() {
+                return AnimationTrack{{}, target};
             });
-    if (pos != keys.begin() && std::prev(pos)->time_sec == time_sec) {
-        throw std::invalid_argument(
-                "Duplicate keyframe time for the same target");
+    InsertKeySorted(&track.keys, TransformKeyframe{{time_sec}, transform},
+                    "Duplicate keyframe time for the same target");
+
+    max_key_time_ = std::max(max_key_time_, time_sec);
+}
+
+void AnimationClip::AddVisibilityKey(const ObjectID& target,
+                                     const double time_sec,
+                                     const bool visible) {
+    ValidateKeyTime(time_sec);
+
+    auto& track = FindOrCreateTrack(
+            &visibility_tracks_,
+            [&target](const VisibilityTrack& t) { return t.target == target; },
+            [&target]() {
+                return VisibilityTrack{{}, target};
+            });
+    InsertKeySorted(&track.keys, VisibilityKeyframe{{time_sec}, visible},
+                    "Duplicate visibility key time for the same target");
+
+    max_key_time_ = std::max(max_key_time_, time_sec);
+}
+
+void AnimationClip::AddEvent(const std::string& name, const double time_sec,
+                             const std::int64_t value) {
+    if (name.empty()) {
+        throw std::invalid_argument("Event track name must not be empty");
     }
-    keys.insert(pos, TransformKeyframe{time_sec, transform});
+    ValidateKeyTime(time_sec);
+
+    auto& track = FindOrCreateTrack(
+            &event_tracks_,
+            [&name](const EventTrack& t) { return t.name == name; },
+            [&name]() {
+                return EventTrack{{}, name};
+            });
+    InsertKeySorted(&track.keys, EventKey{{time_sec}, value},
+                    "Duplicate event key time for the same track");
 
     max_key_time_ = std::max(max_key_time_, time_sec);
 }
@@ -69,23 +129,46 @@ double AnimationClip::Duration() const {
     return explicit_duration_ ? *explicit_duration_ : max_key_time_;
 }
 
+const EventTrack* AnimationClip::FindEventTrack(
+        const std::string& name) const {
+    const auto it = std::find_if(
+            event_tracks_.begin(), event_tracks_.end(),
+            [&name](const EventTrack& t) { return t.name == name; });
+    return it == event_tracks_.end() ? nullptr : &*it;
+}
+
+void AnimationClip::ValidateKeyTime(const double time_sec) const {
+    if (time_sec < 0.0) {
+        throw std::invalid_argument("Keyframe time must be non-negative");
+    }
+    if (explicit_duration_ && time_sec > *explicit_duration_) {
+        throw std::invalid_argument(
+                "Keyframe time exceeds the explicit clip duration");
+    }
+}
+
 
 
 /**
  * 非メンバ関数
  */
 
-std::optional<std::size_t> ActiveKeyIndex(const AnimationTrack& track,
-                                          const double time_sec) {
+std::optional<std::int64_t> ActiveEventValue(const EventTrack& track,
+                                             const double time_sec) {
+    const auto index = ActiveKeyIndex(track, time_sec);
+    if (!index) return std::nullopt;
+    return track.keys[*index].value;
+}
+
+std::pair<std::size_t, std::size_t>
+EventKeysBetween(const EventTrack& track, const double from, const double to) {
+    // 前進・後退のいずれも`min < t_k <= max`のキーが対象となる
+    // (左開・右閉のため、両端ともupper_boundで求まる)
     const auto& keys = track.keys;
-    // time_secより後のキーの先頭を求め、その直前が有効なキーとする
-    const auto pos = std::upper_bound(
-            keys.begin(), keys.end(), time_sec,
-            [](const double t, const TransformKeyframe& key) {
-                return t < key.time_sec;
-            });
-    if (pos == keys.begin()) return std::nullopt;
-    return static_cast<std::size_t>(std::distance(keys.begin(), pos)) - 1;
+    const auto lo = detail::UpperBoundByTime(keys, std::min(from, to));
+    const auto hi = detail::UpperBoundByTime(keys, std::max(from, to));
+    return {static_cast<std::size_t>(std::distance(keys.begin(), lo)),
+            static_cast<std::size_t>(std::distance(keys.begin(), hi))};
 }
 
 bool IsRigidTransform(const igesio::Matrix4d& transform,

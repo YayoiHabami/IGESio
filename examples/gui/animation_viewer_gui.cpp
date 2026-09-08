@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <iomanip>
 #include <memory>
@@ -318,6 +319,85 @@ void AppendMotionKeys(anim::AnimationClip* clip, const ObjectID& target,
     }
 }
 
+/// @brief 1対象分の運動の開始時刻を求める
+/// @param params 生成パラメータ (サニタイズ済みであること)
+/// @param index 対象の並び番号 (開始時刻のずらし量に使う)
+/// @return 最初の運動キーの直前となる時刻 [s]
+double MotionStartSec(const DemoClipParams& params, const std::size_t index) {
+    return static_cast<double>(params.start_delay_sec) +
+           static_cast<double>(params.stagger_sec) *
+                   static_cast<double>(index);
+}
+
+/// @brief 1対象分の可視性キーをクリップへ追加する
+/// @param[out] clip 追加先のクリップ
+/// @param target 対象AssemblyのID
+/// @param params 生成パラメータ (サニタイズ済みであること)
+/// @param index 対象の並び番号 (開始時刻のずらし量に使う)
+/// @throw std::invalid_argument キー時刻がクリップの制約を満たさない場合
+/// @note 片道到着時刻で非表示にし、復路終了 (ping_pong時) または保持終了で
+///       再表示する. 再表示時刻が到着時刻と一致する (保持0秒) 場合は再表示
+///       キーを省き、Stop/Releaseによる基準可視性への復元に任せる
+void AppendVisibilityKeys(anim::AnimationClip* clip, const ObjectID& target,
+                          const DemoClipParams& params,
+                          const std::size_t index) {
+    const double travel = static_cast<double>(params.travel_sec);
+    const double arrival = MotionStartSec(params, index) + travel;
+    const double reappear = params.ping_pong
+            ? arrival + travel
+            : arrival + static_cast<double>(params.hold_sec);
+    clip->AddVisibilityKey(target, arrival, false);
+    if (reappear > arrival) clip->AddVisibilityKey(target, reappear, true);
+}
+
+/// @brief "stage"イベントトラックの名前
+constexpr const char* kStageTrackName = "stage";
+/// @brief "stage"イベントの値 (待機・往路・復路・保持)
+enum StageValue : std::int64_t {
+    /// @brief 最初のキーまでの待機
+    kStageIdle = 0,
+    /// @brief 往路 (基準姿勢から終端姿勢へ)
+    kStageOutbound = 1,
+    /// @brief 復路 (終端姿勢から基準姿勢へ. ping_pong時のみ)
+    kStageReturn = 2,
+    /// @brief 最終姿勢の保持
+    kStageHold = 3,
+};
+
+/// @brief "stage"イベントトラックをクリップへ追加する
+/// @param[out] clip 追加先のクリップ
+/// @param params 生成パラメータ (サニタイズ済みであること)
+/// @throw std::invalid_argument キー時刻がクリップの制約を満たさない場合
+/// @note 対象毎のずらし量は無視し、先頭対象 (index 0) の時刻を代表として用いる.
+///       待機時間が0の場合は待機キーを省く (往路キーと同時刻になるため)
+void AppendStageEvents(anim::AnimationClip* clip,
+                       const DemoClipParams& params) {
+    const double start = MotionStartSec(params, 0);
+    const double travel = static_cast<double>(params.travel_sec);
+    if (start > 0.0) clip->AddEvent(kStageTrackName, 0.0, kStageIdle);
+    clip->AddEvent(kStageTrackName, start, kStageOutbound);
+    if (params.ping_pong) {
+        clip->AddEvent(kStageTrackName, start + travel, kStageReturn);
+        clip->AddEvent(kStageTrackName, start + travel * 2.0, kStageHold);
+    } else {
+        clip->AddEvent(kStageTrackName, start + travel, kStageHold);
+    }
+}
+
+/// @brief "stage"イベント値の表示ラベルを取得する
+/// @param value イベント値 (無ければ先頭キーより前)
+/// @return 表示用の文字列
+const char* StageLabel(const std::optional<std::int64_t>& value) {
+    if (!value) return "(before first key)";
+    switch (*value) {
+        case kStageIdle: return "0 (idle)";
+        case kStageOutbound: return "1 (outbound)";
+        case kStageReturn: return "2 (return)";
+        case kStageHold: return "3 (hold)";
+        default: return "(unknown)";
+    }
+}
+
 /// @brief 秒数を小数点以下2桁の文字列にする
 /// @param seconds 秒数
 /// @return "4.60"形式の文字列
@@ -367,6 +447,12 @@ void AnimationViewerGUI::OnFrameUpdate(const double dt_sec) {
     if (player_.State() == anim::PlaybackState::kPlaying) {
         player_.Advance(dt_sec);
         RequestRedraw();
+    }
+    // 利用側の手本: 毎フレーム、Advanceの後に時刻の動きを問い合わせる.
+    // Seek/Stop等のUI操作による移動もここでまとめて取得される
+    if (player_.IsBound()) {
+        const auto change = player_.TakeTimeChange();
+        if (change.changed) last_time_change_ = change;
     }
     // 再生状態に連動して連続描画を切り替える (停止・終端到達で省電力待機へ復帰)
     SetContinuousRedraw(player_.State() == anim::PlaybackState::kPlaying);
@@ -454,6 +540,20 @@ void AnimationViewerGUI::RenderPlaybackControls() {
     ImGui::SameLine();
     ImGui::Text("| %s | %.2f / %.2f s", StateLabel(state),
                 player_.CurrentTime(), player_.Duration());
+
+    // イベントトラックの現在値 (利用側の問い合わせ例)
+    if (const auto* stage = player_.Clip().FindEventTrack(kStageTrackName)) {
+        ImGui::Text("Stage: %s", StageLabel(anim::ActiveEventValue(
+                                          *stage, player_.CurrentTime())));
+    }
+    // 直近の時刻変化 (TakeTimeChangeの結果)
+    if (last_time_change_) {
+        ImGui::Text("Time change: %.2f -> %.2f s (%s)",
+                    last_time_change_->from, last_time_change_->to,
+                    last_time_change_->monotone ? "monotone" : "non-monotone");
+    } else {
+        ImGui::Text("Time change: (none yet)");
+    }
 }
 
 void AnimationViewerGUI::RenderDemoSettings() {
@@ -468,6 +568,12 @@ void AnimationViewerGUI::RenderDemoSettings() {
         ImGui::Checkbox("Alternate direction", &p.alternate_direction);
         ImGui::SameLine();
         ImGui::Checkbox("Ping-pong", &p.ping_pong);
+        ImGui::Checkbox("Hide after travel", &p.hide_after_travel);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                    "Adds visibility keys: hidden on arrival, shown again "
+                    "when the return leg (Ping-pong) or the hold ends.");
+        }
     }
     if (ImGui::CollapsingHeader("Smoothness", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::SliderInt("Steps", &p.steps, 1, kMaxDemoSteps);
@@ -496,19 +602,43 @@ void AnimationViewerGUI::RenderDemoSettings() {
 }
 
 void AnimationViewerGUI::RenderTrackList() {
-    const auto& tracks = player_.Clip().Tracks();
-    ImGui::Text("Tracks: %d", static_cast<int>(tracks.size()));
+    const auto& clip = player_.Clip();
+    const auto& root = GetScene().Root();
+
+    // 分割数によりキー数が多くなるため、時刻は範囲のみを示す
+    const auto& tracks = clip.Tracks();
+    ImGui::Text("Transform tracks: %d", static_cast<int>(tracks.size()));
     for (const auto& track : tracks) {
-        const auto name = FindAssemblyName(GetScene().Root(), track.target);
+        const auto name = FindAssemblyName(root, track.target);
         if (track.keys.empty()) {
             ImGui::BulletText("%s: no keys", name.c_str());
             continue;
         }
-        // 分割数によりキー数が多くなるため、時刻は範囲のみを示す
         ImGui::BulletText("%s: %d keys [%.2f - %.2f s]", name.c_str(),
                           static_cast<int>(track.keys.size()),
                           track.keys.front().time_sec,
                           track.keys.back().time_sec);
+    }
+
+    const auto& vtracks = clip.VisibilityTracks();
+    ImGui::Text("Visibility tracks: %d", static_cast<int>(vtracks.size()));
+    for (const auto& track : vtracks) {
+        const auto name = FindAssemblyName(root, track.target);
+        if (track.keys.empty()) {
+            ImGui::BulletText("%s: no keys", name.c_str());
+            continue;
+        }
+        ImGui::BulletText("%s: %d keys [%.2f - %.2f s]", name.c_str(),
+                          static_cast<int>(track.keys.size()),
+                          track.keys.front().time_sec,
+                          track.keys.back().time_sec);
+    }
+
+    const auto& etracks = clip.EventTracks();
+    ImGui::Text("Event tracks: %d", static_cast<int>(etracks.size()));
+    for (const auto& track : etracks) {
+        ImGui::BulletText("\"%s\": %d keys", track.name.c_str(),
+                          static_cast<int>(track.keys.size()));
     }
 }
 
@@ -568,7 +698,11 @@ void AnimationViewerGUI::BuildAndBindDemoClip() {
             const auto motion =
                     MakeDemoMotion(params, *targets[i], extent, i);
             AppendMotionKeys(&clip, targets[i]->GetID(), motion, params, i);
+            if (params.hide_after_travel) {
+                AppendVisibilityKeys(&clip, targets[i]->GetID(), params, i);
+            }
         }
+        AppendStageEvents(&clip, params);
         clip.SetDuration(plan.duration_sec);
     } catch (const std::exception& e) {
         anim_status_ = std::string("Failed to build clip: ") + e.what();
@@ -576,6 +710,8 @@ void AnimationViewerGUI::BuildAndBindDemoClip() {
     }
 
     const auto unresolved = player_.Bind(root, clip);
+    // Bindで時刻変化の記録が初期化されるため、表示側も揃える
+    last_time_change_.reset();
     player_.SetSpeed(static_cast<double>(speed_ui_));
     player_.SetLoop(loop_ui_);
     if (was_playing) player_.Play();
@@ -588,6 +724,7 @@ void AnimationViewerGUI::BuildAndBindDemoClip() {
 
 void AnimationViewerGUI::ReleaseAnimation() {
     player_.Unbind();
+    last_time_change_.reset();
     SetContinuousRedraw(false);
     anim_status_ = "Animation released (base poses restored).";
     RequestRedraw();
