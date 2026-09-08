@@ -127,7 +127,7 @@ if (!success) {
 To build the IGESio library, you need:
 
 - **C++17 compatible compiler**: Required for modern C++ features
-- **CMake 3.14 or later**: Used as the build system
+- **CMake 3.16 or later**: Used as the build system
 
 ### Tested Environments
 

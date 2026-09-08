@@ -37,6 +37,15 @@ if(IGESIO_ENABLE_ANIMATION_EXTENSION)
     )
 endif()
 
+if(IGESIO_ENABLE_MACHINES_EXTENSION)
+    # TOML読込・運動学はGL非依存 (常に追加). サブフォルダ単位で列挙する
+    list(APPEND EXTENSIONS_SOURCES
+        machines/core/diagnostics.cpp
+        machines/core/units.cpp
+        machines/core/rotation.cpp
+    )
+endif()
+
 add_library(igesio_extensions STATIC ${EXTENSIONS_SOURCES})
 
 # Set the source and include directories
@@ -60,6 +69,11 @@ target_link_libraries(igesio_extensions
 if(IGESIO_ENABLE_GRAPHICS)
     # graphics有効時のみ、拡張固有の描画関連ソースをリンク可能にする
     target_link_libraries(igesio_extensions PUBLIC IGESio::graphics)
+endif()
+if(IGESIO_ENABLE_MACHINES_EXTENSION)
+    # toml11はヘッダオンリーで、.cpp内でのみ使用している. BUILD_INTERFACEで囲い、
+    # install(EXPORT)がtoml11ターゲットを要求しないようにする (Boost::mathと同型)
+    target_link_libraries(igesio_extensions PRIVATE $<BUILD_INTERFACE:toml11::toml11>)
 endif()
 
 # Create an alias for the extensions library

@@ -20,6 +20,8 @@
 #   - IGESIO_ENABLE_OBJ_EXTENSION: Enable the OBJ (Wavefront OBJ) file I/O extension (default: OFF)
 #   - IGESIO_ENABLE_INSPECTION_EXTENSION: Enable the inspection extension (coordinate frame groups etc.) (default: OFF)
 #   - IGESIO_ENABLE_ANIMATION_EXTENSION: Enable the keyframe animation extension (default: OFF)
+#   - IGESIO_ENABLE_MACHINES_EXTENSION: Enable the machine-tool kinematics and simulation extension (default: OFF)
+#     - if IGESIO_ENABLE_MACHINES_EXTENSION is ON, the STL, OBJ and animation extensions are also set to ON
 #
 # Defined macros:
 #   - IGESIO_ENABLE_BOOST: Defined when Boost support is enabled
@@ -27,7 +29,8 @@
 #   - IGESIO_OBJ_EXTENSION_ENABLED: Defined when the OBJ extension is enabled
 #   - IGESIO_INSPECTION_EXTENSION_ENABLED: Defined when the inspection extension is enabled
 #   - IGESIO_ANIMATION_EXTENSION_ENABLED: Defined when the animation extension is enabled
-cmake_minimum_required(VERSION 3.14)
+#   - IGESIO_MACHINES_EXTENSION_ENABLED: Defined when the machines extension is enabled
+cmake_minimum_required(VERSION 3.16)
 
 # Set CMP0135 policy to control timestamp handling for FetchContent archive extraction
 # when CMake version 3.24 or later is available
@@ -237,6 +240,8 @@ option(IGESIO_ENABLE_OBJ_EXTENSION "Enable OBJ file I/O extension" OFF)
 option(IGESIO_ENABLE_INSPECTION_EXTENSION "Enable inspection extension" OFF)
 # Option to enable the keyframe animation extension
 option(IGESIO_ENABLE_ANIMATION_EXTENSION "Enable keyframe animation extension" OFF)
+# Option to enable the machine-tool kinematics and simulation extension
+option(IGESIO_ENABLE_MACHINES_EXTENSION "Enable machine-tool kinematics and simulation extension" OFF)
 # Option to enable all extensions at once
 option(IGESIO_ENABLE_ALL_EXTENSIONS "Enable all extensions" OFF)
 if(IGESIO_ENABLE_ALL_EXTENSIONS)
@@ -244,10 +249,19 @@ if(IGESIO_ENABLE_ALL_EXTENSIONS)
   set(IGESIO_ENABLE_OBJ_EXTENSION ON)
   set(IGESIO_ENABLE_INSPECTION_EXTENSION ON)
   set(IGESIO_ENABLE_ANIMATION_EXTENSION ON)
+  set(IGESIO_ENABLE_MACHINES_EXTENSION ON)
   message(STATUS "All IGESio extensions enabled")
 endif()
+# The machines extension reads STL/OBJ geometry and drives the animation player
+if(IGESIO_ENABLE_MACHINES_EXTENSION)
+  set(IGESIO_ENABLE_STL_EXTENSION ON)
+  set(IGESIO_ENABLE_OBJ_EXTENSION ON)
+  set(IGESIO_ENABLE_ANIMATION_EXTENSION ON)
+  message(STATUS "Machines extension enabled (STL, OBJ and animation extensions forced ON)")
+endif()
 if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION
-    OR IGESIO_ENABLE_INSPECTION_EXTENSION OR IGESIO_ENABLE_ANIMATION_EXTENSION)
+    OR IGESIO_ENABLE_INSPECTION_EXTENSION OR IGESIO_ENABLE_ANIMATION_EXTENSION
+    OR IGESIO_ENABLE_MACHINES_EXTENSION)
   set(IGESIO_EXTENSIONS_ENABLED ON)
 else()
   set(IGESIO_EXTENSIONS_ENABLED OFF)
@@ -265,6 +279,33 @@ if(IGESIO_ENABLE_INSPECTION_EXTENSION)
 endif()
 if(IGESIO_ENABLE_ANIMATION_EXTENSION)
   add_compile_definitions(IGESIO_ANIMATION_EXTENSION_ENABLED)
+endif()
+if(IGESIO_ENABLE_MACHINES_EXTENSION)
+  add_compile_definitions(IGESIO_MACHINES_EXTENSION_ENABLED)
+endif()
+
+# toml11 (header-only TOML parser) for the machines extension.
+# Prefer a locally installed toml11; fetch it only as a fallback.
+if(IGESIO_ENABLE_MACHINES_EXTENSION)
+  find_package(toml11 QUIET CONFIG)
+  if(toml11_FOUND)
+    message(STATUS "toml11 found locally: ${toml11_DIR}")
+  else()
+    message(STATUS "toml11 not found locally. Fetching via FetchContent...")
+    include(FetchContent)
+    igesio_disable_build_testing()
+    # GIT_SUBMODULES "" skips the docs theme submodule, which fails to fetch
+    # (requires CMake 3.16 or later for the empty list to mean "none")
+    FetchContent_Declare(
+      toml11
+      GIT_REPOSITORY https://github.com/ToruNiina/toml11.git
+      GIT_TAG        v4.4.0
+      GIT_SHALLOW    TRUE
+      GIT_SUBMODULES ""
+    )
+    FetchContent_MakeAvailable(toml11)
+    igesio_restore_build_testing()
+  endif()
 endif()
 
 

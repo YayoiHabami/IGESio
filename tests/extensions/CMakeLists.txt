@@ -26,6 +26,13 @@ if(IGESIO_ENABLE_ANIMATION_EXTENSION)
     )
 endif()
 
+if(IGESIO_ENABLE_MACHINES_EXTENSION)
+    list(APPEND TEST_SOURCES
+        machines/core/test_units.cpp
+        machines/core/test_rotation.cpp
+    )
+endif()
+
 add_executable(test_extensions ${TEST_SOURCES})
 target_link_libraries(test_extensions PRIVATE gtest gtest_main igesio)
 
