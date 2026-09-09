@@ -38,11 +38,15 @@ if(IGESIO_ENABLE_ANIMATION_EXTENSION)
 endif()
 
 if(IGESIO_ENABLE_MACHINES_EXTENSION)
-    # TOML読込・運動学はGL非依存 (常に追加). サブフォルダ単位で列挙する
+    # TOML入出力・運動学はGL非依存 (常に追加). サブフォルダ単位で列挙する
     list(APPEND EXTENSIONS_SOURCES
         machines/core/diagnostics.cpp
         machines/core/units.cpp
         machines/core/rotation.cpp
+        machines/machine/machine_definition.cpp
+        machines/machine/toml_reading.cpp
+        machines/machine/machine_writing.cpp
+        machines/machine/machine_io.cpp
     )
 endif()
 

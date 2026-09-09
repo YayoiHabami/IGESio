@@ -1,0 +1,195 @@
+# 工具側XYZ・テーブル側ACの同時5軸機（検証用モデル）
+# 運動連鎖は以下のとおりで、基準姿勢における全STLの原点は機械座標系原点に一致する
+#
+#   (table)-C-(cradle)-A-(cradle-frame)-(base)-X-(on-x)-Y-(on-y)-Z-(on-z)
+#
+# 基準姿勢 (X=Y=Z=0mm, A=C=0°) における基準点:
+#   - 機械座標系原点     : テーブル上面の中心
+#   - A軸とC軸の交点     : (0, 0, 60)
+#   - ホルダ差込口       : (0, -180, 250.5)
+#
+# 実機値が存在しないため、送り速度はシミュレーションにおいて確認しやすい値を設定している。
+
+[format]
+name = "machine-definition"
+version = [2, 0]
+
+[machine]
+name = "tool-ZYX-base-AC-work"
+description = "工具側X-Y-Z・テーブル側A-Cの同時5軸機（検証用）"
+author = "Yayoi Habami"
+date = 2026-08-31
+
+[units]
+length = "mm"
+angle = "deg"
+
+# ---- ワーク側: base - cradle-frame - A - C - Attach ----
+
+[[component]]
+name = "cradle-frame"
+type = "fixed"
+parent = "base"
+
+[[component.geometry]]
+name = "cradle frame"
+file = "tool-ZYX-base-AC-work/cradle-frame.STL"
+color = "#e0d6c8"
+
+[[component]]
+name = "A"
+type = "rotary"
+parent = "cradle-frame"
+
+[component.axis]
+register = "A"
+direction = [1.0, 0.0, 0.0]
+# A軸とC軸の交点 (回転中心)
+point = [0.0, 0.0, 60.0]
+limits = [-90.0, 90.0]
+
+[component.axis.dynamics]
+rapid_feed = 3600.0
+max_feed = 3600.0
+min_feed = 1.0
+
+[[component.geometry]]
+name = "cradle"
+file = "tool-ZYX-base-AC-work/cradle.STL"
+color = "#b4bcc4"
+
+[[component]]
+name = "C"
+type = "rotary"
+parent = "A"
+
+[component.axis]
+register = "C"
+direction = [0.0, 0.0, 1.0]
+# C軸線上の点としてテーブル上面中心を採る ((0, 0, 80)と同一軸線)
+point = [0.0, 0.0, 0.0]
+unlimited = true
+wrap_start = 0.0
+
+[component.axis.dynamics]
+rapid_feed = 3600.0
+max_feed = 3600.0
+min_feed = 1.0
+
+[[component.geometry]]
+name = "テーブル"
+file = "tool-ZYX-base-AC-work/table.STL"
+color = "#4b697d"
+
+[[component]]
+name = "Attach"
+type = "work_mount"
+parent = "C"
+
+# テーブル上面の中心
+[component.frame]
+origin = [0.0, 0.0, 0.0]
+z_axis = [0.0, 0.0, 1.0]
+
+# ---- 工具側: base - X - Y - Z - Spindle - Tool ----
+
+[[component]]
+name = "X"
+type = "linear"
+parent = "base"
+
+[component.axis]
+register = "X"
+direction = [1.0, 0.0, 0.0]
+limits = [-400.0, 400.0]
+
+[component.axis.dynamics]
+rapid_feed = 6000.0
+max_feed = 6000.0
+min_feed = 1.0
+
+[[component.geometry]]
+file = "tool-ZYX-base-AC-work/on-x.STL"
+color = "#d8d8d8"
+
+[[component]]
+name = "Y"
+type = "linear"
+parent = "X"
+
+[component.axis]
+register = "Y"
+direction = [0.0, 1.0, 0.0]
+limits = [0.0, 300.0]
+
+[component.axis.dynamics]
+rapid_feed = 6000.0
+max_feed = 6000.0
+min_feed = 1.0
+
+[[component.geometry]]
+file = "tool-ZYX-base-AC-work/on-y.STL"
+color = "#c8c8c8"
+
+[[component]]
+name = "Z"
+type = "linear"
+parent = "Y"
+
+[component.axis]
+register = "Z"
+direction = [0.0, 0.0, 1.0]
+limits = [-90.0, 300.0]
+
+[component.axis.dynamics]
+rapid_feed = 6000.0
+max_feed = 6000.0
+min_feed = 1.0
+
+[[component.geometry]]
+file = "tool-ZYX-base-AC-work/on-z.STL"
+color = "#707070"
+
+[[component]]
+name = "Spindle"
+type = "spindle"
+parent = "Z"
+
+[[component]]
+name = "Tool"
+type = "tool_mount"
+parent = "Spindle"
+
+# ホルダ差込口 (工具はここからz軸の負方向)
+[component.frame]
+origin = [0.0, -180.0, 250.5]
+z_axis = [0.0, 0.0, 1.0]
+
+# ---- ベース ----
+
+[[component]]
+name = "base"
+type = "base"
+
+[[component.geometry]]
+file = "tool-ZYX-base-AC-work/base.STL"
+color = "#969696"
+
+# ---- 規約・干渉設定 ----
+
+[kinematics]
+branch = "positive"
+
+[collision]
+default_clearance = 0.5
+pairs = [
+  ["Spindle", "cradle-frame"],
+  ["tool", "cradle-frame"],
+  ["tool", "base"],
+]
+
+# 工具側チェーン (Z以下+工具) と
+# ワーク側チェーン (A以下+ワーク) の全組み合わせ
+[[collision.pair]]
+targets = ["Z", "A"]
+subtree = [true, true]

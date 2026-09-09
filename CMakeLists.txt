@@ -305,6 +305,14 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
     )
     FetchContent_MakeAvailable(toml11)
     igesio_restore_build_testing()
+
+    # Set toml11 include directories as SYSTEM to suppress warnings from third-party code
+    get_target_property(TOML11_INC toml11 INTERFACE_INCLUDE_DIRECTORIES)
+    if(TOML11_INC)
+      set_target_properties(toml11 PROPERTIES
+        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${TOML11_INC}"
+      )
+    endif()
   endif()
 endif()
 

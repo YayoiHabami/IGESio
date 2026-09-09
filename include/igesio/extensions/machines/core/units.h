@@ -4,10 +4,10 @@
  * @author Yayoi Habami
  * @date 2026-09-08
  * @copyright 2026 Yayoi Habami
- * @note 本拡張の内部単位はmmとradで固定する. TOMLの`[units]`で宣言された単位は
- *       読込時に`UnitScales`の係数を乗じて内部単位へ換算し、以降の処理は
- *       単位を意識しない. C++が保持する角度はradであり,
- *       degはファイル上の表現と人が読む出力 (診断文言・GUI表示) でのみ使用する.
+ * @note 本拡張の内部単位はmm, rad, sとする. 読込時にTOMLの`[units]`で宣言された単位は
+ *       `UnitScales`の係数を乗じて内部単位へ換算し、以降の処理では内部単位のみを扱う.
+ *       (ファイル上の表現と人が読む出力 (診断文言・GUI表示) 等ではdeg等も使用する)
+ * @note 時間の基準はsであるが、主軸回転数でのみ [min⁻¹] のまま保持する.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_CORE_UNITS_H_
 #define IGESIO_EXTENSIONS_MACHINES_CORE_UNITS_H_
@@ -50,6 +50,9 @@ constexpr double kFullTurn = 2.0 * igesio::kPi;
 constexpr double kHalfTurn = igesio::kPi;
 /// @brief 1/4回転 (π/2 rad)
 constexpr double kQuarterTurn = igesio::kPi / 2.0;
+
+/// @brief 1分あたりの秒数
+constexpr double kSecondsPerMinute = 60.0;
 
 /// @brief degをradへ換算する
 /// @param degrees 角度 [deg]

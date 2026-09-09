@@ -6,9 +6,10 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: ParseLengthUnit / ParseAngleUnit / LengthUnitName / AngleUnitName /
  *       LengthScale / AngleScale / MakeUnitScales / UnitScalesの既定値 /
- *       角度定数 (kDegreeToRadian等) / ToRadians / ToDegrees
+ *       角度定数 (kDegreeToRadian等) / 時間定数 (kSecondsPerMinute) /
+ *       ToRadians / ToDegrees
  *       - 正常系 (代表値): 4種の単位文字列の解釈、名称との往復、
- *         換算係数 (25.4・π/180)、`MakeUnitScales`の合成、deg↔radの往復
+ *         換算係数 (25.4・π/180・60)、`MakeUnitScales`の合成、deg↔radの往復
  *       - 正常系 (境界値): 空文字列 (未知扱い)、角度0の換算
  *       - 異常系: 未知の文字列・大文字小文字違いで`std::nullopt` (例外は投げない)
  *       TODO: 退化ケースは列挙型と線形換算のみのAPIのため該当なし
@@ -110,6 +111,13 @@ TEST(MachinesUnitsTest, AngleConstants_MatchPi) {
     EXPECT_NEAR(mc::kFullTurn, 2.0 * igesio::kPi, kTol);
     EXPECT_NEAR(mc::kHalfTurn, igesio::kPi, kTol);
     EXPECT_NEAR(mc::kQuarterTurn, igesio::kPi / 2.0, kTol);
+}
+
+TEST(MachinesUnitsTest, SecondsPerMinute_ConvertsFeedsBetweenMinuteAndSecond) {
+    // ファイルの毎分 (6000 mm/min) と内部の毎秒 (100 mm/s) の換算に用いる
+    EXPECT_NEAR(mc::kSecondsPerMinute, 60.0, kTol);
+    EXPECT_NEAR(6000.0 / mc::kSecondsPerMinute, 100.0, kTol);
+    EXPECT_NEAR(100.0 * mc::kSecondsPerMinute, 6000.0, kTol);
 }
 
 TEST(MachinesUnitsTest, ToRadians_ConvertsRepresentativeAngles) {

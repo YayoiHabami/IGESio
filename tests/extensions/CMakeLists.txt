@@ -30,6 +30,8 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
     list(APPEND TEST_SOURCES
         machines/core/test_units.cpp
         machines/core/test_rotation.cpp
+        machines/machine/test_machine_io.cpp
+        machines/machine/test_machine_writer.cpp
     )
 endif()
 
