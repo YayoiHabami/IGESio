@@ -131,7 +131,7 @@ TomlValue ParseTomlFile(const std::filesystem::path& path,
         return toml::parse(path.string());
     } catch (const toml::exception& e) {
         throw igesio::DataFormatError(
-                source_name + ": TOML読込エラー: " + e.what());
+                source_name + ": TOML parse error: " + e.what());
     }
 }
 
@@ -141,7 +141,7 @@ TomlValue ParseTomlString(const std::string& text, const std::string& source_nam
         return toml::parse_str(text);
     } catch (const toml::exception& e) {
         throw igesio::DataFormatError(
-                source_name + ": TOML読込エラー: " + e.what());
+                source_name + ": TOML parse error: " + e.what());
     }
 }
 
@@ -159,8 +159,8 @@ std::array<int, 2> ReadFormat(const TomlValue& root,
     const TomlValue* name = format == nullptr ? nullptr : Find(*format, "name");
     if (name == nullptr || !name->is_string()
         || name->as_string() != kMachineFormatName) {
-        Fail("", "[format].nameは\"" + std::string(kMachineFormatName)
-                 + "\"であること", LineOfTable(format));
+        Fail("", "[format].name must be \"" + std::string(kMachineFormatName)
+                 + "\"", LineOfTable(format));
     }
     const TomlValue* version = Find(*format, "version");
     const bool well_formed =
@@ -169,8 +169,8 @@ std::array<int, 2> ReadFormat(const TomlValue& root,
             && version->as_array()[0].is_integer()
             && version->as_array()[1].is_integer();
     if (!well_formed) {
-        Fail("", "[format].versionは[major, minor]の整数2要素: "
-                 + (version == nullptr ? std::string("(なし)")
+        Fail("", "[format].version must be two integers [major, minor]: "
+                 + (version == nullptr ? std::string("(missing)")
                                        : detail::FormatValue(*version)),
              LineOfTable(format));
     }
@@ -178,15 +178,17 @@ std::array<int, 2> ReadFormat(const TomlValue& root,
             static_cast<int>(version->as_array()[0].as_integer()),
             static_cast<int>(version->as_array()[1].as_integer())};
     if (result[0] != kMachineFormatVersion[0]) {
-        Fail("", "未対応のフォーマットバージョン: " + FormatVersion(result)
-                 + " (対応major " + std::to_string(kMachineFormatVersion[0]) + ")",
+        Fail("", "unsupported format version: " + FormatVersion(result)
+                 + " (supported major "
+                 + std::to_string(kMachineFormatVersion[0]) + ")",
              LineOf(*version));
     }
     if (result[1] > kMachineFormatVersion[1]) {
         Warn(warnings, "[format]",
-             "フォーマットバージョン" + FormatVersion(result) + "は対応値"
+             "format version " + FormatVersion(result)
+             + " has a newer minor than the supported "
              + FormatVersion(kMachineFormatVersion)
-             + "より新しいminor (未対応のキーは無視される)",
+             + " (unsupported keys are ignored)",
              LineOf(*version));
     }
     return result;
@@ -195,11 +197,11 @@ std::array<int, 2> ReadFormat(const TomlValue& root,
 /// @brief `[machine]`を読み込む
 void ReadMachineMeta(const TomlValue& root, MachineDefinition& definition) {
     const TomlValue* machine = Find(root, "machine");
-    if (machine == nullptr) Fail("", "[machine].nameがない");
-    detail::EnsureTable(*machine, "[machine]がテーブルでない");
+    if (machine == nullptr) Fail("", "[machine].name is missing");
+    detail::EnsureTable(*machine, "[machine] is not a table");
     const TomlValue* name = Find(*machine, "name");
     if (name == nullptr || !name->is_string() || name->as_string().empty()) {
-        Fail("", "[machine].nameがない", LineOf(*machine));
+        Fail("", "[machine].name is missing", LineOf(*machine));
     }
     definition.name = name->as_string();
     definition.description =
@@ -212,7 +214,7 @@ void ReadMachineMeta(const TomlValue& root, MachineDefinition& definition) {
         } else if (date->is_local_date()) {
             definition.date = toml::format(*date);
         } else {
-            Fail("[machine]", "dateが日付または文字列でない: "
+            Fail("[machine]", "date is neither a date nor a string: "
                               + detail::FormatValue(*date), LineOf(*date));
         }
     }
@@ -224,18 +226,18 @@ UnitScales ReadUnits(const TomlValue& root) {
     if (units == nullptr) {
         return MakeUnitScales(LengthUnit::kMillimeter, AngleUnit::kDegree);
     }
-    detail::EnsureTable(*units, "[units]がテーブルでない");
+    detail::EnsureTable(*units, "[units] is not a table");
     const std::string length =
             detail::OptionalString(*units, "length", "[units]").value_or("mm");
     const std::string angle =
             detail::OptionalString(*units, "angle", "[units]").value_or("deg");
     const auto length_unit = ParseLengthUnit(length);
     if (!length_unit.has_value()) {
-        Fail("", "[units].lengthが不正: " + length, LineOf(*units));
+        Fail("", "invalid [units].length: " + length, LineOf(*units));
     }
     const auto angle_unit = ParseAngleUnit(angle);
     if (!angle_unit.has_value()) {
-        Fail("", "[units].angleが不正: " + angle, LineOf(*units));
+        Fail("", "invalid [units].angle: " + angle, LineOf(*units));
     }
     return MakeUnitScales(*length_unit, *angle_unit);
 }
@@ -244,13 +246,14 @@ UnitScales ReadUnits(const TomlValue& root) {
 BranchPolicy ReadKinematics(const TomlValue& root) {
     const TomlValue* kinematics = Find(root, "kinematics");
     if (kinematics == nullptr) return BranchPolicy::kPositive;
-    detail::EnsureTable(*kinematics, "[kinematics]がテーブルでない");
+    detail::EnsureTable(*kinematics, "[kinematics] is not a table");
     const std::string branch =
             detail::OptionalString(*kinematics, "branch", "[kinematics]")
                     .value_or("positive");
     const auto policy = ParseBranchPolicy(branch);
     if (!policy.has_value()) {
-        Fail("", "[kinematics].branchが不正: " + branch, LineOf(*kinematics));
+        Fail("", "invalid [kinematics].branch: " + branch,
+             LineOf(*kinematics));
     }
     return *policy;
 }
@@ -266,17 +269,18 @@ BranchPolicy ReadKinematics(const TomlValue& root) {
 std::string ReadComponentName(const TomlValue& table, const std::size_t index,
                               const ComponentTables& tables) {
     const std::string context = "component[" + std::to_string(index) + "]";
-    detail::EnsureTable(table, context + ": テーブルでない");
+    detail::EnsureTable(table, context + ": not a table");
     const TomlValue* name = Find(table, "name");
     if (name == nullptr || !name->is_string() || name->as_string().empty()) {
-        Fail(context, "nameがない", LineOf(table));
+        Fail(context, "name is missing", LineOf(table));
     }
     const std::string text = name->as_string();
     if (IsReservedTarget(text)) {
-        Fail("", "コンポーネント名に予約名は使用できない: " + text, LineOf(table));
+        Fail("", "reserved name cannot be used as a component name: " + text,
+             LineOf(table));
     }
     if (tables.Has(text)) {
-        Fail("", "コンポーネント名が重複: " + text, LineOf(table));
+        Fail("", "duplicate component name: " + text, LineOf(table));
     }
     return text;
 }
@@ -285,11 +289,11 @@ std::string ReadComponentName(const TomlValue& table, const std::size_t index,
 void ValidateExplicitBase(const TomlValue& base) {
     const auto type = detail::OptionalString(base, "type", ContextOf(kBaseName));
     if (!type.has_value() || *type != "base") {
-        Fail("", "ルート\"base\"のtypeは\"base\"であること", LineOf(base));
+        Fail("", "root \"base\" must have type \"base\"", LineOf(base));
     }
     for (const char* key : {"parent", "axis", "frame", "spindle"}) {
         if (Find(base, key) != nullptr) {
-            Fail("", std::string("\"base\"に") + key + "は指定できない", LineOf(base));
+            Fail("", std::string("\"base\" cannot have ") + key, LineOf(base));
         }
     }
 }
@@ -298,7 +302,7 @@ void ValidateExplicitBase(const TomlValue& base) {
 ComponentTables CollectComponentTables(const TomlValue& root) {
     const TomlValue* raw = Find(root, "component");
     if (raw == nullptr || !raw->is_array() || raw->as_array().empty()) {
-        Fail("", "[[component]]が定義されていない");
+        Fail("", "no [[component]] is defined");
     }
     ComponentTables tables;
     const auto& array = raw->as_array();
@@ -320,18 +324,21 @@ ComponentTables CollectComponentTables(const TomlValue& root) {
         const TomlValue& table = *tables.by_name[name];
         const auto type = detail::OptionalString(table, "type", ContextOf(name));
         if (type.has_value() && *type == "base") {
-            Fail("", "type=\"base\"はルート\"base\"専用: " + name, LineOf(table));
+            Fail("", "type=\"base\" is reserved for the root \"base\": " + name,
+                 LineOf(table));
         }
         const TomlValue* parent = Find(table, "parent");
         if (parent == nullptr) {
-            Fail(name, "parentがない (base以外は必須)", LineOf(table));
+            Fail(name, "parent is missing (required except for base)",
+                 LineOf(table));
         }
         if (!parent->is_string()) {
-            Fail(name, "parentが文字列でない: " + detail::FormatValue(*parent),
+            Fail(name, "parent is not a string: " + detail::FormatValue(*parent),
                  LineOf(*parent));
         }
         if (!tables.Has(parent->as_string())) {
-            Fail(name, "親が存在しない: " + parent->as_string(), LineOf(*parent));
+            Fail(name, "parent does not exist: " + parent->as_string(),
+                 LineOf(*parent));
         }
         tables.parent[name] = parent->as_string();
         tables.children[parent->as_string()].push_back(name);
@@ -362,7 +369,8 @@ std::vector<std::string> TopologicalOrder(const ComponentTables& tables) {
             }
         }
         std::sort(rest.begin(), rest.end());
-        Fail("", "木に属さないコンポーネント(閉路など): " + JoinNames(rest));
+        Fail("", "component not in the tree (cycle or similar): "
+                 + JoinNames(rest));
     }
     return order;
 }
@@ -384,9 +392,9 @@ std::vector<std::string> ChainNames(const ComponentTables& tables,
 ComponentType ReadComponentType(const std::string& name, const TomlValue* table) {
     if (table == nullptr) return ComponentType::kBase;
     const auto text = detail::OptionalString(*table, "type", ContextOf(name));
-    if (!text.has_value()) Fail(name, "typeがない", LineOf(*table));
+    if (!text.has_value()) Fail(name, "type is missing", LineOf(*table));
     const auto type = ParseComponentType(*text);
-    if (!type.has_value()) Fail(name, "未知のtype: " + *text, LineOf(*table));
+    if (!type.has_value()) Fail(name, "unknown type: " + *text, LineOf(*table));
     return *type;
 }
 
@@ -405,25 +413,30 @@ Structure ValidateStructure(const ComponentTables& tables) {
                               || type == ComponentType::kWorkMount;
         const std::string type_name(ComponentTypeName(type));
         if (is_axis != (Find(*table, "axis") != nullptr)) {
-            Fail(name, "type=" + type_name + "とaxisの有無が不整合", LineOf(*table));
+            Fail(name, "type=" + type_name
+                       + " is inconsistent with the presence of axis",
+                 LineOf(*table));
         }
         if (is_mount != (Find(*table, "frame") != nullptr)) {
-            Fail(name, "type=" + type_name + "とframeの有無が不整合", LineOf(*table));
+            Fail(name, "type=" + type_name
+                       + " is inconsistent with the presence of frame",
+                 LineOf(*table));
         }
         if (Find(*table, "spindle") != nullptr && type != ComponentType::kSpindle) {
-            Fail(name, "spindleテーブルはtype=spindleのみ有効", LineOf(*table));
+            Fail(name, "the spindle table is valid only for type=spindle",
+                 LineOf(*table));
         }
         if (type == ComponentType::kSpindle) spindles.push_back(name);
         if (type == ComponentType::kToolMount) tool_mounts.push_back(name);
         if (type == ComponentType::kWorkMount) work_mounts.push_back(name);
     }
     if (tool_mounts.size() != 1) {
-        Fail("", "tool_mountはちょうど1つ必要 (現在"
-                 + std::to_string(tool_mounts.size()) + "個)");
+        Fail("", "exactly one tool_mount is required (found "
+                 + std::to_string(tool_mounts.size()) + ")");
     }
     if (work_mounts.size() != 1) {
-        Fail("", "work_mountはちょうど1つ必要 (現在"
-                 + std::to_string(work_mounts.size()) + "個)");
+        Fail("", "exactly one work_mount is required (found "
+                 + std::to_string(work_mounts.size()) + ")");
     }
     structure.tool_mount = tool_mounts[0];
     structure.work_mount = work_mounts[0];
@@ -431,17 +444,19 @@ Structure ValidateStructure(const ComponentTables& tables) {
         if (name == kBaseName) continue;
         const std::string& parent = tables.parent.at(name);
         if (parent == structure.tool_mount || parent == structure.work_mount) {
-            Fail(name, "マウント(" + parent + ")は子を持てない",
+            Fail(name, "mount (" + parent + ") cannot have children",
                  LineOfTable(tables.by_name.at(name)));
         }
     }
     if (spindles.size() > 1) {
-        Fail("", "spindleは高々1つ (現在" + std::to_string(spindles.size()) + "個)");
+        Fail("", "at most one spindle is allowed (found "
+                 + std::to_string(spindles.size()) + ")");
     }
     if (!spindles.empty()) {
         const std::vector<std::string> chain = ChainNames(tables, structure.tool_mount);
         if (std::find(chain.begin(), chain.end(), spindles[0]) == chain.end()) {
-            Fail("", "spindle(" + spindles[0] + ")はtool_mountの祖先であること");
+            Fail("", "spindle (" + spindles[0]
+                     + ") must be an ancestor of the tool_mount");
         }
     }
     return structure;
@@ -459,7 +474,7 @@ igesio::Matrix4d ReadLocalFrame(const TomlValue& table, const std::string& name,
     const TomlValue* frame = Find(table, "local_frame");
     if (frame == nullptr) return igesio::Matrix4d::Identity();
     const std::string context = ContextOf(name) + ".local_frame";
-    detail::EnsureTable(*frame, context + ": テーブルでない");
+    detail::EnsureTable(*frame, context + ": not a table");
     const igesio::Vector3d origin =
             detail::ReadVec3Or(*frame, "origin", igesio::Vector3d::Zero(), context)
             * scales.length;
@@ -469,7 +484,7 @@ igesio::Matrix4d ReadLocalFrame(const TomlValue& table, const std::string& name,
 /// @brief マウントの`frame` (`component.frame`) からゼロポーズ機械座標での配置Hを作る
 igesio::Matrix4d ReadFrame(const TomlValue& frame, const igesio::Matrix4d& local_frame,
                            const UnitScales& scales, const std::string& context) {
-    detail::EnsureTable(frame, context + ": テーブルでない");
+    detail::EnsureTable(frame, context + ": not a table");
     const igesio::Matrix3d r_lf = RotationPart(local_frame);
     const igesio::Vector3d origin =
             detail::ReadVec3(frame, "origin", context) * scales.length;
@@ -479,7 +494,8 @@ igesio::Matrix4d ReadFrame(const TomlValue& frame, const igesio::Matrix4d& local
     const std::vector<std::string> axis_keys =
             detail::PresentKeys(frame, {"z_axis", "x_axis"});
     if (!rotation_keys.empty() && !axis_keys.empty()) {
-        Fail(context, "回転形式(" + rotation_keys[0] + ")とz_axis/x_axisは排他",
+        Fail(context, "rotation form (" + rotation_keys[0]
+                      + ") and z_axis/x_axis are exclusive",
              LineOf(frame));
     }
     igesio::Matrix3d rotation;
@@ -494,13 +510,15 @@ igesio::Matrix4d ReadFrame(const TomlValue& frame, const igesio::Matrix4d& local
         if (const TomlValue* x_axis = Find(frame, "x_axis"); x_axis != nullptr) {
             x = r_lf * detail::AsUnitVec3(*x_axis, context + ".x_axis");
             if (std::abs(x.dot(z)) > kUnitVectorTolerance) {
-                Fail(context, "x_axisがz_axisと直交しない", LineOf(*x_axis));
+                Fail(context, "x_axis is not orthogonal to z_axis",
+                     LineOf(*x_axis));
             }
         }
         x -= x.dot(z) * z;
         if (x.norm() < kDegenerateTolerance) {
-            Fail(context, "x軸を定められない (z_axisとローカルx軸が平行。"
-                          "x_axisを明示すること)", LineOf(frame));
+            Fail(context, "cannot determine the x axis (z_axis is parallel to "
+                          "the local x axis; specify x_axis explicitly)",
+                 LineOf(frame));
         }
         x.normalize();
         rotation.col(0) = x;
@@ -520,7 +538,7 @@ AxisDynamics ReadDynamics(const TomlValue& axis, const double scale,
     const TomlValue* table = Find(axis, "dynamics");
     if (table == nullptr) return dynamics;
     const std::string ctx = context + ".dynamics";
-    detail::EnsureTable(*table, ctx + ": テーブルでない");
+    detail::EnsureTable(*table, ctx + ": not a table");
     const double feed_scale = scale / kSecondsPerMinute;
     const std::array<std::tuple<const char*, std::optional<double>*, double>, 6> keys = {{
             {"rapid_feed", &dynamics.rapid_feed, feed_scale},
@@ -537,7 +555,7 @@ AxisDynamics ReadDynamics(const TomlValue& axis, const double scale,
     }
     if (dynamics.min_feed.has_value() && dynamics.max_feed.has_value()
         && *dynamics.min_feed > *dynamics.max_feed) {
-        Fail(ctx, "min_feedがmax_feedを超える: "
+        Fail(ctx, "min_feed exceeds max_feed: "
                   + detail::FormatValue(*Find(*table, "min_feed")) + " > "
                   + detail::FormatValue(*Find(*table, "max_feed")), LineOf(*table));
     }
@@ -548,13 +566,13 @@ AxisDynamics ReadDynamics(const TomlValue& axis, const double scale,
 std::array<double, 2> ReadLimits(const TomlValue& raw, const double scale,
                                  const std::string& context) {
     if (!raw.is_array() || raw.as_array().size() != 2) {
-        Fail(context, "limitsは実数2要素であること", LineOf(raw));
+        Fail(context, "limits must be two real numbers", LineOf(raw));
     }
     const std::array<double, 2> limits = {
             detail::AsReal(raw.as_array()[0], context + ".limits[0]") * scale,
             detail::AsReal(raw.as_array()[1], context + ".limits[1]") * scale};
     if (!(limits[0] < limits[1])) {
-        Fail(context, "limitsがmin < maxでない: " + detail::FormatValue(raw),
+        Fail(context, "limits is not min < max: " + detail::FormatValue(raw),
              LineOf(raw));
     }
     return limits;
@@ -572,10 +590,12 @@ double ReadInitial(const TomlValue& axis, const double scale,
                         && initial <= (*limits)[1] + kLimitTolerance;
     if (inside) return initial;
     if (raw != nullptr) {
-        Fail(context, "initialがlimits範囲外: " + detail::FormatValue(*raw),
+        Fail(context, "initial is outside limits: " + detail::FormatValue(*raw),
              LineOf(*raw));
     }
-    Fail(context, "limitsが0を含まないためinitialを省略できない", LineOf(axis));
+    Fail(context,
+         "initial cannot be omitted because limits does not contain 0",
+         LineOf(axis));
 }
 
 /// @brief `component.axis`を読み込み、単位を換算する
@@ -583,29 +603,33 @@ AxisSpec ReadAxis(const TomlValue& table, const std::string& name,
                   const bool is_rotary, const UnitScales& scales) {
     const TomlValue& axis = *Find(table, "axis");
     const std::string context = ContextOf(name) + ".axis";
-    detail::EnsureTable(axis, context + ": テーブルでない");
+    detail::EnsureTable(axis, context + ": not a table");
     AxisSpec spec;
     spec.register_name = detail::RequireString(axis, "register", context);
     const TomlValue* direction = Find(axis, "direction");
     if (direction == nullptr) {
-        Fail(context + ".direction", "実数3成分の配列でない: (なし)", LineOf(axis));
+        Fail(context + ".direction",
+             "not an array of 3 real numbers: (missing)", LineOf(axis));
     }
     spec.direction = detail::AsUnitVec3(*direction, context + ".direction");
     if (is_rotary) {
         spec.point = detail::ReadVec3(axis, "point", context) * scales.length;
     } else if (Find(axis, "point") != nullptr) {
-        Fail(context, "pointはrotaryのみ指定できる", LineOf(axis));
+        Fail(context, "point can be specified only for rotary", LineOf(axis));
     }
     const double scale = is_rotary ? scales.angle : scales.length;
     spec.unlimited = detail::OptionalBool(axis, "unlimited", false, context);
     const TomlValue* limits = Find(axis, "limits");
     if ((limits != nullptr) == spec.unlimited) {
-        Fail(context, "limitsとunlimited = trueのちょうど一方を指定する", LineOf(axis));
+        Fail(context, "specify exactly one of limits and unlimited = true",
+             LineOf(axis));
     }
     if (limits != nullptr) spec.limits = ReadLimits(*limits, scale, context);
     if (const TomlValue* wrap = Find(axis, "wrap_start"); wrap != nullptr) {
         if (!(is_rotary && spec.unlimited)) {
-            Fail(context, "wrap_startはrotaryかつunlimited = trueのみ", LineOf(*wrap));
+            Fail(context,
+                 "wrap_start is allowed only for rotary with unlimited = true",
+                 LineOf(*wrap));
         }
         spec.wrap_start = detail::AsReal(*wrap, context + ".wrap_start") * scales.angle;
     }
@@ -622,7 +646,7 @@ std::optional<SpindleSpec> ReadSpindle(const TomlValue& table,
     const TomlValue* spindle = Find(table, "spindle");
     if (spindle == nullptr) return std::nullopt;
     const std::string context = ContextOf(name) + ".spindle";
-    detail::EnsureTable(*spindle, context + ": テーブルでない");
+    detail::EnsureTable(*spindle, context + ": not a table");
     SpindleSpec spec;
     if (const TomlValue* max_rpm = Find(*spindle, "max_rpm"); max_rpm != nullptr) {
         spec.max_rpm = detail::AsPositive(*max_rpm, context + ".max_rpm");
@@ -637,7 +661,8 @@ void ReadGeometries(const TomlValue& table, ComponentSpec& spec,
     const TomlValue* geometries = Find(table, "geometry");
     if (geometries == nullptr) return;
     if (!geometries->is_array()) {
-        Fail(ContextOf(spec.name), "geometryが配列でない", LineOf(*geometries));
+        Fail(ContextOf(spec.name), "geometry is not an array",
+             LineOf(*geometries));
     }
     const auto& array = geometries->as_array();
     for (std::size_t i = 0; i < array.size(); ++i) {
@@ -708,8 +733,8 @@ void ValidateChains(const std::map<std::string, ComponentSpec>& specs,
     std::sort(common.begin(), common.end());
     if (!common.empty()) {
         Warn(warnings, "[[component]]",
-             "両チェーンに共通のコンポーネント(可動軸は相対運動で相殺される): "
-             + JoinNames(common));
+             "component common to both chains (moving axes cancel out in "
+             "relative motion): " + JoinNames(common));
     }
     std::set<std::string> members(tool_chain.begin(), tool_chain.end());
     members.insert(work_chain.begin(), work_chain.end());
@@ -726,10 +751,12 @@ void ValidateChains(const std::map<std::string, ComponentSpec>& specs,
         }
     }
     if (rotary_count > 2) {
-        Fail("", "チェーン上の回転軸が2本を超える: " + std::to_string(rotary_count) + "本");
+        Fail("", "more than 2 rotary axes on the chain: "
+                 + std::to_string(rotary_count));
     }
     if (!SpansThreeDimensions(linears)) {
-        Fail("", "チェーン上の直進軸の実効方向が3次元を張らない");
+        Fail("", "effective directions of the linear axes on the chain do "
+                 "not span 3 dimensions");
     }
     if (linears.count("X") && linears.count("Y") && linears.count("Z")) {
         igesio::Matrix3d xyz;
@@ -738,12 +765,14 @@ void ValidateChains(const std::map<std::string, ComponentSpec>& specs,
         xyz.col(2) = linears.at("Z");
         const double det = xyz.determinant();
         if (det <= 0.0) {
-            Fail("", "直進軸X・Y・Zの実効方向が右手系でない (行列式"
+            Fail("", "effective directions of linear axes X, Y and Z are "
+                     "not right-handed (determinant "
                      + detail::FormatReal(det) + ")");
         }
     } else {
         Warn(warnings, "[[component]]",
-             "右手系検査: レジスタ名X・Y・Zの直進軸3本が揃わないため省略");
+             "right-handedness check skipped: the three linear axes with "
+             "register names X, Y and Z are not all present");
     }
 }
 
@@ -790,10 +819,11 @@ void ValidateCollisionPairs(const std::vector<CollisionPair>& pairs,
         for (std::size_t k = 0; k < 2; ++k) {
             const std::string& target = pair.targets[k];
             if (!tables.Has(target) && !IsReservedTarget(target)) {
-                Fail("", "干渉ペアの対象が存在しない: " + target);
+                Fail("", "collision pair target does not exist: " + target);
             }
             if (IsReservedTarget(target) && pair.subtree[k]) {
-                Fail("", "予約名" + target + "にsubtree = trueは指定できない");
+                Fail("", "subtree = true cannot be specified for the "
+                         "reserved name " + target);
             }
             groups[k] = CollisionGroup(target, pair.subtree[k], tables, structure);
         }
@@ -801,15 +831,16 @@ void ValidateCollisionPairs(const std::vector<CollisionPair>& pairs,
         const std::set<std::pair<std::string, bool>> key = {
                 {pair.targets[0], pair.subtree[0]}, {pair.targets[1], pair.subtree[1]}};
         if (!seen.insert(key).second) {
-            Fail("", "干渉ペアが重複: " + JoinNames(targets));
+            Fail("", "duplicate collision pair: " + JoinNames(targets));
         }
         std::vector<std::string> intersection;
         std::set_intersection(groups[0].begin(), groups[0].end(),
                               groups[1].begin(), groups[1].end(),
                               std::back_inserter(intersection));
         if (!intersection.empty()) {
-            Fail("", "干渉ペアの2グループが交差: " + JoinNames(targets)
-                     + " 共通=" + JoinNames(intersection));
+            Fail("", "the two groups of the collision pair intersect: "
+                     + JoinNames(targets)
+                     + " common=" + JoinNames(intersection));
         }
     }
 }
@@ -819,17 +850,21 @@ CollisionPair ReadCollisionPair(const TomlValue& value, const std::size_t index,
                                 const double default_clearance,
                                 const double length_scale) {
     const std::string context = "[[collision.pair]][" + std::to_string(index) + "]";
-    detail::EnsureTable(value, context + ": テーブルでない");
+    detail::EnsureTable(value, context + ": not a table");
     CollisionPair pair;
     const TomlValue* targets = Find(value, "targets");
-    if (targets == nullptr) Fail(context, "targetsが文字列2要素でない", LineOf(value));
-    pair.targets = ReadNamePair(*targets, context, "targetsが文字列2要素でない");
+    if (targets == nullptr) {
+        Fail(context, "targets is not two strings", LineOf(value));
+    }
+    pair.targets = ReadNamePair(*targets, context, "targets is not two strings");
     if (const TomlValue* subtree = Find(value, "subtree"); subtree != nullptr) {
         const bool well_formed =
                 subtree->is_array() && subtree->as_array().size() == 2
                 && subtree->as_array()[0].is_boolean()
                 && subtree->as_array()[1].is_boolean();
-        if (!well_formed) Fail(context, "subtreeが真偽値2要素でない", LineOf(*subtree));
+        if (!well_formed) {
+            Fail(context, "subtree is not two booleans", LineOf(*subtree));
+        }
         pair.subtree = {subtree->as_array()[0].as_boolean(),
                         subtree->as_array()[1].as_boolean()};
     }
@@ -847,14 +882,17 @@ std::vector<std::array<std::string, 2>> ReadExclude(const TomlValue& collision,
     std::vector<std::array<std::string, 2>> exclude;
     const TomlValue* raw = Find(collision, "exclude");
     if (raw == nullptr) return exclude;
-    if (!raw->is_array()) Fail("[collision].exclude", "配列でない", LineOf(*raw));
+    if (!raw->is_array()) {
+        Fail("[collision].exclude", "not an array", LineOf(*raw));
+    }
     const auto& array = raw->as_array();
     for (std::size_t i = 0; i < array.size(); ++i) {
         const std::string context = "[collision].exclude[" + std::to_string(i) + "]";
-        const auto pair = ReadNamePair(array[i], context, "文字列2要素でない");
+        const auto pair = ReadNamePair(array[i], context, "not two strings");
         for (const std::string& target : pair) {
             if (!tables.Has(target) && !IsReservedTarget(target)) {
-                Fail(context, "対象が存在しない: " + target, LineOf(array[i]));
+                Fail(context, "target does not exist: " + target,
+                     LineOf(array[i]));
             }
         }
         exclude.push_back(pair);
@@ -869,13 +907,13 @@ std::optional<CollisionSettings> ReadCollision(
         std::vector<Diagnostic>& warnings) {
     const TomlValue* collision = Find(root, "collision");
     if (collision == nullptr) return std::nullopt;
-    detail::EnsureTable(*collision, "[collision]がテーブルでない");
+    detail::EnsureTable(*collision, "[collision] is not a table");
     CollisionSettings settings;
     const std::string mode =
             detail::OptionalString(*collision, "mode", "[collision]").value_or("pairs");
     const auto parsed_mode = ParseCollisionMode(mode);
     if (!parsed_mode.has_value()) {
-        Fail("", "[collision].modeが不正: " + mode, LineOf(*collision));
+        Fail("", "invalid [collision].mode: " + mode, LineOf(*collision));
     }
     settings.mode = *parsed_mode;
     if (const TomlValue* value = Find(*collision, "default_clearance"); value != nullptr) {
@@ -886,23 +924,26 @@ std::optional<CollisionSettings> ReadCollision(
     settings.exclude = ReadExclude(*collision, tables);
     if (!settings.exclude.empty() && settings.mode == CollisionMode::kPairs) {
         Warn(warnings, "[collision]",
-             "[collision].excludeはmode = \"all_except_adjacent\"時のみ有効",
+             "[collision].exclude is valid only when "
+             "mode = \"all_except_adjacent\"",
              LineOf(*Find(*collision, "exclude")));
     }
     if (const TomlValue* pairs = Find(*collision, "pairs"); pairs != nullptr) {
-        if (!pairs->is_array()) Fail("[collision].pairs", "配列でない", LineOf(*pairs));
+        if (!pairs->is_array()) {
+            Fail("[collision].pairs", "not an array", LineOf(*pairs));
+        }
         const auto& array = pairs->as_array();
         for (std::size_t i = 0; i < array.size(); ++i) {
             const std::string context = "[collision].pairs[" + std::to_string(i) + "]";
             CollisionPair pair;
-            pair.targets = ReadNamePair(array[i], context, "文字列2要素でない");
+            pair.targets = ReadNamePair(array[i], context, "not two strings");
             pair.clearance = settings.default_clearance;
             settings.pairs.push_back(pair);
         }
     }
     if (const TomlValue* detailed = Find(*collision, "pair"); detailed != nullptr) {
         if (!detailed->is_array()) {
-            Fail("[[collision.pair]]", "配列でない", LineOf(*detailed));
+            Fail("[[collision.pair]]", "not an array", LineOf(*detailed));
         }
         const auto& array = detailed->as_array();
         for (std::size_t i = 0; i < array.size(); ++i) {
@@ -932,16 +973,18 @@ std::map<std::string, ComponentSpec> ReadAllComponents(
         ComponentSpec spec = ReadComponent(name, tables, structure, scales, base_dir,
                                            warnings, issues);
         if (spec.axis.has_value() && !registers.insert(spec.axis->register_name).second) {
-            Fail("", "registerが重複: " + spec.axis->register_name, spec.line);
+            Fail("", "duplicate register: " + spec.axis->register_name,
+                 spec.line);
         }
         specs[name] = std::move(spec);
     }
     const int total = issues.absolute + issues.escape;
     if (total > 0) {
         Warn(warnings, "[[component]]",
-             "可搬でない形状パス" + std::to_string(total) + "件 (絶対パス"
-             + std::to_string(issues.absolute) + "件・親ディレクトリ越え"
-             + std::to_string(issues.escape) + "件)");
+             std::to_string(total)
+             + " non-portable geometry path(s) (absolute: "
+             + std::to_string(issues.absolute) + ", above base directory: "
+             + std::to_string(issues.escape) + ")");
     }
     return specs;
 }

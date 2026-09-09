@@ -28,7 +28,7 @@ igesio::Vector3d NormalizeOrThrow(const igesio::Vector3d& vector,
                                   const char* what) {
     const double norm = vector.norm();
     if (norm < kDegenerateTolerance) {
-        throw std::invalid_argument(std::string(what) + "がゼロベクトル");
+        throw std::invalid_argument(std::string(what) + " is a zero vector");
     }
     return vector / norm;
 }
@@ -43,7 +43,7 @@ igesio::Vector3d RequireUnit(const igesio::Vector3d& vector,
     const double norm = vector.norm();
     if (std::abs(norm - 1.0) > kUnitVectorTolerance) {
         std::ostringstream message;
-        message << name << ": 単位ベクトルでない (ノルム"
+        message << name << ": not a unit vector (norm "
                 << std::fixed << std::setprecision(6) << norm << ")";
         throw std::invalid_argument(message.str());
     }
@@ -56,7 +56,7 @@ igesio::Vector3d RequireUnit(const igesio::Vector3d& vector,
 
 igesio::Matrix3d RotationAboutAxis(const igesio::Vector3d& axis,
                                    const double angle_rad) {
-    const igesio::Vector3d unit = NormalizeOrThrow(axis, "回転軸");
+    const igesio::Vector3d unit = NormalizeOrThrow(axis, "rotation axis");
     return Eigen::AngleAxisd(angle_rad, unit).toRotationMatrix();
 }
 
@@ -77,10 +77,10 @@ igesio::Matrix3d RotationFromColumns(const ColumnsSpec& columns) {
     const double deviation =
             (gram - igesio::Matrix3d::Identity()).cwiseAbs().maxCoeff();
     if (deviation > kUnitVectorTolerance) {
-        throw std::invalid_argument("正規直交系でない");
+        throw std::invalid_argument("not an orthonormal frame");
     }
     if (rotation.determinant() < 0.0) {
-        throw std::invalid_argument("鏡映 (行列式が負)");
+        throw std::invalid_argument("mirrored frame (negative determinant)");
     }
     return rotation;
 }

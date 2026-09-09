@@ -84,7 +84,7 @@ TEST(MachinesRotationTest, RotationAboutAxis_QuarterTurnAboutZMapsXToY) {
 TEST(MachinesRotationTest, RotationAboutAxis_ThrowsInvalidArgumentWhenAxisIsZero) {
     ExpectInvalidArgumentContaining(
             [] { mc::RotationAboutAxis(Vector3d::Zero(), ToRadians(10.0)); },
-            "ゼロベクトル");
+            "zero vector");
 }
 
 TEST(MachinesRotationTest, RotationFromEulerIjk_AppliesXThenYThenZ) {
@@ -141,7 +141,7 @@ TEST(MachinesRotationTest, RotationFromColumns_ThrowsInvalidArgumentWhenNotOrtho
                 mc::RotationFromColumns(mc::ColumnsSpec{
                         Vector3d::UnitX(), tilted, Vector3d::UnitZ()});
             },
-            "正規直交");
+            "orthonormal");
 }
 
 TEST(MachinesRotationTest, RotationFromColumns_ThrowsInvalidArgumentWhenMirrored) {
@@ -151,7 +151,7 @@ TEST(MachinesRotationTest, RotationFromColumns_ThrowsInvalidArgumentWhenMirrored
                         Vector3d::UnitX(), Vector3d::UnitY(),
                         -Vector3d::UnitZ()});
             },
-            "鏡映");
+            "mirrored");
 }
 
 TEST(MachinesRotationTest, ResolveRotation_DispatchesEachForm) {
@@ -211,7 +211,7 @@ TEST(MachinesRotationTest, RotationAboutLine_ThrowsInvalidArgumentWhenDirectionI
                 mc::RotationAboutLine(Vector3d::Zero(), Vector3d::Zero(),
                                       ToRadians(1.0));
             },
-            "ゼロベクトル");
+            "zero vector");
 }
 
 TEST(MachinesRotationTest, ApplyDirection_IgnoresTranslation) {

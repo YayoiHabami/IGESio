@@ -71,7 +71,8 @@ std::optional<float> HexPair(const std::string& text, const std::size_t offset) 
 PrimitiveSpec ReadPrimitive(const TomlValue& geometry, const std::string& context,
                             const double length_scale) {
     if (Find(geometry, "unit") != nullptr) {
-        Fail(context, "プリミティブにunitは指定できない", LineOf(geometry));
+        Fail(context, "unit cannot be specified for a primitive",
+             LineOf(geometry));
     }
     const std::string kind = RequireString(geometry, "primitive", context);
     PrimitiveSpec primitive;
@@ -79,11 +80,12 @@ PrimitiveSpec ReadPrimitive(const TomlValue& geometry, const std::string& contex
         primitive.kind = PrimitiveSpec::Kind::kBox;
         const TomlValue* size = Find(geometry, "size");
         if (size == nullptr) {
-            Fail(context, "boxにはsizeが必要", LineOf(geometry));
+            Fail(context, "box requires size", LineOf(geometry));
         }
         const igesio::Vector3d raw = AsVec3(*size, context + ".size");
         if (!(raw.array() > 0.0).all()) {
-            Fail(context + ".size", "各成分が正でない: " + FormatValue(*size),
+            Fail(context + ".size",
+                 "components are not all positive: " + FormatValue(*size),
                  LineOf(*size));
         }
         primitive.size = raw * length_scale;
@@ -94,13 +96,14 @@ PrimitiveSpec ReadPrimitive(const TomlValue& geometry, const std::string& contex
         const TomlValue* radius = Find(geometry, "radius");
         const TomlValue* height = Find(geometry, "height");
         if (radius == nullptr || height == nullptr) {
-            Fail(context, "cylinderにはradiusとheightが必要", LineOf(geometry));
+            Fail(context, "cylinder requires radius and height",
+                 LineOf(geometry));
         }
         primitive.radius = AsPositive(*radius, context + ".radius") * length_scale;
         primitive.height = AsPositive(*height, context + ".height") * length_scale;
         return primitive;
     }
-    Fail(context, "未知のprimitive: " + kind, LineOf(geometry));
+    Fail(context, "unknown primitive: " + kind, LineOf(geometry));
 }
 
 /// @brief ファイル参照形式の`file`・`unit`を解釈する
@@ -118,13 +121,14 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
                     PathIssues& issues, GeometrySpec& spec) {
     for (const char* key : {"size", "radius", "height"}) {
         if (Find(geometry, key) != nullptr) {
-            Fail(context, std::string(key) + "はプリミティブ形式のみ有効",
+            Fail(context,
+                 std::string(key) + " is valid only for the primitive form",
                  LineOf(geometry));
         }
     }
     const TomlValue& file = *Find(geometry, "file");
     if (!file.is_string() || file.as_string().empty()) {
-        Fail(context, "fileが不正: " + FormatValue(file), LineOf(file));
+        Fail(context, "invalid file: " + FormatValue(file), LineOf(file));
     }
     spec.raw_path = file.as_string();
     CheckFilePath(spec.raw_path, context, issues);
@@ -140,24 +144,28 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
     const bool is_step = (ext == ".stp" || ext == ".step");
     if (is_iges || is_step) {
         if (Find(geometry, "unit") != nullptr) {
-            Fail(context, "IGES/STEPにunitは指定できない", LineOf(geometry));
+            Fail(context, "unit cannot be specified for IGES/STEP",
+                 LineOf(geometry));
         }
         if (is_step) {
-            Warn(warnings, context, "未対応形式のためスキップ: " + spec.raw_path,
+            Warn(warnings, context,
+                 "skipped because the format is unsupported: " + spec.raw_path,
                  LineOf(file));
             return false;
         }
         return true;
     }
     if (ext != ".stl" && ext != ".obj") {
-        Fail(context, "未対応のモデル形式: " + spec.raw_path, LineOf(file));
+        Fail(context, "unsupported model format: " + spec.raw_path,
+             LineOf(file));
     }
     const std::optional<std::string> unit = OptionalString(geometry, "unit", context);
     LengthUnit length_unit = ctx.scales.length_unit;
     if (unit.has_value()) {
         const auto parsed = ParseLengthUnit(*unit);
         if (!parsed.has_value()) {
-            Fail(context, "未知のunit: " + *unit, LineOf(*Find(geometry, "unit")));
+            Fail(context, "unknown unit: " + *unit,
+                 LineOf(*Find(geometry, "unit")));
         }
         length_unit = *parsed;
     }
@@ -222,7 +230,7 @@ std::string RequireString(const TomlValue& table, const std::string& key,
                           const std::string& context) {
     const TomlValue* value = Find(table, key);
     if (value == nullptr || !value->is_string() || value->as_string().empty()) {
-        Fail(context, key + "がない",
+        Fail(context, key + " is missing",
              value == nullptr ? LineOf(table) : LineOf(*value));
     }
     return value->as_string();
@@ -234,7 +242,8 @@ std::optional<std::string> OptionalString(const TomlValue& table,
     const TomlValue* value = Find(table, key);
     if (value == nullptr) return std::nullopt;
     if (!value->is_string()) {
-        Fail(context, key + "が文字列でない: " + FormatValue(*value), LineOf(*value));
+        Fail(context, key + " is not a string: " + FormatValue(*value),
+             LineOf(*value));
     }
     return value->as_string();
 }
@@ -244,7 +253,8 @@ bool OptionalBool(const TomlValue& table, const std::string& key,
     const TomlValue* value = Find(table, key);
     if (value == nullptr) return default_value;
     if (!value->is_boolean()) {
-        Fail(context, key + "が真偽値でない: " + FormatValue(*value), LineOf(*value));
+        Fail(context, key + " is not a boolean: " + FormatValue(*value),
+             LineOf(*value));
     }
     return value->as_boolean();
 }
@@ -267,24 +277,26 @@ std::vector<std::string> PresentKeys(const TomlValue& table,
 double AsReal(const TomlValue& value, const std::string& context) {
     if (value.is_integer()) return static_cast<double>(value.as_integer());
     if (value.is_floating()) return value.as_floating();
-    Fail(context, "実数でない: " + FormatValue(value), LineOf(value));
+    Fail(context, "not a real number: " + FormatValue(value), LineOf(value));
 }
 
 double AsPositive(const TomlValue& value, const std::string& context,
                   const bool allow_zero) {
     const double real = AsReal(value, context);
     if (allow_zero) {
-        if (real < 0.0) Fail(context, "0以上でない: " + FormatValue(value), LineOf(value));
+        if (real < 0.0) {
+            Fail(context, "not >= 0: " + FormatValue(value), LineOf(value));
+        }
     } else if (real <= 0.0) {
-        Fail(context, "正でない: " + FormatValue(value), LineOf(value));
+        Fail(context, "not positive: " + FormatValue(value), LineOf(value));
     }
     return real;
 }
 
 std::vector<double> AsRealArray(const TomlValue& value, const std::size_t size,
                                 const std::string& context) {
-    const std::string what =
-            "実数" + std::to_string(size) + "成分の配列でない: " + FormatValue(value);
+    const std::string what = "not an array of " + std::to_string(size)
+                             + " real numbers: " + FormatValue(value);
     if (!value.is_array() || value.as_array().size() != size) {
         Fail(context, what, LineOf(value));
     }
@@ -308,7 +320,7 @@ igesio::Vector3d AsUnitVec3(const TomlValue& value, const std::string& context) 
     const igesio::Vector3d v = AsVec3(value, context);
     const double norm = v.norm();
     if (std::abs(norm - 1.0) > kUnitVectorTolerance) {
-        Fail(context, "単位ベクトルでない (ノルム" + FormatReal(norm) + ")",
+        Fail(context, "not a unit vector (norm " + FormatReal(norm) + ")",
              LineOf(value));
     }
     return v / norm;
@@ -317,7 +329,7 @@ igesio::Vector3d AsUnitVec3(const TomlValue& value, const std::string& context) 
 double ReadReal(const TomlValue& table, const std::string& key,
                 const std::string& context) {
     const TomlValue* value = Find(table, key);
-    if (value == nullptr) Fail(context, key + "がない", LineOf(table));
+    if (value == nullptr) Fail(context, key + " is missing", LineOf(table));
     return AsReal(*value, context + "." + key);
 }
 
@@ -332,7 +344,8 @@ igesio::Vector3d ReadVec3(const TomlValue& table, const std::string& key,
                           const std::string& context) {
     const TomlValue* value = Find(table, key);
     if (value == nullptr) {
-        Fail(context + "." + key, "実数3成分の配列でない: (なし)", LineOf(table));
+        Fail(context + "." + key,
+             "not an array of 3 real numbers: (missing)", LineOf(table));
     }
     return AsVec3(*value, context + "." + key);
 }
@@ -358,7 +371,8 @@ igesio::Matrix3d ReadRotation(const TomlValue& table, const std::string& context
     if (keys.size() > 1) {
         std::string listed;
         for (const auto& key : keys) listed += (listed.empty() ? "" : ", ") + key;
-        Fail(context, "回転の複数形式を同時指定: [" + listed + "]", LineOf(table));
+        Fail(context, "multiple rotation forms at once: [" + listed + "]",
+             LineOf(table));
     }
     if (keys.empty()) return igesio::Matrix3d::Identity();
 
@@ -366,13 +380,15 @@ igesio::Matrix3d ReadRotation(const TomlValue& table, const std::string& context
     const std::string ctx = context + "." + keys[0];
     try {
         if (keys[0] == "rotation") {
-            EnsureTable(value, ctx + ": x_axis・y_axis・z_axisのテーブルでない");
+            EnsureTable(value,
+                        ctx + ": not a table of x_axis, y_axis and z_axis");
             const std::array<const char*, 3> names = {"x_axis", "y_axis", "z_axis"};
             std::array<igesio::Vector3d, 3> columns;
             for (std::size_t i = 0; i < names.size(); ++i) {
                 const TomlValue* column = Find(value, names[i]);
                 if (column == nullptr) {
-                    Fail(ctx, std::string(names[i]) + "がない", LineOf(value));
+                    Fail(ctx, std::string(names[i]) + " is missing",
+                         LineOf(value));
                 }
                 columns[i] = AsUnitVec3(*column, ctx + "." + names[i]);
             }
@@ -383,7 +399,7 @@ igesio::Matrix3d ReadRotation(const TomlValue& table, const std::string& context
             const TomlValue* axis = value.is_table() ? Find(value, "axis") : nullptr;
             const TomlValue* angle = value.is_table() ? Find(value, "angle") : nullptr;
             if (axis == nullptr || angle == nullptr) {
-                Fail(ctx, "axisとangleが必要", LineOf(value));
+                Fail(ctx, "axis and angle are required", LineOf(value));
             }
             const igesio::Vector3d unit = AsUnitVec3(*axis, ctx + ".axis");
             const double angle_rad = AsReal(*angle, ctx + ".angle") * angle_scale;
@@ -402,13 +418,13 @@ std::optional<std::array<float, 3>> ReadColor(const TomlValue& table,
     if (!text.has_value()) return std::nullopt;
     const int line = LineOf(*Find(table, "color"));
     if (text->size() != 7 || (*text)[0] != '#') {
-        Fail(context + ".color", "\"#RRGGBB\"形式でない: " + *text, line);
+        Fail(context + ".color", "not in \"#RRGGBB\" form: " + *text, line);
     }
     std::array<float, 3> rgb{};
     for (std::size_t i = 0; i < 3; ++i) {
         const std::optional<float> channel = HexPair(*text, 1 + 2 * i);
         if (!channel.has_value()) {
-            Fail(context + ".color", "\"#RRGGBB\"形式でない: " + *text, line);
+            Fail(context + ".color", "not in \"#RRGGBB\" form: " + *text, line);
         }
         rgb[i] = *channel;
     }
@@ -425,7 +441,7 @@ bool IsAbsolutePathString(const std::string& raw) {
 void CheckFilePath(const std::string& raw, const std::string& context,
                    PathIssues& issues) {
     if (raw.find('\\') != std::string::npos) {
-        Fail(context, "パス区切りは'/'のみを用いる: " + raw);
+        Fail(context, "use only '/' as the path separator: " + raw);
     }
     if (IsAbsolutePathString(raw)) {
         ++issues.absolute;
@@ -442,17 +458,18 @@ std::optional<GeometrySpec> ReadGeometry(
         const TomlValue& geometry,
         const std::string& context, const GeometryContext& ctx,
         std::vector<Diagnostic>& warnings, PathIssues& issues) {
-    EnsureTable(geometry, context + ": テーブルでない");
+    EnsureTable(geometry, context + ": not a table");
     const bool has_file = Find(geometry, "file") != nullptr;
     if (has_file == (Find(geometry, "primitive") != nullptr)) {
-        Fail(context, "fileとprimitiveはどちらか一方を指定する", LineOf(geometry));
+        Fail(context, "specify exactly one of file and primitive",
+             LineOf(geometry));
     }
     GeometrySpec spec;
     spec.line = LineOf(geometry);
     if (const TomlValue* opacity = Find(geometry, "opacity"); opacity != nullptr) {
         const double value = AsReal(*opacity, context + ".opacity");
         if (value < 0.0 || value > 1.0) {
-            Fail(context, "opacityが0..1でない: " + FormatValue(*opacity),
+            Fail(context, "opacity is not in 0..1: " + FormatValue(*opacity),
                  LineOf(*opacity));
         }
         spec.opacity = static_cast<float>(value);

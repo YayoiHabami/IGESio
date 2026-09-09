@@ -578,7 +578,7 @@ TEST(MachineReaderTest, Geometry_StepIsSkippedWithWarning) {
                                      "file = \"models/x.step\"\n");
     const auto def = ReadString(toml);
     EXPECT_TRUE(FindComponent(def, "X").geometries.empty());
-    ExpectSingleWarning(def, "スキップ");
+    ExpectSingleWarning(def, "skipped");
     EXPECT_EQ(def.warnings[0].context, "component[X].geometry[0]");
     EXPECT_GT(def.warnings[0].line, 0);
 }
@@ -666,7 +666,7 @@ TEST(MachineReaderTest, Format_ThrowsDataFormatErrorWhenVersionMalformed) {
 
 TEST(MachineReaderTest, Format_ThrowsDataFormatErrorWhenMajorUnsupported) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "version = [2, 0]", "version = [3, 0]"),
-                          "未対応のフォーマットバージョン");
+                          "unsupported format version");
 }
 
 TEST(MachineReaderTest, Format_WarnsWhenMinorIsNewer) {
@@ -695,69 +695,69 @@ TEST(MachineReaderTest, Units_ThrowsDataFormatErrorWhenUnknown) {
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenNameDuplicated) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "name = \"Y\"", "name = \"X\""),
-                          "重複");
+                          "duplicate component name");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenNameReserved) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "name = \"Spindle\"", "name = \"tool\""),
-                          "予約名");
+                          "reserved name");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenParentMissing) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "parent = \"Y\"", "parent = \"Q\""),
-                          "親が存在しない");
+                          "parent does not exist");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "parent = \"Y\"\n", ""),
-                          "parentがない");
+                          "parent is missing");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenCyclic) {
     // A.parent = "C" かつ C.parent = "A"
     ExpectDataFormatError(Replace(MinimalXyzAc(), "parent = \"base\"", "parent = \"C\""),
-                          "閉路");
+                          "cycle");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenTypeUnknown) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "type = \"spindle\"", "type = \"motor\""),
-                          "未知のtype");
+                          "unknown type");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenSubTableMismatch) {
     // linearにaxisがない
     ExpectDataFormatError(Replace(MinimalXyzAc(), "type = \"spindle\"", "type = \"linear\""),
-                          "axisの有無");
+                          "presence of axis");
     // fixedにframe
     ExpectDataFormatError(Replace(MinimalXyzAc(), "type = \"work_mount\"", "type = \"fixed\""),
-                          "frameの有無");
+                          "presence of frame");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenMountCountIsNotOne) {
     // Toolをwork_mountにする → tool_mount 0個 (work_mount 2個より先に検出される)
     ExpectDataFormatError(Replace(MinimalXyzAc(), "type = \"tool_mount\"",
                                   "type = \"work_mount\""),
-                          "tool_mountはちょうど1つ");
+                          "exactly one tool_mount");
     // Tableをfixedにする (frameも外す) → work_mount 0個
     ExpectDataFormatError(Replace(MinimalXyzAc(),
                                   "type = \"work_mount\"\nparent = \"C\"\n\n"
                                   "[component.frame]\norigin = [0, 0, 0]\n",
                                   "type = \"fixed\"\nparent = \"C\"\n"),
-                          "work_mountはちょうど1つ");
+                          "exactly one work_mount");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenMountHasChild) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "parent = \"Spindle\"", "parent = \"Table\""),
-                          "子を持てない");
+                          "cannot have children");
 }
 
 TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenSpindleMisplaced) {
     const std::string two = MinimalXyzAc()
             + "\n[[component]]\nname = \"S2\"\ntype = \"spindle\"\nparent = \"Z\"\n";
-    ExpectDataFormatError(two, "spindleは高々1つ");
+    ExpectDataFormatError(two, "at most one spindle");
     // ワーク側にspindle: Spindleをbase直下へ移すとToolも外れるので、A配下の別spindleを作る
     const std::string work_side = Replace(
             Replace(MinimalXyzAc(), "name = \"Spindle\"\ntype = \"spindle\"\nparent = \"Z\"\n",
                     "name = \"Spindle\"\ntype = \"spindle\"\nparent = \"A\"\n"),
             "parent = \"Spindle\"", "parent = \"Z\"");
-    ExpectDataFormatError(work_side, "tool_mountの祖先");
+    ExpectDataFormatError(work_side, "ancestor of the tool_mount");
 }
 
 // ---- 異常系: axis ----
@@ -765,22 +765,22 @@ TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenSpindleMisplaced) {
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenLimitsAndUnlimitedNotExclusive) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-90, 90]\n",
                                   "limits = [-90, 90]\nunlimited = true\n"),
-                          "ちょうど一方");
+                          "exactly one of limits");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-90, 90]\n", ""),
-                          "ちょうど一方");
+                          "exactly one of limits");
 }
 
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenLimitsNotIncreasing) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-90, 90]", "limits = [90, 90]"),
                           "min < max");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-90, 90]", "limits = [-90]"),
-                          "実数2要素");
+                          "two real numbers");
 }
 
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenLinearHasPoint) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-400, 400]\n",
                                   "limits = [-400, 400]\npoint = [0, 0, 0]\n"),
-                          "pointはrotaryのみ");
+                          "only for rotary");
 }
 
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenWrapStartOnLimitedAxis) {
@@ -792,12 +792,12 @@ TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenWrapStartOnLimitedAxis) {
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenInitialOutOfLimits) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-90, 90]\n",
                                   "limits = [-90, 90]\ninitial = 90.001\n"),
-                          "initialがlimits範囲外");
+                          "initial is outside limits");
 }
 
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenInitialOmittedOutsideLimits) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-90, 90]", "limits = [10, 90]"),
-                          "initialを省略できない");
+                          "initial cannot be omitted");
 }
 
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenDynamicsInvalid) {
@@ -808,7 +808,7 @@ TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenDynamicsInvalid) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "limits = [-90, 90]\n",
                                   "limits = [-90, 90]\n[component.axis.dynamics]\n"
                                   "rapid_feed = 0\n"),
-                          "正でない");
+                          "not positive");
 }
 
 TEST(MachineReaderTest, Spindle_ThrowsDataFormatErrorWhenMaxRpmNotPositive) {
@@ -820,13 +820,13 @@ TEST(MachineReaderTest, Spindle_ThrowsDataFormatErrorWhenMaxRpmNotPositive) {
 
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenRegisterDuplicated) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "register = \"Y\"", "register = \"X\""),
-                          "registerが重複");
+                          "duplicate register");
 }
 
 TEST(MachineReaderTest, Axis_ThrowsDataFormatErrorWhenDirectionNotUnit) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "direction = [1, 0, 0]\npoint",
                                   "direction = [1.0011, 0, 0]\npoint"),
-                          "単位ベクトルでない");
+                          "not a unit vector");
 }
 
 // ---- 異常系: frame ----
@@ -839,18 +839,18 @@ TEST(MachineReaderTest, Frame_ThrowsDataFormatErrorWhenOriginMissing) {
 TEST(MachineReaderTest, Frame_ThrowsDataFormatErrorWhenRotationAndAxesMixed) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "z_axis = [0, 0, 1]\n",
                                   "z_axis = [0, 0, 1]\nrotation_euler_ijk = [0, 0, 0]\n"),
-                          "排他");
+                          "exclusive");
 }
 
 TEST(MachineReaderTest, Frame_ThrowsDataFormatErrorWhenXAxisNotOrthogonal) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "z_axis = [0, 0, 1]\n",
                                   "z_axis = [0, 0, 1]\nx_axis = [0.8, 0, 0.6]\n"),
-                          "直交しない");
+                          "not orthogonal");
 }
 
 TEST(MachineReaderTest, Frame_ThrowsDataFormatErrorWhenDefaultXAxisDegenerates) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "z_axis = [0, 0, 1]\n", "z_axis = [1, 0, 0]\n"),
-                          "x軸を定められない");
+                          "cannot determine the x axis");
 }
 
 TEST(MachineReaderTest, Frame_AcceptsExplicitXAxisWithProjection) {
@@ -869,10 +869,10 @@ TEST(MachineReaderTest, Frame_AcceptsExplicitXAxisWithProjection) {
 TEST(MachineReaderTest, Geometry_ThrowsDataFormatErrorWhenSourceNotExclusive) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"\n",
                                   "primitive = \"box\"\nfile = \"x.stl\"\n"),
-                          "どちらか一方");
+                          "exactly one of file and primitive");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                   "color = \"#000000\"\n"),
-                          "どちらか一方");
+                          "exactly one of file and primitive");
 }
 
 TEST(MachineReaderTest, Geometry_ThrowsDataFormatErrorWhenOpacityOutOfRange) {
@@ -884,26 +884,26 @@ TEST(MachineReaderTest, Geometry_ThrowsDataFormatErrorWhenOpacityOutOfRange) {
 TEST(MachineReaderTest, Geometry_ThrowsDataFormatErrorWhenPathInvalid) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                   "file = 'models\\x.stl'\n"),
-                          "パス区切り");
+                          "path separator");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                   "file = \"models/x.3mf\"\n"),
-                          "未対応のモデル形式");
+                          "unsupported model format");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                   "file = \"models/x.iges\"\nunit = \"mm\"\n"),
                           "unit");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                   "file = \"models/x.stl\"\nunit = \"cm\"\n"),
-                          "未知のunit");
+                          "unknown unit");
 }
 
 TEST(MachineReaderTest, Geometry_ThrowsDataFormatErrorWhenPrimitiveInvalid) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "size = [10, 20, 30]", "size = [10, 0, 30]"),
-                          "正でない");
+                          "not all positive");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                   "primitive = \"cylinder\"\nheight = 10\n"),
-                          "radiusとheight");
+                          "radius and height");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "primitive = \"box\"", "primitive = \"cone\""),
-                          "未知のprimitive");
+                          "unknown primitive");
     ExpectDataFormatError(Replace(MinimalXyzAc(), "size = [10, 20, 30]\n",
                                   "size = [10, 20, 30]\nunit = \"mm\"\n"),
                           "unit");
@@ -927,9 +927,10 @@ TEST(MachineReaderTest, Geometry_WarnsOnceForNonPortablePaths) {
             "\n[[component.geometry]]\nfile = \"..dots/d.stl\"\n");
     const auto def = ReadString(toml);
     EXPECT_EQ(FindComponent(def, "X").geometries.size(), 4u);
-    ExpectSingleWarning(def, "可搬でない形状パス3件");
-    EXPECT_NE(def.warnings[0].message.find("絶対パス2件"), std::string::npos);
-    EXPECT_NE(def.warnings[0].message.find("親ディレクトリ越え1件"), std::string::npos);
+    ExpectSingleWarning(def, "3 non-portable geometry path(s)");
+    EXPECT_NE(def.warnings[0].message.find("absolute: 2"), std::string::npos);
+    EXPECT_NE(def.warnings[0].message.find("above base directory: 1"),
+              std::string::npos);
     // 絶対パスは基準ディレクトリを付けない
     EXPECT_EQ(std::get<fs::path>(FindComponent(def, "X").geometries[1].source),
               fs::path("D:/abs/b.stl").lexically_normal());
@@ -940,18 +941,18 @@ TEST(MachineReaderTest, Geometry_WarnsOnceForNonPortablePaths) {
 TEST(MachineReaderTest, Chain_ThrowsDataFormatErrorWhenLinearAxesDoNotSpan) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "direction = [0, 0, 1]\nlimits = [-90, 300]",
                                   "direction = [1, 0, 0]\nlimits = [-90, 300]"),
-                          "3次元を張らない");
+                          "span 3 dimensions");
 }
 
 TEST(MachineReaderTest, Chain_ThrowsDataFormatErrorWhenXyzLeftHanded) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "direction = [0, 0, 1]\nlimits = [-90, 300]",
                                   "direction = [0, 0, -1]\nlimits = [-90, 300]"),
-                          "右手系でない");
+                          "not right-handed");
 }
 
 TEST(MachineReaderTest, Chain_WarnsWhenXyzRegistersIncomplete) {
     const auto def = ReadString(Replace(MinimalXyzAc(), "register = \"Z\"", "register = \"W\""));
-    ExpectSingleWarning(def, "右手系検査");
+    ExpectSingleWarning(def, "right-handedness check");
 }
 
 TEST(MachineReaderTest, Chain_ThrowsDataFormatErrorWhenThreeRotaryAxes) {
@@ -961,13 +962,13 @@ TEST(MachineReaderTest, Chain_ThrowsDataFormatErrorWhenThreeRotaryAxes) {
             "register = \"B\"\ndirection = [0, 1, 0]\npoint = [0, 0, 0]\n"
             "limits = [-90, 90]\n\n[[component]]\nname = \"Spindle\"\ntype = \"spindle\"\n"
             "parent = \"B\"\n");
-    ExpectDataFormatError(toml, "2本を超える");
+    ExpectDataFormatError(toml, "more than 2 rotary axes");
 }
 
 TEST(MachineReaderTest, Chain_WarnsWhenComponentIsSharedByBothChains) {
     // Aの親をXにすると、Xが両チェーンに共通になる
     const auto def = ReadString(Replace(MinimalXyzAc(), "parent = \"base\"", "parent = \"X\""));
-    ExpectSingleWarning(def, "両チェーンに共通");
+    ExpectSingleWarning(def, "common to both chains");
     EXPECT_NE(def.warnings[0].message.find("[X]"), std::string::npos);
 }
 
@@ -999,9 +1000,9 @@ TEST(MachineReaderTest, Collision_WarnsWhenExcludeUsedWithPairsMode) {
 
 TEST(MachineReaderTest, Collision_ThrowsDataFormatErrorWhenTargetMissing) {
     ExpectDataFormatError(MinimalXyzAc() + "\n[collision]\npairs = [[\"X\", \"Q\"]]\n",
-                          "対象が存在しない");
+                          "target does not exist");
     ExpectDataFormatError(MinimalXyzAc() + "\n[collision]\nexclude = [[\"X\", \"Q\"]]\n",
-                          "対象が存在しない");
+                          "target does not exist");
 }
 
 TEST(MachineReaderTest, Collision_ThrowsDataFormatErrorWhenReservedHasSubtree) {
@@ -1013,14 +1014,14 @@ TEST(MachineReaderTest, Collision_ThrowsDataFormatErrorWhenReservedHasSubtree) {
 TEST(MachineReaderTest, Collision_ThrowsDataFormatErrorWhenPairDuplicated) {
     ExpectDataFormatError(MinimalXyzAc() + "\n[collision]\n"
                                            "pairs = [[\"X\", \"A\"], [\"A\", \"X\"]]\n",
-                          "干渉ペアが重複");
+                          "duplicate collision pair");
 }
 
 TEST(MachineReaderTest, Collision_ThrowsDataFormatErrorWhenGroupsIntersect) {
     // Zのsubtree (Z・Spindle・Tool・@tool) と tool (@tool) が交差する
     ExpectDataFormatError(MinimalXyzAc() + "\n[[collision.pair]]\ntargets = [\"tool\", \"Z\"]\n"
                                            "subtree = [false, true]\n",
-                          "交差");
+                          "intersect");
 }
 
 TEST(MachineReaderTest, Collision_DetailedPairKeepsClearanceAndEnabled) {
@@ -1046,7 +1047,7 @@ TEST(MachineReaderTest, FromString_ThrowsDataFormatErrorWithSourceNameOnSyntaxEr
     } catch (const igesio::DataFormatError& e) {
         const std::string message = e.what();
         EXPECT_NE(message.find("unit-test.toml"), std::string::npos) << message;
-        EXPECT_NE(message.find("TOML読込エラー"), std::string::npos) << message;
+        EXPECT_NE(message.find("TOML parse error"), std::string::npos) << message;
     }
 }
 

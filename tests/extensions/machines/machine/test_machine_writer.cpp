@@ -408,7 +408,7 @@ TEST(MachineWriterTest, Fixture_PathIsRelativizedToAnotherBaseDir) {
               std::get<fs::path>(FindComponent(original, "cradle-frame").geometries[0].source));
     // 親ディレクトリ越えの警告は読込側の仕様どおり1件
     ASSERT_EQ(restored.warnings.size(), 1u);
-    EXPECT_TRUE(Contains(restored.warnings[0].message, "親ディレクトリ越え"));
+    EXPECT_TRUE(Contains(restored.warnings[0].message, "above base directory"));
 }
 
 TEST(MachineWriterTest, Fixture_SimpleAndDetailedPairsAreSeparated) {

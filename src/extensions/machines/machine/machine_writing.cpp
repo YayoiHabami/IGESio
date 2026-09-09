@@ -44,7 +44,8 @@ using TomlArray = toml::ordered_array;
 
 /// @brief 出力の先頭に置く見出しコメント
 constexpr const char* kHeaderComment =
-        "# machine-definition 2.0 (IGESio machines拡張による書き出し)\n\n";
+        "# machine-definition 2.0 "
+        "(written by the IGESio machines extension)\n\n";
 /// @brief 実数をこの大きさ未満なら0として書く
 /// @note 90°回転の`cos`や、`local_frame`相対へ戻した原点の丸め誤差が
 ///       `6e-17`のような値で書かれるのを避ける. 単位ベクトルは読込側で
@@ -338,8 +339,10 @@ void PutFileSource(TomlValue& table, const GeometrySpec& geometry,
     const std::optional<LengthUnit> unit = UnitFromScale(geometry.file_unit_scale);
     if (!unit.has_value()) {
         throw std::invalid_argument(
-                context + ": file_unit_scale " + std::to_string(geometry.file_unit_scale)
-                + " はmm・inchのいずれの係数でもない (unitで表現できない)");
+                context + ": file_unit_scale "
+                + std::to_string(geometry.file_unit_scale)
+                + " matches neither the mm nor the inch factor"
+                  " (cannot be expressed by unit)");
     }
     if (*unit != ctx.length_unit) table["unit"] = std::string(LengthUnitName(*unit));
 }
