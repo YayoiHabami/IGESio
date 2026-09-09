@@ -38,6 +38,7 @@
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
 #include "igesio/extensions/machines/machine/machine_io.h"
+#include "./machines_for_testing.h"
 
 namespace {
 
@@ -47,190 +48,19 @@ using igesio::Matrix3d;
 using igesio::Matrix4d;
 using igesio::Vector3d;
 using mc::ToRadians;
+using machines_test::kBaseDir;
+using machines_test::kFixturePath;
+using machines_test::FindComponent;
+using machines_test::MinimalXyzAc;
+using machines_test::Replace;
+using machines_test::ThreeAxis;
 
 /// @brief 数値比較の許容誤差
 constexpr double kTol = 1e-12;
 
-/// @brief 実例TOMLのパス (tests/test_data/machines/)
-const fs::path kFixturePath =
-        fs::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-        / "test_data" / "machines" / "t-ZYX-b-AC-w.toml";
-
-/// @brief 文字列入力の相対パス基準ディレクトリ
-const fs::path kBaseDir = fs::path("C:/machines");
-
-/// @brief 最小構成の機械定義 (工具側XYZ・ワーク側AC、プリミティブのみ、暗黙base)
-/// @note 実例機と同じ幾何 (A軸は(0,0,60)を通るx軸、Toolは(0,-180,250.5))
-std::string MinimalXyzAc() {
-    return R"([format]
-name = "machine-definition"
-version = [2, 0]
-
-[machine]
-name = "minimal-xyz-ac"
-
-[[component]]
-name = "A"
-type = "rotary"
-parent = "base"
-
-[component.axis]
-register = "A"
-direction = [1, 0, 0]
-point = [0, 0, 60]
-limits = [-90, 90]
-
-[[component]]
-name = "C"
-type = "rotary"
-parent = "A"
-
-[component.axis]
-register = "C"
-direction = [0, 0, 1]
-point = [0, 0, 0]
-unlimited = true
-wrap_start = 0
-
-[[component]]
-name = "Table"
-type = "work_mount"
-parent = "C"
-
-[component.frame]
-origin = [0, 0, 0]
-
-[[component]]
-name = "X"
-type = "linear"
-parent = "base"
-
-[component.axis]
-register = "X"
-direction = [1, 0, 0]
-limits = [-400, 400]
-
-[[component.geometry]]
-name = "x-box"
-primitive = "box"
-size = [10, 20, 30]
-
-[[component]]
-name = "Y"
-type = "linear"
-parent = "X"
-
-[component.axis]
-register = "Y"
-direction = [0, 1, 0]
-limits = [0, 300]
-
-[[component]]
-name = "Z"
-type = "linear"
-parent = "Y"
-
-[component.axis]
-register = "Z"
-direction = [0, 0, 1]
-limits = [-90, 300]
-
-[[component]]
-name = "Spindle"
-type = "spindle"
-parent = "Z"
-
-[[component]]
-name = "Tool"
-type = "tool_mount"
-parent = "Spindle"
-
-[component.frame]
-origin = [0, -180, 250.5]
-z_axis = [0, 0, 1]
-)";
-}
-
-/// @brief 3軸のみ (XYZ・回転軸なし) の最小構成
-std::string ThreeAxis() {
-    return R"([format]
-name = "machine-definition"
-version = [2, 0]
-
-[machine]
-name = "three-axis"
-
-[[component]]
-name = "Table"
-type = "work_mount"
-parent = "base"
-
-[component.frame]
-origin = [0, 0, 0]
-
-[[component]]
-name = "X"
-type = "linear"
-parent = "base"
-
-[component.axis]
-register = "X"
-direction = [1, 0, 0]
-limits = [-100, 100]
-
-[[component]]
-name = "Y"
-type = "linear"
-parent = "X"
-
-[component.axis]
-register = "Y"
-direction = [0, 1, 0]
-limits = [-100, 100]
-
-[[component]]
-name = "Z"
-type = "linear"
-parent = "Y"
-
-[component.axis]
-register = "Z"
-direction = [0, 0, 1]
-limits = [-100, 100]
-
-[[component]]
-name = "Tool"
-type = "tool_mount"
-parent = "Z"
-
-[component.frame]
-origin = [0, 0, 100]
-)";
-}
-
-/// @brief 文字列の最初の出現を置換する (異常系の作成用)
-/// @throw std::logic_error 置換元が見つからない場合 (テストの記述ミス)
-std::string Replace(std::string base, const std::string& from, const std::string& to) {
-    const auto pos = base.find(from);
-    if (pos == std::string::npos) {
-        throw std::logic_error("Replace: anchor not found: " + from);
-    }
-    return base.replace(pos, from.size(), to);
-}
-
 /// @brief 文字列入力で読み込む
 mc::MachineDefinition ReadString(const std::string& toml) {
     return mc::ReadMachineDefinitionFromString(toml, kBaseDir, "<test>");
-}
-
-/// @brief 名前でコンポーネントを引く
-/// @throw std::logic_error 見つからない場合
-const mc::ComponentSpec& FindComponent(const mc::MachineDefinition& definition,
-                                       const std::string& name) {
-    for (const auto& component : definition.components) {
-        if (component.name == name) return component;
-    }
-    throw std::logic_error("component not found: " + name);
 }
 
 /// @brief `DataFormatError`が投げられ、メッセージに指定語を含むことを検証する
@@ -1066,4 +896,38 @@ TEST(MachineReaderTest, ReadFile_ThrowsDataFormatErrorWhenComponentsMissing) {
     ExpectDataFormatError("[format]\nname = \"machine-definition\"\nversion = [2, 0]\n"
                           "[machine]\nname = \"m\"\n",
                           "[[component]]");
+}
+
+// ---- 語彙 (machine_definition.h の予約名・種別・形式) ----
+
+TEST(MachineDefinitionTest, ReservedCollisionTarget_MatchesToolAndWorkOnly) {
+    EXPECT_TRUE(mc::IsReservedCollisionTarget(mc::kToolCollisionTarget));
+    EXPECT_TRUE(mc::IsReservedCollisionTarget(mc::kWorkCollisionTarget));
+    EXPECT_FALSE(mc::IsReservedCollisionTarget(mc::kBaseComponentName));
+    EXPECT_FALSE(mc::IsReservedCollisionTarget("Tool"));
+    EXPECT_FALSE(mc::IsReservedCollisionTarget(""));
+    EXPECT_EQ(mc::ParseComponentType(mc::kBaseComponentName), mc::ComponentType::kBase);
+}
+
+TEST(MachineDefinitionTest, PrimitiveKind_RoundTripsThroughName) {
+    for (const auto kind : {mc::PrimitiveSpec::Kind::kBox, mc::PrimitiveSpec::Kind::kCylinder}) {
+        const auto parsed = mc::ParsePrimitiveKind(mc::PrimitiveKindName(kind));
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(*parsed, kind);
+    }
+    EXPECT_FALSE(mc::ParsePrimitiveKind("sphere").has_value());
+    EXPECT_FALSE(mc::ParsePrimitiveKind("Box").has_value());
+}
+
+TEST(MachineDefinitionTest, ClassifyGeometryFile_IgnoresExtensionCase) {
+    EXPECT_EQ(mc::ClassifyGeometryFile("a/b.stl"), mc::GeometryFileFormat::kStl);
+    EXPECT_EQ(mc::ClassifyGeometryFile("a/b.STL"), mc::GeometryFileFormat::kStl);
+    EXPECT_EQ(mc::ClassifyGeometryFile("b.obj"), mc::GeometryFileFormat::kObj);
+    EXPECT_EQ(mc::ClassifyGeometryFile("b.igs"), mc::GeometryFileFormat::kIges);
+    EXPECT_EQ(mc::ClassifyGeometryFile("b.IGES"), mc::GeometryFileFormat::kIges);
+    EXPECT_EQ(mc::ClassifyGeometryFile("b.stp"), mc::GeometryFileFormat::kStep);
+    EXPECT_EQ(mc::ClassifyGeometryFile("b.step"), mc::GeometryFileFormat::kStep);
+    EXPECT_EQ(mc::ClassifyGeometryFile("b.ply"), mc::GeometryFileFormat::kUnknown);
+    EXPECT_EQ(mc::ClassifyGeometryFile("noext"), mc::GeometryFileFormat::kUnknown);
+    EXPECT_EQ(mc::ClassifyGeometryFile("dir.stl/model"), mc::GeometryFileFormat::kUnknown);
 }

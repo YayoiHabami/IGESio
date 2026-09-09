@@ -24,7 +24,9 @@
 
 // 共通基盤
 #include "igesio/extensions/machines/core/diagnostics.h"
+#include "igesio/extensions/machines/core/tolerances.h"
 #include "igesio/extensions/machines/core/units.h"
+#include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
 
 // 機械定義・運動学

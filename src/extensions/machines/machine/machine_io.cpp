@@ -29,7 +29,9 @@
 #include <toml.hpp>
 
 #include "igesio/common/errors.h"
+#include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/extensions/machines/core/tolerances.h"
 #include "igesio/extensions/machines/core/units.h"
 #include "extensions/machines/machine/machine_writing.h"
 #include "extensions/machines/machine/toml_reading.h"
@@ -44,12 +46,9 @@ using detail::Find;
 using detail::LineOf;
 using detail::Warn;
 
-/// @brief ルートコンポーネントの予約名
-constexpr const char* kBaseName = "base";
-/// @brief 直進軸の実効方向のrank判定に用いる特異値の許容誤差
-constexpr double kRankTolerance = 1e-6;
-/// @brief `initial`と`limits`の範囲検査の許容誤差 (mmまたはrad)
-constexpr double kLimitTolerance = 1e-9;
+/// @brief ルートコンポーネントの予約名 (`kBaseComponentName`の`std::string`版)
+/// @note 名前→テーブルの表の添字や`std::string`との比較に用いる
+const std::string kBaseName(kBaseComponentName);
 
 /// @brief `[[component]]`の表 (名前→テーブル). 暗黙のbaseはテーブルを持たない
 struct ComponentTables {
@@ -75,11 +74,6 @@ struct Structure {
     /// @brief work_mountの名前
     std::string work_mount;
 };
-
-/// @brief 干渉設定の予約名 (`tool`・`work`) か
-bool IsReservedTarget(const std::string& name) {
-    return name == "tool" || name == "work";
-}
 
 /// @brief コンポーネントの文脈文字列 `component[{name}]`
 std::string ContextOf(const std::string& name) {
@@ -220,17 +214,18 @@ void ReadMachineMeta(const TomlValue& root, MachineDefinition& definition) {
     }
 }
 
-/// @brief `[units]`を読み込む. 既定はmm・deg
+/// @brief `[units]`を読み込む. 既定は`UnitScales`の既定値 (mm・deg)
 UnitScales ReadUnits(const TomlValue& root) {
+    const UnitScales defaults;
     const TomlValue* units = Find(root, "units");
-    if (units == nullptr) {
-        return MakeUnitScales(LengthUnit::kMillimeter, AngleUnit::kDegree);
-    }
+    if (units == nullptr) return defaults;
     detail::EnsureTable(*units, "[units] is not a table");
     const std::string length =
-            detail::OptionalString(*units, "length", "[units]").value_or("mm");
+            detail::OptionalString(*units, "length", "[units]")
+                    .value_or(std::string(LengthUnitName(defaults.length_unit)));
     const std::string angle =
-            detail::OptionalString(*units, "angle", "[units]").value_or("deg");
+            detail::OptionalString(*units, "angle", "[units]")
+                    .value_or(std::string(AngleUnitName(defaults.angle_unit)));
     const auto length_unit = ParseLengthUnit(length);
     if (!length_unit.has_value()) {
         Fail("", "invalid [units].length: " + length, LineOf(*units));
@@ -242,14 +237,15 @@ UnitScales ReadUnits(const TomlValue& root) {
     return MakeUnitScales(*length_unit, *angle_unit);
 }
 
-/// @brief `[kinematics]`を読み込む. 既定は`positive`
+/// @brief `[kinematics]`を読み込む. 既定は`MachineDefinition::branch`の既定値
 BranchPolicy ReadKinematics(const TomlValue& root) {
+    const BranchPolicy default_branch = MachineDefinition{}.branch;
     const TomlValue* kinematics = Find(root, "kinematics");
-    if (kinematics == nullptr) return BranchPolicy::kPositive;
+    if (kinematics == nullptr) return default_branch;
     detail::EnsureTable(*kinematics, "[kinematics] is not a table");
     const std::string branch =
             detail::OptionalString(*kinematics, "branch", "[kinematics]")
-                    .value_or("positive");
+                    .value_or(std::string(BranchPolicyName(default_branch)));
     const auto policy = ParseBranchPolicy(branch);
     if (!policy.has_value()) {
         Fail("", "invalid [kinematics].branch: " + branch,
@@ -275,7 +271,7 @@ std::string ReadComponentName(const TomlValue& table, const std::size_t index,
         Fail(context, "name is missing", LineOf(table));
     }
     const std::string text = name->as_string();
-    if (IsReservedTarget(text)) {
+    if (IsReservedCollisionTarget(text)) {
         Fail("", "reserved name cannot be used as a component name: " + text,
              LineOf(table));
     }
@@ -288,7 +284,7 @@ std::string ReadComponentName(const TomlValue& table, const std::size_t index,
 /// @brief 明示された`base`の制約 (`[[component]].base`) を検証する
 void ValidateExplicitBase(const TomlValue& base) {
     const auto type = detail::OptionalString(base, "type", ContextOf(kBaseName));
-    if (!type.has_value() || *type != "base") {
+    if (!type.has_value() || *type != kBaseComponentName) {
         Fail("", "root \"base\" must have type \"base\"", LineOf(base));
     }
     for (const char* key : {"parent", "axis", "frame", "spindle"}) {
@@ -323,7 +319,7 @@ ComponentTables CollectComponentTables(const TomlValue& root) {
         if (name == kBaseName) continue;
         const TomlValue& table = *tables.by_name[name];
         const auto type = detail::OptionalString(table, "type", ContextOf(name));
-        if (type.has_value() && *type == "base") {
+        if (type.has_value() && *type == kBaseComponentName) {
             Fail("", "type=\"base\" is reserved for the root \"base\": " + name,
                  LineOf(table));
         }
@@ -767,7 +763,7 @@ void ValidateChains(const std::map<std::string, ComponentSpec>& specs,
         if (det <= 0.0) {
             Fail("", "effective directions of linear axes X, Y and Z are "
                      "not right-handed (determinant "
-                     + detail::FormatReal(det) + ")");
+                     + FormatFixed(det, 6) + ")");
         }
     } else {
         Warn(warnings, "[[component]]",
@@ -788,8 +784,8 @@ void ValidateChains(const std::map<std::string, ComponentSpec>& specs,
 std::set<std::string> CollisionGroup(const std::string& target, const bool subtree,
                                      const ComponentTables& tables,
                                      const Structure& structure) {
-    if (target == "tool") return {"@tool"};
-    if (target == "work") return {"@work"};
+    if (target == kToolCollisionTarget) return {"@tool"};
+    if (target == kWorkCollisionTarget) return {"@work"};
     std::set<std::string> group = {target};
     if (subtree) {
         std::vector<std::string> stack = {target};
@@ -818,10 +814,10 @@ void ValidateCollisionPairs(const std::vector<CollisionPair>& pairs,
         std::array<std::set<std::string>, 2> groups;
         for (std::size_t k = 0; k < 2; ++k) {
             const std::string& target = pair.targets[k];
-            if (!tables.Has(target) && !IsReservedTarget(target)) {
+            if (!tables.Has(target) && !IsReservedCollisionTarget(target)) {
                 Fail("", "collision pair target does not exist: " + target);
             }
-            if (IsReservedTarget(target) && pair.subtree[k]) {
+            if (IsReservedCollisionTarget(target) && pair.subtree[k]) {
                 Fail("", "subtree = true cannot be specified for the "
                          "reserved name " + target);
             }
@@ -890,7 +886,7 @@ std::vector<std::array<std::string, 2>> ReadExclude(const TomlValue& collision,
         const std::string context = "[collision].exclude[" + std::to_string(i) + "]";
         const auto pair = ReadNamePair(array[i], context, "not two strings");
         for (const std::string& target : pair) {
-            if (!tables.Has(target) && !IsReservedTarget(target)) {
+            if (!tables.Has(target) && !IsReservedCollisionTarget(target)) {
                 Fail(context, "target does not exist: " + target,
                      LineOf(array[i]));
             }
@@ -910,7 +906,8 @@ std::optional<CollisionSettings> ReadCollision(
     detail::EnsureTable(*collision, "[collision] is not a table");
     CollisionSettings settings;
     const std::string mode =
-            detail::OptionalString(*collision, "mode", "[collision]").value_or("pairs");
+            detail::OptionalString(*collision, "mode", "[collision]")
+                    .value_or(std::string(CollisionModeName(settings.mode)));
     const auto parsed_mode = ParseCollisionMode(mode);
     if (!parsed_mode.has_value()) {
         Fail("", "invalid [collision].mode: " + mode, LineOf(*collision));

@@ -37,6 +37,7 @@
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
 #include "igesio/extensions/machines/machine/machine_io.h"
+#include "./machines_for_testing.h"
 
 namespace {
 
@@ -46,6 +47,9 @@ using igesio::Matrix3d;
 using igesio::Matrix4d;
 using igesio::Vector3d;
 using mc::ToRadians;
+using machines_test::kBaseDir;
+using machines_test::kFixturePath;
+using machines_test::FindComponent;
 
 /// @brief 往復比較の許容誤差 (単位換算の往復とdouble文字列化の丸めを含む)
 constexpr double kTol = 1e-9;
@@ -53,27 +57,9 @@ constexpr double kTol = 1e-9;
 /// @brief 色の往復の許容誤差 (`"#RRGGBB"`は8bit量子化のため最大0.5/255ずれる)
 constexpr double kColorTol = 1.0 / 255.0;
 
-/// @brief 実例TOMLのパス (tests/test_data/machines/)
-const fs::path kFixturePath =
-        fs::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
-        / "test_data" / "machines" / "t-ZYX-b-AC-w.toml";
-
-/// @brief 文字列入力・出力の相対パス基準ディレクトリ
-const fs::path kBaseDir = fs::path("C:/machines");
-
 /// @brief 文字列に部分文字列が含まれるか
 bool Contains(const std::string& text, const std::string& needle) {
     return text.find(needle) != std::string::npos;
-}
-
-/// @brief 名前でコンポーネントを引く
-/// @throw std::logic_error 見つからない場合
-const mc::ComponentSpec& FindComponent(const mc::MachineDefinition& definition,
-                                       const std::string& name) {
-    for (const auto& component : definition.components) {
-        if (component.name == name) return component;
-    }
-    throw std::logic_error("component not found: " + name);
 }
 
 /// @brief 名前でコンポーネントを引く (書き換え用)

@@ -16,14 +16,9 @@
 #include <variant>
 
 #include "igesio/numerics/core/matrix.h"
+#include "igesio/extensions/machines/core/tolerances.h"
 
 namespace igesio::extensions::machines {
-
-/// @brief 単位ベクトル・直交性・正規直交性の検証に用いる許容誤差
-constexpr double kUnitVectorTolerance = 1e-3;
-
-/// @brief 退化 (ゼロベクトル・射影の消失) の判定に用いる許容誤差
-constexpr double kDegenerateTolerance = 1e-9;
 
 /// @brief 軸角形式 `{ axis = [x, y, z], angle = a }`
 /// @note 単位ベクトルaxisまわりの右ねじ回転

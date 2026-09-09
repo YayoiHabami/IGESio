@@ -10,9 +10,7 @@
  */
 #include "extensions/machines/machine/machine_writing.h"
 
-#include <algorithm>
 #include <array>
-#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -28,7 +26,9 @@
 
 #include <toml.hpp>
 
+#include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/extensions/machines/core/tolerances.h"
 #include "igesio/extensions/machines/core/units.h"
 
 namespace igesio::extensions::machines::detail {
@@ -46,13 +46,6 @@ using TomlArray = toml::ordered_array;
 constexpr const char* kHeaderComment =
         "# machine-definition 2.0 "
         "(written by the IGESio machines extension)\n\n";
-/// @brief 実数をこの大きさ未満なら0として書く
-/// @note 90°回転の`cos`や、`local_frame`相対へ戻した原点の丸め誤差が
-///       `6e-17`のような値で書かれるのを避ける. 単位ベクトルは読込側で
-///       再正規化され (許容1e-3)、長さ・角度で1e-12未満の値は意味を持たない
-constexpr double kZeroSnapTolerance = 1e-12;
-/// @brief 単位行列・零ベクトルとみなす許容誤差 (省略可能なキーの判定)
-constexpr double kIdentityTolerance = 1e-12;
 /// @brief `clearance`が`default_clearance`と等しいとみなす許容誤差 [mm]
 constexpr double kClearanceTolerance = 1e-9;
 /// @brief `file_unit_scale`が単位の係数と等しいとみなす許容誤差
@@ -95,9 +88,12 @@ int ShortestPrecision(const double value) {
 }
 
 /// @brief 実数の値を作る (微小値は0、それ以外は最短の往復桁数)
-/// @note `-0.0`も0として書く
+/// @note 90°回転の`cos`や、`local_frame`相対へ戻した原点の丸め誤差が
+///       `6e-17`のような値で書かれるのを避けるため、`kZeroTolerance`未満は
+///       0とする (`-0.0`も0). 単位ベクトルは読込側で再正規化され (許容1e-3)、
+///       長さ・角度で1e-12未満の値は意味を持たない
 TomlValue Real(const double value) {
-    const double written = std::abs(value) < kZeroSnapTolerance ? 0.0 : value;
+    const double written = std::abs(value) < kZeroTolerance ? 0.0 : value;
     TomlValue result(written);
     result.as_floating_fmt().prec = static_cast<std::size_t>(ShortestPrecision(written));
     return result;
@@ -160,17 +156,6 @@ TomlValue BoolPair(const std::array<bool, 2>& flags) {
     return OnelineArray({TomlValue(flags[0]), TomlValue(flags[1])});
 }
 
-/// @brief 色を`"#RRGGBB"`にする (各成分を0..1にクランプして255倍・四捨五入)
-std::string ColorText(const std::array<float, 3>& rgb) {
-    std::ostringstream stream;
-    stream << '#' << std::hex << std::setfill('0');
-    for (const float channel : rgb) {
-        const double clamped = std::clamp(static_cast<double>(channel), 0.0, 1.0);
-        stream << std::setw(2) << std::lround(clamped * 255.0);
-    }
-    return stream.str();
-}
-
 
 
 /**
@@ -179,7 +164,7 @@ std::string ColorText(const std::array<float, 3>& rgb) {
 
 /// @brief 回転が単位行列でなければ`rotation = { x_axis, y_axis, z_axis }`を書く
 void PutRotation(TomlValue& table, const igesio::Matrix3d& rotation) {
-    if (rotation.isIdentity(kIdentityTolerance)) return;
+    if (rotation.isIdentity(kZeroTolerance)) return;
     TomlValue spec = InlineTable();
     spec["x_axis"] = Vec3(rotation.col(0));
     spec["y_axis"] = Vec3(rotation.col(1));
@@ -190,14 +175,14 @@ void PutRotation(TomlValue& table, const igesio::Matrix3d& rotation) {
 /// @brief 原点が零ベクトルでなければ`origin`を書く
 void PutOrigin(TomlValue& table, const igesio::Vector3d& origin,
                const double length_scale) {
-    if (origin.isZero(kIdentityTolerance)) return;
+    if (origin.isZero(kZeroTolerance)) return;
     table["origin"] = Vec3(origin / length_scale);
 }
 
 /// @brief `local_frame` (`[[component]].local_frame`) が単位行列でなければ書く
 void PutLocalFrame(TomlValue& component, const igesio::Matrix4d& local_frame,
                    const WriteContext& ctx) {
-    if (local_frame.isIdentity(kIdentityTolerance)) return;
+    if (local_frame.isIdentity(kZeroTolerance)) return;
     TomlValue frame = Table();
     PutOrigin(frame, TranslationPart(local_frame), ctx.length_scale);
     PutRotation(frame, RotationPart(local_frame));
@@ -215,7 +200,7 @@ TomlValue MakeFrame(const igesio::Matrix4d& local_frame,
     TomlValue frame = Table();
     frame["origin"] = Vec3(TranslationPart(relative) / length_scale);
     frame["z_axis"] = Vec3(rotation.col(2));
-    if (!rotation.isIdentity(kIdentityTolerance)) {
+    if (!rotation.isIdentity(kZeroTolerance)) {
         frame["x_axis"] = Vec3(rotation.col(0));
     }
     return frame;
@@ -294,16 +279,6 @@ TomlValue MakeAxis(const AxisSpec& axis, const bool is_rotary,
  * ---- 形状 ----
  */
 
-/// @brief 拡張子を小文字にして返す (`".STL"` → `".stl"`)
-std::string LowerExtension(const std::filesystem::path& path) {
-    std::string ext = path.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](const unsigned char c) {
-                       return static_cast<char>(std::tolower(c));
-                   });
-    return ext;
-}
-
 /// @brief 換算係数に対応する長さ単位を返す
 /// @return mm (1.0) またはinch (25.4). どちらでもなければ`std::nullopt`
 std::optional<LengthUnit> UnitFromScale(const double scale) {
@@ -334,8 +309,8 @@ void PutFileSource(TomlValue& table, const GeometrySpec& geometry,
                    const std::string& context, const WriteContext& ctx) {
     const std::string text = PathText(geometry, ctx);
     table["file"] = text;
-    const std::string ext = LowerExtension(std::filesystem::path(text));
-    if (ext != ".stl" && ext != ".obj") return;
+    const GeometryFileFormat format = ClassifyGeometryFile(std::filesystem::path(text));
+    if (format != GeometryFileFormat::kStl && format != GeometryFileFormat::kObj) return;
     const std::optional<LengthUnit> unit = UnitFromScale(geometry.file_unit_scale);
     if (!unit.has_value()) {
         throw std::invalid_argument(
@@ -350,12 +325,11 @@ void PutFileSource(TomlValue& table, const GeometrySpec& geometry,
 /// @brief プリミティブ形式 (`[[component.geometry]].primitive`) を書き出す
 void PutPrimitive(TomlValue& table, const PrimitiveSpec& primitive,
                   const double length_scale) {
+    table["primitive"] = std::string(PrimitiveKindName(primitive.kind));
     if (primitive.kind == PrimitiveSpec::Kind::kBox) {
-        table["primitive"] = "box";
         table["size"] = Vec3(primitive.size / length_scale);
         return;
     }
-    table["primitive"] = "cylinder";
     table["radius"] = Real(primitive.radius / length_scale);
     table["height"] = Real(primitive.height / length_scale);
 }
@@ -376,7 +350,7 @@ TomlValue MakeGeometry(const GeometrySpec& geometry, const igesio::Matrix4d& loc
     const igesio::Matrix4d relative = RigidInverse(local_frame) * geometry.placement;
     PutOrigin(table, TranslationPart(relative), ctx.length_scale);
     PutRotation(table, RotationPart(relative));
-    if (geometry.color.has_value()) table["color"] = ColorText(*geometry.color);
+    if (geometry.color.has_value()) table["color"] = FormatHexColor(*geometry.color);
     if (geometry.opacity != 1.0f) {   // 既定値 (省略時1) との一致検査
         table["opacity"] = Real(static_cast<double>(geometry.opacity));
     }
@@ -394,7 +368,7 @@ TomlValue MakeGeometry(const GeometrySpec& geometry, const igesio::Matrix4d& loc
 /// @brief 暗黙のbaseとして省略できるか (形状も`local_frame`も持たないbase)
 bool IsImplicitBase(const ComponentSpec& component) {
     return component.type == ComponentType::kBase && component.geometries.empty()
-           && component.local_frame.isIdentity(kIdentityTolerance);
+           && component.local_frame.isIdentity(kZeroTolerance);
 }
 
 /// @brief `[[component]]`の1要素を書き出す. 省略可能なキーは省略する

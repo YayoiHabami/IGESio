@@ -34,6 +34,20 @@ constexpr std::string_view kMachineFormatName = "machine-definition";
 /// @note 読込はmajorが一致するものを受理し、書き出しは常にこの値を書く
 constexpr std::array<int, 2> kMachineFormatVersion = {2, 0};
 
+/// @brief ルートコンポーネントの予約名
+/// @note `type = "base"`のコンポーネントは必ずこの名前とする (省略時は暗黙的に追加)
+constexpr std::string_view kBaseComponentName = "base";
+
+/// @brief 干渉設定で工具 (ホルダ等を含む工具アセンブリ全体) を指す予約名
+constexpr std::string_view kToolCollisionTarget = "tool";
+
+/// @brief 干渉設定でワーク (プロジェクト側で追加する治具等も含む) を指す予約名
+constexpr std::string_view kWorkCollisionTarget = "work";
+
+/// @brief 干渉設定の予約名 (`"tool"`/`"work"`) か
+/// @note 予約名はコンポーネント名として使用できない
+bool IsReservedCollisionTarget(std::string_view name);
+
 /// @brief コンポーネントの種別
 /// @note TOMLの`[[component]]`の`type`キーに対応
 enum class ComponentType {
@@ -184,6 +198,34 @@ struct PrimitiveSpec {
     /// @brief 高さ [mm] (kCylinderのみ)
     double height = 0.0;
 };
+
+/// @brief プリミティブ種別の文字列 (`[[component.geometry]]`の`primitive`キーの値)
+///        をKindに変換する
+/// @return 対応する種別. 未知の文字列なら`std::nullopt`
+std::optional<PrimitiveSpec::Kind> ParsePrimitiveKind(std::string_view text);
+
+/// @brief PrimitiveSpec::Kindを文字列 (TOMLで用いるもの) に変換する
+std::string_view PrimitiveKindName(PrimitiveSpec::Kind kind);
+
+/// @brief 形状ファイルの形式
+enum class GeometryFileFormat {
+    /// @brief STL (`.stl`)
+    kStl,
+    /// @brief Wavefront OBJ (`.obj`)
+    kObj,
+    /// @brief IGES (`.igs`・`.iges`)
+    kIges,
+    /// @brief STEP (`.stp`・`.step`)
+    /// @note 未対応. 読込時は警告してスキップする
+    kStep,
+    /// @brief 対応外の拡張子
+    kUnknown,
+};
+
+/// @brief 形状ファイルの形式を判定する
+/// @param path 形状ファイルのパス (拡張子の大文字/小文字は区別しない)
+/// @return 対応外なら`kUnknown`
+GeometryFileFormat ClassifyGeometryFile(const std::filesystem::path& path);
 
 /// @brief コンポーネントの部分形状 (1コンポーネントは複数の形状を持つことが可能)
 /// @note ファイル参照形式とプリミティブ形式のいずれか.

@@ -7,13 +7,21 @@
  */
 #include "igesio/extensions/machines/machine/machine_definition.h"
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace igesio::extensions::machines {
 
+bool IsReservedCollisionTarget(const std::string_view name) {
+    return name == kToolCollisionTarget || name == kWorkCollisionTarget;
+}
+
 std::optional<ComponentType> ParseComponentType(const std::string_view text) {
-    if (text == "base") return ComponentType::kBase;
+    if (text == kBaseComponentName) return ComponentType::kBase;
     if (text == "linear") return ComponentType::kLinear;
     if (text == "rotary") return ComponentType::kRotary;
     if (text == "spindle") return ComponentType::kSpindle;
@@ -61,6 +69,29 @@ std::optional<CollisionMode> ParseCollisionMode(const std::string_view text) {
 std::string_view CollisionModeName(const CollisionMode mode) {
     return mode == CollisionMode::kAllExceptAdjacent ? "all_except_adjacent"
                                                      : "pairs";
+}
+
+std::optional<PrimitiveSpec::Kind> ParsePrimitiveKind(const std::string_view text) {
+    if (text == "box") return PrimitiveSpec::Kind::kBox;
+    if (text == "cylinder") return PrimitiveSpec::Kind::kCylinder;
+    return std::nullopt;
+}
+
+std::string_view PrimitiveKindName(const PrimitiveSpec::Kind kind) {
+    return kind == PrimitiveSpec::Kind::kCylinder ? "cylinder" : "box";
+}
+
+GeometryFileFormat ClassifyGeometryFile(const std::filesystem::path& path) {
+    std::string ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](const unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    if (ext == ".stl") return GeometryFileFormat::kStl;
+    if (ext == ".obj") return GeometryFileFormat::kObj;
+    if (ext == ".igs" || ext == ".iges") return GeometryFileFormat::kIges;
+    if (ext == ".stp" || ext == ".step") return GeometryFileFormat::kStep;
+    return GeometryFileFormat::kUnknown;
 }
 
 }  // namespace igesio::extensions::machines

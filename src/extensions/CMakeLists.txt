@@ -42,12 +42,23 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
     list(APPEND EXTENSIONS_SOURCES
         machines/core/diagnostics.cpp
         machines/core/units.cpp
+        machines/core/formatting.cpp
         machines/core/rotation.cpp
         machines/machine/machine_definition.cpp
         machines/machine/toml_reading.cpp
         machines/machine/machine_writing.cpp
         machines/machine/machine_io.cpp
     )
+    if(MINGW)
+        # toml11のテンプレート展開とデバッグ情報でCOFFのセクション数上限 (2^16) を
+        # 超えるため、toml11に依存するソースのみ大きなオブジェクト形式を許可する
+        set_source_files_properties(
+            machines/machine/toml_reading.cpp
+            machines/machine/machine_writing.cpp
+            machines/machine/machine_io.cpp
+            PROPERTIES COMPILE_OPTIONS "-Wa,-mbig-obj"
+        )
+    endif()
 endif()
 
 add_library(igesio_extensions STATIC ${EXTENSIONS_SOURCES})

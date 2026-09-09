@@ -7,58 +7,21 @@
  */
 #include "extensions/machines/machine/toml_reading.h"
 
-#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
-#include <iomanip>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "igesio/common/errors.h"
+#include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
 
 namespace igesio::extensions::machines::detail {
 
 namespace {
-
-/// @brief 拡張子を小文字にして返す (`".STL"` → `".stl"`)
-/// @param path 対象のパス
-/// @return 小文字の拡張子 (無ければ空)
-std::string LowerExtension(const std::filesystem::path& path) {
-    std::string ext = path.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](const unsigned char c) {
-                       return static_cast<char>(std::tolower(c));
-                   });
-    return ext;
-}
-
-/// @brief 16進2桁を0~1の値にする
-/// @param text `"#RRGGBB"`の文字列
-/// @param offset 読み取る位置 (1・3・5)
-/// @return 0~1の値. 16進でなければ`std::nullopt`
-std::optional<float> HexPair(const std::string& text, const std::size_t offset) {
-    int value = 0;
-    for (std::size_t i = offset; i < offset + 2; ++i) {
-        const unsigned char c = static_cast<unsigned char>(text[i]);
-        int digit = 0;
-        if (std::isdigit(c)) {
-            digit = c - '0';
-        } else if (c >= 'a' && c <= 'f') {
-            digit = 10 + (c - 'a');
-        } else if (c >= 'A' && c <= 'F') {
-            digit = 10 + (c - 'A');
-        } else {
-            return std::nullopt;
-        }
-        value = value * 16 + digit;
-    }
-    return static_cast<float>(value) / 255.0f;
-}
 
 /// @brief プリミティブ形状を読む
 /// @param geometry 形状テーブル (`primitive`を持つこと)
@@ -75,9 +38,13 @@ PrimitiveSpec ReadPrimitive(const TomlValue& geometry, const std::string& contex
              LineOf(geometry));
     }
     const std::string kind = RequireString(geometry, "primitive", context);
+    const std::optional<PrimitiveSpec::Kind> parsed = ParsePrimitiveKind(kind);
+    if (!parsed.has_value()) {
+        Fail(context, "unknown primitive: " + kind, LineOf(geometry));
+    }
     PrimitiveSpec primitive;
-    if (kind == "box") {
-        primitive.kind = PrimitiveSpec::Kind::kBox;
+    primitive.kind = *parsed;
+    if (primitive.kind == PrimitiveSpec::Kind::kBox) {
         const TomlValue* size = Find(geometry, "size");
         if (size == nullptr) {
             Fail(context, "box requires size", LineOf(geometry));
@@ -91,19 +58,14 @@ PrimitiveSpec ReadPrimitive(const TomlValue& geometry, const std::string& contex
         primitive.size = raw * length_scale;
         return primitive;
     }
-    if (kind == "cylinder") {
-        primitive.kind = PrimitiveSpec::Kind::kCylinder;
-        const TomlValue* radius = Find(geometry, "radius");
-        const TomlValue* height = Find(geometry, "height");
-        if (radius == nullptr || height == nullptr) {
-            Fail(context, "cylinder requires radius and height",
-                 LineOf(geometry));
-        }
-        primitive.radius = AsPositive(*radius, context + ".radius") * length_scale;
-        primitive.height = AsPositive(*height, context + ".height") * length_scale;
-        return primitive;
+    const TomlValue* radius = Find(geometry, "radius");
+    const TomlValue* height = Find(geometry, "height");
+    if (radius == nullptr || height == nullptr) {
+        Fail(context, "cylinder requires radius and height", LineOf(geometry));
     }
-    Fail(context, "unknown primitive: " + kind, LineOf(geometry));
+    primitive.radius = AsPositive(*radius, context + ".radius") * length_scale;
+    primitive.height = AsPositive(*height, context + ".height") * length_scale;
+    return primitive;
 }
 
 /// @brief ファイル参照形式の`file`・`unit`を解釈する
@@ -139,15 +101,13 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
     }
     spec.source = path.lexically_normal();
 
-    const std::string ext = LowerExtension(path);
-    const bool is_iges = (ext == ".igs" || ext == ".iges");
-    const bool is_step = (ext == ".stp" || ext == ".step");
-    if (is_iges || is_step) {
+    const GeometryFileFormat format = ClassifyGeometryFile(path);
+    if (format == GeometryFileFormat::kIges || format == GeometryFileFormat::kStep) {
         if (Find(geometry, "unit") != nullptr) {
             Fail(context, "unit cannot be specified for IGES/STEP",
                  LineOf(geometry));
         }
-        if (is_step) {
+        if (format == GeometryFileFormat::kStep) {
             Warn(warnings, context,
                  "skipped because the format is unsupported: " + spec.raw_path,
                  LineOf(file));
@@ -155,7 +115,7 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
         }
         return true;
     }
-    if (ext != ".stl" && ext != ".obj") {
+    if (format == GeometryFileFormat::kUnknown) {
         Fail(context, "unsupported model format: " + spec.raw_path,
              LineOf(file));
     }
@@ -198,12 +158,6 @@ void Warn(std::vector<Diagnostic>& warnings, const std::string& context,
 
 std::string FormatValue(const TomlValue& value) {
     return toml::format(value);
-}
-
-std::string FormatReal(const double value) {
-    std::ostringstream stream;
-    stream << std::fixed << std::setprecision(6) << value;
-    return stream.str();
 }
 
 
@@ -320,7 +274,7 @@ igesio::Vector3d AsUnitVec3(const TomlValue& value, const std::string& context) 
     const igesio::Vector3d v = AsVec3(value, context);
     const double norm = v.norm();
     if (std::abs(norm - 1.0) > kUnitVectorTolerance) {
-        Fail(context, "not a unit vector (norm " + FormatReal(norm) + ")",
+        Fail(context, "not a unit vector (norm " + FormatFixed(norm, 6) + ")",
              LineOf(value));
     }
     return v / norm;
@@ -416,17 +370,10 @@ std::optional<std::array<float, 3>> ReadColor(const TomlValue& table,
                                               const std::string& context) {
     const std::optional<std::string> text = OptionalString(table, "color", context);
     if (!text.has_value()) return std::nullopt;
-    const int line = LineOf(*Find(table, "color"));
-    if (text->size() != 7 || (*text)[0] != '#') {
-        Fail(context + ".color", "not in \"#RRGGBB\" form: " + *text, line);
-    }
-    std::array<float, 3> rgb{};
-    for (std::size_t i = 0; i < 3; ++i) {
-        const std::optional<float> channel = HexPair(*text, 1 + 2 * i);
-        if (!channel.has_value()) {
-            Fail(context + ".color", "not in \"#RRGGBB\" form: " + *text, line);
-        }
-        rgb[i] = *channel;
+    const std::optional<std::array<float, 3>> rgb = ParseHexColor(*text);
+    if (!rgb.has_value()) {
+        Fail(context + ".color", "not in \"#RRGGBB\" form: " + *text,
+             LineOf(*Find(table, "color")));
     }
     return rgb;
 }

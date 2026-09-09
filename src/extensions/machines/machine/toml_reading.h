@@ -80,9 +80,6 @@ void Warn(std::vector<Diagnostic>& warnings, const std::string& context,
 /// @brief 値をTOML表記の文字列にする (診断文言用)
 std::string FormatValue(const TomlValue& value);
 
-/// @brief 実数を文言用に整形する (小数6桁)
-std::string FormatReal(double value);
-
 
 
 /**
