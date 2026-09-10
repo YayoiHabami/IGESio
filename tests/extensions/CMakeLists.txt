@@ -33,6 +33,10 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/core/test_rotation.cpp
         machines/machine/test_machine_io.cpp
         machines/machine/test_machine_writer.cpp
+        machines/machine/test_axis_values.cpp
+        machines/machine/test_machine_model.cpp
+        machines/machine/test_forward_kinematics.cpp
+        machines/machine/test_inverse_kinematics.cpp
     )
 endif()
 

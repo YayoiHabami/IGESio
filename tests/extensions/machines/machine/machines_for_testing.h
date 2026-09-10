@@ -17,6 +17,7 @@
 
 #include "igesio/extensions/machines/machine/machine_definition.h"
 #include "igesio/extensions/machines/machine/machine_io.h"
+#include "igesio/extensions/machines/machine/machine_model.h"
 
 namespace machines_test {
 
@@ -273,7 +274,7 @@ origin = [0, 0, 0]
 /// @brief ヘッド・ヘッド型 (工具側X-Y-Z-C-B、ワーク側はTableのみ)
 /// @note C軸はz軸で(0,0,300)を通り無制限 (`wrap_start = 0`)、B軸はy軸で
 ///       (0,0,300)を通り`limits = [-120, 120]`. Toolは(0,0,200)で工具軸は+z.
-///       回転因子は根本側のCが外側、Bが内側 (いずれもσ=+1)
+///       工具の向きを決める回転軸は根元側のCが外側、Bが内側 (いずれもσ=+1)
 inline std::string HeadBc() {
     return R"([format]
 name = "machine-definition"
@@ -376,6 +377,10 @@ inline igesio::extensions::machines::MachineDefinition ReadDefinition(
             toml, kBaseDir, "<test>");
 }
 
+/// @brief 文字列入力で機械定義を読み込み、運動学モデルを作る
+inline igesio::extensions::machines::MachineModel ReadModel(const std::string& toml) {
+    return igesio::extensions::machines::MachineModel(ReadDefinition(toml));
+}
 
 /// @brief 名前でコンポーネントを引く
 /// @throw std::logic_error 見つからない場合

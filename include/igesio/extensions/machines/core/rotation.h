@@ -37,13 +37,13 @@ struct EulerIjkSpec {
 };
 
 /// @brief 軸ベクトル指定形式 `{ x_axis = [...], y_axis = [...], z_axis = [...] }`
-/// @note 元の座標系のx, y, z軸それぞれの配置先での方向 (回転行列の列ベクトル)
+/// @note 元の座標系のx, y, z軸それぞれの回転後の方向 (回転行列の列ベクトル)
 struct ColumnsSpec {
-    /// @brief x軸の配置先方向
+    /// @brief x軸の回転後の方向
     igesio::Vector3d x_axis;
-    /// @brief y軸の配置先方向
+    /// @brief y軸の回転後の方向
     igesio::Vector3d y_axis;
-    /// @brief z軸の配置先方向
+    /// @brief z軸の回転後の方向
     igesio::Vector3d z_axis;
 };
 

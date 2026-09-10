@@ -277,7 +277,8 @@ TEST(MachineReaderTest, Spindle_KeepsMaxRpmWithoutUnitConversion) {
     const std::string toml = Replace(MinimalXyzAc(), "type = \"spindle\"\nparent = \"Z\"\n",
                                      "type = \"spindle\"\nparent = \"Z\"\n\n"
                                      "[component.spindle]\nmax_rpm = 12000\n");
-    const auto& spindle = FindComponent(ReadString(toml), "Spindle").spindle;
+    const mc::MachineDefinition def = ReadString(toml);
+    const auto& spindle = FindComponent(def, "Spindle").spindle;
     ASSERT_TRUE(spindle.has_value());
     ASSERT_TRUE(spindle->max_rpm.has_value());
     EXPECT_NEAR(*spindle->max_rpm, 12000.0, kTol);   // min⁻¹のまま
@@ -287,7 +288,8 @@ TEST(MachineReaderTest, Spindle_EmptyTableYieldsSpecWithoutValues) {
     const std::string toml = Replace(MinimalXyzAc(), "type = \"spindle\"\nparent = \"Z\"\n",
                                      "type = \"spindle\"\nparent = \"Z\"\n\n"
                                      "[component.spindle]\n");
-    const auto& spindle = FindComponent(ReadString(toml), "Spindle").spindle;
+    const mc::MachineDefinition def = ReadString(toml);
+    const auto& spindle = FindComponent(def, "Spindle").spindle;
     ASSERT_TRUE(spindle.has_value());
     EXPECT_FALSE(spindle->max_rpm.has_value());
 }
@@ -793,6 +795,30 @@ TEST(MachineReaderTest, Chain_ThrowsDataFormatErrorWhenThreeRotaryAxes) {
             "limits = [-90, 90]\n\n[[component]]\nname = \"Spindle\"\ntype = \"spindle\"\n"
             "parent = \"B\"\n");
     ExpectDataFormatError(toml, "more than 2 rotary axes");
+}
+
+TEST(MachineReaderTest, Chain_AcceptsRotaryAxisCommonToBothChains) {
+    // 両チェーンの根元に回転軸Rを挟む. チェーン上の回転軸は計3本になるが、共通の
+    // Rは相対運動で相殺されIK対象にならないため、上限 (2本) には数えない
+    std::string toml = Replace(MinimalXyzAc(),
+                               "name = \"A\"\ntype = \"rotary\"\nparent = \"base\"",
+                               "name = \"A\"\ntype = \"rotary\"\nparent = \"R\"");
+    toml = Replace(toml, "name = \"X\"\ntype = \"linear\"\nparent = \"base\"",
+                   "name = \"X\"\ntype = \"linear\"\nparent = \"R\"");
+    const auto def = ReadString(toml + R"(
+[[component]]
+name = "R"
+type = "rotary"
+parent = "base"
+
+[component.axis]
+register = "R"
+direction = [0, 1, 0]
+point = [0, 0, 0]
+limits = [-90, 90]
+)");
+    ExpectSingleWarning(def, "common to both chains");
+    EXPECT_EQ(mc::MachineModel(def).OrientationAxes().size(), 2u);
 }
 
 TEST(MachineReaderTest, Chain_WarnsWhenComponentIsSharedByBothChains) {

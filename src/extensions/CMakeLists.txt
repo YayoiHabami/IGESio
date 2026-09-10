@@ -48,6 +48,10 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/machine/toml_reading.cpp
         machines/machine/machine_writing.cpp
         machines/machine/machine_io.cpp
+        machines/machine/axis_values.cpp
+        machines/machine/machine_model.cpp
+        machines/machine/forward_kinematics.cpp
+        machines/machine/inverse_kinematics.cpp
     )
     if(MINGW)
         # toml11のテンプレート展開とデバッグ情報でCOFFのセクション数上限 (2^16) を

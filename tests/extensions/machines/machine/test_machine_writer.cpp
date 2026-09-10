@@ -515,7 +515,8 @@ TEST(MachineWriterTest, Spindle_TableFollowsSpecPresence) {
     const std::string text = mc::WriteMachineDefinitionToString(empty, kBaseDir);
     EXPECT_TRUE(Contains(text, "[component.spindle]"));
     EXPECT_FALSE(Contains(text, "max_rpm"));
-    const auto& restored = FindComponent(RoundTrip(empty, kBaseDir), "Spindle").spindle;
+    const mc::MachineDefinition read_back = RoundTrip(empty, kBaseDir);
+    const auto& restored = FindComponent(read_back, "Spindle").spindle;
     ASSERT_TRUE(restored.has_value());
     EXPECT_FALSE(restored->max_rpm.has_value());
 }
@@ -531,7 +532,8 @@ TEST(MachineWriterTest, Dynamics_FeedsAreWrittenPerMinute) {
     EXPECT_TRUE(Contains(text, "rapid_feed = 6000.0"));
     EXPECT_TRUE(Contains(text, "accel = 2.5"));
     EXPECT_TRUE(Contains(text, "resolution = 0.001"));
-    const auto& restored = *FindComponent(RoundTrip(definition, kBaseDir), "X").axis;
+    const mc::MachineDefinition read_back = RoundTrip(definition, kBaseDir);
+    const auto& restored = *FindComponent(read_back, "X").axis;
     EXPECT_NEAR(*restored.dynamics.rapid_feed, 100.0, kTol);
     EXPECT_NEAR(*restored.dynamics.accel, 2.5, kTol);
     EXPECT_NEAR(*restored.dynamics.resolution, 0.001, kTol);
