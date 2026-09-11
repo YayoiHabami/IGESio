@@ -40,7 +40,9 @@ $$\left\lbrace\begin{aligned}
     0 &\leq \quad \theta_e - \theta_s &< 2\pi
 \end{aligned}\right.$$
 
-Since there is always a relationship of $\theta_s < \theta_e$ between the start angle $\theta_s$ and the end angle $\theta_e$, the arc is always defined counterclockwise. Therefore, to define a clockwise arc, you must use the `CircularArc::OverwriteTransformationMatrix(matrix)` function to specify a transformation matrix that performs rotation processing in 3D space.
+Since there is always a relationship of $\theta_s < \theta_e$ between the start angle $\theta_s$ and the end angle $\theta_e$, an arc in the IGES file is always defined counterclockwise. Inside the library, however, `CircularArc` can also represent a clockwise arc (`IsClockwise()`): pass `is_clockwise = true` to `MakeCircularArc` / `MakeCircle`, give `start_angle > end_angle` to the angle-based factory, or list three points in clockwise order in `MakeCircularArcThroughPoints`. For a clockwise arc, the parameter range is still $[\theta_s, \theta_s + \Delta]$ (with $\Delta$ the sweep angle, see `SweepAngle()`), and the geometric angle decreases as the parameter increases, so that `EndAngle()` $= \theta_s - \Delta$ is smaller than `StartAngle()`.
+
+When written to an IGES file (`ConvertToIntermediate` / `WriteIges`), a clockwise arc is expanded into a standard-conforming pair: a counterclockwise arc mirrored about the line $y = y_c$ in definition space, plus a Transformation Matrix (Type 124) that rotates by $\pi$ about the axis parallel to $X_T$ through the center. The mirrored arc takes the original arc's DE slot, so references from other entities (e.g. a Composite Curve) remain valid, and if the original arc already referenced a transformation matrix, the new matrix chains to it. Using a clockwise arc as a parameter-space curve of Type 142/144 is not recommended, since it relies on the reading system honoring that transformation matrix.
 
 #### Derivatives $C'(t), C''(t)$
 

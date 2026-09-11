@@ -31,15 +31,20 @@
 #include <stdexcept>
 
 #include "igesio/common/errors.h"
+#include "igesio/common/id_generator.h"
 #include "igesio/common/validation_result.h"
 #include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/transformations/transformation_matrix.h"
 
 namespace {
 
 namespace i_ent = igesio::entities;
+namespace i_num = igesio::numerics;
 using igesio::Matrix3d;
 using igesio::Matrix4d;
+using igesio::Vector2d;
 using igesio::Vector3d;
 using igesio::ValidationSeverity;
 using i_ent::MakeRotation;
@@ -684,7 +689,7 @@ TEST(TransformationMatrixFactoryTest,
     const Vector3d offset(7.0, -8.0, 9.0);
     const auto tm = MakeTranslation(offset);
 
-    EXPECT_TRUE(tm->GetRotation().isApprox(Matrix3d::Identity(), kTol));
+    EXPECT_TRUE(tm->GetRotation().isApprox(Matrix3d(Matrix3d::Identity()), kTol));
     EXPECT_TRUE(tm->GetTranslation().isApprox(offset, kTol));
     EXPECT_EQ(tm->GetMatrixType(), MatrixType::kDefault);
 }
@@ -720,7 +725,7 @@ TEST(TransformationMatrixFactoryTest, MakeRotation_NormalizesAxis) {
 // 境界: 回転角0 → 単位行列
 TEST(TransformationMatrixFactoryTest, MakeRotation_ZeroAngleYieldsIdentity) {
     const auto tm = MakeRotation(0.0, Vector3d(1.0, 1.0, 1.0));
-    EXPECT_TRUE(tm->GetRotation().isApprox(Matrix3d::Identity(), kTol));
+    EXPECT_TRUE(tm->GetRotation().isApprox(Matrix3d(Matrix3d::Identity()), kTol));
 }
 
 // ゼロ軸 (ノルムが許容誤差内を含む) はstd::invalid_argument。
@@ -761,4 +766,145 @@ TEST(TransformationMatrixFactoryTest,
     EXPECT_TRUE(about_origin->GetRotation().isApprox(
         two_arg->GetRotation(), kTol));
     EXPECT_NEAR(about_origin->GetTranslation().norm(), 0.0, kTol);
+}
+
+
+
+/*******************************************************************************
+ * DE第7欄ラッパー (DETransformationMatrix) の参照チェーン合成
+ * (IGES 5.3 §3.2.3 explicit case: エンティティが直接指す行列が先に適用され、
+ *  その行列のDE第7欄が指す行列が後に適用される)
+ ******************************************************************************/
+
+namespace {
+
+/// @brief 循環参照を作れる最小のITransformation実装
+/// @note TransformationMatrix::SetReferenceは循環を棄却するため、不正な
+///       ファイル由来の循環データを模擬するには参照検査を持たない実装が要る.
+///       変換は x方向へ +1 の平行移動
+class CyclicTransformation : public i_ent::ITransformation {
+ public:
+    /// @brief 新規IDで初期化する
+    CyclicTransformation()
+        : id_(igesio::IDGenerator::Generate(
+                  igesio::ObjectType::kEntityNew,
+                  static_cast<uint16_t>(i_ent::EntityType::kTransformationMatrix))) {}
+    /// @brief IDを返す
+    const igesio::ObjectID& GetID() const override { return id_; }
+    /// @brief 変換行列エンティティとして振る舞う
+    i_ent::EntityType GetType() const override {
+        return i_ent::EntityType::kTransformationMatrix;
+    }
+    /// @brief フォーム番号 (常に0)
+    int GetFormNumber() const override { return 0; }
+    /// @brief 回転部 (単位行列)
+    Matrix3d GetRotation() const override { return Matrix3d::Identity(); }
+    /// @brief 並進部 (+1, 0, 0)
+    Vector3d GetTranslation() const override { return Vector3d(1.0, 0.0, 0.0); }
+    /// @brief 同次変換行列
+    Matrix4d GetTransformation() const override {
+        Matrix4d transformation = Matrix4d::Identity();
+        transformation.block<3, 1>(0, 3) = GetTranslation();
+        return transformation;
+    }
+    /// @brief 参照を設定する (循環検査なし)
+    bool SetReference(
+            const std::shared_ptr<i_ent::ITransformation>& next) override {
+        next_ = next;
+        return true;
+    }
+    /// @brief 参照を設定する (循環検査なし)
+    bool SetReference(
+            const std::shared_ptr<const i_ent::ITransformation>& next) override {
+        next_ = next;
+        return true;
+    }
+    /// @brief 参照先を返す
+    std::shared_ptr<const i_ent::ITransformation>
+    GetRefTransformation() const override { return next_.lock(); }
+
+ private:
+    /// @brief 自身のID
+    igesio::ObjectID id_;
+    /// @brief 参照先 (弱参照)
+    std::weak_ptr<const i_ent::ITransformation> next_;
+};
+
+/// @brief DE第7欄の参照元として用いる円弧 (原点中心・半径1、始点(1,0)・終点(0,1))
+std::shared_ptr<i_ent::CircularArc> MakeReferencingArc() {
+    return i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), Vector2d(1.0, 0.0), Vector2d(0.0, 1.0));
+}
+
+}  // namespace
+
+// 弧 → M1 → M2 の連鎖で、ラッパーは M2·M1 を返し、点は M2(M1(p)) に写る
+TEST(TransformationMatrixChainTest, DeWrapper_ComposesTwoMatrices) {
+    auto m1 = MakeTranslation(Vector3d(1.0, 0.0, 0.0));
+    auto m2 = MakeRotation(kPi / 2.0, Vector3d(0.0, 0.0, 1.0));
+    std::shared_ptr<i_ent::ITransformation> m2_ref = m2;
+    ASSERT_TRUE(m1->SetReference(m2_ref));
+
+    auto arc = MakeReferencingArc();
+    ASSERT_TRUE(arc->OverwriteTransformationMatrix(m1));
+
+    const auto& wrapper = arc->GetTransformationMatrix();
+    const Matrix4d expected = m2->GetTransformation() * m1->GetTransformation();
+    EXPECT_TRUE(i_num::IsApproxEqual(wrapper.GetTransformation(), expected, kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(wrapper.GetRotation(), m2->GetRotation(), kTol));
+    // M2(M1(0)) = Rz(π/2)·(1, 0, 0) = (0, 1, 0)
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            wrapper.GetTranslation(), Vector3d(0.0, 1.0, 0.0), kTol));
+
+    // 始点 (1, 0, 0) → M1 → (2, 0, 0) → M2 → (0, 2, 0)
+    const auto point = arc->TryGetPointAt(arc->GetParameterRange()[0]);
+    ASSERT_TRUE(point.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(*point, Vector3d(0.0, 2.0, 0.0), kTol));
+
+    // TransformationMatrix自身のアクセサは自身の値のみ返す (合成しない)
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            m1->GetTranslation(), Vector3d(1.0, 0.0, 0.0), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(m1->GetRotation(), Matrix3d(Matrix3d::Identity()), kTol));
+}
+
+// 連鎖の無い直接参照では従来どおり M1 そのもの
+TEST(TransformationMatrixChainTest, DeWrapper_DirectOnlyUnchanged) {
+    auto m1 = MakeRotation(kPi / 3.0, Vector3d(0.0, 1.0, 0.0), Vector3d(1.0, 2.0, 3.0));
+    auto arc = MakeReferencingArc();
+    ASSERT_TRUE(arc->OverwriteTransformationMatrix(m1));
+
+    const auto& wrapper = arc->GetTransformationMatrix();
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            wrapper.GetTransformation(), m1->GetTransformation(), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(wrapper.GetRotation(), m1->GetRotation(), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            wrapper.GetTranslation(), m1->GetTranslation(), kTol));
+
+    // 参照が無ければ単位変換
+    auto plain = MakeReferencingArc();
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            plain->GetTransformationMatrix().GetTransformation(),
+            Matrix4d(Matrix4d::Identity()), kTol));
+}
+
+// 不正な循環 (A → B → A) でも有限時間で戻り、各行列は一度だけ適用される
+TEST(TransformationMatrixChainTest, DeWrapper_CycleTerminates) {
+    auto a = std::make_shared<CyclicTransformation>();
+    auto b = std::make_shared<CyclicTransformation>();
+    std::shared_ptr<i_ent::ITransformation> a_ref = a;
+    std::shared_ptr<i_ent::ITransformation> b_ref = b;
+    ASSERT_TRUE(a->SetReference(b_ref));
+    ASSERT_TRUE(b->SetReference(a_ref));
+
+    // 弧自身は循環に含まれないため参照の設定は受理される
+    auto arc = MakeReferencingArc();
+    ASSERT_TRUE(arc->OverwriteTransformationMatrix(a));
+
+    const auto& wrapper = arc->GetTransformationMatrix();
+    const Matrix4d transformation = wrapper.GetTransformation();
+    EXPECT_TRUE(transformation.allFinite());
+    // A (+1) → B (+1) → A は訪問済みで打ち切り: 並進は (2, 0, 0)
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            wrapper.GetTranslation(), Vector3d(2.0, 0.0, 0.0), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(wrapper.GetRotation(), Matrix3d(Matrix3d::Identity()), kTol));
 }

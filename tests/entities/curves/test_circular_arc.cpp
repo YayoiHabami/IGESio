@@ -6,6 +6,8 @@
  * @copyright 2025 Yayoi Habami
  * @note ファクトリ関数 (MakeCircularArc / MakeCircle /
  *       MakeCircularArcThroughPoints) のテストを含む
+ * @note 時計回り (CW) の弧の生成・評価と、IGES出力時の展開 (ExpandForExport:
+ *       鏡映CCW弧 + Type 124) のテストを含む
  */
 #include <gtest/gtest.h>
 
@@ -17,6 +19,8 @@
 #include "igesio/common/errors.h"
 #include "igesio/numerics/core/tolerance.h"
 #include "igesio/entities/curves/circular_arc.h"
+#include "igesio/entities/structures/color_definition.h"
+#include "igesio/entities/transformations/transformation_matrix.h"
 
 namespace {
 
@@ -163,18 +167,24 @@ TEST(CircularArcTest, ConstructorFromCenterRadiusStartEndAngle) {
                         start_angle_zero, end_angle_zero, z_t_zero);
     }, igesio::EntityValueError);
 
-    // 例外テスト: 始点角度が終点角度より大きい場合
-    Vector2d center_invalid_angle(0.0, 0.0);
-    double radius_invalid = 1.0;
-    double start_angle_invalid = kPi / 2;
-    double end_angle_invalid = 0.0;
-    double z_t_invalid_angle = 0.0;
+    // 始点角度が終点角度より大きい場合は例外ではなく時計回りの弧になる
+    Vector2d center_cw(0.0, 0.0);
+    double radius_cw = 1.0;
+    double start_angle_cw = kPi / 2;
+    double end_angle_cw = 0.0;
+    double z_t_cw = 0.0;
 
-    ASSERT_THROW({
-        CircularArc arc(center_invalid_angle, radius_invalid,
-                        start_angle_invalid, end_angle_invalid,
-                        z_t_invalid_angle);
-    }, igesio::EntityValueError);
+    ASSERT_NO_THROW({
+        CircularArc arc(center_cw, radius_cw, start_angle_cw, end_angle_cw, z_t_cw);
+    });
+    CircularArc arc_cw(center_cw, radius_cw, start_angle_cw, end_angle_cw, z_t_cw);
+    EXPECT_TRUE(arc_cw.IsClockwise());
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            arc_cw.TryGetDefinedPointAt(arc_cw.GetParameterRange()[0]).value(),
+            Vector3d(0.0, 1.0, 0.0), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            arc_cw.TryGetDefinedPointAt(arc_cw.GetParameterRange()[1]).value(),
+            Vector3d(1.0, 0.0, 0.0), kTol));
 }
 
 // 中心点と半径から円（閉じた円弧）を生成するコンストラクタ
@@ -340,14 +350,20 @@ TEST(CircularArcFactoryTest,
     EXPECT_NEAR(range[1] - range[0], 2.0 * kPi, kTol);
 }
 
-// エラー+境界精度: start_angle > end_angleは厳密比較で棄却され、同値は受理
+// 向き: start_angle > end_angleは厳密比較で時計回りの弧、同値は反時計回りの閉円
 TEST(CircularArcFactoryTest,
-     MakeCircularArcFromAngles_ThrowsEntityValueErrorWhenStartExceedsEnd) {
-    EXPECT_THROW(i_ent::MakeCircularArc(
-            Vector2d(0.0, 0.0), 1.0, kPi / 4.0 + 1e-12, kPi / 4.0),
-            igesio::EntityValueError);
-    EXPECT_NO_THROW(i_ent::MakeCircularArc(
-            Vector2d(0.0, 0.0), 1.0, kPi / 4.0, kPi / 4.0));
+     MakeCircularArcFromAngles_StartExceedingEndYieldsClockwise) {
+    const auto cw = i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), 1.0, kPi / 2.0, 0.0);
+    EXPECT_TRUE(cw->IsClockwise());
+    EXPECT_NEAR(cw->StartAngle(), kPi / 2.0, kTol);
+    EXPECT_NEAR(cw->EndAngle(), 0.0, kTol);
+    EXPECT_NEAR(cw->SweepAngle(), kPi / 2.0, kTol);
+
+    const auto closed = i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), 1.0, kPi / 4.0, kPi / 4.0);
+    EXPECT_FALSE(closed->IsClockwise());
+    EXPECT_TRUE(closed->IsClosed());
 }
 
 // エラー+境界精度: 半径がkGeometryTolerance (1e-9) の内側→throw、すぐ外→受理
@@ -410,18 +426,26 @@ TEST(CircularArcFactoryTest,
     EXPECT_TRUE(i_num::IsApproxEqual(*mid, Vector3d(0.0, 1.0, 0.0), kTol));
 }
 
-// 代表値: 時計回りの3点は始終点が入れ替わり、通過点が弧上に保たれる
-TEST(CircularArcFactoryTest,
-     MakeCircularArcThroughPoints_CwPointsSwapEndpoints) {
+// 代表値: 時計回りの3点は入力順のまま時計回りの弧になり、通過点が弧上に乗る
+TEST(CircularArcFactoryTest, Clockwise_ThroughPointsKeepsInputOrder) {
     const auto arc = i_ent::MakeCircularArcThroughPoints(
             Vector2d(1.0, 0.0), Vector2d(0.0, -1.0), Vector2d(-1.0, 0.0));
 
-    // 始点(-1,0)・終点(1,0)の反時計回りの弧 [π, 2π] になる
-    EXPECT_NEAR(arc->StartAngle(), kPi, kTol);
-    EXPECT_NEAR(arc->EndAngle(), 2.0 * kPi, kTol);
+    // 始点(1,0)・終点(-1,0)の時計回りの弧 (θs = 0、Δ = π、終点角 −π)
+    EXPECT_TRUE(arc->IsClockwise());
+    EXPECT_NEAR(arc->StartAngle(), 0.0, kTol);
+    EXPECT_NEAR(arc->EndAngle(), -kPi, kTol);
+    EXPECT_NEAR(arc->SweepAngle(), kPi, kTol);
 
-    // 通過点(0,-1)が弧上 (角3π/2) に乗る
-    const auto mid = arc->TryGetDefinedPointAt(3.0 * kPi / 2.0);
+    const auto range = arc->GetParameterRange();
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            arc->TryGetDefinedPointAt(range[0]).value(),
+            Vector3d(1.0, 0.0, 0.0), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            arc->TryGetDefinedPointAt(range[1]).value(),
+            Vector3d(-1.0, 0.0, 0.0), kTol));
+    // 通過点(0,-1)が弧上 (パラメータ t0 + π/2) に乗る
+    const auto mid = arc->TryGetDefinedPointAt(range[0] + kPi / 2.0);
     ASSERT_TRUE(mid.has_value());
     EXPECT_TRUE(i_num::IsApproxEqual(*mid, Vector3d(0.0, -1.0, 0.0), kTol));
 }
@@ -468,4 +492,327 @@ TEST(CircularArcFactoryTest,
     EXPECT_THROW(i_ent::MakeCircularArcThroughPoints(
             Vector2d(1.0, 1.0), Vector2d(2.0, 3.0), Vector2d(1.0, 1.0)),
             igesio::EntityValueError);
+}
+
+
+
+/**
+ * 時計回りの弧: 生成と評価
+ */
+
+// 点指定 + is_clockwise: フラグが保持され、角度・範囲の契約が向きに応じて変わる
+TEST(CircularArcTest, Clockwise_ConstructorFromPointsStoresFlag) {
+    // 始点(1,0) → 終点(0,1) を時計回りに進む弧 (掃引角 3π/2)
+    const auto arc = i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), Vector2d(1.0, 0.0), Vector2d(0.0, 1.0), 0.0, true);
+
+    EXPECT_TRUE(arc->IsClockwise());
+    EXPECT_NEAR(arc->StartAngle(), 0.0, kTol);
+    EXPECT_NEAR(arc->SweepAngle(), 3.0 * kPi / 2.0, kTol);
+    EXPECT_GT(arc->StartAngle(), arc->EndAngle());
+    EXPECT_NEAR(arc->EndAngle(), -3.0 * kPi / 2.0, kTol);
+    const auto range = arc->GetParameterRange();
+    EXPECT_LT(range[0], range[1]);
+    EXPECT_NEAR(range[1] - range[0], arc->SweepAngle(), kTol);
+
+    // 同じ点でis_clockwise = falseなら反時計回りの掃引角 π/2
+    const auto ccw = i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), Vector2d(1.0, 0.0), Vector2d(0.0, 1.0));
+    EXPECT_FALSE(ccw->IsClockwise());
+    EXPECT_NEAR(ccw->SweepAngle(), kPi / 2.0, kTol);
+}
+
+// 角度指定: start > end は例外にならず時計回り、始終点は各角度のcos/sin
+TEST(CircularArcTest, Clockwise_AngleConstructorStartGreaterThanEnd) {
+    std::shared_ptr<CircularArc> arc;
+    ASSERT_NO_THROW(arc = i_ent::MakeCircularArc(
+            Vector2d(1.0, -1.0), 2.0, kPi / 2.0, 0.0, 0.5));
+    EXPECT_TRUE(arc->IsClockwise());
+    const auto range = arc->GetParameterRange();
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            arc->TryGetDefinedPointAt(range[0]).value(),
+            Vector3d(1.0, 1.0, 0.5), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            arc->TryGetDefinedPointAt(range[1]).value(),
+            Vector3d(3.0, -1.0, 0.5), kTol));
+    EXPECT_NEAR(arc->SweepAngle(), kPi / 2.0, kTol);
+}
+
+// 閉じた円のCW: 点集合は同じで、パラメータの進行方向のみ逆
+TEST(CircularArcTest, Clockwise_ClosedCircle) {
+    const auto circle = i_ent::MakeCircle(Vector2d(0.0, 0.0), 1.0, 0.0, true);
+
+    EXPECT_TRUE(circle->IsClockwise());
+    EXPECT_TRUE(circle->IsClosed());
+    EXPECT_NEAR(circle->SweepAngle(), 2.0 * kPi, kTol);
+    EXPECT_NEAR(circle->StartAngle(), 0.0, kTol);
+    EXPECT_NEAR(circle->EndAngle(), -2.0 * kPi, kTol);
+
+    // t0 + π/2 で角度 −π/2 の点 (0, −1) を通る
+    const auto range = circle->GetParameterRange();
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            circle->TryGetDefinedPointAt(range[0] + kPi / 2.0).value(),
+            Vector3d(0.0, -1.0, 0.0), kTol));
+    // バウンディングボックスはCCWの閉円と同じ
+    const auto ccw = i_ent::MakeCircle(Vector2d(0.0, 0.0), 1.0);
+    const auto bb_cw = circle->GetDefinedBoundingBox();
+    const auto bb_ccw = ccw->GetDefinedBoundingBox();
+    EXPECT_TRUE(i_num::IsApproxEqual(bb_cw.GetControl(), bb_ccw.GetControl(), kTol));
+    for (size_t i = 0; i < 3; ++i) {
+        EXPECT_NEAR(bb_cw.GetSizes()[i], bb_ccw.GetSizes()[i], kTol);
+    }
+}
+
+// 導関数: C'(t0)が時計回り方向、C''が中心向き (σ² = 1)、C(t1)が終点
+TEST(CircularArcTest, Clockwise_DerivativesFollowOrientation) {
+    // 始点(1,0) → 終点(0,−1) を時計回りに進む弧 (掃引角 π/2)
+    const auto arc = i_ent::MakeCircularArc(
+            Vector2d(0.0, 0.0), Vector2d(1.0, 0.0), Vector2d(0.0, -1.0), 0.0, true);
+    const auto range = arc->GetParameterRange();
+
+    const auto d0 = arc->TryGetDefinedDerivatives(range[0], 2);
+    ASSERT_TRUE(d0.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(d0.value()[0], Vector3d(1.0, 0.0, 0.0), kTol));
+    // 接線は (0, −1): 始点ベクトル (1, 0) との外積 (z成分) が負 = 時計回り
+    EXPECT_TRUE(i_num::IsApproxEqual(d0.value()[1], Vector3d(0.0, -1.0, 0.0), kTol));
+    const double cross = d0.value()[0].x() * d0.value()[1].y()
+                       - d0.value()[0].y() * d0.value()[1].x();
+    EXPECT_LT(cross, 0.0);
+    // 2階導関数は中心向き (−始点ベクトル)
+    EXPECT_TRUE(i_num::IsApproxEqual(d0.value()[2], Vector3d(-1.0, 0.0, 0.0), kTol));
+
+    // 終点
+    const auto d1 = arc->TryGetDefinedDerivatives(range[1], 1);
+    ASSERT_TRUE(d1.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(d1.value()[0], Vector3d(0.0, -1.0, 0.0), kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(d1.value()[1], Vector3d(-1.0, 0.0, 0.0), kTol));
+
+    // 中間点 (t0 + π/4): 角度 −π/4
+    const auto mid = arc->TryGetDefinedPointAt(range[0] + kPi / 4.0);
+    ASSERT_TRUE(mid.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            *mid, Vector3d(std::sqrt(0.5), -std::sqrt(0.5), 0.0), kTol));
+}
+
+// バウンディングボックス: CW弧 (θs, Δ) は CCW弧 (θs−Δ, Δ) と一致する
+TEST(CircularArcTest, Clockwise_BoundingBoxMatchesReversedCcw) {
+    const Vector2d center(0.5, -0.5);
+    const double radius = 2.0;
+    struct Case {
+        double start;  // θs
+        double sweep;  // Δ
+    };
+    // 主要角 (0) を跨ぐ例: θs = π/2 → −π/2、跨がない例: θs = π/3 → π/6
+    const std::vector<Case> cases{{kPi / 2.0, kPi}, {kPi / 3.0, kPi / 6.0},
+                                  {3.0 * kPi / 2.0, kPi}};
+    for (const auto& c : cases) {
+        const auto cw = i_ent::MakeCircularArc(
+                center, radius, c.start, c.start - c.sweep);
+        ASSERT_TRUE(cw->IsClockwise());
+        const auto ccw = i_ent::MakeCircularArc(
+                center, radius, c.start - c.sweep, c.start);
+        ASSERT_FALSE(ccw->IsClockwise());
+
+        const auto bb_cw = cw->GetDefinedBoundingBox();
+        const auto bb_ccw = ccw->GetDefinedBoundingBox();
+        EXPECT_TRUE(i_num::IsApproxEqual(
+                bb_cw.GetControl(), bb_ccw.GetControl(), kTol))
+                << "start = " << c.start << ", sweep = " << c.sweep;
+        for (size_t i = 0; i < 3; ++i) {
+            EXPECT_NEAR(bb_cw.GetSizes()[i], bb_ccw.GetSizes()[i], kTol)
+                    << "start = " << c.start << ", sweep = " << c.sweep;
+        }
+    }
+
+    // 跨ぐ例 (θs = π/2、Δ = π) の具体値: x ∈ [xc, xc+r]、y ∈ [yc−r, yc+r]
+    const auto cw = i_ent::MakeCircularArc(center, radius, kPi / 2.0, -kPi / 2.0);
+    const auto bb = cw->GetDefinedBoundingBox();
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            bb.GetControl(), Vector3d(0.5, -2.5, 0.0), kTol));
+    EXPECT_NEAR(bb.GetSizes()[0], 2.0, kTol);
+    EXPECT_NEAR(bb.GetSizes()[1], 4.0, kTol);
+}
+
+// 回帰: 反時計回りの弧では SweepAngle / EndAngle が従来の GetParameterRange と一致
+TEST(CircularArcTest, Ccw_RegressionUnchanged) {
+    const auto arc = i_ent::MakeCircularArc(
+            Vector2d(1.0, 1.0), Vector2d(2.0, 1.0), Vector2d(0.0, 1.0));
+    EXPECT_FALSE(arc->IsClockwise());
+    const auto range = arc->GetParameterRange();
+    EXPECT_NEAR(arc->SweepAngle(), range[1] - range[0], kTol);
+    EXPECT_NEAR(arc->EndAngle(), range[1], kTol);
+    EXPECT_NEAR(arc->StartAngle(), range[0], kTol);
+    EXPECT_NEAR(arc->SweepAngle(), kPi, kTol);
+}
+
+
+
+/**
+ * 時計回りの弧: 出力時展開 (ExpandForExport)
+ */
+
+namespace {
+
+/// @brief 展開テスト用の時計回り弧 (中心 (1,2)、z_t = 0.5、始点(2,2) → 終点(1,3))
+std::shared_ptr<CircularArc> MakeClockwiseSample() {
+    return i_ent::MakeCircularArc(
+            Vector2d(1.0, 2.0), Vector2d(2.0, 2.0), Vector2d(1.0, 3.0), 0.5, true);
+}
+
+}  // namespace
+
+// 反時計回りの弧は展開不要
+TEST(CircularArcTest, Expand_CcwReturnsEmpty) {
+    const auto arc = i_ent::MakeCircularArc(
+            Vector2d(1.0, 2.0), Vector2d(2.0, 2.0), Vector2d(1.0, 3.0), 0.5);
+    const auto expansion = arc->ExpandForExport();
+    EXPECT_EQ(expansion.replacement, nullptr);
+    EXPECT_TRUE(expansion.auxiliaries.empty());
+}
+
+// CW弧は鏡映CCW弧 (置換) と π回転のType 124 (補助) に展開される
+TEST(CircularArcTest, Expand_CwProducesMirroredArcAndFlip) {
+    const auto arc = MakeClockwiseSample();
+    const auto expansion = arc->ExpandForExport();
+
+    // 置換弧: PDは {zt, xc, yc, xs, 2yc−ys, xt, 2yc−yt}、反時計回り
+    ASSERT_NE(expansion.replacement, nullptr);
+    const auto mirrored =
+            std::dynamic_pointer_cast<CircularArc>(expansion.replacement);
+    ASSERT_NE(mirrored, nullptr);
+    EXPECT_FALSE(mirrored->IsClockwise());
+    auto params = mirrored->GetParameters();  // access_asは非const
+    ASSERT_EQ(params.size(), 7u);
+    const std::vector<double> expected{0.5, 1.0, 2.0, 2.0, 2.0, 1.0, 1.0};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_NEAR(params.access_as<double>(i), expected[i], kTol) << "i = " << i;
+    }
+
+    // 補助: Type 124 ×1、R = diag(1,−1,−1)、T = (0, 2yc, 2zt)、Form 0、
+    // 従属スイッチは00 (DE第7欄からの参照は従属関係を作らない)
+    ASSERT_EQ(expansion.auxiliaries.size(), 1u);
+    const auto flip = std::dynamic_pointer_cast<i_ent::TransformationMatrix>(
+            expansion.auxiliaries[0]);
+    ASSERT_NE(flip, nullptr);
+    igesio::Matrix3d expected_rotation = igesio::Matrix3d::Identity();
+    expected_rotation(1, 1) = -1.0;
+    expected_rotation(2, 2) = -1.0;
+    EXPECT_TRUE(i_num::IsApproxEqual(flip->GetRotation(), expected_rotation, kTol));
+    EXPECT_TRUE(i_num::IsApproxEqual(
+            flip->GetTranslation(), Vector3d(0.0, 4.0, 1.0), kTol));
+    EXPECT_EQ(flip->GetFormNumber(), 0);
+    EXPECT_EQ(flip->GetSubordinateEntitySwitch(),
+              i_ent::SubordinateEntitySwitch::kIndependent);
+    EXPECT_EQ(flip->GetRefTransformation(), nullptr);
+
+    // 置換弧のDE7が補助を指す
+    EXPECT_EQ(mirrored->GetTransformationMatrix().GetID(), flip->GetID());
+    ASSERT_NE(mirrored->GetTransformationMatrix().GetPointer(), nullptr);
+    EXPECT_EQ(mirrored->GetTransformationMatrix().GetPointer()->GetID(),
+              flip->GetID());
+
+    // 元の弧は変更されない
+    EXPECT_TRUE(arc->IsClockwise());
+    EXPECT_EQ(arc->GetTransformationMatrix().GetValueType(),
+              i_ent::DEFieldValueType::kDefault);
+}
+
+// 点対応: 置換弧を補助行列で変換した点 (モデル空間) が元のCW弧の点と向きを含めて一致
+TEST(CircularArcTest, Expand_PointCorrespondence) {
+    const auto arc = MakeClockwiseSample();
+    const auto expansion = arc->ExpandForExport();
+    const auto mirrored =
+            std::dynamic_pointer_cast<CircularArc>(expansion.replacement);
+    ASSERT_NE(mirrored, nullptr);
+
+    const auto range = arc->GetParameterRange();
+    const auto range_m = mirrored->GetParameterRange();
+    const double sweep = range[1] - range[0];
+    EXPECT_NEAR(range_m[1] - range_m[0], sweep, kTol);
+
+    for (const double u : {0.0, sweep / 3.0, sweep}) {
+        // 置換弧のTryGetDerivatives (モデル空間) は自身のDE7 (補助行列) を適用する
+        const auto original = arc->TryGetDefinedDerivatives(range[0] + u, 1);
+        const auto expanded = mirrored->TryGetDerivatives(range_m[0] + u, 1);
+        ASSERT_TRUE(original.has_value());
+        ASSERT_TRUE(expanded.has_value());
+        EXPECT_TRUE(i_num::IsApproxEqual(
+                expanded.value()[0], original.value()[0], kTol)) << "u = " << u;
+        EXPECT_TRUE(i_num::IsApproxEqual(
+                expanded.value()[1], original.value()[1], kTol)) << "u = " << u;
+    }
+}
+
+// DEフィールド (色・レベル・ラベル・線種・従属スイッチ・線幅) が置換弧へ複製される
+TEST(CircularArcTest, Expand_CopiesDeFields) {
+    const auto arc = MakeClockwiseSample();
+    const auto color = i_ent::MakeColorDefinitionFromRGB255(10, 20, 30);
+    ASSERT_TRUE(arc->OverwriteColor(color));
+    ASSERT_TRUE(arc->OverwriteLevel(5));
+    ASSERT_TRUE(arc->SetEntityLabel("ARC"));
+    ASSERT_TRUE(arc->OverwriteLineFontPattern(i_ent::LineFontPattern::kDashed));
+    arc->SetSubordinateEntitySwitch(
+            i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
+    ASSERT_TRUE(arc->SetLineWeightNumber(3));
+
+    const auto mirrored = arc->ExpandForExport().replacement;
+    ASSERT_NE(mirrored, nullptr);
+    EXPECT_EQ(mirrored->GetColor().GetID(), color->GetID());
+    ASSERT_NE(mirrored->GetColor().GetPointer(), nullptr);
+    EXPECT_EQ(mirrored->GetLevel().GetLevelNumber(), 5);
+    EXPECT_EQ(mirrored->GetEntityLabel(), "ARC");
+    EXPECT_EQ(mirrored->GetLineFontPattern().GetPattern(),
+              i_ent::LineFontPattern::kDashed);
+    EXPECT_EQ(mirrored->GetSubordinateEntitySwitch(),
+              i_ent::SubordinateEntitySwitch::kPhysicallyDependent);
+    EXPECT_EQ(mirrored->GetLineWeightNumber(), 3);
+    EXPECT_EQ(mirrored->GetFormNumber(), arc->GetFormNumber());
+}
+
+// 元の弧がM0を参照していれば 置換弧 → flip → M0 の連鎖になり、モデル空間の点が一致
+TEST(CircularArcTest, Expand_ChainsExistingMatrix) {
+    const auto arc = MakeClockwiseSample();
+    const auto m0 = i_ent::MakeRotation(kPi / 3.0, Vector3d(0.0, 0.0, 1.0),
+                                        Vector3d(1.0, 1.0, 1.0));
+    ASSERT_TRUE(arc->OverwriteTransformationMatrix(m0));
+
+    const auto expansion = arc->ExpandForExport();
+    const auto mirrored =
+            std::dynamic_pointer_cast<CircularArc>(expansion.replacement);
+    ASSERT_NE(mirrored, nullptr);
+    ASSERT_EQ(expansion.auxiliaries.size(), 1u);
+    const auto flip = std::dynamic_pointer_cast<i_ent::TransformationMatrix>(
+            expansion.auxiliaries[0]);
+    ASSERT_NE(flip, nullptr);
+
+    ASSERT_NE(flip->GetRefTransformation(), nullptr);
+    EXPECT_EQ(flip->GetRefTransformation()->GetID(), m0->GetID());
+    EXPECT_EQ(mirrored->GetTransformationMatrix().GetID(), flip->GetID());
+    // 元の弧のDE7はM0のまま
+    EXPECT_EQ(arc->GetTransformationMatrix().GetID(), m0->GetID());
+
+    const auto range = arc->GetParameterRange();
+    const auto range_m = mirrored->GetParameterRange();
+    const double sweep = range[1] - range[0];
+    for (const double u : {0.0, sweep / 2.0, sweep}) {
+        const auto original = arc->TryGetPointAt(range[0] + u);
+        const auto expanded = mirrored->TryGetPointAt(range_m[0] + u);
+        ASSERT_TRUE(original.has_value());
+        ASSERT_TRUE(expanded.has_value());
+        EXPECT_TRUE(i_num::IsApproxEqual(*expanded, *original, kTol)) << "u = " << u;
+    }
+}
+
+// DE7がID保持のみ (参照先が失効) のCW弧は展開できず ReferenceError
+TEST(CircularArcTest, Expand_UnresolvedMatrixThrows) {
+    const auto arc = MakeClockwiseSample();
+    {
+        const auto m0 = i_ent::MakeTranslation(Vector3d(1.0, 0.0, 0.0));
+        ASSERT_TRUE(arc->OverwriteTransformationMatrix(m0));
+    }
+    // DEフィールドは弱参照のため、M0の破棄後はIDのみが残る
+    ASSERT_EQ(arc->GetTransformationMatrix().GetValueType(),
+              i_ent::DEFieldValueType::kPointer);
+    ASSERT_EQ(arc->GetTransformationMatrix().GetPointer(), nullptr);
+    EXPECT_THROW(arc->ExpandForExport(), igesio::ReferenceError);
 }

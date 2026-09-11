@@ -5,7 +5,8 @@
 //   - center (uniform vec3)
 //   - radius (uniform float)
 //   - startAngle (uniform float)  // [rad]
-//   - endAngle (uniform float)    // [rad], endAngle > startAngle
+//   - endAngle (uniform float)    // [rad], endAngle > startAngle (CCW) or
+//                                           endAngle < startAngle (CW)
 // - General:
 //   - model (uniform mat4)
 //   - view (uniform mat4)
@@ -17,7 +18,8 @@ layout (isolines, equal_spacing, ccw) in;
 uniform vec3 center;
 uniform float radius;
 uniform float startAngle;  // [rad]
-uniform float endAngle;    // [rad], endAngle > startAngle
+uniform float endAngle;    // [rad], endAngle > startAngle (CCW) or
+                           //        endAngle < startAngle (CW)
 
 // transformation
 uniform mat4 model;

@@ -7,13 +7,16 @@
  */
 #include "igesio/entities/curves/circular_arc.h"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "igesio/numerics/core/tolerance.h"
+#include "igesio/common/errors.h"
 #include "igesio/common/iges_parameter_vector.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/entities/transformations/transformation_matrix.h"
 
 namespace {
 
@@ -21,6 +24,44 @@ namespace i_num = igesio::numerics;
 namespace i_ent = igesio::entities;
 using CircularArc = i_ent::CircularArc;
 using Vector3d = igesio::Vector3d;
+constexpr double kPi = igesio::kPi;
+
+/// @brief 円弧の始点角と角度範囲
+struct ArcAngles {
+    /// @brief 始点角θs [rad] ([0, 2π))
+    double start = 0.0;
+    /// @brief 角度範囲Δ [rad] (向きによらず正. 閉じた円では2π)
+    double sweep = 0.0;
+};
+
+/// @brief 始点角と角度範囲を計算する
+/// @param center 中心座標
+/// @param start_point 始点座標
+/// @param terminate_point 終点座標
+/// @param is_clockwise 時計回りの弧か
+/// @param is_closed 閉じた円か (始点と終点が一致)
+/// @return 始点角と角度範囲. 角度範囲は進行方向に沿って始点から終点まで測った
+///         中心角で、(0, 2π]の範囲
+ArcAngles ComputeArcAngles(const Vector3d& center, const Vector3d& start_point,
+                           const Vector3d& terminate_point,
+                           const bool is_clockwise, const bool is_closed) {
+    const auto start_vec = start_point - center;
+    const auto end_vec = terminate_point - center;
+
+    // 始点の角度を [0, 2π) の範囲に正規化
+    double start_angle = std::atan2(start_vec[1], start_vec[0]);
+    if (start_angle < 0) start_angle += 2.0 * kPi;
+    if (is_closed) return {start_angle, 2.0 * kPi};
+
+    double end_angle = std::atan2(end_vec[1], end_vec[0]);
+    if (end_angle < 0) end_angle += 2.0 * kPi;
+
+    // 進行方向に沿って測った角度範囲を (0, 2π] にする
+    double sweep = is_clockwise ? start_angle - end_angle
+                                : end_angle - start_angle;
+    if (sweep <= 0) sweep += 2.0 * kPi;
+    return {start_angle, sweep};
+}
 
 }  // namespace
 
@@ -39,7 +80,8 @@ CircularArc::CircularArc(const RawEntityDE& de_record,
 }
 
 CircularArc::CircularArc(const Vector2d& center, const Vector2d& start_point,
-                         const Vector2d& terminate_point, const double z_t)
+                         const Vector2d& terminate_point, const double z_t,
+                         const bool is_clockwise)
         : CircularArc(RawEntityDE::ByDefault(EntityType::kCircularArc),
                       IGESParameterVector{z_t, center[0], center[1],
                                          start_point[0], start_point[1],
@@ -55,6 +97,7 @@ CircularArc::CircularArc(const Vector2d& center, const Vector2d& start_point,
     if (i_num::IsApproxZero(r1, i_num::kGeometryTolerance)) {
         throw igesio::EntityValueError("Degenerate circular arc: radius is too small.");
     }
+    is_clockwise_ = is_clockwise;
 }
 
 CircularArc::CircularArc(const Vector2d& center, const double radius,
@@ -71,15 +114,13 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
     if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
         throw igesio::EntityValueError("Degenerate circular arc: radius is too small.");
     }
-    // 始点と終点の角度が不正な場合はエラー
-    if (start_angle > end_angle) {
-        throw igesio::EntityValueError(
-            "Start angle must be less than end angle for a circular arc.");
-    }
+    // 始点角が終点角より大きい場合は時計回りの弧と解釈する
+    // (始終点の座標は各角度のcos/sinそのままで正しい)
+    is_clockwise_ = start_angle > end_angle;
 }
 
 CircularArc::CircularArc(const Vector2d& center, const double radius,
-                         const double z_t)
+                         const double z_t, const bool is_clockwise)
         : CircularArc(
             RawEntityDE::ByDefault(EntityType::kCircularArc),
             IGESParameterVector{z_t, center[0], center[1],
@@ -89,6 +130,7 @@ CircularArc::CircularArc(const Vector2d& center, const double radius,
     if (i_num::IsApproxZero(radius, i_num::kGeometryTolerance)) {
         throw igesio::EntityValueError("Degenerate circular arc: radius is too small.");
     }
+    is_clockwise_ = is_clockwise;
 }
 
 
@@ -165,26 +207,10 @@ igesio::ValidationResult CircularArc::ValidatePD() const {
  */
 
 std::array<double, 2> CircularArc::GetParameterRange() const {
-    // 中心から始点・終点へのベクトルを計算
-    const auto start_vec = start_point_ - center_;
-    const auto end_vec = terminate_point_ - center_;
-
-    // 始点と終点の角度を計算 (atan2は[-PI, PI]の範囲で返す)
-    double start_angle = std::atan2(start_vec[1], start_vec[0]);
-    double end_angle = std::atan2(end_vec[1], end_vec[0]);
-
-    // 始点の角度を [0, 2*PI) の範囲に正規化
-    if (start_angle < 0) start_angle += 2.0 * kPi;
-
-    // 終点の角度を、始点から反時計回りに進んだ角度として計算
-    if (end_angle <= start_angle) end_angle += 2.0 * kPi;
-
-    // 閉じた円の場合 (始点と終点が同じ)
-    if (IsClosed()) {
-        end_angle = start_angle + 2.0 * kPi;
-    }
-
-    return {start_angle, end_angle};
+    // 向きによらず {θs, θs + Δ}. 時計回りでは幾何角度が φ(t) = 2θs − t となる
+    const auto angles = ComputeArcAngles(center_, start_point_, terminate_point_,
+                                         is_clockwise_, IsClosed());
+    return {angles.start, angles.start + angles.sweep};
 }
 
 bool CircularArc::IsClosed() const {
@@ -201,22 +227,25 @@ CircularArc::TryGetDefinedDerivatives(const double t, const unsigned int n) cons
     if (!tc) return std::nullopt;
 
     const double radius = Radius();
+    // 幾何角度 φ(t) = θs + σ(t − θs) (σ = CCWで+1、CWで−1)
+    const double sigma = is_clockwise_ ? -1.0 : 1.0;
+    const double phi = range[0] + sigma * (*tc - range[0]);
 
     CurveDerivatives result(n);
-    // n階導関数を一般式で計算（位相は k * PI/2 で増える）
+    // n階導関数を一般式で計算 (位相は k * PI/2 で増え、係数は σ^k)
+    double coefficient = radius;
     for (unsigned int k = 0; k <= n; ++k) {
-        double phase = *tc + static_cast<double>(k) * (kPi / 2.0);
+        double phase = phi + static_cast<double>(k) * (kPi / 2.0);
         result[k] = Vector3d{
-            radius * std::cos(phase),
-            radius * std::sin(phase),
+            coefficient * std::cos(phase),
+            coefficient * std::sin(phase),
             0.0
         };
+        coefficient *= sigma;
     }
 
-    if (n >= 0) {
-        // 0階導関数は位置ベクトルに変換
-        result[0] += center_;
-    }
+    // 0階導関数は位置ベクトルに変換
+    result[0] += center_;
 
     return result;
 }
@@ -226,13 +255,18 @@ i_num::BoundingBox CircularArc::GetDefinedBoundingBox() const {
     Vector3d max = Center();
     auto r = Radius();
 
-    // 円弧のパラメータ範囲を取得
-    auto [start, end] = GetParameterRange();
+    // 弧が通過する幾何角度の区間 (CCW: [θs, θs+Δ]、CW: [θs−Δ, θs])
+    const auto angles = ComputeArcAngles(center_, start_point_, terminate_point_,
+                                         is_clockwise_, IsClosed());
+    const double start = is_clockwise_ ? angles.start - angles.sweep
+                                       : angles.start;
+    const double end = start + angles.sweep;
     // 始点と終点を考慮 (角度の往復変換誤差を避けるため保存済みの点を直接使用)
     min = min.cwiseMin(start_point_).cwiseMin(terminate_point_);
     max = max.cwiseMax(start_point_).cwiseMax(terminate_point_);
 
     // [start, end]の間にある主要な角度 (0, π/2, π, 3π/2) をチェック
+    // (startが負でもfloorによるオフセットはそのまま機能する)
     auto offset = static_cast<int>(std::floor(start / (kPi / 2.0)));
     for (int i = 0; i < 4; ++i) {
         double angle = (offset + i) * (kPi / 2.0);
@@ -250,6 +284,59 @@ i_num::BoundingBox CircularArc::GetDefinedBoundingBox() const {
 
 
 /**
+ * 出力時展開
+ */
+
+i_ent::EntityBase::ExportExpansion CircularArc::ExpandForExport() const {
+    if (!is_clockwise_) return {};
+
+    // 鏡映行列Fを計算する
+    //    中心を通るXT軸平行線まわりのπ回転 (R = diag(1, −1, −1)、
+    //    T = (0, 2yc, 2zt)). det = +1 なのでForm 0. 従属スイッチは既定の00のまま
+    //    (DE第7欄からの参照は従属関係を作らず (IGES 5.3 §2.2.4.4.9.2)、
+    //    Type 124の従属スイッチは規格上n.a.のため)
+    auto flip = MakeRotation(kPi, Vector3d::UnitX(), center_);
+
+    // 元の弧が変換行列M0を参照している場合はF → M0のチェーンにする (点はFと次にM0で変換)
+    const auto& de7 = GetTransformationMatrix();
+    if (de7.GetValueType() == DEFieldValueType::kPointer) {
+        auto base = de7.GetPointer();
+        if (!base) {
+            throw igesio::ReferenceError(
+                "CircularArc::ExpandForExport: the referenced transformation"
+                " matrix (ID " + ToString(de7.GetID()) + ") is unresolved.");
+        }
+        flip->SetReference(base);
+    }
+
+    // 鏡映CCW弧を作成する
+    //    y成分を中心について反転する (中心・z_tは不変).
+    //    フォーマットはpd_parameters_から添字対応で複製する
+    const double yc = center_[1];
+    IGESParameterVector mirrored_params{
+        center_[2], center_[0], yc,
+        start_point_[0], 2.0 * yc - start_point_[1],
+        terminate_point_[0], 2.0 * yc - terminate_point_[1]};
+    for (size_t i = 0; i < std::min(mirrored_params.size(),
+                                    pd_parameters_.size()); ++i) {
+        try {
+            mirrored_params.set_format(i, pd_parameters_.get_format(i));
+        } catch (const std::invalid_argument&) {
+            // 変換元のフォーマットが正しくない場合は更新しない
+        }
+    }
+    auto mirrored = std::make_shared<CircularArc>(
+            RawEntityDE::ByDefault(EntityType::kCircularArc), mirrored_params);
+    mirrored->CopyCommonPropertiesFrom(*this);
+    // DE第7欄をM0からFへ差し替える (Fは新規IDなので循環しない)
+    mirrored->OverwriteTransformationMatrix(flip);
+
+    return {mirrored, {flip}};
+}
+
+
+
+/**
  * 描画用
  */
 
@@ -258,12 +345,21 @@ double CircularArc::Radius() const {
     return (start_point_ - center_).norm();
 }
 
+double CircularArc::SweepAngle() const {
+    return ComputeArcAngles(center_, start_point_, terminate_point_,
+                            is_clockwise_, IsClosed()).sweep;
+}
+
 double CircularArc::StartAngle() const {
-    return GetParameterRange()[0];
+    return ComputeArcAngles(center_, start_point_, terminate_point_,
+                            is_clockwise_, IsClosed()).start;
 }
 
 double CircularArc::EndAngle() const {
-    return GetParameterRange()[1];
+    const auto angles = ComputeArcAngles(center_, start_point_, terminate_point_,
+                                         is_clockwise_, IsClosed());
+    return is_clockwise_ ? angles.start - angles.sweep
+                         : angles.start + angles.sweep;
 }
 
 
@@ -274,9 +370,10 @@ double CircularArc::EndAngle() const {
 
 std::shared_ptr<CircularArc> i_ent::MakeCircularArc(
         const Vector2d& center, const Vector2d& start_point,
-        const Vector2d& terminate_point, const double z_t) {
+        const Vector2d& terminate_point, const double z_t,
+        const bool is_clockwise) {
     return std::make_shared<CircularArc>(
-            center, start_point, terminate_point, z_t);
+            center, start_point, terminate_point, z_t, is_clockwise);
 }
 
 std::shared_ptr<CircularArc> i_ent::MakeCircularArc(
@@ -287,8 +384,9 @@ std::shared_ptr<CircularArc> i_ent::MakeCircularArc(
 }
 
 std::shared_ptr<CircularArc> i_ent::MakeCircle(
-        const Vector2d& center, const double radius, const double z_t) {
-    return std::make_shared<CircularArc>(center, radius, z_t);
+        const Vector2d& center, const double radius, const double z_t,
+        const bool is_clockwise) {
+    return std::make_shared<CircularArc>(center, radius, z_t, is_clockwise);
 }
 
 std::shared_ptr<CircularArc> i_ent::MakeCircularArcThroughPoints(
@@ -312,12 +410,8 @@ std::shared_ptr<CircularArc> i_ent::MakeCircularArcThroughPoints(
             Vector2d{v.y() * u2 - u.y() * v2,
                      u.x() * v2 - v.x() * u2} / (2.0 * cross);
 
-    // Type 100は反時計回りの弧のみ表現可能なため、3点が時計回り (cross < 0)
-    // の場合は始終点を入れ替えて、通過点が弧上に乗るようにする
-    if (cross > 0.0) {
-        return std::make_shared<CircularArc>(
-                center, start_point, terminate_point, z_t);
-    }
+    // 3点が時計回り (cross < 0) の場合は入力順のまま時計回りの弧にする
+    // (通過点が弧上に乗り、パラメータの進行方向も入力どおりになる)
     return std::make_shared<CircularArc>(
-            center, terminate_point, start_point, z_t);
+            center, start_point, terminate_point, z_t, cross < 0.0);
 }

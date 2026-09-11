@@ -196,6 +196,16 @@ class EntityBase : public virtual IEntityIdentifier {
     ///       色 (ColorDefinition) は描画時にlive読みされるため対象外.
     void MarkGeometryModified() { ++geometry_revision_; }
 
+    /// @brief DEフィールドおよびPD追加ポインタを他エンティティから複製する
+    /// @param source 複製元のエンティティ
+    /// @note `ExpandForExport`の置換エンティティ構築用. 元エンティティのDE
+    ///       (線種・ビュー・変換行列・色・フォーム番号等) と追加ポインタを
+    ///       そのまま引き継ぐ. `id_`・`type_`・`pd_parameters_`・
+    ///       ジオメトリリビジョンは複製しない
+    /// @note DEフィールドの参照は解決済みポインタごと共有される
+    ///       (RawEntityDE経由のID往復を行わない)
+    void CopyCommonPropertiesFrom(const EntityBase& source);
+
  public:
     /// @brief プログラム上でエンティティを一意に識別するためのID
     /// @note IDはIDGeneratorクラスを使用して生成される.
@@ -477,6 +487,27 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @return パラメータデータのベクトル
     /// @note 追加ポインタを含む全Parameter Dataセクションのデータを取得する
     IGESParameterVector GetParameters() const;
+
+    /// @brief IGES出力時のエンティティ展開結果
+    /// @note IGES5.3規格で直接表現できない内部状態 (時計回りの円弧等) を持つ
+    ///       エンティティが、`ExpandForExport`で規格に適合するエンティティ群へ
+    ///       展開した結果. `ConvertToIntermediate`が出力直前に用いる
+    struct ExportExpansion {
+        /// @brief 元エンティティの代わりに同じDE枠へ出力するエンティティ
+        /// @note nullptrの場合は展開不要 (元エンティティをそのまま出力する)
+        std::shared_ptr<EntityBase> replacement = nullptr;
+        /// @brief 追加で出力する補助エンティティ (Transformation Matrix (Type 124) 等)
+        /// @note 各補助エンティティは自身のIDでリスト末尾に追加される
+        std::vector<std::shared_ptr<EntityBase>> auxiliaries;
+    };
+
+    /// @brief IGES5.3規格で直接表現できない内部状態を、等価なエンティティ群へ展開する
+    /// @return 展開結果. 既定では展開不要 (`replacement == nullptr`)
+    /// @note `ConvertToIntermediate`から出力直前に呼ばれる. `replacement`は
+    ///       元エンティティと同じDE枠で出力されるため、他エンティティからの参照は
+    ///       そのまま有効. `replacement`は規格に沿った形で出力される (再展開不要)
+    /// @note 元エンティティ (`*this`) は変更しない
+    virtual ExportExpansion ExpandForExport() const { return {}; }
 
     // 物理的に従属するエンティティのID (GetChildIDs) は
     // IEntityIdentifierの既定実装 (空) を継承する. 物理従属子を持つ

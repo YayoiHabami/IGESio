@@ -345,6 +345,25 @@ bool EntityBase::OverwriteTransformationMatrix(
     return true;
 }
 
+void EntityBase::CopyCommonPropertiesFrom(const EntityBase& source) {
+    // DEフィールド (参照は解決済みポインタごと共有する)
+    de_structure_ = source.de_structure_;
+    de_line_font_pattern_ = source.de_line_font_pattern_;
+    de_level_ = source.de_level_;
+    de_view_ = source.de_view_;
+    de_transformation_matrix_ = source.de_transformation_matrix_;
+    de_label_display_associativity_ = source.de_label_display_associativity_;
+    de_color_ = source.de_color_;
+    de_status_ = source.de_status_;
+    de_line_weight_ = source.de_line_weight_;
+    de_entity_label_ = source.de_entity_label_;
+    de_entity_subscript_number_ = source.de_entity_subscript_number_;
+    form_number_ = source.form_number_;
+    // PDの追加ポインタ
+    former_additional_pointers_ = source.former_additional_pointers_;
+    latter_additional_pointers_ = source.latter_additional_pointers_;
+}
+
 bool EntityBase::OverwriteLabelDisplayAssociativity(
         const std::shared_ptr<const ILabelDisplayAssociativity>& label_display_associativity) {
     if (!label_display_associativity) return false;

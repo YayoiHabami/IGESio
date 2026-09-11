@@ -370,6 +370,21 @@ igesio::ConvertToIntermediate(const models::IgesData& data,
             all_entities;
     CollectAllEntities(data.Root(), all_entities);
 
+    // 展開パス: 規格表現に収まらないエンティティ (時計回りの円弧等) を規格に従った
+    // 置換用のエンティティに差し替え、補助エンティティを末尾に追加する.
+    // ペアのIDは元のまま保つため、置換エンティティは元のDE枠へ出力され、
+    // 他エンティティからの参照はそのままで有効となる. 添字走査により末尾に追加された
+    // 補助エンティティも一律に展開対象とする (置換用のエンティティはすべて規格に
+    // 従うものとし、再展開はしない). モデル本体は変更しない
+    for (size_t i = 0; i < all_entities.size(); ++i) {
+        auto expansion = all_entities[i].second->ExpandForExport();
+        if (!expansion.replacement) continue;
+        all_entities[i].second = expansion.replacement;
+        for (const auto& aux : expansion.auxiliaries) {
+            if (aux) all_entities.emplace_back(aux->GetID(), aux);
+        }
+    }
+
     // id -> de_pointerのマッピングを作成する
     id2pointer id2de;
     for (const auto& [id, entity] : all_entities) {

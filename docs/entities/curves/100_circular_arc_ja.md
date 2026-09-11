@@ -40,7 +40,9 @@ $$\left\lbrace\begin{aligned}
   0 &\leq \quad \theta_e - \theta_s &< 2\pi
 \end{aligned}\right.$$
 
-　開始角度 $\theta_s$ と終了角度 $\theta_e$ の間には、常に $\theta_s < \theta_e$ の関係が存在するため、円弧は常に反時計回りに定義されます。そのため、時計回りの円弧を定義する場合には、`CircularArc::OverwriteTransformationMatrix(matrix)`関数を使用して、3次元空間内で回転処理を行う変換行列を指定する必要があります。
+　開始角度 $\theta_s$ と終了角度 $\theta_e$ の間には、常に $\theta_s < \theta_e$ の関係が存在するため、IGESファイル上の円弧は常に反時計回りに定義されます。一方、本ライブラリの`CircularArc`は時計回りの円弧も表現可能です（`IsClockwise()`）。どちらの円弧でもパラメータ範囲は $[\theta_s, \theta_s + \Delta]$ ($\Delta$ は角度範囲`SweepAngle()`) ですが、時計回りではパラメータの増加に対して幾何角度が減るため、`EndAngle()` $= \theta_s - \Delta$ は`StartAngle()`より小さくなります。
+
+　IGESファイルへ書き出す際(`ConvertToIntermediate`/`WriteIges`)、時計回りの円弧は規格に適合する2エンティティに展開されます。定義空間で直線 $y = y_c$ について鏡映した反時計回りの円弧と、中心を通る $X_T$ 軸平行線まわりの $\pi$ 回転を表す変換行列（Type 124）です。鏡映した円弧は元の円弧のDE枠に出力されるため、他エンティティ（複合曲線など）からの参照はそのまま有効であり、元の円弧が変換行列を参照していた場合は新しい変換行列がそれに連鎖します。時計回りの円弧をType 142/144のパラメータ空間曲線として用いることは、読み込み側がこの変換行列を正しく解釈することに依存するため推奨しません。
 
 #### 導関数 $C'(t), C''(t)$
 
