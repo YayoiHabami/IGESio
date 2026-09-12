@@ -9,7 +9,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -38,9 +37,6 @@ namespace i_mod = igesio::models;
 using igesio::Vector2d;
 using igesio::Vector3d;
 
-/// @brief 色成分の量子化段階数 (8bit)
-constexpr double kColorLevels = 255.0;
-
 /// @brief 各部位のアセンブリの作成順序
 /// @note いずれかの部位の輪郭が存在しない場合は、その部位を飛ばして作成する
 constexpr std::array<ToolPart, 3> kPartOrder = {
@@ -57,19 +53,13 @@ igesio::Matrix4d GeneratrixFrameTransform() {
                      Vector3d::Zero());
 }
 
-/// @brief 色成分 (0~1) を8bit値へ量子化する
-int ToColor255(const float channel) {
-    const double clamped = std::clamp(static_cast<double>(channel), 0.0, 1.0);
-    return static_cast<int>(std::lround(clamped * kColorLevels));
-}
-
 /// @brief 要素の色定義 (Type 314) を作る (色の省略時は部位の既定色)
+/// @note 要素の色のα成分はType 314に持てないため捨てる (不透明度は別途
+///       Assemblyのオーバーライドで与える)
 std::shared_ptr<i_ent::ColorDefinition> MakeElementColor(
         const ToolProfileElement& element) {
-    const std::array<float, 3>& rgb =
-            element.color.has_value() ? *element.color : DefaultPartColor(element.part);
-    return i_ent::MakeColorDefinitionFromRGB255(
-            ToColor255(rgb[0]), ToColor255(rgb[1]), ToColor255(rgb[2]));
+    return i_ent::MakeColorDefinition(
+            element.color.value_or(DefaultPartColor(element.part)));
 }
 
 /// @brief 要素の母線とその構成曲線

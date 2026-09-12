@@ -31,6 +31,7 @@
 #include <variant>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/common/errors.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/rotation.h"
@@ -286,7 +287,7 @@ mc::MachineDefinition MakeMinimalDefinition() {
     primitive.size = Vector3d(10.0, 20.0, 30.0);
     box.source = primitive;
     box.placement = z.local_frame * mc::Translation(Vector3d(5.0, 0.0, 0.0));
-    box.color = std::array<float, 3>{1.0f, 0.5f, 0.0f};
+    box.color = igesio::Color{1.0, 0.5, 0.0};
     box.opacity = 0.5f;
     box.collision = false;
     box.visible = false;

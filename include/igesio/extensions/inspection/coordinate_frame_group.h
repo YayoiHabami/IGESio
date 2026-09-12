@@ -10,12 +10,12 @@
 #ifndef IGESIO_EXTENSIONS_INSPECTION_COORDINATE_FRAME_GROUP_H_
 #define IGESIO_EXTENSIONS_INSPECTION_COORDINATE_FRAME_GROUP_H_
 
-#include <array>
 #include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/non_iges_entity_base.h"
@@ -43,13 +43,13 @@ struct CoordinateFrame {
 /// @note 既定値はCoordinateFrameGroupの既定と揃える (点=白, X=赤, Y=緑, Z=青)
 struct CoordinateFrameStyle {
     /// @brief 点の色 (RGBA; [0,1])
-    std::array<float, 4> point_color = {1.0f, 1.0f, 1.0f, 1.0f};
+    Color point_color = {1.0, 1.0, 1.0, 1.0};
     /// @brief X軸 (A方向) の色 (RGBA; [0,1])
-    std::array<float, 4> x_color = {1.0f, 0.2f, 0.2f, 1.0f};
+    Color x_color = {1.0, 0.2, 0.2, 1.0};
     /// @brief Y軸 (B方向) の色 (RGBA; [0,1])
-    std::array<float, 4> y_color = {0.2f, 1.0f, 0.2f, 1.0f};
+    Color y_color = {0.2, 1.0, 0.2, 1.0};
     /// @brief Z軸 (法線方向) の色 (RGBA; [0,1])
-    std::array<float, 4> z_color = {0.3f, 0.4f, 1.0f, 1.0f};
+    Color z_color = {0.3, 0.4, 1.0, 1.0};
     /// @brief 点の表示径 [px]
     double point_size = 2.0;
     /// @brief 軸の表示長 [モデル長]
@@ -103,13 +103,13 @@ class CoordinateFrameGroup
      */
 
     /// @brief 点の色 (RGBA; [0,1]) を取得する
-    const std::array<float, 4>& PointColor() const { return style_.point_color; }
+    const Color& PointColor() const { return style_.point_color; }
     /// @brief X軸の色 (RGBA; [0,1]) を取得する
-    const std::array<float, 4>& XColor() const { return style_.x_color; }
+    const Color& XColor() const { return style_.x_color; }
     /// @brief Y軸の色 (RGBA; [0,1]) を取得する
-    const std::array<float, 4>& YColor() const { return style_.y_color; }
+    const Color& YColor() const { return style_.y_color; }
     /// @brief Z軸の色 (RGBA; [0,1]) を取得する
-    const std::array<float, 4>& ZColor() const { return style_.z_color; }
+    const Color& ZColor() const { return style_.z_color; }
     /// @brief 点の表示径 [px] を取得する
     double PointSize() const { return style_.point_size; }
     /// @brief 軸の表示長 [モデル長] を取得する
@@ -118,13 +118,13 @@ class CoordinateFrameGroup
     double AxisWidth() const { return style_.axis_width; }
 
     /// @brief 点の色を設定する (RGBA; [0,1])
-    void SetPointColor(const std::array<float, 4>& c) { style_.point_color = c; }
+    void SetPointColor(const Color& c) { style_.point_color = c; }
     /// @brief X軸の色を設定する (RGBA; [0,1])
-    void SetXColor(const std::array<float, 4>& c) { style_.x_color = c; }
+    void SetXColor(const Color& c) { style_.x_color = c; }
     /// @brief Y軸の色を設定する (RGBA; [0,1])
-    void SetYColor(const std::array<float, 4>& c) { style_.y_color = c; }
+    void SetYColor(const Color& c) { style_.y_color = c; }
     /// @brief Z軸の色を設定する (RGBA; [0,1])
-    void SetZColor(const std::array<float, 4>& c) { style_.z_color = c; }
+    void SetZColor(const Color& c) { style_.z_color = c; }
     /// @brief 点の表示径 [px] を設定する
     void SetPointSize(const double s) { style_.point_size = s; }
     /// @brief 軸の表示線幅 [px] を設定する

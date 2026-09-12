@@ -28,17 +28,18 @@
 #include <string_view>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/diagnostics.h"
 
 namespace igesio::extensions::machines {
 
-/// @brief 切れ刃部のデフォルト色 (RGB 0~1. `#ffd900`)
-constexpr std::array<float, 3> kDefaultCutterColor = {1.0f, 0.85098f, 0.0f};
-/// @brief シャンク部のデフォルト色 (RGB 0~1. `#ffffff`)
-constexpr std::array<float, 3> kDefaultShankColor = {1.0f, 1.0f, 1.0f};
-/// @brief ホルダ部のデフォルト色 (RGB 0~1. `#8090a0`)
-constexpr std::array<float, 3> kDefaultHolderColor = {0.50196f, 0.56471f, 0.62745f};
+/// @brief 切れ刃部のデフォルト色 (`#ffd900`)
+constexpr Color kDefaultCutterColor = Color::FromRGB255(255, 217, 0);
+/// @brief シャンク部のデフォルト色 (`#ffffff`)
+constexpr Color kDefaultShankColor = Color::FromRGB255(255, 255, 255);
+/// @brief ホルダ部のデフォルト色 (`#8090a0`)
+constexpr Color kDefaultHolderColor = Color::FromRGB255(128, 144, 160);
 
 /// @brief 工具・ホルダの部位の種別
 /// @note 実体化時の部位容器 (Assembly) の名前にも用いる (`ToolPartName`)
@@ -64,8 +65,8 @@ std::optional<ToolPart> ParseToolPart(std::string_view text);
 
 /// @brief 工具・ホルダの部位のデフォルトの色を取得する
 /// @param part 部位
-/// @return RGB (0~1)
-const std::array<float, 3>& DefaultPartColor(ToolPart part);
+/// @return 部位のデフォルト色 (a = 1.0)
+const Color& DefaultPartColor(ToolPart part);
 
 /// @brief r-z平面における母線の1セグメント (直線または円弧)
 /// @note 2次元工具座標は (r, z) [mm] であり、先端をz=0とし、主軸側が正方向とする.
@@ -115,8 +116,9 @@ struct ToolProfileElement {
     std::string name;
     /// @brief 母線のセグメント列 (連続. 前の`end`と次の`start`が一致する)
     std::vector<ProfileSegment> segments;
-    /// @brief 色 (RGB 0~1). 省略時は部位のデフォルト色
-    std::optional<std::array<float, 3>> color;
+    /// @brief 色 (RGB; [0, 1]). 省略時は部位のデフォルト色
+    /// @note α成分は使わない (不透明度は`opacity`で独立に指定する)
+    std::optional<Color> color;
     /// @brief 不透明度 (0=透明〜1=不透明)
     float opacity = 1.0f;
 };

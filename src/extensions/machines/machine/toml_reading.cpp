@@ -366,11 +366,10 @@ igesio::Matrix3d ReadRotation(const TomlValue& table, const std::string& context
     }
 }
 
-std::optional<std::array<float, 3>> ReadColor(const TomlValue& table,
-                                              const std::string& context) {
+std::optional<Color> ReadColor(const TomlValue& table, const std::string& context) {
     const std::optional<std::string> text = OptionalString(table, "color", context);
     if (!text.has_value()) return std::nullopt;
-    const std::optional<std::array<float, 3>> rgb = ParseHexColor(*text);
+    const std::optional<Color> rgb = ParseHexColor(*text);
     if (!rgb.has_value()) {
         Fail(context + ".color", "not in \"#RRGGBB\" form: " + *text,
              LineOf(*Find(table, "color")));

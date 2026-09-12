@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/entity_base.h"
 #include "igesio/entities/entity_type.h"
@@ -301,7 +302,7 @@ TEST(ToolEntitiesTest, Color_DefaultAndOverride) {
         }
     }
     // 要素の色と不透明度を指定
-    spec.profile.elements[0].color = std::array<float, 3>{0.2f, 0.4f, 0.6f};
+    spec.profile.elements[0].color = igesio::Color{0.2, 0.4, 0.6};
     spec.profile.elements[0].opacity = 0.5f;
     const auto tool = mc::MakeToolAssembly(spec);
     const auto cutter0 = ElementNode(*tool, ToolPart::kCutter, 0);

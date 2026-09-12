@@ -24,6 +24,7 @@
 
 #include <toml.hpp>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/diagnostics.h"
 #include "igesio/extensions/machines/core/units.h"
@@ -189,10 +190,9 @@ igesio::Matrix3d ReadRotation(const TomlValue& table, const std::string& context
                               double angle_scale);
 
 /// @brief 任意の`color`キー (`"#RRGGBB"`) を読む
-/// @return RGB各0..1. 欠落なら`std::nullopt`
+/// @return 色 (RGB各0.0～1.0、a = 1.0). 欠落なら`std::nullopt`
 /// @throw igesio::DataFormatError 形式が不正な場合
-std::optional<std::array<float, 3>> ReadColor(const TomlValue& table,
-                                              const std::string& context);
+std::optional<Color> ReadColor(const TomlValue& table, const std::string& context);
 
 /// @brief 形状パスの規約を検査し、絶対パスを集計する
 /// @note 絶対パスは先頭`/`またはドライブ文字 (`X:`) で判定する (OS非依存).

@@ -9,24 +9,26 @@
  *         (大文字・小文字)、整形の往復
  *       - 正常系 (境界値): 桁数0、成分0と255、0..1の外の成分のクランプ
  *       - 正常系 (退化): 負のゼロ
- *       - 異常系 (解釈失敗): 長さ違い、先頭が`#`でない、16進でない文字
+ *       - 異常系 (解釈失敗): 長さ違い、先頭が`#`でない、16進でない文字、8桁
  *         (`std::nullopt`を返し例外は投げない)
  */
 #include <gtest/gtest.h>
 
-#include <array>
+#include <cstddef>
 #include <optional>
 #include <string>
 
+#include "igesio/common/color.h"
 #include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/units.h"
 
 namespace {
 
 namespace mc = igesio::extensions::machines;
+using igesio::Color;
 
 /// @brief 色成分の比較の許容誤差 (8bit量子化の半分未満)
-constexpr float kColorTol = 1.0f / 512.0f;
+constexpr double kColorTol = 1.0 / 512.0;
 
 }  // namespace
 
@@ -57,9 +59,10 @@ TEST(FormattingTest, ParseHexColor_ReadsLowerAndUpperCase) {
     const auto upper = mc::ParseHexColor("#FF8000");
     ASSERT_TRUE(lower.has_value());
     ASSERT_TRUE(upper.has_value());
-    EXPECT_NEAR((*lower)[0], 1.0f, kColorTol);
-    EXPECT_NEAR((*lower)[1], 128.0f / 255.0f, kColorTol);
-    EXPECT_NEAR((*lower)[2], 0.0f, kColorTol);
+    EXPECT_NEAR(lower->r, 1.0, kColorTol);
+    EXPECT_NEAR(lower->g, 128.0 / 255.0, kColorTol);
+    EXPECT_NEAR(lower->b, 0.0, kColorTol);
+    EXPECT_NEAR(lower->a, 1.0, kColorTol);  // 6桁は不透明
     EXPECT_EQ(*lower, *upper);
 }
 
@@ -69,8 +72,8 @@ TEST(FormattingTest, ParseHexColor_BoundaryComponents) {
     ASSERT_TRUE(black.has_value());
     ASSERT_TRUE(white.has_value());
     for (std::size_t i = 0; i < 3; ++i) {
-        EXPECT_NEAR((*black)[i], 0.0f, kColorTol);
-        EXPECT_NEAR((*white)[i], 1.0f, kColorTol);
+        EXPECT_NEAR((*black)[i], 0.0, kColorTol);
+        EXPECT_NEAR((*white)[i], 1.0, kColorTol);
     }
 }
 
@@ -81,17 +84,22 @@ TEST(FormattingTest, ParseHexColor_ReturnsNulloptWhenMalformed) {
     EXPECT_FALSE(mc::ParseHexColor("0ff8000").has_value());     // 先頭が`#`でない
     EXPECT_FALSE(mc::ParseHexColor("#ff80gg").has_value());     // 16進でない
     EXPECT_FALSE(mc::ParseHexColor("").has_value());            // 空
+    EXPECT_FALSE(mc::ParseHexColor("#ff800080").has_value());   // 8桁 (α付き) は不可
 }
 
 // ---- FormatHexColor ----
 
 TEST(FormattingTest, FormatHexColor_WritesLowerCaseHex) {
-    EXPECT_EQ(mc::FormatHexColor({1.0f, 0.5f, 0.0f}), "#ff8000");
-    EXPECT_EQ(mc::FormatHexColor({0.0f, 0.0f, 0.0f}), "#000000");
+    EXPECT_EQ(mc::FormatHexColor(Color{1.0, 0.5, 0.0}), "#ff8000");
+    EXPECT_EQ(mc::FormatHexColor(Color{0.0, 0.0, 0.0}), "#000000");
 }
 
 TEST(FormattingTest, FormatHexColor_ClampsOutOfRangeComponents) {
-    EXPECT_EQ(mc::FormatHexColor({1.5f, -0.5f, 1.0f}), "#ff00ff");
+    EXPECT_EQ(mc::FormatHexColor(Color{1.5, -0.5, 1.0}), "#ff00ff");
+}
+
+TEST(FormattingTest, FormatHexColor_IgnoresAlpha) {
+    EXPECT_EQ(mc::FormatHexColor(Color{1.0, 0.5, 0.0, 0.25}), "#ff8000");
 }
 
 TEST(FormattingTest, FormatHexColor_RoundTripsThroughParse) {

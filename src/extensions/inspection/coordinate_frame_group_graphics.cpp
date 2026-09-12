@@ -7,6 +7,7 @@
  */
 #include "igesio/extensions/inspection/coordinate_frame_group_graphics.h"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -163,16 +164,13 @@ void CoordinateFrameGroupGraphics::Draw(
         // 太線化はGS (kFrameLineGeom) が行う. viewportSizeはレンダラが、線幅[px]は
         // 各DrawWithState (引数widthからlineWidth uniform) が設定する.
         if (!x_axis_buffer_.IsEmpty()) {
-            x_axis_buffer_.DrawWithState(
-                    shader, model, igesio::Color::FromFloatRGBA(entity_->XColor()), width);
+            x_axis_buffer_.DrawWithState(shader, model, entity_->XColor(), width);
         }
         if (!y_axis_buffer_.IsEmpty()) {
-            y_axis_buffer_.DrawWithState(
-                    shader, model, igesio::Color::FromFloatRGBA(entity_->YColor()), width);
+            y_axis_buffer_.DrawWithState(shader, model, entity_->YColor(), width);
         }
         if (!z_axis_buffer_.IsEmpty()) {
-            z_axis_buffer_.DrawWithState(
-                    shader, model, igesio::Color::FromFloatRGBA(entity_->ZColor()), width);
+            z_axis_buffer_.DrawWithState(shader, model, entity_->ZColor(), width);
         }
         return;
     }
@@ -265,9 +263,9 @@ void CoordinateFrameGroupGraphics::DrawPoints(gl::Uint shader) const {
     const igesio::Matrix4f model = GetWorldTransform();
     gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
                           1, gl::kFalse, model.data());
-    const auto& color = entity_->PointColor();
+    const std::array<float, 4> rgba = entity_->PointColor().ToFloatRGBA();
     gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
-                    1, color.data());
+                    1, rgba.data());
     gl_->Uniform1f(gl_->GetUniformLocation(shader, "uPointSize"),
                    static_cast<float>(entity_->PointSize()));
 

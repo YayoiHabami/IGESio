@@ -229,7 +229,7 @@ std::optional<ToolPart> ParseToolPart(const std::string_view text) {
     return std::nullopt;
 }
 
-const std::array<float, 3>& DefaultPartColor(const ToolPart part) {
+const Color& DefaultPartColor(const ToolPart part) {
     switch (part) {
         case ToolPart::kCutter: return kDefaultCutterColor;
         case ToolPart::kShank: return kDefaultShankColor;

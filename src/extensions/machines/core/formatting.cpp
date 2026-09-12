@@ -8,10 +8,11 @@
 #include "igesio/extensions/machines/core/formatting.h"
 
 #include <algorithm>
-#include <cmath>
+#include <cctype>
 #include <cstddef>
 #include <iomanip>
 #include <sstream>
+#include <string>
 
 #include "igesio/extensions/machines/core/units.h"
 
@@ -19,18 +20,8 @@ namespace igesio::extensions::machines {
 
 namespace {
 
-/// @brief 色成分の量子化段階数 (8bit)
-constexpr double kColorLevels = 255.0;
-
-/// @brief 16進1桁を数値にする
-/// @param c 文字
-/// @return 0~15. 16進でなければ`std::nullopt`
-std::optional<int> HexDigit(const char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-    return std::nullopt;
-}
+/// @brief 色表記の文字数 (`#`と16進6桁)
+constexpr std::size_t kHexColorLength = 7;
 
 }  // namespace
 
@@ -46,26 +37,21 @@ std::string FormatDegrees(const double radians, const int digits) {
     return FormatFixed(ToDegrees(radians), digits);
 }
 
-std::optional<std::array<float, 3>> ParseHexColor(const std::string_view text) {
-    if (text.size() != 7 || text[0] != '#') return std::nullopt;
-    std::array<float, 3> rgb{};
-    for (std::size_t i = 0; i < 3; ++i) {
-        const std::optional<int> high = HexDigit(text[1 + 2 * i]);
-        const std::optional<int> low = HexDigit(text[2 + 2 * i]);
-        if (!high.has_value() || !low.has_value()) return std::nullopt;
-        rgb[i] = static_cast<float>(*high * 16 + *low) / static_cast<float>(kColorLevels);
-    }
-    return rgb;
+std::optional<Color> ParseHexColor(const std::string_view text) {
+    // ファイル上の色表記は`#rrggbb`のみとし、Color::TryParseHexで指定可能な
+    // `#`の省略・8桁はここで弾く
+    if (text.size() != kHexColorLength || text.front() != '#') return std::nullopt;
+    return Color::TryParseHex(text);
 }
 
-std::string FormatHexColor(const std::array<float, 3>& rgb) {
-    std::ostringstream stream;
-    stream << '#' << std::hex << std::setfill('0');
-    for (const float channel : rgb) {
-        const double clamped = std::clamp(static_cast<double>(channel), 0.0, 1.0);
-        stream << std::setw(2) << std::lround(clamped * kColorLevels);
-    }
-    return stream.str();
+std::string FormatHexColor(const Color& color) {
+    // 丸め等はColor::ToHexで行い、ファイル上の表記対応 (小文字) のみここで行う
+    std::string text = color.ToHex();
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](const unsigned char c) {
+                       return static_cast<char>(std::tolower(c));
+                   });
+    return text;
 }
 
 }  // namespace igesio::extensions::machines

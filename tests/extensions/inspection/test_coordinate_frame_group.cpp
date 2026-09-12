@@ -16,9 +16,10 @@
  */
 #include <gtest/gtest.h>
 
-#include <array>
+#include <cstddef>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/entity_type.h"
 #include "igesio/extensions/inspection/coordinate_frame_group.h"
@@ -27,6 +28,7 @@ namespace {
 
 namespace inspection = igesio::extensions::inspection;
 namespace i_ent = igesio::entities;
+using igesio::Color;
 using igesio::Vector3d;
 
 /// @brief バウンディングボックス包含判定の許容に用いる微小量
@@ -59,9 +61,8 @@ void ExpectVecNear(const Vector3d& a, const Vector3d& b,
 }
 
 /// @brief 2つのRGBA色が各成分で一致することを検査する
-void ExpectColorNear(const std::array<float, 4>& a,
-                     const std::array<float, 4>& b) {
-    for (std::size_t i = 0; i < 4; ++i) EXPECT_NEAR(a[i], b[i], 1e-6f);
+void ExpectColorNear(const Color& a, const Color& b) {
+    for (std::size_t i = 0; i < 4; ++i) EXPECT_NEAR(a[i], b[i], kEps);
 }
 
 }  // namespace
@@ -84,7 +85,7 @@ TEST(CoordinateFrameGroup, Constructor_StoresFramesAndDefaults) {
     // 既定の表示属性
     EXPECT_NEAR(group.PointSize(), 2.0, kEps);
     EXPECT_NEAR(group.AxisSize(), 5.0, kEps);
-    EXPECT_NEAR(group.PointColor()[3], 1.0f, 1e-6f);  // 既定は不透明
+    EXPECT_NEAR(group.PointColor().a, 1.0, kEps);  // 既定は不透明
 
     // 非IGESエンティティとしての基本属性
     EXPECT_EQ(group.GetType(), i_ent::EntityType::kNonIges);
@@ -96,8 +97,8 @@ TEST(CoordinateFrameGroup, Constructor_StoresFramesAndDefaults) {
 
 TEST(CoordinateFrameGroup, Accessors_RoundTrip) {
     inspection::CoordinateFrameGroup group;
-    const std::array<float, 4> pc = {0.1f, 0.2f, 0.3f, 0.4f};
-    const std::array<float, 4> xc = {0.5f, 0.6f, 0.7f, 0.8f};
+    const Color pc = {0.1, 0.2, 0.3, 0.4};
+    const Color xc = {0.5, 0.6, 0.7, 0.8};
 
     group.SetPointColor(pc);
     group.SetXColor(xc);
@@ -167,10 +168,10 @@ TEST(CoordinateFrameGroup, ColorAndPointSizeSetters_DoNotBumpGeometryRevision) {
     // 色・点径は描画時に参照される属性であり、形状 (テッセレーション) には影響しない
     inspection::CoordinateFrameGroup group({MakeStandardFrame({0.0, 0.0, 0.0})});
     const auto rev0 = group.GeometryRevision();
-    group.SetPointColor({0.0f, 0.0f, 0.0f, 1.0f});
-    group.SetXColor({0.0f, 0.0f, 0.0f, 1.0f});
-    group.SetYColor({0.0f, 0.0f, 0.0f, 1.0f});
-    group.SetZColor({0.0f, 0.0f, 0.0f, 1.0f});
+    group.SetPointColor(Color{0.0, 0.0, 0.0, 1.0});
+    group.SetXColor(Color{0.0, 0.0, 0.0, 1.0});
+    group.SetYColor(Color{0.0, 0.0, 0.0, 1.0});
+    group.SetZColor(Color{0.0, 0.0, 0.0, 1.0});
     group.SetPointSize(20.0);
     EXPECT_EQ(group.GeometryRevision(), rev0);
 }

@@ -5,15 +5,18 @@
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
  * @note 診断・例外等のテキスト出力時に数値を含める際の整形 (固定小数・deg換算) と、
- *       機械定義・プロジェクト定義で共通の色表記`"#RRGGBB"`の相互変換をまとめる.
+ *       機械定義・プロジェクト定義で共通の色表記`"#rrggbb"`の相互変換をまとめる.
+ * @note TOML側では色を`#rrggbb`形式でのみ表現するため、`igesio::Color`との
+ *       互換関数をここに記述する.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_CORE_FORMATTING_H_
 #define IGESIO_EXTENSIONS_MACHINES_CORE_FORMATTING_H_
 
-#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
+
+#include "igesio/common/color.h"
 
 namespace igesio::extensions::machines {
 
@@ -29,15 +32,17 @@ std::string FormatFixed(double value, int digits);
 /// @return deg値の文字列 (単位の記号は付けない)
 std::string FormatDegrees(double radians, int digits = 3);
 
-/// @brief `"#RRGGBB"`形式の色文字列をRGBの配列 (0~1) に変換する
+/// @brief `"#RRGGBB"`形式の色文字列を`Color`構造体に変換する
 /// @param text 色文字列 (`#RRGGBB` (16進6桁). 大文字小文字を区別しない)
-/// @return RGB各成分 (0~1). 形式が異なる場合は`std::nullopt`
-std::optional<std::array<float, 3>> ParseHexColor(std::string_view text);
+/// @return `Color`構造体 (a = 1.0). 形式が異なる場合は`std::nullopt`
+/// @note 機械定義・プロジェクト定義の色表記は`#RRGGBB`に限定する.
+///       `Color::TryParseHex`で指定可能な`#`の省略や8桁 (`#RRGGBBAA`) は対象外とする.
+std::optional<Color> ParseHexColor(std::string_view text);
 
-/// @brief RGB各成分 (0~1) を`"#rrggbb"`形式の文字列に変換する
-/// @param rgb RGBの各成分. 0~1の範囲外はクランプする
+/// @brief 色を`"#rrggbb"`形式の文字列に変換する
+/// @param color 変換する色. RGBの0~1の範囲外はクランプし、α成分は無視する
 /// @return 小文字16進の色文字列 (各成分を255倍して四捨五入)
-std::string FormatHexColor(const std::array<float, 3>& rgb);
+std::string FormatHexColor(const Color& color);
 
 }  // namespace igesio::extensions::machines
 

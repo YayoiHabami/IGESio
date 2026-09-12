@@ -20,6 +20,7 @@
 #include <variant>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/diagnostics.h"
 #include "igesio/extensions/machines/core/units.h"
@@ -249,8 +250,9 @@ struct GeometrySpec {
     ///       モデル座標の点はこの行列のみを掛けてゼロポーズ機械座標に変換できる.
     igesio::Matrix4d placement = igesio::Matrix4d::Identity();
 
-    /// @brief 色 (RGB、0~1). 省略時は`std::nullopt`
-    std::optional<std::array<float, 3>> color;
+    /// @brief 色 (RGB; [0, 1]). 省略時は`std::nullopt`
+    /// @note α成分は使わない (不透明度は`opacity`で独立に指定する)
+    std::optional<Color> color;
     /// @brief 不透明度 (0=透明〜1=不透明)
     float opacity = 1.0f;
     /// @brief 干渉計算の対象か
