@@ -8,8 +8,10 @@
 #ifndef IGESIO_ENTITIES_DE_DE_COLOR_H_
 #define IGESIO_ENTITIES_DE_DE_COLOR_H_
 
+#include <array>
 #include <memory>
 
+#include "igesio/common/color.h"
 #include "igesio/entities/interfaces/de_related.h"
 #include "igesio/entities/de/de_field_wrapper.h"
 
@@ -40,6 +42,31 @@ enum class ColorNumber {
     kWhite = 8
 };
 
+/// @brief 標準色をColorへ変換する
+/// @param number 標準色番号
+/// @return 対応する色 (a = 1.0). kNoColorは黒として扱う
+constexpr Color ToColor(const ColorNumber number) {
+    switch (number) {
+        case ColorNumber::kRed: return Color{1.0, 0.0, 0.0};
+        case ColorNumber::kGreen: return Color{0.0, 1.0, 0.0};
+        case ColorNumber::kBlue: return Color{0.0, 0.0, 1.0};
+        case ColorNumber::kYellow: return Color{1.0, 1.0, 0.0};
+        case ColorNumber::kMagenta: return Color{1.0, 0.0, 1.0};
+        case ColorNumber::kCyan: return Color{0.0, 1.0, 1.0};
+        case ColorNumber::kWhite: return Color{1.0, 1.0, 1.0};
+        case ColorNumber::kNoColor:
+        case ColorNumber::kBlack:
+            return Color{};
+    }
+    return Color{};
+}
+
+/// @brief 指定した色に最も近い標準色を求める
+/// @param color 比較する色 (αは無視する)
+/// @return 最も近い標準色 (kBlack〜kWhite). 同距離の場合は番号の小さい方
+/// @note 距離はRGB空間のユークリッド距離で評価する
+ColorNumber ClosestColorNumber(const Color& color);
+
 /// @brief 色フィールドを表すクラス
 /// @note DEフィールド13: Color Number
 ///       非負の値は標準色、負の値はColor Definition Entity (Type 314)への参照
@@ -69,14 +96,15 @@ class DEColor : public DEFieldWrapper<IColorDefinition> {
     explicit DEColor(const ColorNumber);
 
     /// @brief 色 (RGB) を取得する
-    /// @return RGB値の配列 (それぞれ0.0〜100.0)
-    std::array<double, 3> GetRGB() const;
+    /// @return 解決した色 (a = 1.0). 標準色はその色、参照先のColor Definition
+    ///         Entityがあればその定義色、未設定・参照未解決の場合は黒
+    Color GetRGB() const;
 
     /// @brief 色 (CMY) を取得する
-    /// @return CMY値の配列 (それぞれ0.0〜100.0)
+    /// @return CMY値の配列 (それぞれ[0, 1])
     std::array<double, 3> GetCMY() const {
-        auto [r, g, b] = GetRGB();
-        return {100 - r, 100 - g, 100 - b};
+        const Color rgb = GetRGB();
+        return {1.0 - rgb.r, 1.0 - rgb.g, 1.0 - rgb.b};
     }
 
     /// @brief 色を設定する

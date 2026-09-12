@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/common/errors.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/models/scene.h"
@@ -41,7 +42,7 @@ constexpr int kDefaultDisplayWidth = 1280;
 constexpr int kDefaultDisplayHeight = 720;
 
 /// @brief 選択中エンティティのハイライト色 (RGBA) [0.0 - 1.0]
-constexpr std::array<float, 4> kSelectionColor = {1.0f, 0.6f, 0.0f, 1.0f};
+constexpr Color kSelectionColor = {1.0, 0.6, 0.0, 1.0};
 
 /// @brief ピッキング結果 (ObjectID付きのRayHit)
 struct EntityHit {
@@ -142,13 +143,13 @@ class EntityRenderer {
     int display_width_ = kDefaultDisplayWidth,
         display_height_ = kDefaultDisplayHeight;
 
-    /// @brief 背景色
-    std::array<float, 4> background_color_ = {1.0f, 1.0f, 1.0f, 1.0f};  // 白色
+    /// @brief 背景色 (RGBA) [0.0 - 1.0]
+    Color background_color_ = {1.0, 1.0, 1.0, 1.0};  // 白色
 
-    /// @brief 環境光 (アンビエント) の色 (RGB) [0.0 - 1.0]
+    /// @brief 環境光 (アンビエント) の色 (RGB) [0.0 - 1.0]. α成分は無視する
     /// @note IBLの代替として、面シェーダーが一定の環境光として反射する.
     ///       金属は誘電体と異なり拡散を持たないため、この値が暗部の明るさを決める
-    std::array<float, 3> ambient_color_ = {0.1f, 0.1f, 0.1f};
+    Color ambient_color_ = {0.1, 0.1, 0.1};
 
     /// @brief カメラクラス
     /// @note 自動クリップ球はシーンの派生キャッシュであり、
@@ -323,31 +324,22 @@ class EntityRenderer {
 
     /// @brief 背景色を取得する
     /// @return 背景色 (RGBA) [0.0 - 1.0]
-    std::array<float, 4> GetBackgroundColor() const;
-
-    /// @brief 背景色の参照を取得する
-    /// @return 背景色の参照 (RGBA) [0.0 - 1.0]
-    std::array<float, 4>& GetBackgroundColorRef();
+    Color GetBackgroundColor() const;
 
     /// @brief 背景色を設定する
-    /// @param red 赤成分 [0.0 - 1.0]
-    /// @param green 緑成分 [0.0 - 1.0]
-    /// @param blue 青成分 [0.0 - 1.0]
-    /// @param alpha 不透明度 [0.0 - 1.0] (デフォルト: 1.0f)
-    void SetBackgroundColor(const float, const float,
-                            const float, const float = 1.0f);
+    /// @param color 背景色 (RGBA) [0.0 - 1.0]
+    /// @note 反映には`Draw()`の呼び出しが必要
+    void SetBackgroundColor(const Color&);
 
     /// @brief 環境光 (アンビエント) の色を取得する
     /// @return 環境光の色 (RGB) [0.0 - 1.0]
-    std::array<float, 3> GetAmbientColor() const;
+    Color GetAmbientColor() const;
 
     /// @brief 環境光 (アンビエント) の色を設定する
-    /// @param red 赤成分 [0.0 - 1.0]
-    /// @param green 緑成分 [0.0 - 1.0]
-    /// @param blue 青成分 [0.0 - 1.0]
+    /// @param color 環境光の色 (RGB) [0.0 - 1.0]. α成分は無視する
     /// @note IBLの代替として面シェーダーが反射する一定の環境光. 値を上げると
     ///       暗部 (特に金属) が明るくなる. 反映には`Draw()`の呼び出しが必要
-    void SetAmbientColor(const float, const float, const float);
+    void SetAmbientColor(const Color&);
 
     /// @brief カメラの参照を取得する (const)
     /// @return カメラの参照
@@ -604,7 +596,7 @@ class EntityRenderer {
     ///       最近接オーバーライドを解決し、各描画オブジェクトへフレーム毎にPUSHする.
     void WalkAssembly(const models::Assembly& node,
                       const igesio::Matrix4d& parent_accum,
-                      const std::optional<std::array<float, 3>>& inherited_color,
+                      const std::optional<Color>& inherited_color,
                       const std::optional<float>& inherited_opacity);
 
     /// @brief キャッシュした描画リストをシェーダー単位で描画する

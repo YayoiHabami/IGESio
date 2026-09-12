@@ -14,13 +14,13 @@
  */
 #include <gtest/gtest.h>
 
-#include <array>
 #include <cmath>
 #include <memory>
 #include <utility>
 
 #include "mock_open_gl.h"
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/curves/composite_curve.h"
@@ -41,7 +41,7 @@ using i_graph::test::MockOpenGL;
 /// @brief 浮動小数比較の許容誤差
 constexpr float kTol = 1e-6f;
 /// @brief テスト用のハイライト色 (エンティティ既定色と異なる)
-constexpr std::array<float, 4> kHighlight = {1.0f, 0.6f, 0.0f, 1.0f};
+constexpr igesio::Color kHighlight = {1.0, 0.6, 0.0, 1.0};
 
 /// @brief スモーク用の単純な円弧 (100)
 std::shared_ptr<i_ent::CircularArc> MakeArc() {
@@ -95,7 +95,7 @@ TEST(SelectionPullTest, Draw_UsesEntityColorWhenNotSelected) {
     auto graphics = i_graph::CreateEntityGraphics(arc, gl);
     ASSERT_NE(graphics, nullptr);
 
-    const std::array<float, 4> expected = graphics->GetColor();
+    const igesio::Color expected = graphics->GetColor();
 
     igesio::models::SelectionSet selection;  // 空
     i_graph::DrawContext ctx{};
@@ -119,7 +119,7 @@ TEST(SelectionPullTest, Draw_HighlightFollowsSelectionState) {
     auto graphics = i_graph::CreateEntityGraphics(arc, gl);
     ASSERT_NE(graphics, nullptr);
 
-    const std::array<float, 4> base = graphics->GetColor();
+    const igesio::Color base = graphics->GetColor();
 
     igesio::models::SelectionSet selection;
     selection.Select(arc->GetID());

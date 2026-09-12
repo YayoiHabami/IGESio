@@ -12,6 +12,7 @@
  *   MakeColorDefinitionFromHex
  * - セッター: SetRGB (DE Color Number更新の不変条件含む) / SetColorName
  * - 変換・問い合わせ: GetRGB255 / GetHexCode / GetClosestColorNumber
+ * - GetColor (EntityBase::GetColorのオーバーライド) と読み書きでのIGESスケール保持
  *
  * TODO: Color Number が 8 を超える値（範囲外）のケースは、DEColor の構築時点で
  *       igesio::DataFormatError を送出する既存挙動のため、本エンティティの正規化対象外。
@@ -27,6 +28,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "igesio/common/color.h"
 #include "igesio/common/errors.h"
 #include "igesio/entities/de/de_color.h"
 #include "igesio/entities/de/raw_entity_de.h"
@@ -36,6 +38,7 @@ namespace {
 
 namespace i_ent = igesio::entities;
 using ColorDefinition = i_ent::ColorDefinition;
+using igesio::Color;
 /// @brief 浮動小数点比較の許容誤差
 constexpr double kTol = 1e-9;
 
@@ -48,8 +51,8 @@ i_ent::RawEntityDE MakeColorDE(const int color_number) {
     return de;
 }
 
-/// @brief 標準色「青」に厳密一致する RGB の PD パラメータ (0.0-100.0スケール)
-/// @note GetClosestStandardColor がこの値に対し kBlue を返すことを利用する
+/// @brief 標準色「青」に厳密一致するRGBのPDパラメータ (0.0-100.0スケール)
+/// @note ClosestColorNumberがこの値に対しkBlueを返すことを利用する
 const igesio::IGESParameterVector kBluePD{0.0, 0.0, 100.0};
 
 }  // namespace
@@ -66,7 +69,7 @@ TEST(ColorDefinitionTest, ColorNumber_NormalizedToClosestStandardColorWhenZero) 
     ColorDefinition color(MakeColorDE(0), kBluePD);
 
     // 0/未指定は仕様違反のため、最も近い標準色 (青=kBlue) へ正規化される
-    EXPECT_EQ(color.GetColor().GetValue(),
+    EXPECT_EQ(color.GetDEColor().GetValue(),
               static_cast<int>(i_ent::ColorNumber::kBlue));
     // 正規化後は DE 検証 (1〜8 必須) を通過する
     const auto result = color.Validate();
@@ -78,7 +81,7 @@ TEST(ColorDefinitionTest, ColorNumber_UnchangedWhenAlreadyValid) {
     constexpr int kValidColor = static_cast<int>(i_ent::ColorNumber::kGreen);  // 3
     ColorDefinition color(MakeColorDE(kValidColor), kBluePD);
 
-    EXPECT_EQ(color.GetColor().GetValue(), kValidColor);
+    EXPECT_EQ(color.GetDEColor().GetValue(), kValidColor);
     const auto result = color.Validate();
     EXPECT_TRUE(result.is_valid) << result.Message();
 }
@@ -88,7 +91,7 @@ TEST(ColorDefinitionTest, ColorNumber_UnchangedAtLowerBound) {
     constexpr int kBlack = static_cast<int>(i_ent::ColorNumber::kBlack);  // 1
     ColorDefinition color(MakeColorDE(kBlack), kBluePD);
 
-    EXPECT_EQ(color.GetColor().GetValue(), kBlack);
+    EXPECT_EQ(color.GetDEColor().GetValue(), kBlack);
     EXPECT_TRUE(color.Validate().is_valid);
 }
 
@@ -99,7 +102,7 @@ TEST(ColorDefinitionTest, ColorNumber_NormalizedToWhiteWhenZero) {
     ColorDefinition color(MakeColorDE(0),
                           igesio::IGESParameterVector{100.0, 100.0, 100.0});
 
-    EXPECT_EQ(color.GetColor().GetValue(),
+    EXPECT_EQ(color.GetDEColor().GetValue(),
               static_cast<int>(i_ent::ColorNumber::kWhite));
     EXPECT_TRUE(color.Validate().is_valid);
 }
@@ -112,36 +115,45 @@ TEST(ColorDefinitionTest, ColorNumber_NormalizedToWhiteWhenZero) {
 
 // 代表: RGB・色名が格納され、DEのColor Numberに最近傍標準色が設定される
 TEST(MakeColorDefinitionTest, StoresRGBNameAndClosestColorNumber) {
-    const auto color = i_ent::MakeColorDefinition({0.0, 0.0, 100.0}, "Pure Blue");
+    const auto color = i_ent::MakeColorDefinition(Color{0.0, 0.0, 1.0}, "Pure Blue");
 
-    const auto rgb = color->GetRGB();
-    EXPECT_NEAR(rgb[0], 0.0, kTol);
-    EXPECT_NEAR(rgb[1], 0.0, kTol);
-    EXPECT_NEAR(rgb[2], 100.0, kTol);
+    const Color rgb = color->GetRGB();
+    EXPECT_NEAR(rgb.r, 0.0, kTol);
+    EXPECT_NEAR(rgb.g, 0.0, kTol);
+    EXPECT_NEAR(rgb.b, 1.0, kTol);
+    EXPECT_NEAR(rgb.a, 1.0, kTol);
     EXPECT_EQ(color->GetColorName(), "Pure Blue");
-    EXPECT_EQ(color->GetColor().GetValue(),
+    EXPECT_EQ(color->GetDEColor().GetValue(),
               static_cast<int>(i_ent::ColorNumber::kBlue));
 }
 
 // name省略時は色名なし
 TEST(MakeColorDefinitionTest, DefaultNameEmpty) {
-    const auto color = i_ent::MakeColorDefinition({50.0, 100.0, 30.0});
+    const auto color = i_ent::MakeColorDefinition(Color{0.5, 1.0, 0.3});
 
     EXPECT_EQ(color->GetColorName(), "");
 }
 
-// エラー: RGB成分が[0.0, 100.0]の範囲外
+// エラー: RGB成分が[0.0, 1.0]の範囲外
 TEST(MakeColorDefinitionTest, ThrowsEntityValueErrorWhenOutOfRange) {
-    EXPECT_THROW(i_ent::MakeColorDefinition({101.0, 0.0, 0.0}),
+    EXPECT_THROW(i_ent::MakeColorDefinition(Color{1.01, 0.0, 0.0}),
                  igesio::EntityValueError);
-    EXPECT_THROW(i_ent::MakeColorDefinition({0.0, -0.1, 0.0}),
+    EXPECT_THROW(i_ent::MakeColorDefinition(Color{0.0, -0.001, 0.0}),
                  igesio::EntityValueError);
 }
 
-// 境界精度: 0.0と100.0ちょうどは有効
+// α成分は検証も格納もされない (範囲外のαでも例外にならない)
+TEST(MakeColorDefinitionTest, IgnoresAlpha) {
+    const auto color = i_ent::MakeColorDefinition(Color{0.5, 0.5, 0.5, 2.0});
+
+    EXPECT_NEAR(color->GetRGB().a, 1.0, kTol);
+    EXPECT_EQ(color->GetParameters().size(), 3u);
+}
+
+// 境界精度: 0.0と1.0ちょうどは有効
 TEST(MakeColorDefinitionTest, RangeBoundaries_NoThrow) {
-    EXPECT_NO_THROW(i_ent::MakeColorDefinition({0.0, 0.0, 0.0}));
-    EXPECT_NO_THROW(i_ent::MakeColorDefinition({100.0, 100.0, 100.0}));
+    EXPECT_NO_THROW(i_ent::MakeColorDefinition(Color{0.0, 0.0, 0.0}));
+    EXPECT_NO_THROW(i_ent::MakeColorDefinition(Color{1.0, 1.0, 1.0}));
 }
 
 
@@ -150,27 +162,24 @@ TEST(MakeColorDefinitionTest, RangeBoundaries_NoThrow) {
  * MakeColorDefinitionFromRGB255 のテスト
  */
 
-// 代表: 0〜255スケールが0〜100スケールへ変換され、nameも伝搬する
+// 代表: 0〜255スケールが単位スケールへ変換され、nameも伝搬する
 TEST(MakeColorDefinitionFromRGB255Test, ConvertsScale) {
     const auto color = i_ent::MakeColorDefinitionFromRGB255(
             127, 255, 76, "Light Green");
 
-    const auto rgb = color->GetRGB();
-    EXPECT_NEAR(rgb[0], 127.0 * 100.0 / 255.0, kTol);
-    EXPECT_NEAR(rgb[1], 100.0, kTol);
-    EXPECT_NEAR(rgb[2], 76.0 * 100.0 / 255.0, kTol);
+    const Color rgb = color->GetRGB();
+    EXPECT_NEAR(rgb.r, 127.0 / 255.0, kTol);
+    EXPECT_NEAR(rgb.g, 1.0, kTol);
+    EXPECT_NEAR(rgb.b, 76.0 / 255.0, kTol);
     EXPECT_EQ(color->GetColorName(), "Light Green");
 }
 
-// 全数性質テスト: 0-255→0-100→0-255の変換が全値で可逆
-// (スケール変換の丸め誤差により非可逆になる値が存在しないことを保証する)
-TEST(MakeColorDefinitionFromRGB255Test, RoundTripExhaustive) {
-    for (int v = 0; v <= 255; ++v) {
+// 往復性: 0-255→IGESスケール(0-100)→0-255の変換が可逆 (代表値・境界値)
+// (全値の可逆性はColor側のテスト RoundTripExhaustive で保証する)
+TEST(MakeColorDefinitionFromRGB255Test, RoundTripThroughIgesScale) {
+    for (const int v : {0, 1, 127, 128, 254, 255}) {
         const auto color = i_ent::MakeColorDefinitionFromRGB255(v, v, v);
-        const auto rgb255 = color->GetRGB255();
-        ASSERT_EQ(rgb255[0], v) << "v=" << v;
-        ASSERT_EQ(rgb255[1], v) << "v=" << v;
-        ASSERT_EQ(rgb255[2], v) << "v=" << v;
+        EXPECT_EQ(color->GetRGB255(), (std::array<int, 3>{v, v, v})) << "v=" << v;
     }
 }
 
@@ -219,7 +228,15 @@ TEST(MakeColorDefinitionFromHexTest, RoundTripWithGetHexCode) {
     EXPECT_EQ(color->GetHexCode(), "#7FFF4C");
 }
 
-// エラー: 6桁hex以外の形式
+// 8桁 ("#RRGGBBAA") はα成分を捨てて受理する
+TEST(MakeColorDefinitionFromHexTest, AcceptsEightDigitsIgnoringAlpha) {
+    const auto color = i_ent::MakeColorDefinitionFromHex("#7FFF4C80");
+
+    EXPECT_EQ(color->GetRGB255(), (std::array<int, 3>{127, 255, 76}));
+    EXPECT_NEAR(color->GetRGB().a, 1.0, kTol);
+}
+
+// エラー: 6桁/8桁hex以外の形式 (受理形式の網羅はColor側のテストで行う)
 TEST(MakeColorDefinitionFromHexTest, ThrowsInvalidArgumentWhenMalformed) {
     // 3桁短縮形は非対応
     EXPECT_THROW(i_ent::MakeColorDefinitionFromHex("#FFF"),
@@ -245,49 +262,51 @@ TEST(MakeColorDefinitionFromHexTest, ThrowsInvalidArgumentWhenMalformed) {
 
 // 代表: RGB値が更新される
 TEST(ColorDefinitionSetRGBTest, UpdatesValue) {
-    const auto color = i_ent::MakeColorDefinition({0.0, 0.0, 100.0});
+    const auto color = i_ent::MakeColorDefinition(Color{0.0, 0.0, 1.0});
 
-    color->SetRGB({10.0, 20.0, 30.0});
+    color->SetRGB(Color{0.1, 0.2, 0.3});
 
-    const auto rgb = color->GetRGB();
-    EXPECT_NEAR(rgb[0], 10.0, kTol);
-    EXPECT_NEAR(rgb[1], 20.0, kTol);
-    EXPECT_NEAR(rgb[2], 30.0, kTol);
+    const Color rgb = color->GetRGB();
+    EXPECT_NEAR(rgb.r, 0.1, kTol);
+    EXPECT_NEAR(rgb.g, 0.2, kTol);
+    EXPECT_NEAR(rgb.b, 0.3, kTol);
 }
 
 // DEのColor Numberも最近傍標準色へ更新される (構築時の不変条件を維持)
 TEST(ColorDefinitionSetRGBTest, UpdatesDEColorNumber) {
-    const auto color = i_ent::MakeColorDefinition({0.0, 0.0, 100.0});
-    ASSERT_EQ(color->GetColor().GetValue(),
+    const auto color = i_ent::MakeColorDefinition(Color{0.0, 0.0, 1.0});
+    ASSERT_EQ(color->GetDEColor().GetValue(),
               static_cast<int>(i_ent::ColorNumber::kBlue));
 
-    color->SetRGB({90.0, 5.0, 5.0});  // 赤系
+    color->SetRGB(Color{0.9, 0.05, 0.05});  // 赤系
 
-    EXPECT_EQ(color->GetColor().GetValue(),
+    EXPECT_EQ(color->GetDEColor().GetValue(),
               static_cast<int>(i_ent::ColorNumber::kRed));
 }
 
-// エラー: 成分が[0.0, 100.0]の範囲外 (境界両側: 0.0/100.0ちょうどは有効)
+// エラー: 成分が[0.0, 1.0]の範囲外 (境界両側: 0.0/1.0ちょうどは有効)
 TEST(ColorDefinitionSetRGBTest, ThrowsEntityValueErrorWhenOutOfRange) {
-    const auto color = i_ent::MakeColorDefinition({0.0, 0.0, 100.0});
+    const auto color = i_ent::MakeColorDefinition(Color{0.0, 0.0, 1.0});
 
-    EXPECT_THROW(color->SetRGB({-0.1, 50.0, 50.0}), igesio::EntityValueError);
-    EXPECT_THROW(color->SetRGB({50.0, 50.0, 100.1}), igesio::EntityValueError);
-    EXPECT_NO_THROW(color->SetRGB({0.0, 0.0, 0.0}));
-    EXPECT_NO_THROW(color->SetRGB({100.0, 100.0, 100.0}));
+    EXPECT_THROW(color->SetRGB(Color{-0.001, 0.5, 0.5}), igesio::EntityValueError);
+    EXPECT_THROW(color->SetRGB(Color{0.5, 0.5, 1.001}), igesio::EntityValueError);
+    EXPECT_NO_THROW(color->SetRGB(Color{0.0, 0.0, 0.0}));
+    EXPECT_NO_THROW(color->SetRGB(Color{1.0, 1.0, 1.0}));
+    // α成分は検証しない
+    EXPECT_NO_THROW(color->SetRGB(Color{0.5, 0.5, 0.5, 2.0}));
 }
 
 // 失敗時はRGB・DEのColor Numberとも変更されない
 TEST(ColorDefinitionSetRGBTest, StateUnchangedOnThrow) {
-    const auto color = i_ent::MakeColorDefinition({0.0, 0.0, 100.0});
+    const auto color = i_ent::MakeColorDefinition(Color{0.0, 0.0, 1.0});
 
-    EXPECT_THROW(color->SetRGB({150.0, 0.0, 0.0}), igesio::EntityValueError);
+    EXPECT_THROW(color->SetRGB(Color{1.5, 0.0, 0.0}), igesio::EntityValueError);
 
-    const auto rgb = color->GetRGB();
-    EXPECT_NEAR(rgb[0], 0.0, kTol);
-    EXPECT_NEAR(rgb[1], 0.0, kTol);
-    EXPECT_NEAR(rgb[2], 100.0, kTol);
-    EXPECT_EQ(color->GetColor().GetValue(),
+    const Color rgb = color->GetRGB();
+    EXPECT_NEAR(rgb.r, 0.0, kTol);
+    EXPECT_NEAR(rgb.g, 0.0, kTol);
+    EXPECT_NEAR(rgb.b, 1.0, kTol);
+    EXPECT_EQ(color->GetDEColor().GetValue(),
               static_cast<int>(i_ent::ColorNumber::kBlue));
 }
 
@@ -299,7 +318,7 @@ TEST(ColorDefinitionSetRGBTest, StateUnchangedOnThrow) {
 
 // 代表: 色名が更新される
 TEST(ColorDefinitionSetColorNameTest, UpdatesName) {
-    const auto color = i_ent::MakeColorDefinition({0.0, 0.0, 100.0});
+    const auto color = i_ent::MakeColorDefinition(Color{0.0, 0.0, 1.0});
 
     color->SetColorName("Sky");
 
@@ -308,7 +327,7 @@ TEST(ColorDefinitionSetColorNameTest, UpdatesName) {
 
 // 空文字列で色名なしとなり、PDパラメータの4番目が省略される
 TEST(ColorDefinitionSetColorNameTest, EmptyOmitsPDParameter) {
-    const auto color = i_ent::MakeColorDefinition({0.0, 0.0, 100.0}, "Named");
+    const auto color = i_ent::MakeColorDefinition(Color{0.0, 0.0, 1.0}, "Named");
     ASSERT_EQ(color->GetParameters().size(), 4u);
 
     color->SetColorName("");
@@ -325,7 +344,7 @@ TEST(ColorDefinitionSetColorNameTest, EmptyOmitsPDParameter) {
 
 // 0.5丸め位置の値が四捨五入される (127.5→128, 76.5→77)
 TEST(ColorDefinitionConversionTest, GetRGB255_RoundsHalfUp) {
-    const auto color = i_ent::MakeColorDefinition({50.0, 100.0, 30.0});
+    const auto color = i_ent::MakeColorDefinition(Color{0.5, 1.0, 0.3});
 
     EXPECT_EQ(color->GetRGB255(), (std::array<int, 3>{128, 255, 77}));
 }
@@ -342,7 +361,7 @@ TEST(ColorDefinitionConversionTest, GetRGB255_SaturatesOutOfRangeRGB) {
 TEST(ColorDefinitionConversionTest, GetHexCode_FormatsUppercaseWithHash) {
     EXPECT_EQ(i_ent::MakeColorDefinitionFromRGB255(127, 255, 76)->GetHexCode(),
               "#7FFF4C");
-    EXPECT_EQ(i_ent::MakeColorDefinition({0.0, 0.0, 0.0})->GetHexCode(),
+    EXPECT_EQ(i_ent::MakeColorDefinition(Color{0.0, 0.0, 0.0})->GetHexCode(),
               "#000000");
 }
 
@@ -356,8 +375,8 @@ TEST(ColorDefinitionConversionTest, GetHexCode_FormatsUppercaseWithHash) {
 // NOTE: kWhiteの写像は旧実装のバグ (探索ループがkWhiteを除外) の回帰テスト
 TEST(ColorDefinitionClosestColorTest, PureStandardColors) {
     for (int i = 1; i <= 8; ++i) {
-        const auto color = i_ent::MakeColorDefinition(i_ent::kColorVectors[
-                static_cast<size_t>(i)]);
+        const auto color = i_ent::MakeColorDefinition(
+                i_ent::ToColor(static_cast<i_ent::ColorNumber>(i)));
         EXPECT_EQ(color->GetClosestColorNumber(),
                   static_cast<i_ent::ColorNumber>(i)) << "color number " << i;
     }
@@ -366,11 +385,63 @@ TEST(ColorDefinitionClosestColorTest, PureStandardColors) {
 // 標準色近傍の色は最も近い標準色へ写像される
 TEST(ColorDefinitionClosestColorTest, NearColors) {
     // 白に近い灰色 (旧実装ではkYellowに写像されていた)
-    EXPECT_EQ(i_ent::MakeColorDefinition({90.0, 90.0, 90.0})
+    EXPECT_EQ(i_ent::MakeColorDefinition(Color{0.9, 0.9, 0.9})
                       ->GetClosestColorNumber(),
               i_ent::ColorNumber::kWhite);
     // 黒に近い灰色
-    EXPECT_EQ(i_ent::MakeColorDefinition({10.0, 10.0, 10.0})
+    EXPECT_EQ(i_ent::MakeColorDefinition(Color{0.1, 0.1, 0.1})
                       ->GetClosestColorNumber(),
               i_ent::ColorNumber::kBlack);
+}
+
+
+
+/**
+ * GetColor (EntityBase::GetColorのオーバーライド) のテスト
+ */
+
+// Type 314自身のGetColorは定義色を返す (DE13の最近接標準色ではない)
+TEST(ColorDefinitionGetColorTest, ReturnsDefinedColorNotStandardColor) {
+    const auto color = i_ent::MakeColorDefinition(Color{0.8, 0.2, 0.2});
+
+    const Color resolved = color->GetColor();
+    EXPECT_NEAR(resolved.r, 0.8, kTol);
+    EXPECT_NEAR(resolved.g, 0.2, kTol);
+    EXPECT_NEAR(resolved.b, 0.2, kTol);
+    EXPECT_NEAR(resolved.a, 1.0, kTol);
+    // DE13には最近接標準色 (赤) が入っているが、GetColorはそれを返さない
+    EXPECT_EQ(color->GetDEColor().GetValue(),
+              static_cast<int>(i_ent::ColorNumber::kRed));
+    EXPECT_NE(color->GetColor(), i_ent::ToColor(i_ent::ColorNumber::kRed));
+}
+
+// EntityBase 経由 (仮想呼び出し) でも定義色が返る
+TEST(ColorDefinitionGetColorTest, VirtualDispatchThroughEntityBase) {
+    const auto color = i_ent::MakeColorDefinition(Color{0.8, 0.2, 0.2});
+    const i_ent::EntityBase& base = *color;
+
+    EXPECT_NEAR(base.GetColor().r, 0.8, kTol);
+}
+
+
+
+/**
+ * 読み書きでのIGESスケール保持のテスト
+ */
+
+// ファイルから読んだPDの値は単位スケールへ換算せずそのまま保持し、
+// 書き戻し時 (GetMainPDParameters) に同じ値が出力される
+TEST(ColorDefinitionReadWriteTest, PreservesIgesScaleValues) {
+    // 単位スケールへの往復 (/100 → ×100) で1ulpずれうる値を含める
+    const igesio::IGESParameterVector pd{6.251, 12.941176470588236, 33.3};
+    ColorDefinition color(MakeColorDE(1), pd);
+
+    auto params = color.GetParameters();  // access_asは非constのためコピーで受ける
+    ASSERT_EQ(params.size(), 3u);
+    // 書き戻しの文字列表現を変えないことが目的のため、ビット単位の一致を要求する
+    EXPECT_EQ(params.access_as<double>(0), 6.251);
+    EXPECT_EQ(params.access_as<double>(1), 12.941176470588236);
+    EXPECT_EQ(params.access_as<double>(2), 33.3);
+    // 公開 API は単位スケール
+    EXPECT_NEAR(color.GetRGB().r, 0.06251, kTol);
 }

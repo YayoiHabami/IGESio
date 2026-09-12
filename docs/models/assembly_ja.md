@@ -63,7 +63,7 @@
 | --- | --- |
 | `visible` | 可視性（表示トグル）。非表示でも論理的には存在し、BBox・検証・出力・クエリには含まれる |
 | `suppressed` | 抑制。論理的にモデルから除外する（子孫も連鎖）。抑制時は描画されず、BBox・検証・出力・クエリからも除外される |
-| `color_override` | 色のオーバーライド（RGB; $[0, 1]$ ）。未設定ならメンバの色を使用 |
+| `color_override` | 色のオーバーライド（`std::optional<igesio::Color>`; RGBは $[0, 1]$ ）。α成分は無視する（不透明度は`opacity_override`で指定する）。未設定ならメンバの色を使用 |
 | `opacity_override` | 不透明度のオーバーライド（ $[0, 1]$ ）。未設定ならメンバの値を使用 |
 
 描画条件は`visible`かつ`!suppressed`である。
@@ -132,7 +132,7 @@ igesio::models::Assembly* owner = root.FindOwner(picked_id);
 | `SetVisible(visible)`等の表示状態setter | 自ノードの表示状態（`DisplayState`）を設定する |
 | `SetVisibleRecursive(visible)` | 自ノードと全子孫の可視性を一括設定する |
 | `SetSuppressedRecursive(suppressed)` | 自ノードと全子孫の抑制状態を一括設定する |
-| `SetColorOverrideRecursive(color)` | 自ノードと全子孫の色オーバーライドを一括設定する |
+| `SetColorOverrideRecursive(color)` | 自ノードと全子孫の色オーバーライド（`igesio::Color`; αは無視）を一括設定する |
 | `SetOpacityOverrideRecursive(opacity)` | 自ノードと全子孫の不透明度オーバーライドを一括設定する |
 | `ComposeGlobalTransform(transform)` | このノードの大域変換へ追加変換を合成する（非再帰） |
 | `Revision()` | ルートに集約されたモデルリビジョンを取得する |

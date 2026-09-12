@@ -11,11 +11,11 @@
 #ifndef IGESIO_GRAPHICS_CORE_SURFACE_EDGE_BUFFER_H_
 #define IGESIO_GRAPHICS_CORE_SURFACE_EDGE_BUFFER_H_
 
-#include <array>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/graphics/core/gl_types.h"
 #include "igesio/graphics/core/i_open_gl.h"
@@ -26,7 +26,7 @@ namespace igesio::graphics {
 
 /// @brief サーフェス境界エッジ描画時のデフォルト色 (RGBA) [0.0 - 1.0]
 /// @note shadedモードで面と区別できるよう、やや暗い灰色とする
-constexpr std::array<float, 4> kSurfaceEdgeColor = {0.1f, 0.1f, 0.1f, 1.0f};
+constexpr Color kSurfaceEdgeColor = {0.1, 0.1, 0.1, 1.0};
 
 /// @brief ハイライト中のエッジへ適用するウィンドウ深度の圧縮率
 /// @note 隣接面が共有する辺は両面から1本ずつ (別テッセレーションで) 描かれ、
@@ -85,7 +85,7 @@ class SurfaceEdgeBuffer {
     ///        (kHighlightDepthShrink参照)
     /// @note view/projection uniformは呼び出し側で設定済みであること
     void DrawWithState(gl::Uint, const igesio::Matrix4f&,
-                       const std::array<float, 4>&, double,
+                       const Color&, double,
                        bool highlighted = false) const;
 
     /// @brief GPUリソースを解放する

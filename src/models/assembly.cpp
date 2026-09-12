@@ -607,8 +607,7 @@ void Assembly::SetSuppressedRecursive(const bool suppressed) {
     }
 }
 
-void Assembly::SetColorOverrideRecursive(
-        const std::optional<std::array<float, 3>>& color) {
+void Assembly::SetColorOverrideRecursive(const std::optional<Color>& color) {
     SetColorOverride(color);
     for (const auto& child : children_) {
         if (child) child->SetColorOverrideRecursive(color);

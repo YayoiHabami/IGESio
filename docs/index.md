@@ -29,7 +29,8 @@ The following are module-specific documents. For files not listed, please refer 
 
 ### common module
 
-- Currently, there are no documents.
+- **[Color](common/color.md)**: RGBA color value type (`igesio::Color`)
+  - Canonical $[0, 1]$ scale and conversions to/from the IGES scale, 8-bit values, `float` arrays, and hex color codes
 
 ### entities module
 

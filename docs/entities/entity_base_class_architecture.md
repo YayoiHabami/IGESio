@@ -196,7 +196,7 @@ Newly defined in the `EntityBase` class:
 The following member functions have corresponding DE fields that have pointers. These member functions are implemented as functions that take individual classes that store pointers as return values/arguments. The following seven fields are
 
 - `GetXxx()` member function that returns a const reference
-  - Example: `const DEColor& GetColor() const;`
+  - Example: `const DEColor& GetDEColor() const;`
 - `ResetXxx()` member function that returns to the default state (state with invalid value set)
   - Example: `void ResetColor();`
 - `OverwriteXxx(...)` member function that changes the pointer or value
@@ -213,7 +213,9 @@ have. These member functions have different implementations depending on the typ
 | 6th | (c) | `GetView()` <br> `ResetView()` <br> `OverwriteView(...)` |
 | 7th | (a) | `GetTransformationMatrix()` <br> `ResetTransformationMatrix()` <br> `OverwriteTransformationMatrix(...)` |
 | 8th | (a) | `GetLabelDisplayAssociativity()` <br> `ResetLabelDisplayAssociativity()` <br> `OverwriteLabelDisplayAssociativity(...)` |
-| 13th | (b) | `GetColor()` <br> `ResetColor()` <br> `OverwriteColor(...)` |
+| 13th | (b) | `GetDEColor()` <br> `ResetColor()` <br> `OverwriteColor(...)` |
+
+> **Note on the 13th field**: only the color field has a value type of its own. The wrapper is obtained with `GetDEColor()`, while `Color GetColor() const` returns the resolved display color (the standard color, the defined color of the referenced Color Definition entity, or black when unset) as an [`igesio::Color`](../common/color.md). `ColorDefinition` (Type 314) overrides `GetColor()` to return its own defined color.
 
 > **Value of "type" column**:
 >

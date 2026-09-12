@@ -155,9 +155,10 @@ The following is an example of manipulating the color field (13th DE Field) of t
 using Vector2d = iges::Vector2d;
 namespace ent = iges::entities;
 
-// Array to hold color values: IGES expresses RGB values in the range of 0-100
-// Can be obtained as an array of double type regardless of the type of value stored
-std::array<double, 3> color;
+// Resolved color: `igesio::Color` holds each RGBA component in [0, 1]
+// (IGES colors are always opaque, a = 1.0). It is obtained the same way
+// regardless of the type of value stored in the field
+igesio::Color color;
 
 // Create a circle entity with a radius of 5.0 and centered at the origin
 // Each DE field is initialized with the default value
@@ -165,20 +166,22 @@ auto center = Vector2d(0.0, 0.0);
 auto circle = ent::MakeCircle(center, 5.0);
 
 // Get the default color
-circle->GetColor().GetValueType();    // DEFieldValueType::kDefault
-color = circle->GetColor().GetRGB();  // {0, 0, 0}
+circle->GetDEColor().GetValueType();  // DEFieldValueType::kDefault
+color = circle->GetColor();           // {0, 0, 0, 1}
 
 // Set to the specified color (enumeration value)
 circle->OverwriteColor(ent::ColorNumber::kCyan);
-circle->GetColor().GetValueType();    // DEFieldValueType::kPositive
-color = circle->GetColor().GetRGB();  // {0, 100, 100}
+circle->GetDEColor().GetValueType();  // DEFieldValueType::kPositive
+color = circle->GetColor();           // {0, 1, 1, 1}
 
 // Create and set a color entity (pointer value)
-auto color_def = ent::MakeColorDefinition({50.0, 100.0, 30.0}, "Light Green");
+auto color_def = ent::MakeColorDefinition(igesio::Color{0.5, 1.0, 0.3}, "Light Green");
 circle->OverwriteColor(color_def);
-circle->GetColor().GetValueType();    // DEFieldValueType::kPointer
-color = circle->GetColor().GetRGB();  // {50, 100, 30}
+circle->GetDEColor().GetValueType();  // DEFieldValueType::kPointer
+color = circle->GetColor();           // {0.5, 1, 0.3, 1}
 ```
+
+`GetDEColor()` returns the `DEColor` wrapper of the 13th field (value type, ID, pointer), while `GetColor()` returns the resolved display color as an [`igesio::Color`](../common/color.md).
 
 ### Key Members of the Class Interface
 
@@ -234,17 +237,17 @@ In addition, copy constructors, move constructors, assignment operators, etc. ar
 The following is a continuation of the code created in [Example: Color Field Manipulation](#example-color-field-manipulation).
 
 ```cpp
-circle->GetColor().HasValidPointer();  // true - Light Green's ColorDefinition is set
+circle->GetDEColor().HasValidPointer();  // true - Light Green's ColorDefinition is set
 
 // Create a new color definition entity
-auto new_color_def = ent::MakeColorDefinition({100.0, 50.0, 0.0}, "Orange");
+auto new_color_def = ent::MakeColorDefinition(igesio::Color{1.0, 0.5, 0.0}, "Orange");
 
 // Overwrite with a pointer to the new color definition entity
 // Inside `OverwritePointer`, `DEColor::OverwriteID` and `DEColor::SetPointer` are called
-circle.OverwriteColor(new_color_def);
+circle->OverwriteColor(new_color_def);
 
 // Get the new color
-color = circle->GetColor().GetRGB();  // {100, 50, 0}
+color = circle->GetColor();  // {1, 0.5, 0, 1}
 ```
 
 The `EntityBase` inheritance class only provides const references to each DE field. Therefore, if you want to set a new value as in the example above, use the `Overwrite` function corresponding to that field (`EntityBase::OverwriteColor` in the case of the color field).

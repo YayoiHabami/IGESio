@@ -17,12 +17,12 @@
  */
 #include <gtest/gtest.h>
 
-#include <array>
 #include <memory>
 #include <utility>
 
 #include "mock_open_gl.h"
 
+#include "igesio/common/color.h"
 #include "igesio/common/errors.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
@@ -69,7 +69,7 @@ TEST(GraphicsObjectSmokeTest, Draw_EmitsModelColorAndDrawCall) {
     ASSERT_NE(graphics, nullptr);
 
     // ハイライト前 (非選択) の色 = エンティティ色
-    const std::array<float, 4> expected = graphics->GetColor();
+    const igesio::Color expected = graphics->GetColor();
 
     // 任意のプログラムID (モックはlocationを名前で採番するため実プログラム不要)
     // 非選択の表示コンテキスト (ハイライトしない)

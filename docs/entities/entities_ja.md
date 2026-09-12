@@ -189,7 +189,7 @@ if (entity->IsSupported()) {
 
 　`ColorDefinition`クラスは、エンティティの色を定義するためのエンティティクラスです。IGESファイル内で定義された色を表現し、他のエンティティに適用することができます。以下のコード例は、カラーコード#4C7FFFを持つColorDefinitionエンティティを生成し、`CircularArc`エンティティに適用しています（図参照）。
 
-　なお、IGESの色定義はRGB各成分を (0.0-100.0) の範囲で保持し、`MakeColorDefinition`はこのスケールでRGB値を直接指定します。0〜255スケールの値や16進カラーコードから作成する場合は、換算不要の`MakeColorDefinitionFromRGB255`・`MakeColorDefinitionFromHex`を使用できます。
+　なお、`MakeColorDefinition`は各成分が $[0, 1]$ の[`igesio::Color`](../common/color_ja.md)を受け取り（α成分は無視されます）、エンティティ内部でIGESスケール（0.0〜100.0）へ換算します。0〜255スケールの値や16進カラーコードから作成する場合は、`MakeColorDefinitionFromRGB255`・`MakeColorDefinitionFromHex`を使用できます。定義色は`GetRGB()`（または`GetColor()`）で`Color`として取得できます。
 
 ```cpp
 auto circle = igesio::entities::MakeCircle(igesio::Vector2d{0.0, 0.0}, 1.0);

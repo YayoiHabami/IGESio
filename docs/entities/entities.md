@@ -189,7 +189,7 @@ if (entity->IsSupported()) {
 
 The `ColorDefinition` class is an entity class for defining the color of entities. It represents colors defined in IGES files and can be applied to other entities. The following code example creates a `ColorDefinition` entity with the color code #4C7FFF and applies it to a `CircularArc` entity (see figure).
 
-Note: IGES color definitions hold each RGB component in the range (0.0-100.0), which is what `MakeColorDefinition` takes directly. To create a color from 0-255 scale values or a hex color code without manual conversion, use `MakeColorDefinitionFromRGB255` or `MakeColorDefinitionFromHex`.
+Note: `MakeColorDefinition` takes an [`igesio::Color`](../common/color.md) whose components are in $[0, 1]$ (the alpha component is ignored); the entity converts it to the IGES scale (0.0–100.0) internally. To create a color from 0–255 scale values or a hex color code, use `MakeColorDefinitionFromRGB255` or `MakeColorDefinitionFromHex`. The defined color is read back as a `Color` with `GetRGB()` (or `GetColor()`).
 
 ```cpp
 auto circle = igesio::entities::MakeCircle(igesio::Vector2d{0.0, 0.0}, 1.0);

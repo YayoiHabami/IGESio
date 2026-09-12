@@ -13,6 +13,9 @@
 // エラー型 (IGESioError階層)
 #include "igesio/common/errors.h"
 
+// 色の値型 (Color)
+#include "igesio/common/color.h"
+
 // 数値計算 (行列・ベクトル、許容誤差、バウンディングボックス等)
 #include "igesio/numerics.h"
 

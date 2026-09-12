@@ -445,9 +445,17 @@ class EntityBase : public virtual IEntityIdentifier {
     /// @return 上書きに成功した場合は`true` (正の値であれば常に`true`を返す)
     bool SetLineWeightNumber(const int);
 
-    /// @brief Color Number (13th field of DE) を取得する
+    /// @brief Color Number (13th field of DE) のラッパーを取得する
     /// @return 色フィールド
-    const DEColor& GetColor() const { return de_color_; }
+    /// @note 解決済みの色 (Color) はGetColor()で取得する
+    const DEColor& GetDEColor() const { return de_color_; }
+    /// @brief 表示色を取得する
+    /// @return Color Number (13th field of DE) を解決した色 (αは1.0).
+    ///         標準色はその色、参照先のColor Definition Entity (Type 314)
+    ///         があればその定義色、未設定・参照未解決の場合は黒
+    /// @note ColorDefinition (Type 314) は自身の定義色を返す
+    ///       (DE13は定義色に最も近い標準色であり、定義色そのものではないため)
+    virtual Color GetColor() const { return de_color_.GetRGB(); }
     /// @brief Color Number (13th field of DE) の値をリセットする
     /// @note 参照の存在しない、デフォルト値の状態に設定する
     void ResetColor() { de_color_.Reset(); }

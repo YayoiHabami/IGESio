@@ -71,8 +71,7 @@ void CurveOnSurfaceGraphics::PrewarmCpu() {
         // WalkAssemblyでの適用時点では子が未生成のため、ここで反映する.
         SetWorldTransform(world_transform_);
         if (is_color_overridden_) {
-            curve_graphics_->SetColor(
-                    {color_[0], color_[1], color_[2], color_[3]});
+            curve_graphics_->SetColor(color_);
         } else {
             curve_graphics_->ResetColor();
         }
@@ -151,7 +150,7 @@ std::vector<i_graph::RayHit> CurveOnSurfaceGraphics::Intersect(
     return curve_graphics_->Intersect(ray, params);
 }
 
-void CurveOnSurfaceGraphics::SetColor(const std::array<float, 4>& color) {
+void CurveOnSurfaceGraphics::SetColor(const Color& color) {
     EntityGraphics::SetColor(color);
     // 描画は子要素C(t)に委譲されるため、色も子要素へ伝播させる
     if (curve_graphics_ != nullptr) curve_graphics_->SetColor(color);

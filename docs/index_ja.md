@@ -29,7 +29,8 @@
 
 ### commonモジュール
 
-- 現在、ドキュメントはありません。
+- **[Color](common/color_ja.md)**: RGBA色の値型（`igesio::Color`）
+  - 正準スケール $[0, 1]$ と、IGESスケール・8bit値・`float`配列・16進カラーコードとの相互変換
 
 ### entitiesモジュール
 

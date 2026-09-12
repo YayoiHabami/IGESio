@@ -418,24 +418,18 @@ class EntityGraphics : public IEntityGraphics {
     /// @return メインの色 (RGBA; [0, 1]の範囲)
     /// @note SetColorで色をオーバーライドした場合はその色を返す.
     ///       そうでない場合は、エンティティが保持する色を返す.
-    std::array<float, 4> GetColor() const override {
+    Color GetColor() const override {
         if (!is_color_overridden_) {
             auto base = std::dynamic_pointer_cast<const entities::EntityBase>(entity_);
-            if (base) {
-                auto [r, g, b] = base->GetColor().GetRGB();
-                return {static_cast<float>(r) / 100.0f,
-                        static_cast<float>(g) / 100.0f,
-                        static_cast<float>(b) / 100.0f,
-                        material_property_.opacity};
-            }
+            if (base) return base->GetColor().WithAlpha(material_property_.opacity);
         }
-        return {color_[0], color_[1], color_[2], color_[3]};
+        return color_;
     }
 
     /// @brief メインの色を設定する
     /// @param color メインの色 (RGBA; [0, 1]の範囲)
     /// @note 子要素 (複合ノード) を持つ場合は子にも伝播する.
-    void SetColor(const std::array<float, 4>& color) override {
+    void SetColor(const Color& color) override {
         IEntityGraphics::SetColor(color);
         for (auto& [st, list] : child_graphics_) {
             for (auto& child : list) {
@@ -448,13 +442,7 @@ class EntityGraphics : public IEntityGraphics {
     void ResetColor() override {
         is_color_overridden_ = false;
         auto base = std::dynamic_pointer_cast<const entities::EntityBase>(entity_);
-        if (base) {
-            auto [r, g, b] = base->GetColor().GetRGB();
-            color_[0] = static_cast<float>(r) / 100.0f;
-            color_[1] = static_cast<float>(g) / 100.0f;
-            color_[2] = static_cast<float>(b) / 100.0f;
-            color_[3] = 1.0f;  // 不透明度は1.0f (完全に不透明)
-        }
+        if (base) color_ = base->GetColor();  // IGESの色は不透明 (a = 1.0)
         // 子要素 (複合ノード) の色もデフォルトに戻す
         for (auto& [st, list] : child_graphics_) {
             for (auto& child : list) {
@@ -840,10 +828,11 @@ class EntityGraphics : public IEntityGraphics {
                               1, gl::kFalse, model.data());
         // 選択中はハイライト色をPULLし、そうでなければエンティティの色を使う
         // (選択色をオブジェクトへ焼き込まない)
-        const std::array<float, 4> color =
-                ctx.IsHighlighted(GetEntityID()) ? ctx.highlight_color : GetColor();
+        const std::array<float, 4> rgba =
+                (ctx.IsHighlighted(GetEntityID()) ? ctx.highlight_color : GetColor())
+                .ToFloatRGBA();
         gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
-                        1, color.data());
+                        1, rgba.data());
 
         // エンティティが面を持っている場合は関連するパラメータを設定
         if constexpr (has_surfaces) {

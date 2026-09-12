@@ -7,7 +7,6 @@
  */
 #include "igesio/graphics/core/i_entity_graphics.h"
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
@@ -35,7 +34,7 @@ IEntityGraphics::IEntityGraphics(const std::shared_ptr<i_graph::IOpenGL>& gl,
         : gl_(gl), use_entity_transform_(use_entity_transform) {}
 
 IEntityGraphics::IEntityGraphics(IEntityGraphics&& other) noexcept
-        : color_{other.color_[0], other.color_[1], other.color_[2], other.color_[3]},
+        : color_(other.color_),
           is_color_overridden_(other.is_color_overridden_),
           world_transform_(std::move(other.world_transform_)),
           use_entity_transform_(other.use_entity_transform_),
@@ -47,7 +46,7 @@ IEntityGraphics::IEntityGraphics(IEntityGraphics&& other) noexcept
 IEntityGraphics& IEntityGraphics::operator=(IEntityGraphics&& other) noexcept {
     if (this != &other) {
         // メンバをムーブ
-        std::copy(std::begin(other.color_), std::end(other.color_), color_);
+        color_ = other.color_;
         is_color_overridden_ = other.is_color_overridden_;
         world_transform_ = std::move(other.world_transform_);
         use_entity_transform_ = other.use_entity_transform_;
@@ -88,8 +87,8 @@ void IEntityGraphics::SetWorldTransform(const igesio::Matrix4d& matrix) {
     world_transform_ = matrix;
 }
 
-void IEntityGraphics::SetColor(const std::array<float, 4>&color) {
-    std::copy(color.begin(), color.end(), color_);
+void IEntityGraphics::SetColor(const Color& color) {
+    color_ = color;
     is_color_overridden_ = true;
 }
 

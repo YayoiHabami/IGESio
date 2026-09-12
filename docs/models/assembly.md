@@ -63,7 +63,7 @@ The display state `DisplayState` holds state that affects the derived rendering 
 | --- | --- |
 | `visible` | Visibility (display toggle). Even when hidden, it exists logically and is included in bounding box, validation, output, and queries |
 | `suppressed` | Suppression. Logically excludes the node from the model (cascades to descendants). When suppressed, it is not drawn and is also excluded from bounding box, validation, output, and queries |
-| `color_override` | Color override (RGB; $[0, 1]$ ). If unset, the member's color is used |
+| `color_override` | Color override (`std::optional<igesio::Color>`; RGB in $[0, 1]$ ). The alpha component is ignored (opacity is controlled by `opacity_override`). If unset, the member's color is used |
 | `opacity_override` | Opacity override ( $[0, 1]$ ). If unset, the member's value is used |
 
 An entity is drawn when `visible` and `!suppressed`.
@@ -132,7 +132,7 @@ The main editing members are shown below.
 | Display-state setters such as `SetVisible(visible)` | Set the display state (`DisplayState`) of this node |
 | `SetVisibleRecursive(visible)` | Set visibility for this node and all descendants at once |
 | `SetSuppressedRecursive(suppressed)` | Set suppression for this node and all descendants at once |
-| `SetColorOverrideRecursive(color)` | Set the color override for this node and all descendants at once |
+| `SetColorOverrideRecursive(color)` | Set the color override (`igesio::Color`; alpha ignored) for this node and all descendants at once |
 | `SetOpacityOverrideRecursive(opacity)` | Set the opacity override for this node and all descendants at once |
 | `ComposeGlobalTransform(transform)` | Compose an additional transform onto this node's global transform (non-recursive) |
 | `Revision()` | Get the model revision aggregated at the root |

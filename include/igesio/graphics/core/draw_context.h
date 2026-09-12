@@ -11,8 +11,7 @@
 #ifndef IGESIO_GRAPHICS_CORE_DRAW_CONTEXT_H_
 #define IGESIO_GRAPHICS_CORE_DRAW_CONTEXT_H_
 
-#include <array>
-
+#include "igesio/common/color.h"
 #include "igesio/common/id_generator.h"
 #include "igesio/models/selection_set.h"
 
@@ -32,13 +31,13 @@ enum class DisplayMode {
 };
 
 /// @brief 描画時に下ろす表示コンテキスト
-/// @note GLfloatはfloatのエイリアスのため、色は`std::array<float, 4>`で持つ
-///       (gladに依存させない). 描画側の`mainColor` uniformへそのまま渡せる.
+/// @note 色は`Color`で持ち、描画側が`mainColor` uniformへ転送する際に
+///       `ToFloatRGBA()`で単精度化する (gladに依存させない).
 struct DrawContext {
     /// @brief 選択集合への参照 (非所有). nullptrの場合はハイライトしない
     const models::SelectionSet* selection = nullptr;
     /// @brief ハイライト色 (RGBA; [0, 1])
-    std::array<float, 4> highlight_color = {1.0f, 0.6f, 0.0f, 1.0f};
+    Color highlight_color = {1.0, 0.6, 0.0, 1.0};
     /// @brief 親(複合/委譲ノード)が選択中で、子へハイライトを強制するか
     /// @note 複合ノードは描画を子(別ID)へ委譲するため、親が選択された場合は本フラグを
     ///       立てた複製コンテキストを子へ渡し、子のID判定に依らずハイライトさせる.

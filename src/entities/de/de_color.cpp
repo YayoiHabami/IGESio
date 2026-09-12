@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/de/de_color.h"
 
+#include <limits>
 #include <memory>
 
 #include "igesio/common/errors.h"
@@ -17,6 +18,26 @@ namespace i_ent = igesio::entities;
 using DEColor = i_ent::DEColor;
 
 }  // namespace
+
+
+
+i_ent::ColorNumber i_ent::ClosestColorNumber(const Color& color) {
+    double min_distance = std::numeric_limits<double>::max();
+    ColorNumber closest = ColorNumber::kBlack;
+
+    // 標準色 (kBlack=1 〜 kWhite=8) の全てを探索する.
+    // 厳密な小なり比較のため、同距離の場合は先に見つかった (番号の小さい) 色を採用する
+    for (int i = static_cast<int>(ColorNumber::kBlack);
+         i <= static_cast<int>(ColorNumber::kWhite); ++i) {
+        const auto number = static_cast<ColorNumber>(i);
+        const double distance = color.SquaredDistanceRGB(ToColor(number));
+        if (distance < min_distance) {
+            min_distance = distance;
+            closest = number;
+        }
+    }
+    return closest;
+}
 
 
 
@@ -36,46 +57,20 @@ DEColor::DEColor(const ColorNumber value) : DEColor::DEFieldWrapper() {
     SetColor(value);
 }
 
-std::array<double, 3> DEColor::GetRGB() const {
-    if (GetValueType() == DEFieldValueType::kDefault) {
-        // デフォルト値の場合は黒を返す
-        return {0.0, 0.0, 0.0};
-    }
-
+igesio::Color DEColor::GetRGB() const {
     if (GetValueType() == DEFieldValueType::kPositive) {
-        // 規定色が指定されている場合はそのRGB値を返す
-        switch (color_) {
-            case ColorNumber::kNoColor:
-                // 規定色が指定されていない場合は後の処理で対応
-                break;
-            case ColorNumber::kBlack:
-                return {0.0, 0.0, 0.0};
-            case ColorNumber::kRed:
-                return {100.0, 0.0, 0.0};
-            case ColorNumber::kGreen:
-                return {0.0, 100.0, 0.0};
-            case ColorNumber::kBlue:
-                return {0.0, 0.0, 100.0};
-            case ColorNumber::kYellow:
-                return {100.0, 100.0, 0.0};
-            case ColorNumber::kMagenta:
-                return {100.0, 0.0, 100.0};
-            case ColorNumber::kCyan:
-                return {0.0, 100.0, 100.0};
-            case ColorNumber::kWhite:
-                return {100.0, 100.0, 100.0};
-        }
+        // 規定色が指定されている場合はその色 (kNoColorは黒)
+        return ToColor(color_);
     }
 
-    // 規定色が指定されていない場合
     if (GetValueType() == DEFieldValueType::kPointer) {
         // ポインタが設定されている場合は、Color Definition Entityから取得する
         auto ptr = GetPointer<IColorDefinition>();
         if (ptr) return ptr->GetRGB();
     }
 
-    // デフォルト値または無効な状態の場合は黒を返す
-    return {0.0, 0.0, 0.0};
+    // デフォルト値または参照未解決の場合は黒を返す
+    return Color{};
 }
 
 void DEColor::SetColor(const ColorNumber value) {

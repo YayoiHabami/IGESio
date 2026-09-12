@@ -14,12 +14,12 @@
  */
 #include <gtest/gtest.h>
 
-#include <array>
 #include <memory>
 #include <vector>
 
 #include "mock_open_gl.h"
 
+#include "igesio/common/color.h"
 #include "igesio/common/errors.h"
 #include "igesio/entities/curves/circular_arc.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
@@ -50,13 +50,12 @@ std::shared_ptr<i_ent::CircularArc> MakeArc() {
 /// @brief エンティティ固有色 (オーバーライド無し時の mainColor) のオラクルを得る
 /// @note レンダラに投入するものとは別の描画オブジェクトから取得する.
 ///       GetColor()は{base_rgb, material_opacity}を返し、グローバルパラメータに依存しない.
-std::array<float, 4> NaturalColor(
+igesio::Color NaturalColor(
         const std::shared_ptr<i_ent::CircularArc>& arc,
         const std::shared_ptr<MockOpenGL>& gl) {
     auto ref = i_graph::CreateEntityGraphics(
         std::static_pointer_cast<const i_ent::IEntityIdentifier>(arc), gl);
-    auto c = ref->GetColor();
-    return {c[0], c[1], c[2], c[3]};
+    return ref->GetColor();
 }
 
 }  // namespace
@@ -74,7 +73,7 @@ TEST(OverridePullTest, ParentColorOverride_AppliesToDescendant) {
     }
 
     auto root = i_mod::MakeAssembly();
-    root->SetColorOverride(std::array<float, 3>{1.0f, 0.0f, 0.0f});
+    root->SetColorOverride(igesio::Color{1.0, 0.0, 0.0});
     auto child = i_mod::MakeAssembly();
     root->AddChildAssembly(child);
 
@@ -104,9 +103,9 @@ TEST(OverridePullTest, NearestColorOverrideWins) {
     }
 
     auto root = i_mod::MakeAssembly();
-    root->SetColorOverride(std::array<float, 3>{1.0f, 0.0f, 0.0f});
+    root->SetColorOverride(igesio::Color{1.0, 0.0, 0.0});
     auto child = i_mod::MakeAssembly();
-    child->SetColorOverride(std::array<float, 3>{0.0f, 1.0f, 0.0f});
+    child->SetColorOverride(igesio::Color{0.0, 1.0, 0.0});
     root->AddChildAssembly(child);
 
     auto arc = MakeArc();

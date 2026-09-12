@@ -133,7 +133,7 @@ igesio::models::Assembly* owner = root->FindOwner(some_id);
 | --- | --- |
 | 曲線 | `MakeCircle` / `MakeCircularArc` / `MakeLine` / `MakeRay` / `MakeEllipse` / `MakeLinearPath` / `MakeCompositeCurve` / `MakeBezierCurve` / `MakeClampedBSplineCurve` / `MakeRationalBSplineCurve` |
 | 曲面 | `MakeBezierSurface` / `MakeClampedBSplineSurface` / `MakeRationalBSplineSurface` / `MakeRuledSurface` / `MakeSurfaceOfRevolution` / `MakeTabulatedCylinder` / `MakeTrimmedSurface` / `MakeCurveOnAParametricSurface` |
-| その他 | `MakeTransformationMatrix` / `MakeTranslation` / `MakeRotation` / `MakeColorDefinition`系 |
+| その他 | `MakeTransformationMatrix` / `MakeTranslation` / `MakeRotation` / `MakeColorDefinition`系（`igesio::Color`（ $[0, 1]$ ）・0〜255値・16進カラーコードから作成） |
 
 追加は`AddEntity`（1件）または`AddEntities`（一括。参照解決を1回で行うため大量追加の際に高速）を用いる。
 
@@ -214,7 +214,7 @@ node->Metadata().lock.editable = false;
 ```cpp
 node->SetVisible(false);                       // サブツリーを非表示
 node->SetSuppressed(true);                     // 論理的に除外（BBox・出力等からも除外）
-node->SetColorOverride({{1.0f, 0.0f, 0.0f}});  // サブツリーを赤に塗る
+node->SetColorOverride(igesio::Color{1.0, 0.0, 0.0});  // サブツリーを赤に塗る（αは無視）
 node->SetOpacityOverride(0.5f);                // 半透明化（解除はstd::nullopt）
 // 全子孫へ一括適用するSet*Recursive版もある
 ```
@@ -376,7 +376,8 @@ setterはGLコンテキスト前提を持たない（GL操作は次回描画時�
 
 - `EnableAntialiasing(bool)` / `EnableTransparency(bool)`: MSAA・ブレンドの有効化（半透明描画には`EnableTransparency(true)`が必要）
 - `SetDisplayMode(mode)`: `kShaded`（面+エッジ）/ `kWireFrame`（エッジのみ）/ `kNoEdge`（面のみ）。独立した曲線エンティティは常に描画される
-- `SetBackgroundColor(r, g, b, a)` / `GetBackgroundColorRef()`
+- `SetBackgroundColor(color)` / `GetBackgroundColor()`: 背景色（`igesio::Color`; RGBA）
+- `SetAmbientColor(color)` / `GetAmbientColor()`: 環境光の色（`igesio::Color`; αは無視）
 - `SetDisplaySize(w, h)`: ウィンドウリサイズ時に呼ぶ（反映は次回`Draw()`）
 
 色の解決は「エンティティ固有色 → マテリアルオーバーライド → `DisplayState`の色/不透明度（最近接優先） → 選択ハイライト」の順に上書きされる。
@@ -408,7 +409,7 @@ lights[0].SetDirectional({-1.0f, -1.0f, -1.0f});   // 平行光源（方向）
 igesio::graphics::Light point;
 point.SetPoint({0.0f, 5.0f, 0.0f},                 // 点光源: 位置
                {1.0f, 0.1f, 0.0f},                 // 距離減衰係数 (C, L, Q)
-               {1.0f, 0.9f, 0.8f, 1.0f});          // 色 (RGBA)
+               igesio::Color{1.0, 0.9, 0.8});      // 色 (RGBA; αは省略時1.0)
 lights.push_back(point);
 ```
 
@@ -522,7 +523,7 @@ for (auto type : present_types) {
 renderer.SetDisplayFilter(filter);
 
 // 解析結果の強調: サブツリーを赤の半透明に
-target_node->SetColorOverride({{1.0f, 0.0f, 0.0f}});
+target_node->SetColorOverride(igesio::Color{1.0, 0.0, 0.0});
 target_node->SetOpacityOverride(0.4f);
 renderer.EnableTransparency(true);
 ```

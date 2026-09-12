@@ -296,7 +296,7 @@ TEST(ToolEntitiesTest, Color_DefaultAndOverride) {
             const auto surface = GetSingle<i_ent::EntityBase>(
                     *node, EntityType::kSurfaceOfRevolution);
             ASSERT_NE(surface, nullptr);
-            EXPECT_EQ(surface->GetColor().GetPointer(), color);
+            EXPECT_EQ(surface->GetDEColor().GetPointer(), color);
             EXPECT_FALSE(node->Display().opacity_override.has_value());
         }
     }

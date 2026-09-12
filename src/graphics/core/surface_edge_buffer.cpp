@@ -59,7 +59,7 @@ void SurfaceEdgeBuffer::BuildFromSegments(
 
 void SurfaceEdgeBuffer::DrawWithState(
         gl::Uint shader, const igesio::Matrix4f& model,
-        const std::array<float, 4>& color, double line_width,
+        const Color& color, double line_width,
         const bool highlighted) const {
     if (vertex_count_ == 0 || !gl_) return;
 
@@ -69,8 +69,9 @@ void SurfaceEdgeBuffer::DrawWithState(
                    static_cast<gl::Float>(line_width));
     gl_->UniformMatrix4fv(gl_->GetUniformLocation(shader, "model"),
                           1, gl::kFalse, model.data());
+    const std::array<float, 4> rgba = color.ToFloatRGBA();
     gl_->Uniform4fv(gl_->GetUniformLocation(shader, "mainColor"),
-                    1, color.data());
+                    1, rgba.data());
 
     // ハイライト中は深度を僅かに手前へ圧縮し、隣接面側の同一エッジとの
     // Zファイト (選択色と通常色の縞) を描画順に依らず選択色側で確定させる

@@ -99,7 +99,7 @@ class CurveOnAParametricSurfaceGraphics
     /// @brief メインの色を設定する
     /// @param color メインの色 (RGBA; [0, 1]の範囲)
     /// @note 描画は子要素C(t)に委譲されるため、色も子要素へ伝播させる
-    void SetColor(const std::array<float, 4>&) override;
+    void SetColor(const Color&) override;
 
     /// @brief 色をデフォルトのエンティティの色に戻す
     /// @note 描画は子要素C(t)に委譲されるため、子要素の色もリセットする

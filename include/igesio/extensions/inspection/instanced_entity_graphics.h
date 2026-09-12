@@ -21,13 +21,13 @@
 #ifndef IGESIO_EXTENSIONS_INSPECTION_INSTANCED_ENTITY_GRAPHICS_H_
 #define IGESIO_EXTENSIONS_INSPECTION_INSTANCED_ENTITY_GRAPHICS_H_
 
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/graphics/core/entity_graphics.h"
 #include "igesio/extensions/inspection/instanced_entity.h"
@@ -104,7 +104,7 @@ class InstancedEntityGraphics
     void SetWorldTransform(const igesio::Matrix4d& matrix) override;
 
     /// @brief メインの色を設定する (各メンバへ委譲)
-    void SetColor(const std::array<float, 4>& color) override;
+    void SetColor(const igesio::Color& color) override;
     /// @brief 色をデフォルトのエンティティの色に戻す (各メンバへ委譲)
     void ResetColor() override;
 

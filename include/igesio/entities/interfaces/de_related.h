@@ -15,9 +15,11 @@
 #ifndef IGESIO_ENTITIES_INTERFACES_DE_RELATED_H_
 #define IGESIO_ENTITIES_INTERFACES_DE_RELATED_H_
 
+#include <array>
 #include <memory>
 #include <string>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 
@@ -133,15 +135,15 @@ class IColorDefinition : public virtual IEntityIdentifier {
     /// @return 色名
     virtual std::string GetColorName() const = 0;
 
-    /// @brief RGB値を取得する (0.0〜100.0)
-    /// @return RGB値
-    virtual std::array<double, 3> GetRGB() const = 0;
+    /// @brief 定義色を取得する
+    /// @return 定義色 (a = 1.0)
+    virtual Color GetRGB() const = 0;
 
-    /// @brief CMY値を取得する (0.0〜100.0)
+    /// @brief CMY値を取得する ([0, 1])
     /// @return CMY値
     std::array<double, 3> GetCMY() const {
-        auto rgb = GetRGB();
-        return {100.0 - rgb[0], 100.0 - rgb[1], 100.0 - rgb[2]};
+        const Color rgb = GetRGB();
+        return {1.0 - rgb.r, 1.0 - rgb.g, 1.0 - rgb.b};
     }
 };
 

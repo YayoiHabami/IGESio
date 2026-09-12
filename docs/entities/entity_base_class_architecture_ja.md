@@ -196,7 +196,7 @@ classDiagram
 　以下に示すメンバ関数は、対応するDEフィールドがポインタを持つものです。これらのメンバ関数は、ポインタなどを格納する個別クラスを戻り値/引数とする関数として実装されます。以下の7つのフィールドは、
 
 - const参照をを返す`GetXxx()`メンバ関数
-  - 例: `const DEColor& GetColor() const;`
+  - 例: `const DEColor& GetDEColor() const;`
 - デフォルト状態（無効値が設定された状態）に戻す`ResetXxx()`メンバ関数
   - 例: `void ResetColor();`
 - ポインタや値を変更する`OverwriteXxx(...)`メンバ関数
@@ -213,7 +213,9 @@ classDiagram
 | 6th | (c) | `GetView()` <br> `ResetView()` <br> `OverwriteView(...)` |
 | 7th | (a) | `GetTransformationMatrix()` <br> `ResetTransformationMatrix()` <br> `OverwriteTransformationMatrix(...)` |
 | 8th | (a) | `GetLabelDisplayAssociativity()` <br> `ResetLabelDisplayAssociativity()` <br> `OverwriteLabelDisplayAssociativity(...)` |
-| 13th | (b) | `GetColor()` <br> `ResetColor()` <br> `OverwriteColor(...)` |
+| 13th | (b) | `GetDEColor()` <br> `ResetColor()` <br> `OverwriteColor(...)` |
+
+> **13番目のフィールドについて**：色フィールドのみ、フィールド固有の値型を持ちます。ラッパーは`GetDEColor()`で取得し、`Color GetColor() const`は解決済みの表示色（標準色、参照先のColor Definitionエンティティの定義色、未設定なら黒）を[`igesio::Color`](../common/color_ja.md)として返します。`ColorDefinition`（Type 314）は`GetColor()`をオーバーライドし、自身の定義色を返します。
 
 > **「type」列の値**：
 >

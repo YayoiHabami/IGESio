@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/entity_type.h"
@@ -115,7 +116,7 @@ class IEntityGraphics {
     /// @note フラグメントシェーダーの`mainColor`変数に対応する.
     /// @note オーバーライドした、メインで使用する色. 例えばサーフェスの場合、
     ///       面の色に相当し、境界線の色は別途設定する必要がある
-    float color_[4] = {.8f, .8f, .8f, 1.0f};  // デフォルトは薄いグレー
+    Color color_ = {0.8, 0.8, 0.8, 1.0};  // デフォルトは薄いグレー
     /// @brief 色をオーバーライドしたか. falseの場合は、エンティティ側が指定する色
     ///        を使用する. 取得に失敗した場合や、trueの場合は`color_`を使用する
     bool is_color_overridden_ = false;
@@ -296,14 +297,14 @@ class IEntityGraphics {
     /// @return メインの色 (RGBA; [0, 1]の範囲)
     /// @note SetColorで色をオーバーライドした場合はその色を返す.
     ///       そうでない場合は、エンティティが保持する色を返す.
-    virtual std::array<float, 4> GetColor() const = 0;
+    virtual Color GetColor() const = 0;
 
     /// @brief メインの色を設定する
     /// @param color メインの色 (RGBA; [0, 1]の範囲)
     /// @note この関数で設定可能な色は描画上の色であり、エンティティが保持する
     ///       (IGES側で定義する) 色とは異なる.したがって、この関数で色を設定したとしても、
     ///       エンティティのインスタンスの色情報は変更されない.
-    virtual void SetColor(const std::array<float, 4>&);
+    virtual void SetColor(const Color&);
 
     /// @brief 色をデフォルトのエンティティの色に戻す
     virtual void ResetColor() = 0;

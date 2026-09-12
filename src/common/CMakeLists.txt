@@ -6,6 +6,7 @@ add_library(igesio_common STATIC
     id_generator.cpp
     serialization.cpp
     iges_parameter_vector.cpp
+    color.cpp
 )
 
 # Set the source and include directories

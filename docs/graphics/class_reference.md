@@ -26,8 +26,8 @@
 |---|---|
 | `SetWorldTransform(matrix)` | ワールド変換行列を設定する |
 | `GetWorldTransform()` | ワールド変換行列を取得する |
-| `SetColor(color)` | 描画色をオーバーライドする (IGES側の色情報は変更しない) |
-| `GetColor()` | 現在の描画色を返す |
+| `SetColor(color)` | 描画色 (`igesio::Color`; RGBA) をオーバーライドする (IGES側の色情報は変更しない) |
+| `GetColor()` | 現在の描画色を`igesio::Color`で返す (オーバーライド無しならエンティティ色 + マテリアルの不透明度) |
 | `ResetColor()` | 色をエンティティのIGES色に戻す |
 | `GetLineWidth()` | 線幅を返す |
 | `SetGlobalParam(param)` | 描画グローバルパラメータを設定する |
@@ -95,7 +95,8 @@
 | `Camera()` | カメラへの参照を返す |
 | `Light()` | 光源への参照を返す |
 | `SetDisplaySize(w, h)` | 描画対象サイズを設定する |
-| `SetBackgroundColor(r, g, b, a)` | 背景色を設定する |
+| `SetBackgroundColor(color)` / `GetBackgroundColor()` | 背景色 (`igesio::Color`; RGBA) を設定・取得する |
+| `SetAmbientColor(color)` / `GetAmbientColor()` | 環境光の色 (`igesio::Color`; α成分は無視) を設定・取得する |
 | `SetScene(scene)` | 描画対象の`models::Scene`を設定する (rootと選択を一元管理) |
 | `SetDisplayFilter(filter)` / `GetDisplayFilter()` | エンティティ型単位の表示フィルタ(レンダラ単位のビュー状態)を設定・取得する |
 | `SetMaterialProperty(id, material)` / `ClearMaterialProperty(id)` | エンティティ毎の描画プロパティのオーバーライドを設定・解除する(GLコンテキスト前提を持たず、適用は次回の描画/ピック時) |
@@ -138,7 +139,7 @@
 | メンバ | 説明 |
 |---|---|
 | `selection` | 参照する`SelectionSet`(非所有) |
-| `highlight_color` | 選択ハイライト色 (RGBA) |
+| `highlight_color` | 選択ハイライト色 (`igesio::Color`; RGBA) |
 | `display_mode` | 表示モード(`DisplayMode`; 面/面エッジの描画組み合わせ)。メッシュ系グラフィックスがエッジ集合(全エッジ/特徴エッジ)の選択に使用する |
 | `IsHighlighted(id)` | 指定IDが選択中(ハイライト対象)かを返す |
 

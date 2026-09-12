@@ -515,27 +515,20 @@ void EntityRenderer::SetDisplaySize(const int width, const int height) {
     display_height_ = height;
 }
 
-std::array<float, 4> EntityRenderer::GetBackgroundColor() const {
+igesio::Color EntityRenderer::GetBackgroundColor() const {
     return background_color_;
 }
 
-std::array<float, 4>& EntityRenderer::GetBackgroundColorRef() {
-    return background_color_;
+void EntityRenderer::SetBackgroundColor(const Color& color) {
+    background_color_ = color;
 }
 
-void EntityRenderer::SetBackgroundColor(
-        const float red, const float green,
-        const float blue, const float alpha) {
-    background_color_ = {red, green, blue, alpha};
-}
-
-std::array<float, 3> EntityRenderer::GetAmbientColor() const {
+igesio::Color EntityRenderer::GetAmbientColor() const {
     return ambient_color_;
 }
 
-void EntityRenderer::SetAmbientColor(
-        const float red, const float green, const float blue) {
-    ambient_color_ = {red, green, blue};
+void EntityRenderer::SetAmbientColor(const Color& color) {
+    ambient_color_ = color;
 }
 
 void EntityRenderer::SetSettings(const GraphicsSettings& settings) {
@@ -599,8 +592,8 @@ void EntityRenderer::Draw() {
     if (display_width_ <= 0 || display_height_ <= 0) return;
 
     // 背景色と深度バッファをクリア
-    gl_->ClearColor(background_color_[0], background_color_[1],
-                 background_color_[2], background_color_[3]);
+    const std::array<float, 4> bg = background_color_.ToFloatRGBA();
+    gl_->ClearColor(bg[0], bg[1], bg[2], bg[3]);
     gl_->Clear(gl::kColorBufferBit | gl::kDepthBufferBit);
 
     // シーン(描画の基準ツリー)が未設定なら描画しない (描画はScene走査に一本化)
@@ -682,7 +675,7 @@ void EntityRenderer::RebuildDrawList() {
 
 void EntityRenderer::WalkAssembly(
         const models::Assembly& node, const igesio::Matrix4d& parent_accum,
-        const std::optional<std::array<float, 3>>& inherited_color,
+        const std::optional<Color>& inherited_color,
         const std::optional<float>& inherited_opacity) {
     const auto& disp = node.Display();
     // 非表示・抑制のサブツリーは描画対象から除外する
@@ -730,15 +723,14 @@ void EntityRenderer::WalkAssembly(
 
         // 解決したオーバーライドをフレーム毎にPUSHする (world_transform_と同じ派生キャッシュ).
         // まずentity固有色へ戻し、指定があるRGB/不透明度のみ差し替える
-        // (選択ハイライトは描画時にPULLされ、これより優先される)
+        // (選択ハイライトは描画時にPULLされ、これより優先される).
+        // color_overrideのα成分は無視し、不透明度はopacity_overrideのみが決める
         graphics->ResetColor();
         if (color_ovr || opacity_ovr) {
-            const auto natural = graphics->GetColor();  // {base_rgb, material_opacity}
-            graphics->SetColor({
-                color_ovr ? (*color_ovr)[0] : natural[0],
-                color_ovr ? (*color_ovr)[1] : natural[1],
-                color_ovr ? (*color_ovr)[2] : natural[2],
-                opacity_ovr ? *opacity_ovr : natural[3]});
+            const Color natural = graphics->GetColor();  // {base_rgb, material_opacity}
+            Color composed = color_ovr ? color_ovr->WithAlpha(natural.a) : natural;
+            if (opacity_ovr) composed.a = *opacity_ovr;
+            graphics->SetColor(composed);
         }
 
         // ピック用の平坦リストへエンティティ毎に一意に収集する.
@@ -760,6 +752,7 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {
         static_cast<float>(display_width_), static_cast<float>(display_height_)};
 
     // 光源パラメータを平坦バッファへ詰める (シェーダー間で共有のため一度だけ構築)
+    const std::array<float, 3> ambient = ambient_color_.ToFloatRGB();
     const int num_lights = std::min(static_cast<int>(lights_.size()), kMaxLights);
     std::vector<float> light_pos(3 * num_lights);
     std::vector<float> light_att(3 * num_lights);
@@ -768,7 +761,8 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {
         const auto& l = lights_[i];
         std::copy_n(l.position.data(), 3, light_pos.begin() + 3 * i);
         std::copy_n(l.attenuation.data(), 3, light_att.begin() + 3 * i);
-        std::copy_n(l.color.data(), 4, light_col.begin() + 4 * i);
+        const std::array<float, 4> rgba = l.color.ToFloatRGBA();
+        std::copy_n(rgba.data(), 4, light_col.begin() + 4 * i);
     }
 
     for (const auto& [shader_id, program_id] : shader_programs_) {
@@ -798,7 +792,7 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {
             gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "viewPos_WorldSpace"),
                             1, camera_.GetPosition().data());
             gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "ambientColor"),
-                            1, ambient_color_.data());
+                            1, ambient.data());
             gl_->Uniform1i(gl_->GetUniformLocation(program_id, "numLights"),
                            num_lights);
             if (num_lights > 0) {

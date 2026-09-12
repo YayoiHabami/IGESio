@@ -757,8 +757,8 @@ TEST(CircularArcTest, Expand_CopiesDeFields) {
 
     const auto mirrored = arc->ExpandForExport().replacement;
     ASSERT_NE(mirrored, nullptr);
-    EXPECT_EQ(mirrored->GetColor().GetID(), color->GetID());
-    ASSERT_NE(mirrored->GetColor().GetPointer(), nullptr);
+    EXPECT_EQ(mirrored->GetDEColor().GetID(), color->GetID());
+    ASSERT_NE(mirrored->GetDEColor().GetPointer(), nullptr);
     EXPECT_EQ(mirrored->GetLevel().GetLevelNumber(), 5);
     EXPECT_EQ(mirrored->GetEntityLabel(), "ARC");
     EXPECT_EQ(mirrored->GetLineFontPattern().GetPattern(),

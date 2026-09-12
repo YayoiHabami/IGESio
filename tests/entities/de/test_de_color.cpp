@@ -8,27 +8,33 @@
  */
 #include <gtest/gtest.h>
 
+#include <array>
 #include <memory>
 #include <string>
 
+#include "igesio/common/color.h"
 #include "igesio/common/errors.h"
 #include "igesio/entities/de/de_color.h"
 
 namespace {
 
 namespace i_ent = igesio::entities;
+using igesio::Color;
+
+/// @brief 浮動小数点比較の許容誤差
+constexpr double kTol = 1e-9;
 
 /// @brief Mockクラス: IColorDefinitionのテスト用
 class MockColorDefinition : public i_ent::IColorDefinition {
  private:
     igesio::ObjectID id_;
     std::string name_;
-    std::array<double, 3> rgb_;
+    Color rgb_;
 
  public:
     explicit MockColorDefinition(const igesio::ObjectID& id,
                                  const std::string& name = "Custom Color",
-                                 const std::array<double, 3>& rgb = {10.0, 20.0, 30.0})
+                                 const Color& rgb = Color{0.1, 0.2, 0.3})
         : id_(id), name_(name), rgb_(rgb) {}
 
     const igesio::ObjectID& GetID() const override { return id_; }
@@ -37,7 +43,7 @@ class MockColorDefinition : public i_ent::IColorDefinition {
         return i_ent::EntityType::kColorDefinition;
     }
     std::string GetColorName() const override { return name_; }
-    std::array<double, 3> GetRGB() const override { return rgb_; }
+    Color GetRGB() const override { return rgb_; }
 };
 
 }  // namespace
@@ -60,9 +66,9 @@ class DEColorTest : public ::testing::Test {
                 static_cast<uint16_t>(i_ent::EntityType::kColorDefinition));
 
         color_def_ptr_1 = std::make_shared<MockColorDefinition>(
-                id_1, "Custom Red", std::array<double, 3>{80.0, 20.0, 20.0});
+                id_1, "Custom Red", Color{0.8, 0.2, 0.2});
         color_def_ptr_2 = std::make_shared<MockColorDefinition>(
-                id_2, "Custom Blue", std::array<double, 3>{20.0, 20.0, 80.0});
+                id_2, "Custom Blue", Color{0.2, 0.2, 0.8});
     }
 };
 
@@ -83,7 +89,7 @@ TEST_F(DEColorTest, DefaultConstructor) {
     EXPECT_EQ(nullptr, color.GetPointer());
 
     // デフォルトの色は黒
-    EXPECT_EQ((std::array<double, 3>{0.0, 0.0, 0.0}), color.GetRGB());
+    EXPECT_EQ(Color{}, color.GetRGB());
 }
 
 // IDを指定するコンストラクタのテスト
@@ -109,7 +115,7 @@ TEST_F(DEColorTest, ConstructorWithColorNumber) {
     EXPECT_EQ(3, color.GetValue());
     EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
-    EXPECT_EQ((std::array<double, 3>{0.0, 100.0, 0.0}), color.GetRGB());
+    EXPECT_EQ((Color{0.0, 1.0, 0.0}), color.GetRGB());
 }
 
 // int値を指定するコンストラクタのテスト
@@ -119,7 +125,7 @@ TEST_F(DEColorTest, ConstructorWithInt) {
     EXPECT_EQ(i_ent::DEFieldValueType::kPositive, color.GetValueType());
     EXPECT_EQ(4, color.GetValue());
     EXPECT_FALSE(color.HasValidPointer());
-    EXPECT_EQ((std::array<double, 3>{0.0, 0.0, 100.0}), color.GetRGB());
+    EXPECT_EQ((Color{0.0, 0.0, 1.0}), color.GetRGB());
 }
 
 // int値を指定するコンストラクタのテスト（無効値 = デフォルト値）
@@ -130,7 +136,7 @@ TEST_F(DEColorTest, ConstructorWithIntZeroIsDefault) {
     EXPECT_EQ(0, color.GetValue());
     EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
-    EXPECT_EQ((std::array<double, 3>{0.0, 0.0, 0.0}), color.GetRGB());
+    EXPECT_EQ(Color{}, color.GetRGB());
 }
 
 // int値を指定するコンストラクタのテスト（異常値）
@@ -240,7 +246,7 @@ TEST_F(DEColorTest, SetColorInvalidatesPointer) {
     EXPECT_EQ(6, color.GetValue());
     EXPECT_EQ(igesio::IDGenerator::UnsetID(), color.GetID());
     EXPECT_FALSE(color.HasValidPointer());
-    EXPECT_EQ((std::array<double, 3>{100.0, 0.0, 100.0}), color.GetRGB());
+    EXPECT_EQ((Color{1.0, 0.0, 1.0}), color.GetRGB());
 }
 
 
@@ -271,14 +277,20 @@ TEST_F(DEColorTest, GetValueIntegrity) {
 
 // GetCMYのテスト
 TEST_F(DEColorTest, GetCMY) {
-    // 正の値を設定 -> RGB(0, 100, 100)
+    // 正の値を設定 -> RGB(0, 1, 1)
     i_ent::DEColor color_positive(i_ent::ColorNumber::kCyan);
-    EXPECT_EQ((std::array<double, 3>{100.0, 0.0, 0.0}), color_positive.GetCMY());
+    const auto cmy_positive = color_positive.GetCMY();
+    EXPECT_NEAR(cmy_positive[0], 1.0, kTol);
+    EXPECT_NEAR(cmy_positive[1], 0.0, kTol);
+    EXPECT_NEAR(cmy_positive[2], 0.0, kTol);
 
-    // ポインタを設定 -> RGB(80, 20, 20)
+    // ポインタを設定 -> RGB(0.8, 0.2, 0.2)
     i_ent::DEColor color_pointer(id_1);
     color_pointer.SetPointer(color_def_ptr_1);
-    EXPECT_EQ((std::array<double, 3>{20.0, 80.0, 80.0}), color_pointer.GetCMY());
+    const auto cmy_pointer = color_pointer.GetCMY();
+    EXPECT_NEAR(cmy_pointer[0], 0.2, kTol);
+    EXPECT_NEAR(cmy_pointer[1], 0.8, kTol);
+    EXPECT_NEAR(cmy_pointer[2], 0.8, kTol);
 }
 
 
@@ -309,4 +321,56 @@ TEST_F(DEColorTest, Reset) {
     // 同様にデフォルト値にリセットされるはず
     EXPECT_EQ(i_ent::DEFieldValueType::kDefault, color2.GetValueType());
     EXPECT_EQ(0, color2.GetValue());
+}
+
+
+
+/**
+ * ToColor / ClosestColorNumber のテスト
+ */
+
+// 標準色8色 (kBlack〜kWhite) とkNoColorの対応
+TEST(ColorNumberConversionTest, ToColor_StandardColors) {
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kNoColor), Color{});
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kBlack), Color{});
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kRed), (Color{1.0, 0.0, 0.0}));
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kGreen), (Color{0.0, 1.0, 0.0}));
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kBlue), (Color{0.0, 0.0, 1.0}));
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kYellow), (Color{1.0, 1.0, 0.0}));
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kMagenta), (Color{1.0, 0.0, 1.0}));
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kCyan), (Color{0.0, 1.0, 1.0}));
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kWhite), (Color{1.0, 1.0, 1.0}));
+    // 標準色は不透明
+    EXPECT_EQ(i_ent::ToColor(i_ent::ColorNumber::kRed).a, 1.0);
+}
+
+// 標準色8色はすべて自分自身に写像される
+TEST(ColorNumberConversionTest, ClosestColorNumber_PureStandardColors) {
+    for (int i = 1; i <= 8; ++i) {
+        const auto number = static_cast<i_ent::ColorNumber>(i);
+        EXPECT_EQ(i_ent::ClosestColorNumber(i_ent::ToColor(number)), number)
+                << "color number " << i;
+    }
+}
+
+// 標準色近傍の色は最も近い標準色へ写像される
+TEST(ColorNumberConversionTest, ClosestColorNumber_NearColors) {
+    EXPECT_EQ(i_ent::ClosestColorNumber(Color{0.9, 0.9, 0.9}),
+              i_ent::ColorNumber::kWhite);
+    EXPECT_EQ(i_ent::ClosestColorNumber(Color{0.1, 0.1, 0.1}),
+              i_ent::ColorNumber::kBlack);
+    EXPECT_EQ(i_ent::ClosestColorNumber(Color{0.9, 0.05, 0.05}),
+              i_ent::ColorNumber::kRed);
+}
+
+// 同距離の場合は番号の小さい標準色が選ばれる (中間灰色は全8色から等距離)
+TEST(ColorNumberConversionTest, ClosestColorNumber_TieBreaksToSmallerNumber) {
+    EXPECT_EQ(i_ent::ClosestColorNumber(Color{0.5, 0.5, 0.5}),
+              i_ent::ColorNumber::kBlack);
+}
+
+// α成分は距離に影響しない
+TEST(ColorNumberConversionTest, ClosestColorNumber_IgnoresAlpha) {
+    EXPECT_EQ(i_ent::ClosestColorNumber(Color{0.9, 0.9, 0.9, 0.0}),
+              i_ent::ColorNumber::kWhite);
 }

@@ -159,7 +159,7 @@ std::uint64_t InstancedEntityGraphics::CurrentGeometryKey() const {
     return key;
 }
 
-void InstancedEntityGraphics::SetColor(const std::array<float, 4>& color) {
+void InstancedEntityGraphics::SetColor(const igesio::Color& color) {
     EntityGraphics::SetColor(color);
     for (auto& g : member_graphics_) {
         if (g) g->SetColor(color);

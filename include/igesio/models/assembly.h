@@ -12,7 +12,6 @@
 #ifndef IGESIO_MODELS_ASSEMBLY_H_
 #define IGESIO_MODELS_ASSEMBLY_H_
 
-#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -23,6 +22,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/common/id_generator.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/numerics/geometric/bounding_box.h"
@@ -122,7 +122,8 @@ struct DisplayState {
     ///       (子孫も連鎖). 描画条件は visible かつ !suppressed.
     bool suppressed = false;
     /// @brief 色のオーバーライド (RGB; [0, 1]). 未設定の場合はメンバの色を使用する
-    std::optional<std::array<float, 3>> color_override;
+    /// @note α成分は無視する (不透明度はopacity_overrideで独立に指定する)
+    std::optional<Color> color_override;
     /// @brief 不透明度のオーバーライド ([0, 1]). 未設定の場合はメンバの値を使用する
     std::optional<float> opacity_override;
 };
@@ -466,9 +467,10 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     }
 
     /// @brief 色のオーバーライドを設定する
-    /// @param color 設定する色 (RGB; [0,1]). std::nulloptでオーバーライドを解除する
+    /// @param color 設定する色 (RGB; [0,1]. α成分は無視する).
+    ///        std::nulloptでオーバーライドを解除する
     /// @note 値が変化したときのみモデルリビジョンをバンプする.
-    void SetColorOverride(const std::optional<std::array<float, 3>>& color) {
+    void SetColorOverride(const std::optional<Color>& color) {
         if (display_.color_override == color) return;
         display_.color_override = color;
         BumpRevision();
@@ -614,9 +616,9 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     void SetSuppressedRecursive(bool suppressed);
 
     /// @brief 自ノードと全子孫の色オーバーライドを一括設定する
-    /// @param color 設定する色 (RGB; [0,1]). std::nulloptでオーバーライドを解除する
-    void SetColorOverrideRecursive(
-            const std::optional<std::array<float, 3>>& color);
+    /// @param color 設定する色 (RGB; [0,1]. α成分は無視する).
+    ///        std::nulloptでオーバーライドを解除する
+    void SetColorOverrideRecursive(const std::optional<Color>& color);
 
     /// @brief 自ノードと全子孫の不透明度オーバーライドを一括設定する
     /// @param opacity 設定する不透明度 ([0,1]). std::nulloptで解除する

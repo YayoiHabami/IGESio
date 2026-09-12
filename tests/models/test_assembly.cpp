@@ -38,7 +38,6 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <array>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -47,6 +46,7 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/reader.h"
 #include "igesio/entities/entity_base.h"
 #include "igesio/models/assembly.h"
@@ -775,7 +775,7 @@ TEST_F(AssemblyTest, SetColorOverrideRecursive_AppliesAndClears) {
     auto child = MakeAssembly();
     root->AddChildAssembly(child);
 
-    const std::array<float, 3> red{1.0f, 0.0f, 0.0f};
+    const igesio::Color red{1.0, 0.0, 0.0};
     root->SetColorOverrideRecursive(red);
     ASSERT_TRUE(child->Display().color_override.has_value());
     EXPECT_EQ(child->Display().color_override.value(), red);
@@ -1068,7 +1068,7 @@ TEST_F(AssemblyTest, SetSuppressed_BumpsOnlyOnChange) {
 // SetColorOverride: 値が変化したときのみバンプされる (nullopt→nulloptも非バンプ)
 TEST_F(AssemblyTest, SetColorOverride_BumpsOnlyOnChange) {
     auto root = MakeAssembly();
-    const std::array<float, 3> red{1.0f, 0.0f, 0.0f};
+    const igesio::Color red{1.0, 0.0, 0.0};
 
     // 初期状態(nullopt)への同値再設定は非バンプ
     const auto initial = root->Revision();

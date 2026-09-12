@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/graphics/core/shader_code.h"
 #include "igesio/graphics/graphics_registry.h"
 #include "igesio/graphics/shader_registry.h"
@@ -162,13 +163,16 @@ void CoordinateFrameGroupGraphics::Draw(
         // 太線化はGS (kFrameLineGeom) が行う. viewportSizeはレンダラが、線幅[px]は
         // 各DrawWithState (引数widthからlineWidth uniform) が設定する.
         if (!x_axis_buffer_.IsEmpty()) {
-            x_axis_buffer_.DrawWithState(shader, model, entity_->XColor(), width);
+            x_axis_buffer_.DrawWithState(
+                    shader, model, igesio::Color::FromFloatRGBA(entity_->XColor()), width);
         }
         if (!y_axis_buffer_.IsEmpty()) {
-            y_axis_buffer_.DrawWithState(shader, model, entity_->YColor(), width);
+            y_axis_buffer_.DrawWithState(
+                    shader, model, igesio::Color::FromFloatRGBA(entity_->YColor()), width);
         }
         if (!z_axis_buffer_.IsEmpty()) {
-            z_axis_buffer_.DrawWithState(shader, model, entity_->ZColor(), width);
+            z_axis_buffer_.DrawWithState(
+                    shader, model, igesio::Color::FromFloatRGBA(entity_->ZColor()), width);
         }
         return;
     }

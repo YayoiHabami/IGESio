@@ -155,9 +155,10 @@
 using Vector2d = iges::Vector2d;
 namespace ent = iges::entities;
 
-// 色の値を保持するための配列: IGESではRGB値を0-100の範囲で表現
-// 格納されている値の種類に関わらず、double型の配列で取得可能
-std::array<double, 3> color;
+// 解決済みの色: `igesio::Color`はRGBA各成分を[0, 1]で保持する
+// (IGESの色は常に不透明で a = 1.0). フィールドに格納されている値の種類に
+// 関わらず、同じ方法で取得できる
+igesio::Color color;
 
 // 半径5.0、原点中心の円エンティティを作成
 // 各DEフィールドはデフォルト値で初期化される
@@ -165,20 +166,22 @@ auto center = Vector2d(0.0, 0.0);
 auto circle = ent::MakeCircle(center, 5.0);
 
 // デフォルトの色を取得
-circle->GetColor().GetValueType();    // DEFieldValueType::kDefault
-color = circle->GetColor().GetRGB();  // {0, 0, 0}
+circle->GetDEColor().GetValueType();  // DEFieldValueType::kDefault
+color = circle->GetColor();           // {0, 0, 0, 1}
 
 // 規定色に設定（列挙体値）
 circle->OverwriteColor(ent::ColorNumber::kCyan);
-circle->GetColor().GetValueType();    // DEFieldValueType::kPositive
-color = circle->GetColor().GetRGB();  // {0, 100, 100}
+circle->GetDEColor().GetValueType();  // DEFieldValueType::kPositive
+color = circle->GetColor();           // {0, 1, 1, 1}
 
 // 色エンティティを作成して設定（ポインタ値）
-auto color_def = ent::MakeColorDefinition({50.0, 100.0, 30.0}, "Light Green");
+auto color_def = ent::MakeColorDefinition(igesio::Color{0.5, 1.0, 0.3}, "Light Green");
 circle->OverwriteColor(color_def);
-circle->GetColor().GetValueType();    // DEFieldValueType::kPointer
-color = circle->GetColor().GetRGB();  // {50, 100, 30}
+circle->GetDEColor().GetValueType();  // DEFieldValueType::kPointer
+color = circle->GetColor();           // {0.5, 1, 0.3, 1}
 ```
+
+　`GetDEColor()`は13番目のフィールドの`DEColor`ラッパー（値の種類・ID・ポインタ）を返し、`GetColor()`は解決済みの表示色を[`igesio::Color`](../common/color_ja.md)として返します。
 
 ### クラスインターフェースの主要メンバ
 
@@ -234,17 +237,17 @@ class DEFieldWrapper { ... };
 　以下は、[例: 色フィールドの操作](#例-色フィールドの操作)で作成したコードの続きです。
 
 ```cpp
-circle->GetColor().HasValidPointer();  // true - Light GreenのColorDefinitionが設定されている
+circle->GetDEColor().HasValidPointer();  // true - Light GreenのColorDefinitionが設定されている
 
 // 新しい色定義エンティティを作成
-auto new_color_def = ent::MakeColorDefinition({100.0, 50.0, 0.0}, "Orange");
+auto new_color_def = ent::MakeColorDefinition(igesio::Color{1.0, 0.5, 0.0}, "Orange");
 
 // 新しい色定義エンティティのポインタで上書き
 // `OverwritePointer`の内部では、`DEColor::OverwriteID`と`DEColor::SetPointer`が呼ばれる
-circle.OverwriteColor(new_color_def);
+circle->OverwriteColor(new_color_def);
 
 // 新しい色を取得
-color = circle->GetColor().GetRGB();  // {100, 50, 0}
+color = circle->GetColor();  // {1, 0.5, 0, 1}
 ```
 
 　`EntityBase`継承クラスでは、各DEフィールドへのconst参照しか提供されません。したがって、上の例のように新しい値を設定する場合は、そのフィールドに対応する`Overwrite`系関数（色フィールドの場合は`EntityBase::OverwriteColor`）を使用します。

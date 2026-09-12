@@ -8,6 +8,9 @@
 #ifndef IGESIO_GRAPHICS_CORE_LIGHT_H_
 #define IGESIO_GRAPHICS_CORE_LIGHT_H_
 
+#include <array>
+
+#include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 
 
@@ -42,14 +45,14 @@ struct Light {
     std::array<float, 3> attenuation = {0.0f, 0.0f, 0.0f};
 
     /// @brief 光源の色 (RGBA)
-    /// @note 各成分は0.0fから1.0fの範囲.
-    ///       デフォルトは白色光 (1.0f, 1.0f, 1.0f, 1.0f)
-    Vector4f color = {1.0f, 1.0f, 1.0f, 1.0f};
+    /// @note 各成分は[0, 1]. デフォルトは白色光 (1.0, 1.0, 1.0, 1.0)
+    Color color = {1.0, 1.0, 1.0, 1.0};
 
     /// @brief 面光源として設定する
     /// @param direction 光の向かう方向 (単位ベクトル)
+    /// @param light_color 光源の色 (RGBA)
     void SetDirectional(const Vector3f& direction,
-                        const Vector4f& light_color = {1.0f, 1.0f, 1.0f, 1.0f}) {
+                        const Color& light_color = {1.0, 1.0, 1.0, 1.0}) {
         type = LightType::kDirectional;
         position = direction;
         attenuation = {0.0f, 0.0f, 0.0f};
@@ -62,7 +65,7 @@ struct Light {
     /// @param light_color 光源の色 (RGBA)
     void SetPoint(const Vector3f& pos,
                   const std::array<float, 3>& attenuation_coeffs = {1.0f, 0.0f, 0.0f},
-                  const Vector4f& light_color = {1.0f, 1.0f, 1.0f, 1.0f}) {
+                  const Color& light_color = {1.0, 1.0, 1.0, 1.0}) {
         type = LightType::kPoint;
         position = pos;
         attenuation = attenuation_coeffs;

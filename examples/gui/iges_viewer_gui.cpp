@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <igesio/reader.h>
+#include <igesio/common/color.h>
 #include <igesio/entities/interfaces/i_surface.h>
 #include <igesio/graphics/core/material_property.h>
 
@@ -58,7 +59,7 @@ struct ColorScheme {
     /// @brief 説明 (ホバー時にツールチップ表示)
     const char* tooltip;
     /// @brief 物体の既定色 (RGB; [0,1]). std::nulloptで元のIGES色を維持する
-    std::optional<std::array<float, 3>> object_color;
+    std::optional<igesio::Color> object_color;
     /// @brief 金属度 [0,1]
     float metallic;
     /// @brief 表面粗さ [0,1]
@@ -68,12 +69,12 @@ struct ColorScheme {
 /// @brief 選択肢として提示する色の系統の一覧
 /// @note 先頭(インデックス0)は元のIGES色・標準マットへ戻すための既定系統
 const std::vector<ColorScheme> kColorSchemes = {
-    {"IGES Default", "元のIGES色・標準マット", std::nullopt,            0.0f, 0.5f},
-    {"Steel",        "鋼/シルバー金属",  {{0.60f, 0.62f, 0.65f}},      1.0f, 0.35f},
-    {"Gold",         "ゴールド金属",     {{1.00f, 0.78f, 0.34f}},      1.0f, 0.30f},
-    {"Copper",       "銅/ブロンズ金属",  {{0.95f, 0.55f, 0.35f}},      1.0f, 0.35f},
-    {"Plastic Red",  "つや消し赤樹脂",   {{0.85f, 0.15f, 0.12f}},      0.0f, 0.45f},
-    {"Plastic Blue", "つや消し青樹脂",   {{0.18f, 0.35f, 0.85f}},      0.0f, 0.40f},
+    {"IGES Default", "元のIGES色・標準マット", std::nullopt,               0.0f, 0.5f},
+    {"Steel",        "鋼/シルバー金属",  igesio::Color{0.60, 0.62, 0.65}, 1.0f, 0.35f},
+    {"Gold",         "ゴールド金属",     igesio::Color{1.00, 0.78, 0.34}, 1.0f, 0.30f},
+    {"Copper",       "銅/ブロンズ金属",  igesio::Color{0.95, 0.55, 0.35}, 1.0f, 0.35f},
+    {"Plastic Red",  "つや消し赤樹脂",   igesio::Color{0.85, 0.15, 0.12}, 0.0f, 0.45f},
+    {"Plastic Blue", "つや消し青樹脂",   igesio::Color{0.18, 0.35, 0.85}, 0.0f, 0.40f},
 };
 
 /// @brief 表示用のファイル名 (パス末尾の要素) を取得する
@@ -579,8 +580,10 @@ void IgesViewerGUI::RenderMenuBar() {
             }
             ImGui::EndMenu();
         }
-        if (ImGui::ColorEdit3("Background",
-                              renderer_.GetBackgroundColorRef().data())) {
+        // 背景αは1.0固定 (ColorEdit3はαを編集しないため、FromFloatRGBの既定a = 1.0でよい)
+        auto background = renderer_.GetBackgroundColor().ToFloatRGB();
+        if (ImGui::ColorEdit3("Background", background.data())) {
+            renderer_.SetBackgroundColor(igesio::Color::FromFloatRGB(background));
             needs_redraw_ = true;
         }
         // 色の系統 (物体色＋材質のプリセット) を選ぶ
@@ -1030,16 +1033,15 @@ void IgesViewerGUI::RenderAssemblyProperties(models::Assembly& node) {
     bool has_color = node.Display().color_override.has_value();
     if (ImGui::Checkbox("Color override", &has_color)) {
         node.SetColorOverride(has_color
-                ? std::optional<std::array<float, 3>>(
-                        std::array<float, 3>{0.8f, 0.8f, 0.8f})
+                ? std::optional<igesio::Color>(igesio::Color{0.8, 0.8, 0.8})
                 : std::nullopt);
         needs_redraw_ = true;
     }
     if (node.Display().color_override.has_value()) {
-        // setter経由で書き戻すため、編集はローカルコピーで受ける
-        std::array<float, 3> color = *node.Display().color_override;
-        if (ImGui::ColorEdit3("##color", color.data())) {
-            node.SetColorOverride(color);
+        // setter経由で書き戻すため、編集はローカルコピー (float RGB) で受ける
+        auto rgb = node.Display().color_override->ToFloatRGB();
+        if (ImGui::ColorEdit3("##color", rgb.data())) {
+            node.SetColorOverride(igesio::Color::FromFloatRGB(rgb));
             needs_redraw_ = true;
         }
     }
