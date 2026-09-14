@@ -122,30 +122,36 @@ void ExpectSameAxis(const mc::AxisSpec& expected, const mc::AxisSpec& actual) {
 
 /// @brief 形状定義の一致を検証する (解決済みパスは基準ディレクトリに依存するため
 ///        `raw_path`と種別・寸法のみ比較する)
-void ExpectSameGeometry(const mc::GeometrySpec& expected,
-                        const mc::GeometrySpec& actual) {
-    EXPECT_EQ(expected.name, actual.name);
-    ASSERT_EQ(expected.source.index(), actual.source.index());
-    if (std::holds_alternative<mc::PrimitiveSpec>(expected.source)) {
-        const auto& e = std::get<mc::PrimitiveSpec>(expected.source);
-        const auto& a = std::get<mc::PrimitiveSpec>(actual.source);
+void ExpectSameGeometry(const mc::GeometryEntry& expected,
+                        const mc::GeometryEntry& actual) {
+    const mc::GeometrySpec& e_geometry = expected.geometry;
+    const mc::GeometrySpec& a_geometry = actual.geometry;
+    EXPECT_EQ(e_geometry.name, a_geometry.name);
+    ASSERT_EQ(e_geometry.source.index(), a_geometry.source.index());
+    if (std::holds_alternative<mc::PrimitiveSpec>(e_geometry.source)) {
+        const auto& e = std::get<mc::PrimitiveSpec>(e_geometry.source);
+        const auto& a = std::get<mc::PrimitiveSpec>(a_geometry.source);
         EXPECT_EQ(e.kind, a.kind);
         EXPECT_TRUE(e.size.isApprox(a.size, kTol));
         EXPECT_NEAR(e.radius, a.radius, kTol);
         EXPECT_NEAR(e.height, a.height, kTol);
     } else {
-        EXPECT_EQ(expected.raw_path, actual.raw_path);
-        EXPECT_NEAR(expected.file_unit_scale, actual.file_unit_scale, kTol);
+        EXPECT_EQ(e_geometry.raw_path, a_geometry.raw_path);
+        EXPECT_NEAR(e_geometry.file_unit_scale, a_geometry.file_unit_scale, kTol);
     }
-    EXPECT_TRUE(expected.placement.isApprox(actual.placement, kTol))
-            << "expected:\n" << expected.placement << "\nactual:\n" << actual.placement;
-    ASSERT_EQ(expected.color.has_value(), actual.color.has_value());
-    if (expected.color.has_value()) {
+    EXPECT_TRUE(expected.placement.origin.isApprox(actual.placement.origin, kTol))
+            << "expected:\n" << expected.placement.origin
+            << "\nactual:\n" << actual.placement.origin;
+    EXPECT_TRUE(expected.placement.rotation.isApprox(actual.placement.rotation, kTol))
+            << "expected:\n" << expected.placement.rotation
+            << "\nactual:\n" << actual.placement.rotation;
+    ASSERT_EQ(e_geometry.color.has_value(), a_geometry.color.has_value());
+    if (e_geometry.color.has_value()) {
         for (std::size_t i = 0; i < 3; ++i) {
-            EXPECT_NEAR((*expected.color)[i], (*actual.color)[i], kColorTol);
+            EXPECT_NEAR((*e_geometry.color)[i], (*a_geometry.color)[i], kColorTol);
         }
     }
-    EXPECT_NEAR(expected.opacity, actual.opacity, 1e-6);
+    EXPECT_NEAR(e_geometry.opacity, a_geometry.opacity, 1e-6);
     EXPECT_EQ(expected.collision, actual.collision);
     EXPECT_EQ(expected.visible, actual.visible);
 }
@@ -280,15 +286,15 @@ mc::MachineDefinition MakeMinimalDefinition() {
     definition.components.push_back(MakeLinear("Y", "X", Vector3d::UnitY()));
     mc::ComponentSpec z = MakeLinear("Z", "Y", Vector3d::UnitZ());
     z.local_frame = mc::MakeRigid(RotZ90(), Vector3d(1.0, 2.0, 3.0));
-    mc::GeometrySpec box;
-    box.name = "z-box";
+    mc::GeometryEntry box;
+    box.geometry.name = "z-box";
     mc::PrimitiveSpec primitive;
     primitive.kind = mc::PrimitiveSpec::Kind::kBox;
     primitive.size = Vector3d(10.0, 20.0, 30.0);
-    box.source = primitive;
-    box.placement = z.local_frame * mc::Translation(Vector3d(5.0, 0.0, 0.0));
-    box.color = igesio::Color{1.0, 0.5, 0.0};
-    box.opacity = 0.5f;
+    box.geometry.source = primitive;
+    box.placement.origin = Vector3d(5.0, 0.0, 0.0);   // local_frame相対
+    box.geometry.color = igesio::Color{1.0, 0.5, 0.0};
+    box.geometry.opacity = 0.5f;
     box.collision = false;
     box.visible = false;
     z.geometries.push_back(box);
@@ -333,12 +339,12 @@ mc::MachineDefinition MakeMinimalDefinition() {
 /// @brief 直進軸X に STL形状 (指定の`file_unit_scale`) を持たせる
 mc::MachineDefinition WithStlGeometry(const std::string& file, const double unit_scale) {
     mc::MachineDefinition definition = MakeMinimalDefinition();
-    mc::GeometrySpec geometry;
-    geometry.source = (kBaseDir / file).lexically_normal();
-    geometry.raw_path = file;
-    geometry.file_unit_scale = unit_scale;
+    mc::GeometryEntry entry;
+    entry.geometry.source = (kBaseDir / file).lexically_normal();
+    entry.geometry.raw_path = file;
+    entry.geometry.file_unit_scale = unit_scale;
     definition.source_dir = kBaseDir;
-    FindComponentMutable(definition, "X").geometries.push_back(geometry);
+    FindComponentMutable(definition, "X").geometries.push_back(entry);
     return definition;
 }
 
@@ -354,8 +360,8 @@ TEST(MachineWriterTest, Fixture_RoundTripKeepsAllFields) {
     EXPECT_TRUE(restored.warnings.empty());
     ExpectSameDefinition(original, restored);
     // 解決済みパスも一致する (同じ基準ディレクトリ)
-    EXPECT_EQ(std::get<fs::path>(FindComponent(restored, "cradle-frame").geometries[0].source),
-              std::get<fs::path>(FindComponent(original, "cradle-frame").geometries[0].source));
+    EXPECT_EQ(std::get<fs::path>(FindComponent(restored, "cradle-frame").geometries[0].geometry.source),
+              std::get<fs::path>(FindComponent(original, "cradle-frame").geometries[0].geometry.source));
 }
 
 TEST(MachineWriterTest, Fixture_WritesFormatUnitsKinematicsAndFileValues) {
@@ -367,7 +373,8 @@ TEST(MachineWriterTest, Fixture_WritesFormatUnitsKinematicsAndFileValues) {
     EXPECT_TRUE(Contains(text, "length = \"mm\""));
     EXPECT_TRUE(Contains(text, "angle = \"deg\""));
     EXPECT_TRUE(Contains(text, "branch = \"positive\""));
-    EXPECT_TRUE(Contains(text, "date = \"2026-08-31\""));
+    // 日付は裸のリテラルで書く (引用符なし)
+    EXPECT_TRUE(Contains(text, "date = 2026-08-31\n"));
     // 角度はdegへ戻る
     EXPECT_TRUE(Contains(text, "limits = [-90.0, 90.0]"));
     EXPECT_TRUE(Contains(text, "rapid_feed = 3600.0"));
@@ -391,8 +398,8 @@ TEST(MachineWriterTest, Fixture_PathIsRelativizedToAnotherBaseDir) {
     const std::string text = mc::WriteMachineDefinitionToString(original, out_dir);
     EXPECT_TRUE(Contains(text, "file = \"../tool-ZYX-base-AC-work/cradle-frame.STL\""));
     const auto restored = mc::ReadMachineDefinitionFromString(text, out_dir, "<out>");
-    EXPECT_EQ(std::get<fs::path>(FindComponent(restored, "cradle-frame").geometries[0].source),
-              std::get<fs::path>(FindComponent(original, "cradle-frame").geometries[0].source));
+    EXPECT_EQ(std::get<fs::path>(FindComponent(restored, "cradle-frame").geometries[0].geometry.source),
+              std::get<fs::path>(FindComponent(original, "cradle-frame").geometries[0].geometry.source));
     // 親ディレクトリ越えの警告は読込側の仕様どおり1件
     ASSERT_EQ(restored.warnings.size(), 1u);
     EXPECT_TRUE(Contains(restored.warnings[0].message, "above base directory"));
@@ -454,12 +461,12 @@ TEST(MachineWriterTest, ImplicitBase_IsOmittedAndRestoredLast) {
 
 TEST(MachineWriterTest, ExplicitBase_WithGeometryOrLocalFrameIsWritten) {
     auto with_geometry = MakeMinimalDefinition();
-    mc::GeometrySpec cylinder;
+    mc::GeometryEntry cylinder;
     mc::PrimitiveSpec primitive;
     primitive.kind = mc::PrimitiveSpec::Kind::kCylinder;
     primitive.radius = 5.0;
     primitive.height = 20.0;
-    cylinder.source = primitive;
+    cylinder.geometry.source = primitive;
     FindComponentMutable(with_geometry, "base").geometries.push_back(cylinder);
     const std::string text = mc::WriteMachineDefinitionToString(with_geometry, kBaseDir);
     EXPECT_TRUE(Contains(text, "name = \"base\"\ntype = \"base\"\n\n[[component.geometry]]\n"
@@ -650,8 +657,8 @@ TEST(MachineWriterTest, WriteFile_ResolvesGeometryPathsFromOutputDirectory) {
     mc::WriteMachineDefinition(original, path);
     const auto restored = mc::ReadMachineDefinition(path);
     // 記載は変わるが、解決済みパスは元と同じ場所を指す
-    EXPECT_EQ(std::get<fs::path>(FindComponent(restored, "cradle-frame").geometries[0].source),
-              std::get<fs::path>(FindComponent(original, "cradle-frame").geometries[0].source));
+    EXPECT_EQ(std::get<fs::path>(FindComponent(restored, "cradle-frame").geometries[0].geometry.source),
+              std::get<fs::path>(FindComponent(original, "cradle-frame").geometries[0].geometry.source));
     fs::remove_all(dir);
 }
 

@@ -40,6 +40,9 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/machine/test_inverse_kinematics.cpp
         machines/tools/test_tool_profile.cpp
         machines/tools/test_tool_entities.cpp
+        machines/project/test_project_io.cpp
+        machines/project/test_project_writer.cpp
+        machines/project/test_setup.cpp
     )
 endif()
 

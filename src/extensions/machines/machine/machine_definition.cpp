@@ -14,10 +14,16 @@
 #include <string>
 #include <string_view>
 
+#include "igesio/extensions/machines/core/rotation.h"
+
 namespace igesio::extensions::machines {
 
 bool IsReservedCollisionTarget(const std::string_view name) {
     return name == kToolCollisionTarget || name == kWorkCollisionTarget;
+}
+
+igesio::Matrix4d PlacementMatrix(const GeometricPlacement& placement) {
+    return MakeRigid(placement.rotation, placement.origin);
 }
 
 std::optional<ComponentType> ParseComponentType(const std::string_view text) {

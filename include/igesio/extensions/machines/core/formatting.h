@@ -4,8 +4,10 @@
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
- * @note 診断・例外等のテキスト出力時に数値を含める際の整形 (固定小数・deg換算) と、
- *       機械定義・プロジェクト定義で共通の色表記`"#rrggbb"`の相互変換をまとめる.
+ * @note 以下のフォーマット指定・変換関数を提供する
+ *       - 診断・例外等のテキスト出力時に数値を含める際の整形 (固定小数・deg換算)
+ *       - 機械定義・プロジェクト定義で共通の色表記`"#rrggbb"`の相互変換
+ *       - テキストファイル (NC/CL等) の改行・文字コード関連
  * @note TOML側では色を`#rrggbb`形式でのみ表現するため、`igesio::Color`との
  *       互換関数をここに記述する.
  */
@@ -43,6 +45,49 @@ std::optional<Color> ParseHexColor(std::string_view text);
 /// @param color 変換する色. RGBの0~1の範囲外はクランプし、α成分は無視する
 /// @return 小文字16進の色文字列 (各成分を255倍して四捨五入)
 std::string FormatHexColor(const Color& color);
+
+
+
+/**
+ * ---- テキストファイルの改行と文字コード ----
+ * 主にTOMLの`[[program]]`で指定する改行・文字コードの規約に対応する.
+ */
+
+/// @brief テキストファイルの改行の種類
+enum class NewlineStyle {
+    /// @brief LF (`"\n"`)
+    kLf,
+    /// @brief CRLF (`"\r\n"`)
+    kCrlf,
+};
+
+/// @brief テキストファイルの文字コード
+/// @note 基本的に読込はバイト列のまま扱い、本列挙型は表示・書き出しの規約として保持する
+enum class TextEncoding {
+    /// @brief UTF-8
+    kUtf8,
+    /// @brief Shift_JIS
+    kShiftJis,
+};
+
+/// @brief 改行の種類の文字列を`NewlineStyle`に変換する
+/// @param text `"lf"` / `"crlf"` (大文字小文字を区別する)
+/// @return 対応する種類. 未知の文字列なら`std::nullopt`
+std::optional<NewlineStyle> ParseNewlineStyle(std::string_view text);
+
+/// @brief 改行の種類の名称 (TOMLで用いる文字列) を返す
+std::string_view NewlineStyleName(NewlineStyle style);
+
+/// @brief 改行の文字列 (`"\n"` / `"\r\n"`) を返す
+std::string_view NewlineText(NewlineStyle style);
+
+/// @brief 文字コードの文字列を`TextEncoding`に変換する
+/// @param text `"utf-8"` / `"shift_jis"` (大文字小文字を区別する)
+/// @return 対応する文字コード. 未知の文字列なら`std::nullopt`
+std::optional<TextEncoding> ParseTextEncoding(std::string_view text);
+
+/// @brief 文字コードの名称 (TOMLで用いる文字列) を返す
+std::string_view TextEncodingName(TextEncoding encoding);
 
 }  // namespace igesio::extensions::machines
 

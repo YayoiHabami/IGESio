@@ -46,6 +46,7 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/core/rotation.cpp
         machines/machine/machine_definition.cpp
         machines/machine/toml_reading.cpp
+        machines/machine/toml_writing.cpp
         machines/machine/machine_writing.cpp
         machines/machine/machine_io.cpp
         machines/machine/primitives.cpp
@@ -56,14 +57,23 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/tools/tool_profile.cpp
         machines/tools/tool_assembly.cpp
         machines/tools/tool_entities.cpp
+        machines/project/project_definition.cpp
+        machines/project/project_reading.cpp
+        machines/project/project_writing.cpp
+        machines/project/project_io.cpp
+        machines/project/setup.cpp
     )
     if(MINGW)
         # toml11のテンプレート展開とデバッグ情報でCOFFのセクション数上限 (2^16) を
         # 超えるため、toml11に依存するソースのみ大きなオブジェクト形式を許可する
         set_source_files_properties(
             machines/machine/toml_reading.cpp
+            machines/machine/toml_writing.cpp
             machines/machine/machine_writing.cpp
             machines/machine/machine_io.cpp
+            machines/project/project_reading.cpp
+            machines/project/project_writing.cpp
+            machines/project/project_io.cpp
             PROPERTIES COMPILE_OPTIONS "-Wa,-mbig-obj"
         )
     endif()

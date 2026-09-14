@@ -22,6 +22,12 @@
 
 namespace igesio::extensions::machines {
 
+/// @brief 工具なしを示す工具番号
+/// @note NC内での工具番号 (T)、プロジェクト定義の`[[tool]].number`/`[initial].tool`
+///       において、0は工具なしの予約値. 工具経路の記録やセットアップの初期工具でも
+///       同じ値を用いる
+constexpr int kNoTool = 0;
+
 /// @brief 位置IKで目標点に一致させる制御点
 enum class ControlPoint {
     /// @brief 工具の指令点 (`ToolProfile::command_point_z`)

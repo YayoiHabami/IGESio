@@ -5,42 +5,30 @@
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
  * @note `toml::ordered_value`で文書を組み立て、toml11のシリアライザに
- *       `[[component]]`, `[component.axis]`等の配置を任せる. 実数は往復で
- *       同じ値に戻る最短の桁数 (15〜17桁) で書く.
+ *       `[[component]]`, `[component.axis]`等の配置を任せる. 値の生成・幾何要素・
+ *       `[format]`・`[units]`はプロジェクト定義と共有する`toml_writing.h`に置く.
  */
 #include "extensions/machines/machine/machine_writing.h"
 
 #include <array>
 #include <cmath>
-#include <cstdlib>
+#include <cstddef>
 #include <filesystem>
-#include <iomanip>
 #include <optional>
-#include <sstream>
-#include <stdexcept>
 #include <string>
 #include <tuple>
-#include <utility>
-#include <variant>
 #include <vector>
 
 #include <toml.hpp>
 
-#include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
 #include "igesio/extensions/machines/core/tolerances.h"
 #include "igesio/extensions/machines/core/units.h"
+#include "extensions/machines/machine/toml_writing.h"
 
 namespace igesio::extensions::machines::detail {
 
 namespace {
-
-/// @brief 挿入順を保持するtoml11の値型 (書き出し順を制御するため)
-using TomlValue = toml::ordered_value;
-/// @brief `TomlValue`のテーブル型
-using TomlTable = toml::ordered_table;
-/// @brief `TomlValue`の配列型
-using TomlArray = toml::ordered_array;
 
 /// @brief 出力の先頭に置く見出しコメント
 constexpr const char* kHeaderComment =
@@ -48,136 +36,12 @@ constexpr const char* kHeaderComment =
         "(written by the IGESio machines extension)\n\n";
 /// @brief `clearance`が`default_clearance`と等しいとみなす許容誤差 [mm]
 constexpr double kClearanceTolerance = 1e-9;
-/// @brief `file_unit_scale`が単位の係数と等しいとみなす許容誤差
-constexpr double kScaleTolerance = 1e-9;
-/// @brief 実数の最小有効桁数 (この桁数から往復一致する桁数を探す)
-constexpr int kMinPrecision = 15;
-/// @brief 実数の最大有効桁数 (doubleの往復に十分な桁数)
-constexpr int kMaxPrecision = 17;
-
-/// @brief 書き出し全体で共有する内容
-struct WriteContext {
-    /// @brief 形状ファイルの相対パスの基準ディレクトリ (正規化済)
-    std::filesystem::path base_dir;
-    /// @brief `base_dir`が読込時の基準ディレクトリと一致するか
-    bool same_as_source = false;
-    /// @brief 出力する長さ単位
-    LengthUnit length_unit = LengthUnit::kMillimeter;
-    /// @brief 内部値 (mm) をファイル値にする除数
-    double length_scale = 1.0;
-    /// @brief 内部値 (rad) をファイル値にする除数
-    double angle_scale = 1.0;
-};
-
-
-
-/**
- * ---- 値の生成 ----
- */
-
-/// @brief 往復で同じdoubleに戻る最短の有効桁数を返す
-/// @note 文字列化→`strtod`の結果が元の値と一致するかを桁数を増やして調べる.
-///       一致判定はビット単位の往復検査なので`==`で行う
-int ShortestPrecision(const double value) {
-    for (int precision = kMinPrecision; precision < kMaxPrecision; ++precision) {
-        std::ostringstream stream;
-        stream << std::setprecision(precision) << value;
-        if (std::strtod(stream.str().c_str(), nullptr) == value) return precision;
-    }
-    return kMaxPrecision;
-}
-
-/// @brief 実数の値を作る (微小値は0、それ以外は最短の往復桁数)
-/// @note 90°回転の`cos`や、`local_frame`相対へ戻した原点の丸め誤差が
-///       `6e-17`のような値で書かれるのを避けるため、`kZeroTolerance`未満は
-///       0とする (`-0.0`も0). 単位ベクトルは読込側で再正規化され (許容1e-3)、
-///       長さ・角度で1e-12未満の値は意味を持たない
-TomlValue Real(const double value) {
-    const double written = std::abs(value) < kZeroTolerance ? 0.0 : value;
-    TomlValue result(written);
-    result.as_floating_fmt().prec = static_cast<std::size_t>(ShortestPrecision(written));
-    return result;
-}
-
-/// @brief 複数行形式のテーブル (`[a.b]`) を作る
-TomlValue Table() {
-    TomlValue result((TomlTable()));
-    result.as_table_fmt().fmt = toml::table_format::multiline;
-    return result;
-}
-
-/// @brief インライン形式のテーブル (`a = { ... }`) を作る
-TomlValue InlineTable() {
-    TomlValue result((TomlTable()));
-    result.as_table_fmt().fmt = toml::table_format::oneline;
-    return result;
-}
-
-/// @brief テーブル配列 (`[[a]]`) を作る
-TomlValue TableArray() {
-    TomlValue result((TomlArray()));
-    result.as_array_fmt().fmt = toml::array_format::array_of_tables;
-    return result;
-}
-
-/// @brief 1行の配列を作る
-TomlValue OnelineArray(TomlArray elements) {
-    TomlValue result(std::move(elements));
-    result.as_array_fmt().fmt = toml::array_format::oneline;
-    return result;
-}
-
-/// @brief 要素ごとに改行する配列を作る (`pairs`・`exclude`)
-TomlValue MultilineArray() {
-    TomlValue result((TomlArray()));
-    result.as_array_fmt().fmt = toml::array_format::multiline;
-    return result;
-}
-
-/// @brief 実数の配列を作る
-TomlValue Reals(const std::vector<double>& values) {
-    TomlArray elements;
-    for (const double value : values) elements.push_back(Real(value));
-    return OnelineArray(std::move(elements));
-}
-
-/// @brief 3成分ベクトルを作る
-TomlValue Vec3(const igesio::Vector3d& vector) {
-    return Reals({vector.x(), vector.y(), vector.z()});
-}
-
-/// @brief 文字列2要素の配列を作る (干渉ペアの対象)
-TomlValue NamePair(const std::array<std::string, 2>& names) {
-    return OnelineArray({TomlValue(names[0]), TomlValue(names[1])});
-}
-
-/// @brief 真偽値2要素の配列を作る (`subtree`)
-TomlValue BoolPair(const std::array<bool, 2>& flags) {
-    return OnelineArray({TomlValue(flags[0]), TomlValue(flags[1])});
-}
 
 
 
 /**
  * ---- 幾何要素 ----
  */
-
-/// @brief 回転が単位行列でなければ`rotation = { x_axis, y_axis, z_axis }`を書く
-void PutRotation(TomlValue& table, const igesio::Matrix3d& rotation) {
-    if (rotation.isIdentity(kZeroTolerance)) return;
-    TomlValue spec = InlineTable();
-    spec["x_axis"] = Vec3(rotation.col(0));
-    spec["y_axis"] = Vec3(rotation.col(1));
-    spec["z_axis"] = Vec3(rotation.col(2));
-    table["rotation"] = spec;
-}
-
-/// @brief 原点が零ベクトルでなければ`origin`を書く
-void PutOrigin(TomlValue& table, const igesio::Vector3d& origin,
-               const double length_scale) {
-    if (origin.isZero(kZeroTolerance)) return;
-    table["origin"] = Vec3(origin / length_scale);
-}
 
 /// @brief `local_frame` (`[[component]].local_frame`) が単位行列でなければ書く
 void PutLocalFrame(TomlValue& component, const igesio::Matrix4d& local_frame,
@@ -191,8 +55,9 @@ void PutLocalFrame(TomlValue& component, const igesio::Matrix4d& local_frame,
 
 /// @brief マウントの`frame` (`[[component]].frame`) を
 ///        `origin`+`z_axis`(+`x_axis`) で書く
-/// @note 保持している配置Hは`local_frame`込みなので、`C_c⁻¹·H`で相対に戻す.
-///       回転が単位行列なら`z_axis`のみ (`x_axis`は既定のローカルx軸)
+/// @note 保持しているH (取り付け先座標系→ゼロポーズ機械座標) は`local_frame`込み
+///       なので、`C_c⁻¹·H`でコンポーネント座標相対に戻す.
+///       回転が単位行列なら`z_axis`のみ (`x_axis`は既定のコンポーネント座標x軸)
 TomlValue MakeFrame(const igesio::Matrix4d& local_frame,
                     const igesio::Matrix4d& placement, const double length_scale) {
     const igesio::Matrix4d relative = RigidInverse(local_frame) * placement;
@@ -276,92 +141,6 @@ TomlValue MakeAxis(const AxisSpec& axis, const bool is_rotary,
 
 
 /**
- * ---- 形状 ----
- */
-
-/// @brief 換算係数に対応する長さ単位を返す
-/// @return mm (1.0) またはinch (25.4). どちらでもなければ`std::nullopt`
-std::optional<LengthUnit> UnitFromScale(const double scale) {
-    for (const LengthUnit unit : {LengthUnit::kMillimeter, LengthUnit::kInch}) {
-        if (std::abs(scale - LengthScale(unit)) <= kScaleTolerance) return unit;
-    }
-    return std::nullopt;
-}
-
-/// @brief 形状ファイルのパス文字列を決める
-/// @note 基準ディレクトリが読込時と同じなら記載どおりの`raw_path`. 異なれば
-///       解決済みパスを`base_dir`からの相対にし、相対化できなければ
-///       (ドライブが異なる等) そのまま書く. 区切りは`/`に統一する
-std::string PathText(const GeometrySpec& geometry, const WriteContext& ctx) {
-    if (ctx.same_as_source && !geometry.raw_path.empty()) return geometry.raw_path;
-    const std::filesystem::path source =
-            std::get<std::filesystem::path>(geometry.source).lexically_normal();
-    const std::filesystem::path relative = source.lexically_relative(ctx.base_dir);
-    return (relative.empty() ? source : relative).generic_string();
-}
-
-/// @brief ファイル参照形式 (`[[component.geometry]].file`) の
-///       `file`・`unit`を書き出す
-/// @note `unit`はSTL/OBJのみ. 出力の長さ単位と同じなら省略する.
-///       IGES/STEPは`unit`を持てないため`file_unit_scale`を書かない
-/// @throw std::invalid_argument `file_unit_scale`がmm・inchのいずれでもない場合
-void PutFileSource(TomlValue& table, const GeometrySpec& geometry,
-                   const std::string& context, const WriteContext& ctx) {
-    const std::string text = PathText(geometry, ctx);
-    table["file"] = text;
-    const GeometryFileFormat format = ClassifyGeometryFile(std::filesystem::path(text));
-    if (format != GeometryFileFormat::kStl && format != GeometryFileFormat::kObj) return;
-    const std::optional<LengthUnit> unit = UnitFromScale(geometry.file_unit_scale);
-    if (!unit.has_value()) {
-        throw std::invalid_argument(
-                context + ": file_unit_scale "
-                + std::to_string(geometry.file_unit_scale)
-                + " matches neither the mm nor the inch factor"
-                  " (cannot be expressed by unit)");
-    }
-    if (*unit != ctx.length_unit) table["unit"] = std::string(LengthUnitName(*unit));
-}
-
-/// @brief プリミティブ形式 (`[[component.geometry]].primitive`) を書き出す
-void PutPrimitive(TomlValue& table, const PrimitiveSpec& primitive,
-                  const double length_scale) {
-    table["primitive"] = std::string(PrimitiveKindName(primitive.kind));
-    if (primitive.kind == PrimitiveSpec::Kind::kBox) {
-        table["size"] = Vec3(primitive.size / length_scale);
-        return;
-    }
-    table["radius"] = Real(primitive.radius / length_scale);
-    table["height"] = Real(primitive.height / length_scale);
-}
-
-/// @brief `[[component.geometry]]`の1要素を書き出す
-/// @note 保持している`placement`は`C_c`込みなので、`C_c⁻¹·placement`で
-///       `origin`・`rotation`に戻す. 既定値 (`opacity = 1`・`collision`・
-///       `visible`が`true`) のキーは書かない
-TomlValue MakeGeometry(const GeometrySpec& geometry, const igesio::Matrix4d& local_frame,
-                       const std::string& context, const WriteContext& ctx) {
-    TomlValue table = Table();
-    if (!geometry.name.empty()) table["name"] = geometry.name;
-    if (std::holds_alternative<PrimitiveSpec>(geometry.source)) {
-        PutPrimitive(table, std::get<PrimitiveSpec>(geometry.source), ctx.length_scale);
-    } else {
-        PutFileSource(table, geometry, context, ctx);
-    }
-    const igesio::Matrix4d relative = RigidInverse(local_frame) * geometry.placement;
-    PutOrigin(table, TranslationPart(relative), ctx.length_scale);
-    PutRotation(table, RotationPart(relative));
-    if (geometry.color.has_value()) table["color"] = FormatHexColor(*geometry.color);
-    if (geometry.opacity != 1.0f) {   // 既定値 (省略時1) との一致検査
-        table["opacity"] = Real(static_cast<double>(geometry.opacity));
-    }
-    if (!geometry.collision) table["collision"] = false;
-    if (!geometry.visible) table["visible"] = false;
-    return table;
-}
-
-
-
-/**
  * ---- コンポーネント ----
  */
 
@@ -390,12 +169,11 @@ TomlValue MakeComponent(const ComponentSpec& component, const WriteContext& ctx)
         table["spindle"] = MakeSpindle(*component.spindle);
     }
     if (component.geometries.empty()) return table;
-    TomlValue geometries = TableArray();
+    TomlValue geometries = TableArrayValue();
     for (std::size_t i = 0; i < component.geometries.size(); ++i) {
         const std::string context =
                 "component[" + component.name + "].geometry[" + std::to_string(i) + "]";
-        geometries.push_back(MakeGeometry(component.geometries[i],
-                                          component.local_frame, context, ctx));
+        geometries.push_back(MakeGeometry(component.geometries[i], context, ctx));
     }
     table["geometry"] = geometries;
     return table;
@@ -407,30 +185,14 @@ TomlValue MakeComponent(const ComponentSpec& component, const WriteContext& ctx)
  * ---- セクション ----
  */
 
-/// @brief `[format]`を書き出す. 常に対応バージョンを書く
-TomlValue MakeFormat() {
-    TomlValue table = Table();
-    table["name"] = std::string(kMachineFormatName);
-    table["version"] = OnelineArray({TomlValue(kMachineFormatVersion[0]),
-                                     TomlValue(kMachineFormatVersion[1])});
-    return table;
-}
-
 /// @brief `[machine]`を書き出す. 空の任意キーは省略する
+/// @note `date`は日付として解釈できればTOML形式の日付として出力する
 TomlValue MakeMachineMeta(const MachineDefinition& definition) {
     TomlValue table = Table();
     table["name"] = definition.name;
     if (!definition.description.empty()) table["description"] = definition.description;
     if (!definition.author.empty()) table["author"] = definition.author;
-    if (!definition.date.empty()) table["date"] = definition.date;
-    return table;
-}
-
-/// @brief `[units]`を書き出す
-TomlValue MakeUnits(const UnitScales& units) {
-    TomlValue table = Table();
-    table["length"] = std::string(LengthUnitName(units.length_unit));
-    table["angle"] = std::string(AngleUnitName(units.angle_unit));
+    if (!definition.date.empty()) PutDateTime(table, "date", definition.date);
     return table;
 }
 
@@ -473,7 +235,7 @@ TomlValue MakeCollision(const CollisionSettings& settings, const WriteContext& c
         table["exclude"] = exclude;
     }
     TomlValue simple = MultilineArray();
-    TomlValue detailed = TableArray();
+    TomlValue detailed = TableArrayValue();
     for (const CollisionPair& pair : settings.pairs) {
         if (IsSimplePair(pair, settings.default_clearance)) {
             simple.push_back(NamePair(pair.targets));
@@ -487,30 +249,19 @@ TomlValue MakeCollision(const CollisionSettings& settings, const WriteContext& c
     return table;
 }
 
-/// @brief 書き出しの文脈を作る
-WriteContext MakeContext(const MachineDefinition& definition,
-                         const std::filesystem::path& base_dir) {
-    WriteContext ctx;
-    ctx.base_dir = base_dir.lexically_normal();
-    ctx.same_as_source = ctx.base_dir == definition.source_dir.lexically_normal();
-    ctx.length_unit = definition.units.length_unit;
-    ctx.length_scale = LengthScale(definition.units.length_unit);
-    ctx.angle_scale = AngleScale(definition.units.angle_unit);
-    return ctx;
-}
-
 }  // namespace
 
 
 
 std::string FormatMachineDefinition(const MachineDefinition& definition,
                                     const std::filesystem::path& base_dir) {
-    const WriteContext ctx = MakeContext(definition, base_dir);
+    const WriteContext ctx = MakeContext(definition.source_dir, definition.units,
+                                         base_dir);
     TomlValue root = Table();
-    root["format"] = MakeFormat();
+    root["format"] = MakeFormat(kMachineFormatName, kMachineFormatVersion);
     root["machine"] = MakeMachineMeta(definition);
     root["units"] = MakeUnits(definition.units);
-    TomlValue components = TableArray();
+    TomlValue components = TableArrayValue();
     for (const ComponentSpec& component : definition.components) {
         if (IsImplicitBase(component)) continue;
         components.push_back(MakeComponent(component, ctx));

@@ -230,6 +230,7 @@ TEST(ToolProfileTest, Simple_BallWithoutStraightFlute) {
 TEST(ToolProfileTest, Simple_NoShankWhenToolLengthEqualsCuttingLength) {
     SimpleToolSpec spec = BallSpec();
     spec.tool_length = spec.cutting_length;
+    spec.overhang = spec.cutting_length;   // ホルダ下端は工具長を超えられない
     const ToolProfile profile = mc::MakeSimpleToolProfile(spec, nullptr);
     ASSERT_EQ(profile.elements.size(), 2u);
     EXPECT_EQ(FindElement(profile, ToolPart::kShank), nullptr);
@@ -280,6 +281,14 @@ TEST(ToolProfileTest, Simple_ThrowsOnGeometricViolations) {
         spec.tool_length = 20.0;  // < cutting_length
         ExpectInvalidArgumentContaining(
                 [&] { mc::MakeSimpleToolProfile(spec, nullptr); }, "tool_length");
+    }
+    {
+        SimpleToolSpec spec = BallSpec();
+        spec.overhang = spec.tool_length + 1.0;  // ホルダが工具から離れて浮く
+        ExpectInvalidArgumentContaining(
+                [&] { mc::MakeSimpleToolProfile(spec, nullptr); }, "overhang");
+        spec.overhang = spec.tool_length;  // 境界 (ホルダ下端 = シャンク上端) は許す
+        EXPECT_NO_THROW(mc::MakeSimpleToolProfile(spec, nullptr));
     }
     {
         SimpleToolSpec spec = SquareSpec();

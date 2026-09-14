@@ -138,18 +138,18 @@ struct AxisDynamics {
 
 /// @brief 直進軸/回転軸の定義
 /// @note `ComponentSpec::type`が`kLinear`または`kRotary`のコンポーネントで指定
-/// @note `direction`・`point`はコンポーネントのローカル座標系による表現であり,
-///       機械座標への写像 (`local_frame`の適用) は`MachineModel`が行う.
+/// @note `direction`・`point`はコンポーネント座標系による表現であり,
+///       ゼロポーズ機械座標への写像 (`local_frame`の適用) は`MachineModel`が行う.
 /// @note `limits`・`initial`・`wrap_start`は機械座標系における物理的な変位の
 ///       範囲を規定するものではなく、NC指令値の上限/下限を規定するもの.
 struct AxisSpec {
     /// @brief 軸名 (機械内で一意)
     /// @note NCでの指令において使用するもの、"X"や"A"等
     std::string register_name;
-    /// @brief ゼロポーズにおける軸方向 (ローカル座標・正規化済)
+    /// @brief ゼロポーズにおける軸方向 (コンポーネント座標・正規化済)
     /// @note 直進軸の場合は軸の正方向を、回転軸の場合は回転軸 (右ねじ) を表す
     igesio::Vector3d direction = igesio::Vector3d::UnitZ();
-    /// @brief 回転軸を規定する、directionが通る1点 (kRotaryのみ. ローカル座標)
+    /// @brief 回転軸を規定する、directionが通る1点 (kRotaryのみ. コンポーネント座標)
     std::optional<igesio::Vector3d> point;
 
     /// @brief 可動範囲 `[min, max]` (NC指令値, [mm] or [rad])
@@ -228,12 +228,31 @@ enum class GeometryFileFormat {
 /// @return 対応外なら`kUnknown`
 GeometryFileFormat ClassifyGeometryFile(const std::filesystem::path& path);
 
-/// @brief コンポーネントの部分形状 (1コンポーネントは複数の形状を持つことが可能)
+/// @brief 子の座標系→親の座標系の剛体変換 `T(origin) · R`
+/// @note TOMLの`origin`・回転キー (`rotation`等) に書かれた値をそのまま持つ.
+///       子/親は保持する側で決まり、親より上位との合成は呼出側 (`MachiningSetup`).
+///       (i) `GeometryEntry`は機械部品座標系→コンポーネント座標系,
+///       (ii) `ModelSpec`はモデル座標系→取り付け先座標系,
+///       (iii) `WorkOffsetSpec`はワーク座標系→取り付け先座標系
+struct GeometricPlacement {
+    /// @brief 子側の座標系の原点 (親座標系での表現) [mm]
+    igesio::Vector3d origin = igesio::Vector3d::Zero();
+    /// @brief 回転 (各列が、親側の座標系で表した子側の座標系のx/y/z軸に対応)
+    igesio::Matrix3d rotation = igesio::Matrix3d::Identity();
+};
+
+/// @brief `GeometricPlacement`を同次変換行列にする
+/// @return 子の座標系→親の座標系の同次変換行列 `T(origin) · R`
+igesio::Matrix4d PlacementMatrix(const GeometricPlacement& placement);
+
+/// @brief コンポーネントの部分形状の形状定義
 /// @note ファイル参照形式とプリミティブ形式のいずれか.
 ///       本インスタンス作成時 (読み込み時) にはファイルの存在は確認しない.
-/// @note `placement`はモデル座標からゼロポーズ機械座標への変換
-///       `C_c · T(origin) · R` (C_cは`ComponentSpec::local_frame`)
-/// @note TOMLの`[[component.geometry]]`に対応
+/// @note 形状はそれ自身の座標系 (機械部品なら機械部品座標、モデルならモデル座標,
+///       メッシュならmm換算した頂点座標、プリミティブなら原点中心の座標) で定義される.
+///       本クラスでは形状の定義のみを持つ. どの座標系にどう置くか (親座標系と,
+///       自身の座標系→親座標系の剛体変換) や、干渉や表示の対象か等は本クラスの管理側
+///       (`GeometryEntry`/`ModelSpec`) が持つ
 struct GeometrySpec {
     /// @brief 表示名 (機械内で一意でなくてよい)
     std::string name;
@@ -245,22 +264,32 @@ struct GeometrySpec {
     /// @brief ファイルの長さ単位からmmへの換算係数
     /// @note STL/OBJの`unit`. inchなら25.4
     double file_unit_scale = 1.0;
-    /// @brief モデル座標→ゼロポーズ機械座標への変換
-    /// @note C_c (`ComponentSpec::local_frame`) 適用済みの剛体変換行列であり,
-    ///       モデル座標の点はこの行列のみを掛けてゼロポーズ機械座標に変換できる.
-    igesio::Matrix4d placement = igesio::Matrix4d::Identity();
 
     /// @brief 色 (RGB; [0, 1]). 省略時は`std::nullopt`
     /// @note α成分は使わない (不透明度は`opacity`で独立に指定する)
     std::optional<Color> color;
     /// @brief 不透明度 (0=透明〜1=不透明)
     float opacity = 1.0f;
+    /// @brief TOMLの行番号 (診断用)
+    int line = 0;
+};
+
+/// @brief コンポーネントの部分形状
+/// @note 1つのコンポーネントは複数の形状を持つことが可能であり、本構造体では
+///       その部分形状に関する情報をまとめる.
+/// @note 機械部品座標系→ゼロポーズ機械座標系の同次変換は`C_c · T(origin) · R`であり,
+///       `MachiningSetup`で合成する (C_cは`ComponentSpec::local_frame`)
+/// @note TOMLの`[[component.geometry]]`に対応
+struct GeometryEntry {
+    /// @brief 形状
+    GeometrySpec geometry;
+    /// @brief 機械部品座標系→コンポーネント座標系の剛体変換 (`T(origin) · R`)
+    GeometricPlacement placement;
     /// @brief 干渉計算の対象か
     bool collision = true;
     /// @brief 描画対象か
+    /// @note `false`は干渉判定専用の形状 (読み込んで機械座標には置くが、描画しない)
     bool visible = true;
-    /// @brief TOMLの行番号 (診断用)
-    int line = 0;
 };
 
 /// @brief 運動学ツリーの1節点
@@ -274,12 +303,12 @@ struct ComponentSpec {
     /// @brief 種別
     ComponentType type = ComponentType::kFixed;
 
-    /// @brief ローカル座標系の配置C_c
-    /// @note このコンポーネント内の座標値の基準である、ローカル座標系の定義.
-    ///       単位行列の場合は、ローカル座標はゼロポーズ機械座標系と一致する.
-    ///       axisやgeometryの座標値はこのローカル座標系で表現される.
-    /// @note ローカル座標の点pcと機械座標の点pm (同次座標) の関係は
-    ///       `pm = C_c · pc`, `pc = C_c⁻¹ · pm`.
+    /// @brief コンポーネント座標系→ゼロポーズ機械座標系の同次変換C_c
+    /// @note このコンポーネント内の座標値の基準である、コンポーネント座標系の定義.
+    ///       単位行列の場合は、コンポーネント座標系とゼロポーズ機械座標系が一致する.
+    ///       axisやgeometryの座標値はこのコンポーネント座標系で表現される.
+    /// @note コンポーネント座標系の点pcとゼロポーズ機械座標系の点pm (同次座標) は
+    ///       `pm = C_c · pc`, `pc = C_c⁻¹ · pm`を満たす.
     igesio::Matrix4d local_frame = igesio::Matrix4d::Identity();
     /// @brief 可動軸 (typeがkLinear/kRotaryの場合のみ)
     std::optional<AxisSpec> axis;
@@ -290,7 +319,8 @@ struct ComponentSpec {
     /// @brief 主軸の属性
     std::optional<SpindleSpec> spindle;
     /// @brief 形状 (0個以上)
-    std::vector<GeometrySpec> geometries;
+    /// @note 各形状の`placement`は機械部品座標→コンポーネント座標
+    std::vector<GeometryEntry> geometries;
 
     /// @brief TOMLの行番号 (診断用; 暗黙のbaseは0)
     int line = 0;

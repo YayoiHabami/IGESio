@@ -264,7 +264,8 @@ std::string_view SimpleCommandPointName(SimpleToolSpec::CommandPoint point);
 /// @throw std::invalid_argument 幾何が成立しない場合: 長さが正でない,
 ///        ボールで`cutting_length < diameter / 2`、ラジアスで`corner_radius`が
 ///        `(0, diameter / 2)`の外または`cutting_length < corner_radius`,
-///        `cutting_length > tool_length`、ボール以外で`kCenter`
+///        `cutting_length > tool_length`、`overhang > tool_length`,
+///        ボール以外で`kCenter`
 /// @note `overhang < cutting_length` (ホルダが切れ刃に被る) は警告を出す.
 ///       シャンクは`cutting_length`から`tool_length`までの全長を持ち、
 ///       ホルダの内部でも打ち切らない

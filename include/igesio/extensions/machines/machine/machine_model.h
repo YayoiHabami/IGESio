@@ -141,12 +141,12 @@ struct ComponentInfo {
     /// @note `MachineModel::Axes()`におけるインデックス.　軸を持たない場合はnullopt
     std::optional<std::size_t> axis;
 
-    /// @brief ローカル座標系の配置C_c
-    /// @note このコンポーネント内の座標値の基準である、ローカル座標系の定義.
-    ///       単位行列の場合は、ローカル座標はゼロポーズ機械座標系と一致する.
-    ///       axisやgeometryの座標値はこのローカル座標系で表現される.
-    /// @note ローカル座標の点pcと機械座標の点pm (同次座標) の関係は
-    ///       `pm = C_c · pc`, `pc = C_c⁻¹ · pm`.
+    /// @brief コンポーネント座標系→ゼロポーズ機械座標系の同次変換C_c
+    /// @note このコンポーネント内の座標値の基準である、コンポーネント座標系の定義.
+    ///       単位行列の場合は、コンポーネント座標系とゼロポーズ機械座標系が一致する.
+    ///       axisやgeometryの座標値はこのコンポーネント座標系で表現される.
+    /// @note コンポーネント座標系の点pcとゼロポーズ機械座標系の点pm (同次座標) は
+    ///       `pm = C_c · pc`, `pc = C_c⁻¹ · pm`を満たす.
     igesio::Matrix4d local_frame = igesio::Matrix4d::Identity();
     /// @brief 取り付け先座標系→ゼロポーズ機械座標への剛体変換H (typeがkMountの場合のみ)
     /// @note 工具やワークの取り付け座標系上の点は、この行列のみを掛けて

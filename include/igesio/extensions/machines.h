@@ -29,6 +29,7 @@
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/extensions/machines/core/opaque_toml.h"
 
 // 機械定義・運動学
 #include "igesio/extensions/machines/machine/machine_definition.h"
@@ -43,5 +44,11 @@
 #include "igesio/extensions/machines/tools/tool_profile.h"
 #include "igesio/extensions/machines/tools/tool_assembly.h"
 #include "igesio/extensions/machines/tools/tool_entities.h"
+
+// プロジェクト定義・セットアップ
+#include "igesio/extensions/machines/project/project_definition.h"
+#include "igesio/extensions/machines/project/project_io.h"
+#include "igesio/extensions/machines/project/setup.h"
+
 
 #endif  // IGESIO_EXTENSIONS_MACHINES_H_

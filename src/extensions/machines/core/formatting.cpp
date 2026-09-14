@@ -54,4 +54,34 @@ std::string FormatHexColor(const Color& color) {
     return text;
 }
 
+
+
+/**
+ * ---- テキストファイルの改行と文字コード ----
+ */
+
+std::optional<NewlineStyle> ParseNewlineStyle(const std::string_view text) {
+    if (text == "lf") return NewlineStyle::kLf;
+    if (text == "crlf") return NewlineStyle::kCrlf;
+    return std::nullopt;
+}
+
+std::string_view NewlineStyleName(const NewlineStyle style) {
+    return style == NewlineStyle::kCrlf ? "crlf" : "lf";
+}
+
+std::string_view NewlineText(const NewlineStyle style) {
+    return style == NewlineStyle::kCrlf ? "\r\n" : "\n";
+}
+
+std::optional<TextEncoding> ParseTextEncoding(const std::string_view text) {
+    if (text == "utf-8") return TextEncoding::kUtf8;
+    if (text == "shift_jis") return TextEncoding::kShiftJis;
+    return std::nullopt;
+}
+
+std::string_view TextEncodingName(const TextEncoding encoding) {
+    return encoding == TextEncoding::kShiftJis ? "shift_jis" : "utf-8";
+}
+
 }  // namespace igesio::extensions::machines

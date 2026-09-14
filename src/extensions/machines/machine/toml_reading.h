@@ -10,6 +10,9 @@
  * @note 値の読取は`contains`/`is_*`で型検査してから`as_*`を呼ぶため、
  *       toml11の`type_error`/`std::out_of_range`は発生しない.
  *       フォーマットに対しての仕様違反は`igesio::DataFormatError`で報告する.
+ * @note 以下の理由から、値型は挿入順を保持する`toml::ordered_value`とする.
+ *       - 本拡張が読まないセクションを出現順のまま保持・書き戻すため (`OpaqueToml`)
+ *       - 書き出し側 (`toml_writing.h`) と値型を揃えるため
  */
 #ifndef SRC_EXTENSIONS_MACHINES_MACHINE_TOML_READING_H_
 #define SRC_EXTENSIONS_MACHINES_MACHINE_TOML_READING_H_
@@ -20,6 +23,7 @@
 #include <initializer_list>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <toml.hpp>
@@ -27,13 +31,14 @@
 #include "igesio/common/color.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/diagnostics.h"
+#include "igesio/extensions/machines/core/opaque_toml.h"
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
 
 namespace igesio::extensions::machines::detail {
 
-/// @brief toml11の値型
-using TomlValue = toml::value;
+/// @brief toml11の値型 (挿入順を保持する)
+using TomlValue = toml::ordered_value;
 
 /// @brief 回転3形式のキー名
 /// @note TOMLの`[[component.geometry]]`内にて指定可能な回転の形式のキー名
@@ -54,9 +59,27 @@ struct GeometryContext {
     std::filesystem::path base_dir;
     /// @brief 単位換算係数
     UnitScales scales;
-    /// @brief 所属コンポーネントのローカル座標系の配置C_c
-    igesio::Matrix4d local_frame = igesio::Matrix4d::Identity();
 };
+
+
+
+/**
+ * ---- TOMLファイルの読み込み ----
+ */
+
+/// @brief TOMLファイルを読み込む
+/// @param path TOMLファイルのパス
+/// @param source_name 診断・例外の文言に用いる入力の表示名
+/// @throw igesio::DataFormatError 構文誤り (toml11の文言を全文含む)
+TomlValue ParseTomlFile(const std::filesystem::path& path,
+                        const std::string& source_name);
+
+/// @brief TOML文字列を読み込む
+/// @param text TOML本文
+/// @param source_name 診断・例外の文言に用いる入力の表示名
+/// @throw igesio::DataFormatError 構文誤り (toml11の文言を全文含む)
+TomlValue ParseTomlString(const std::string& text,
+                          const std::string& source_name);
 
 
 
@@ -66,6 +89,9 @@ struct GeometryContext {
 
 /// @brief 値のTOML行番号を返す
 int LineOf(const TomlValue& value);
+
+/// @brief テーブルの行番号 (`nullptr`なら0)
+int LineOfTable(const TomlValue* table);
 
 /// @brief 仕様違反を`DataFormatError`として投げる
 /// @param context 発生箇所 (`"component[A].axis"`等)
@@ -80,6 +106,9 @@ void Warn(std::vector<Diagnostic>& warnings, const std::string& context,
 
 /// @brief 値をTOML表記の文字列にする (診断文言用)
 std::string FormatValue(const TomlValue& value);
+
+/// @brief `[a, b]`形式のバージョン表記
+std::string FormatVersion(const std::array<int, 2>& version);
 
 
 
@@ -109,6 +138,14 @@ std::optional<std::string>
 OptionalString(const TomlValue& table, const std::string& key,
                const std::string& context);
 
+/// @brief 任意の文字列配列キーを読む
+/// @param context 読込箇所 (`"[controller]"`等)
+/// @return 値. 欠落なら空
+/// @throw igesio::DataFormatError 配列でない、または文字列でない要素を含む場合
+std::vector<std::string>
+OptionalStringArray(const TomlValue& table, const std::string& key,
+                    const std::string& context);
+
 /// @brief 任意の真偽値キーを読む
 /// @param context 読込箇所 (`"component[A].axis"`等)
 /// @throw igesio::DataFormatError 真偽値でない場合
@@ -118,6 +155,16 @@ bool OptionalBool(const TomlValue& table, const std::string& key,
 /// @brief 指定したキーのうちテーブルに存在するものを列挙する (順序保持)
 std::vector<std::string>
 PresentKeys(const TomlValue& table, std::initializer_list<const char*> keys);
+
+/// @brief テーブル配列 (`[[key]]`) の要素を列挙する
+/// @param root 親テーブル
+/// @param key テーブル配列のキー
+/// @param context 読込箇所 (`"[[tool]]"`等. 文言に用いる)
+/// @return 要素 (いずれもテーブル). 欠落なら空
+/// @throw igesio::DataFormatError 配列でない、またはテーブルでない要素を含む場合
+std::vector<const TomlValue*>
+TableArray(const TomlValue& root, const std::string& key,
+           const std::string& context);
 
 
 
@@ -177,6 +224,72 @@ igesio::Vector3d ReadVec3Or(const TomlValue& table, const std::string& key,
 
 
 /**
+ * ---- 整数 ----
+ */
+
+/// @brief 値を整数として読む
+/// @param context 読込箇所 (`"[[tool]]"`等)
+/// @return 整数値. 整数値の実数リテラル (`1.0`) も受理する
+/// @throw igesio::DataFormatError 整数でない (真偽値・非整数の実数を含む) 場合
+int AsInteger(const TomlValue& value, const std::string& context);
+
+/// @brief 必須の整数キーを読む
+/// @param context 読込箇所 (`"[[tool]]"`等)
+/// @throw igesio::DataFormatError 欠落または整数でない場合
+int RequireInteger(const TomlValue& table, const std::string& key,
+                   const std::string& context);
+
+/// @brief 任意の整数キーを読む
+/// @param context 読込箇所 (`"[[tool]]"`等)
+/// @return 値. 欠落なら`std::nullopt`
+/// @throw igesio::DataFormatError 整数でない場合
+std::optional<int> OptionalInteger(const TomlValue& table, const std::string& key,
+                                   const std::string& context);
+
+
+
+/**
+ * ---- 共通セクション ----
+ */
+
+/// @brief `[format]`を検証する
+/// @param root 文書のルート
+/// @param expected_name `[format].name`の固定値
+/// @param supported_version 対応するバージョン `[major, minor]`
+/// @param warnings 警告の追記先
+/// @return フォーマットバージョン
+/// @throw igesio::DataFormatError 名前の不一致、`version`の形式不正、
+///        majorの不一致
+/// @note minorが対応値より新しければ警告して続行する
+std::array<int, 2> ReadFormat(const TomlValue& root,
+                              std::string_view expected_name,
+                              const std::array<int, 2>& supported_version,
+                              std::vector<Diagnostic>& warnings);
+
+/// @brief `[units]`を読み込む. 既定は`UnitScales`の既定値 (mm・deg)
+/// @throw igesio::DataFormatError テーブルでない、または未知の単位の場合
+UnitScales ReadUnits(const TomlValue& root);
+
+/// @brief 日付・日時キーを表記の文字列で読む
+/// @param table 親テーブル
+/// @param key キー名 (`"date"`・`"modified"`)
+/// @param context 読込箇所 (`"[machine]"`等)
+/// @return TOMLの日付・日時 (local date / local datetime / offset datetime) は
+///         その表記、文字列はそのまま. 欠落なら`std::nullopt`
+/// @throw igesio::DataFormatError 日付・日時・文字列のいずれでもない場合
+std::optional<std::string> ReadDateTimeText(const TomlValue& table,
+                                            const std::string& key,
+                                            const std::string& context);
+
+/// @brief 本拡張が読まないセクションを`OpaqueToml`として抽出する
+/// @param key 読まないセクションのキー
+/// @param value 値 (テーブル・テーブル配列・スカラー・配列)
+/// @return `OpaqueToml`に変換したもの
+OpaqueToml ToOpaque(const std::string& key, const TomlValue& value);
+
+
+
+/**
  * ---- 幾何要素 ----
  */
 
@@ -210,12 +323,17 @@ bool IsAbsolutePathString(const std::string& raw);
 /// @param ctx 形状テーブルの解釈に必要な情報
 /// @param warnings 警告の追記先
 /// @param issues 絶対パスの集計先
-/// @return 形状. 未対応形式 (STEP) は警告して`std::nullopt`
+/// @param keep_unsupported 未対応形式 (STEP) も警告のうえ形状として返すか
+///        (プロジェクト定義の`[[model]]`は書き戻しのため保持する)
+/// @return 形状と、その座標系→親フレームの剛体変換 (`origin`・回転キーは書かれたまま).
+///         未対応形式 (STEP) は警告して`std::nullopt`
+///         (`keep_unsupported`なら警告して形状を返す)
 /// @throw igesio::DataFormatError 仕様違反
-std::optional<GeometrySpec>
+std::optional<GeometryEntry>
 ReadGeometry(const TomlValue& geometry,
              const std::string& context, const GeometryContext& ctx,
-             std::vector<Diagnostic>& warnings, PathIssues& issues);
+             std::vector<Diagnostic>& warnings, PathIssues& issues,
+             bool keep_unsupported = false);
 
 }  // namespace igesio::extensions::machines::detail
 

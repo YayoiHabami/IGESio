@@ -420,10 +420,16 @@ void ValidateSimpleToolSpec(const SimpleToolSpec& spec) {
                 "SimpleToolSpec: cutting_length (" + FormatFixed(spec.cutting_length, 3)
                 + ") exceeds tool_length (" + FormatFixed(spec.tool_length, 3) + ")");
     }
+    // ホルダ下端がシャンク上端より+z側 (主軸側) にある場合、工具がホルダから浮く
+    if (spec.overhang > spec.tool_length) {
+        throw std::invalid_argument(
+                "SimpleToolSpec: overhang (" + FormatFixed(spec.overhang, 3)
+                + ") exceeds tool_length (" + FormatFixed(spec.tool_length, 3) + ")");
+    }
     if (spec.command_point == SimpleToolSpec::CommandPoint::kCenter
             && spec.cutter != SimpleToolSpec::Cutter::kBall) {
-        throw std::invalid_argument(
-                "SimpleToolSpec: command_point = \"center\" is only valid for ball cutters");
+        throw std::invalid_argument("SimpleToolSpec: command_point = \"center\" "
+                                    "is only valid for ball cutters");
     }
 }
 

@@ -189,7 +189,8 @@ TEST(MachineReaderTest, Fixture_GeometriesResolvePathsAndColors) {
     const auto def = mc::ReadMachineDefinition(kFixturePath);
     const auto& frame = FindComponent(def, "cradle-frame");
     ASSERT_EQ(frame.geometries.size(), 1u);
-    const auto& geometry = frame.geometries[0];
+    const auto& entry = frame.geometries[0];
+    const auto& geometry = entry.geometry;
     EXPECT_EQ(geometry.name, "cradle frame");
     EXPECT_EQ(geometry.raw_path, "tool-ZYX-base-AC-work/cradle-frame.STL");
     ASSERT_TRUE(std::holds_alternative<fs::path>(geometry.source));
@@ -201,9 +202,10 @@ TEST(MachineReaderTest, Fixture_GeometriesResolvePathsAndColors) {
     EXPECT_NEAR((*geometry.color)[0], 0xe0 / 255.0, 1e-6);
     EXPECT_NEAR((*geometry.color)[1], 0xd6 / 255.0, 1e-6);
     EXPECT_NEAR((*geometry.color)[2], 0xc8 / 255.0, 1e-6);
-    EXPECT_TRUE(geometry.placement.isApprox(Matrix4d::Identity(), kTol));
-    EXPECT_TRUE(geometry.visible);
-    EXPECT_TRUE(geometry.collision);
+    EXPECT_TRUE(entry.placement.origin.isZero(kTol));
+    EXPECT_TRUE(entry.placement.rotation.isIdentity(kTol));
+    EXPECT_TRUE(entry.visible);
+    EXPECT_TRUE(entry.collision);
     EXPECT_NEAR(geometry.opacity, 1.0, 1e-6);
     // 形状を持たないコンポーネント (Spindle) は空
     EXPECT_TRUE(FindComponent(def, "Spindle").geometries.empty());
@@ -247,7 +249,7 @@ TEST(MachineReaderTest, InchAndRadianUnits_ScaleLengthsOnly) {
     const auto& x = FindComponent(def, "X");
     EXPECT_NEAR((*x.axis->limits)[1], 400.0 * 25.4, kTol);
     EXPECT_NEAR(*x.axis->dynamics.rapid_feed, 100.0 * 25.4 / mc::kSecondsPerMinute, kTol);
-    const auto& box = std::get<mc::PrimitiveSpec>(x.geometries[0].source);
+    const auto& box = std::get<mc::PrimitiveSpec>(x.geometries[0].geometry.source);
     EXPECT_TRUE(box.size.isApprox(Vector3d(10.0, 20.0, 30.0) * 25.4, kTol));
     EXPECT_TRUE(mc::TranslationPart(*FindComponent(def, "Tool").frame_placement)
                         .isApprox(Vector3d(0.0, -180.0, 250.5) * 25.4, kTol));
@@ -327,13 +329,13 @@ height = 20
     EXPECT_GT(base.line, 0);
     EXPECT_TRUE(mc::TranslationPart(base.local_frame).isApprox(Vector3d(0, 0, -50), kTol));
     ASSERT_EQ(base.geometries.size(), 1u);
-    const auto& cylinder = std::get<mc::PrimitiveSpec>(base.geometries[0].source);
+    const auto& cylinder = std::get<mc::PrimitiveSpec>(base.geometries[0].geometry.source);
     EXPECT_EQ(cylinder.kind, mc::PrimitiveSpec::Kind::kCylinder);
     EXPECT_NEAR(cylinder.radius, 5.0, kTol);
     EXPECT_NEAR(cylinder.height, 20.0, kTol);
-    // 形状の配置はlocal_frameを受ける
-    EXPECT_TRUE(mc::TranslationPart(base.geometries[0].placement)
-                        .isApprox(Vector3d(0, 0, -50), kTol));
+    // 形状の剛体変換はコンポーネント座標相対のまま (local_frameとの合成はセットアップ側)
+    EXPECT_TRUE(base.geometries[0].placement.origin.isZero(kTol));
+    EXPECT_TRUE(base.geometries[0].placement.rotation.isIdentity(kTol));
 }
 
 TEST(MachineReaderTest, LocalFrame_AppliesToFrameAndIsKeptForAxis) {
@@ -342,7 +344,7 @@ TEST(MachineReaderTest, LocalFrame_AppliesToFrameAndIsKeptForAxis) {
             MinimalXyzAc(), "parent = \"Spindle\"\n",
             "parent = \"Spindle\"\n\n[component.local_frame]\norigin = [1, 2, 3]\n"
             "rotation_axis_angle = { axis = [0, 0, 1], angle = 90 }\n");
-    // Aにも同じlocal_frame回転を与える (directionはローカルのまま保持される)
+    // Aにも同じlocal_frame回転を与える (directionはコンポーネント座標のまま保持される)
     toml = Replace(toml, "parent = \"base\"\n",
                    "parent = \"base\"\n\n[component.local_frame]\n"
                    "rotation_euler_ijk = [0, 0, 90]\n");
@@ -372,9 +374,9 @@ TEST(MachineReaderTest, RotationForms_AgreeForSamePose) {
     const auto& x = FindComponent(def, "X");
     ASSERT_EQ(x.geometries.size(), 3u);
     const Matrix4d expected = mc::MakeRigid(RotZ90(), Vector3d(1, 0, 0));
-    for (const auto& geometry : x.geometries) {
-        EXPECT_TRUE(geometry.placement.isApprox(expected, kTol))
-                << "actual:\n" << geometry.placement;
+    for (const auto& entry : x.geometries) {
+        const Matrix4d actual = mc::PlacementMatrix(entry.placement);
+        EXPECT_TRUE(actual.isApprox(expected, kTol)) << "actual:\n" << actual;
     }
 }
 
@@ -394,9 +396,10 @@ TEST(MachineReaderTest, Geometry_KeepsVisibilityCollisionOpacityAndColor) {
             "size = [10, 20, 30]\nvisible = false\ncollision = false\n"
             "opacity = 0.5\ncolor = \"#FF8000\"\n");
     const auto def = ReadString(toml);
-    const auto& geometry = FindComponent(def, "X").geometries.at(0);
-    EXPECT_FALSE(geometry.visible);
-    EXPECT_FALSE(geometry.collision);
+    const auto& entry = FindComponent(def, "X").geometries.at(0);
+    const auto& geometry = entry.geometry;
+    EXPECT_FALSE(entry.visible);
+    EXPECT_FALSE(entry.collision);
     EXPECT_NEAR(geometry.opacity, 0.5, 1e-6);
     ASSERT_TRUE(geometry.color.has_value());
     EXPECT_NEAR((*geometry.color)[0], 1.0, 1e-6);
@@ -420,7 +423,7 @@ TEST(MachineReaderTest, Geometry_IgesIsAcceptedWithoutUnit) {
                                      "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                      "file = \"models/x.igs\"\n");
     const auto def = ReadString(toml);
-    const auto& geometry = FindComponent(def, "X").geometries.at(0);
+    const auto& geometry = FindComponent(def, "X").geometries.at(0).geometry;
     EXPECT_EQ(std::get<fs::path>(geometry.source),
               (kBaseDir / "models/x.igs").lexically_normal());
     EXPECT_NEAR(geometry.file_unit_scale, 1.0, kTol);
@@ -432,7 +435,7 @@ TEST(MachineReaderTest, Geometry_UpperCaseExtensionAndInchUnit) {
                                      "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                      "file = \"models/x.STL\"\nunit = \"inch\"\n");
     const auto def = ReadString(toml);
-    const auto& geometry = FindComponent(def, "X").geometries.at(0);
+    const auto& geometry = FindComponent(def, "X").geometries.at(0).geometry;
     EXPECT_EQ(geometry.raw_path, "models/x.STL");
     EXPECT_NEAR(geometry.file_unit_scale, 25.4, kTol);
 }
@@ -444,7 +447,8 @@ TEST(MachineReaderTest, Geometry_UnitDefaultsToDeclaredLengthUnit) {
     toml = Replace(toml, "primitive = \"box\"\nsize = [10, 20, 30]\n",
                    "file = \"models/x.obj\"\n");
     const auto def = ReadString(toml);
-    EXPECT_NEAR(FindComponent(def, "X").geometries.at(0).file_unit_scale, 25.4, kTol);
+    EXPECT_NEAR(FindComponent(def, "X").geometries.at(0).geometry.file_unit_scale,
+                25.4, kTol);
 }
 
 TEST(MachineReaderTest, Geometry_RelativePathResolvesFromBaseDir) {
@@ -452,7 +456,7 @@ TEST(MachineReaderTest, Geometry_RelativePathResolvesFromBaseDir) {
                                      "primitive = \"box\"\nsize = [10, 20, 30]\n",
                                      "file = \"sub/./part.stl\"\n");
     const auto def = ReadString(toml);
-    const auto& geometry = FindComponent(def, "X").geometries.at(0);
+    const auto& geometry = FindComponent(def, "X").geometries.at(0).geometry;
     EXPECT_EQ(std::get<fs::path>(geometry.source),
               (kBaseDir / "sub/part.stl").lexically_normal());
     EXPECT_TRUE(def.warnings.empty());
@@ -764,7 +768,7 @@ TEST(MachineReaderTest, Geometry_WarnsOnceForNonPortablePaths) {
     EXPECT_NE(def.warnings[0].message.find("above base directory: 1"),
               std::string::npos);
     // 絶対パスは基準ディレクトリを付けない
-    EXPECT_EQ(std::get<fs::path>(FindComponent(def, "X").geometries[1].source),
+    EXPECT_EQ(std::get<fs::path>(FindComponent(def, "X").geometries[1].geometry.source),
               fs::path("D:/abs/b.stl").lexically_normal());
 }
 

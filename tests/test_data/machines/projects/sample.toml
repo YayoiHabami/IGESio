@@ -1,0 +1,160 @@
+# プロジェクトフォーマットの記述例 (仕様§6を新フォーマット名で複製したもの)
+# 機械定義・制御装置・工具ライブラリは tests/test_data/machines をライブラリ検索
+# ディレクトリとして解決する。[pnf]・[cutting]・[settings] は本拡張が読まない
+# セクションであり、retained への保持の検証に用いる。
+
+[format]
+name = "machining-project"
+version = [1, 0]
+
+[project]
+name = "sample op10"
+description = "ボールエンドミルによる曲面仕上げ"
+author = "Yayoi Habami"
+modified = 2026-09-02T10:00:00+09:00
+
+[units]
+length = "mm"
+angle = "deg"
+
+[machine]
+library = "t-ZYX-b-AC-w.toml"
+
+[controller]
+library = "controllers/generic-tcp.toml"
+disabled_codes = ["G68.2"]
+
+[[tool_library]]
+alias = "std"
+library = "tools/tools.json"
+
+# ライブラリ参照形式
+[[tool]]
+number = 1
+source = "std"
+assembly = 2
+
+# 簡易アセンブリ形式(ゲージ長を明示)
+[[tool]]
+number = 2
+name = "Ball R5 (simple)"
+gauge_length = 120.0
+
+[tool.simple]
+cutter = "ball"
+diameter = 10.0
+cutting_length = 20.0
+tool_length = 80.0
+command_point = "center"
+overhang = 40.0
+
+[tool.simple.holder]
+diameter = 46.0
+length = 100.0
+
+[[tool_offset]]
+number = 1
+tool = 1
+
+[[tool_offset]]
+number = 2
+tool = 2
+length_wear = -0.02
+
+# 登録値形式: ゲージ点をワーク原点に置く機械位置
+[[work_offset]]
+id = "G54"
+values = { X = -9.0, Y = -22.5, Z = -296.0966 }
+
+# 幾何形式: 治具モデル座標系で原点を与える(登録値は処理系が導出)
+[[work_offset]]
+id = "G55"
+attach = "fixture"
+origin = [0.0, 0.0, 30.0]
+
+[[model]]
+name = "fixture"
+role = "fixture"
+file = "models/cube.stl"
+unit = "inch"
+color = "#808080"
+
+[[model]]
+name = "stock"
+role = "stock"
+primitive = "box"
+size = [100.0, 60.0, 40.0]
+attach = "fixture"
+origin = [0.0, 0.0, 50.0]
+color = "#c0a060"
+opacity = 0.8
+
+[[model]]
+name = "design"
+role = "design"
+file = "models/cube.obj"
+attach = "stock"
+visible = false
+
+[[program]]
+file = "programs/placeholder.nc"
+type = "gcode"
+encoding = "shift_jis"
+block_skip = [1]
+
+[[program]]
+file = "programs/placeholder.cl"
+type = "cl"
+enabled = false
+tool = 2
+work_offset = "G54"
+
+[pnf]
+file = "pnf/sample.pnf"
+tool = 2
+
+[initial]
+tool = 0
+work_offset = "G54"
+
+[initial.axes]
+Z = 300.0
+
+[collision]
+default_clearance = 0.5
+
+[[collision.tool_pair]]
+part = "holder"
+target = "stock"
+clearance = 2.0
+
+[[collision.machine_pair]]
+targets = ["tool", "base"]
+enabled = false
+
+[cutting]
+enabled = true
+resolution = 0.2
+
+[cutting.compare]
+enabled = true
+undercut_tolerance = 0.05
+overcut_tolerance = 0.02
+
+[run]
+overtravel = "error"
+collision = "warning"
+
+[run.output]
+dir = "output"
+log = "run.log"
+cut_stock = "stock_cut.stl"
+
+[settings.cspace_cam]
+version = "0.1.0"
+json = '''
+{
+  "desc": "C-Space設定",
+  "lambda": { "v": 25.0, "desc": "角度重み", "range": "R>0" }
+}
+'''

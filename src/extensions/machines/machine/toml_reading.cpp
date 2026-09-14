@@ -7,17 +7,21 @@
  */
 #include "extensions/machines/machine/toml_reading.h"
 
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "igesio/common/errors.h"
 #include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/extensions/machines/core/tolerances.h"
 
 namespace igesio::extensions::machines::detail {
 
@@ -102,7 +106,8 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
     spec.source = path.lexically_normal();
 
     const GeometryFileFormat format = ClassifyGeometryFile(path);
-    if (format == GeometryFileFormat::kIges || format == GeometryFileFormat::kStep) {
+    if (format == GeometryFileFormat::kIges ||
+        format == GeometryFileFormat::kStep) {
         if (Find(geometry, "unit") != nullptr) {
             Fail(context, "unit cannot be specified for IGES/STEP",
                  LineOf(geometry));
@@ -119,7 +124,8 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
         Fail(context, "unsupported model format: " + spec.raw_path,
              LineOf(file));
     }
-    const std::optional<std::string> unit = OptionalString(geometry, "unit", context);
+    const std::optional<std::string> unit =
+            OptionalString(geometry, "unit", context);
     LengthUnit length_unit = ctx.scales.length_unit;
     if (unit.has_value()) {
         const auto parsed = ParseLengthUnit(*unit);
@@ -138,11 +144,41 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
 
 
 /**
+ * ---- TOMLファイルの読み込み ----
+ */
+
+TomlValue ParseTomlFile(const std::filesystem::path& path,
+                        const std::string& source_name) {
+    try {
+        return toml::parse<toml::ordered_type_config>(path.string());
+    } catch (const toml::exception& e) {
+        throw igesio::DataFormatError(
+                source_name + ": TOML parse error: " + e.what());
+    }
+}
+
+TomlValue ParseTomlString(const std::string& text,
+                          const std::string& source_name) {
+    try {
+        return toml::parse_str<toml::ordered_type_config>(text);
+    } catch (const toml::exception& e) {
+        throw igesio::DataFormatError(
+                source_name + ": TOML parse error: " + e.what());
+    }
+}
+
+
+
+/**
  * ---- 位置・診断 ----
  */
 
 int LineOf(const TomlValue& value) {
     return static_cast<int>(value.location().first_line_number());
+}
+
+int LineOfTable(const TomlValue* table) {
+    return table == nullptr ? 0 : LineOf(*table);
 }
 
 void Fail(const std::string& context, const std::string& message, const int line) {
@@ -158,6 +194,10 @@ void Warn(std::vector<Diagnostic>& warnings, const std::string& context,
 
 std::string FormatValue(const TomlValue& value) {
     return toml::format(value);
+}
+
+std::string FormatVersion(const std::array<int, 2>& version) {
+    return "[" + std::to_string(version[0]) + ", " + std::to_string(version[1]) + "]";
 }
 
 
@@ -213,13 +253,50 @@ bool OptionalBool(const TomlValue& table, const std::string& key,
     return value->as_boolean();
 }
 
-std::vector<std::string> PresentKeys(const TomlValue& table,
-                                     const std::initializer_list<const char*> keys) {
+std::vector<std::string> OptionalStringArray(const TomlValue& table,
+                                             const std::string& key,
+                                             const std::string& context) {
+    std::vector<std::string> result;
+    const TomlValue* value = Find(table, key);
+    if (value == nullptr) return result;
+    if (!value->is_array()) {
+        Fail(context, key + " is not an array of strings: " + FormatValue(*value),
+             LineOf(*value));
+    }
+    for (const TomlValue& element : value->as_array()) {
+        if (!element.is_string()) {
+            Fail(context,
+                 key + " is not an array of strings: " + FormatValue(*value),
+                 LineOf(*value));
+        }
+        result.push_back(element.as_string());
+    }
+    return result;
+}
+
+std::vector<std::string> PresentKeys(
+        const TomlValue& table, const std::initializer_list<const char*> keys) {
     std::vector<std::string> present;
     for (const char* key : keys) {
         if (Find(table, key) != nullptr) present.emplace_back(key);
     }
     return present;
+}
+
+std::vector<const TomlValue*> TableArray(const TomlValue& root,
+                                         const std::string& key,
+                                         const std::string& context) {
+    std::vector<const TomlValue*> tables;
+    const TomlValue* value = Find(root, key);
+    if (value == nullptr) return tables;
+    if (!value->is_array()) {
+        Fail(context, "not an array of tables", LineOf(*value));
+    }
+    for (const TomlValue& element : value->as_array()) {
+        EnsureTable(element, context + ": not an array of tables");
+        tables.push_back(&element);
+    }
+    return tables;
 }
 
 
@@ -315,6 +392,136 @@ igesio::Vector3d ReadVec3Or(const TomlValue& table, const std::string& key,
 
 
 /**
+ * ---- 整数 ----
+ */
+
+int AsInteger(const TomlValue& value, const std::string& context) {
+    if (value.is_integer()) return static_cast<int>(value.as_integer());
+    // 整数値の実数リテラル (`1.0`) は仕様の実数/整数互換により許容する
+    if (value.is_floating()) {
+        const double real = value.as_floating();
+        if (std::isfinite(real) && std::floor(real) == real) {
+            return static_cast<int>(real);
+        }
+    }
+    Fail(context, "not an integer: " + FormatValue(value), LineOf(value));
+}
+
+int RequireInteger(const TomlValue& table, const std::string& key,
+                   const std::string& context) {
+    const TomlValue* value = Find(table, key);
+    if (value == nullptr) Fail(context, key + " is missing", LineOf(table));
+    return AsInteger(*value, context + "." + key);
+}
+
+std::optional<int> OptionalInteger(const TomlValue& table, const std::string& key,
+                                   const std::string& context) {
+    const TomlValue* value = Find(table, key);
+    if (value == nullptr) return std::nullopt;
+    return AsInteger(*value, context + "." + key);
+}
+
+
+
+/**
+ * ---- 共通セクション ----
+ */
+
+std::array<int, 2> ReadFormat(
+        const TomlValue& root, const std::string_view expected_name,
+        const std::array<int, 2>& supported_version,
+        std::vector<Diagnostic>& warnings) {
+    const TomlValue* format = Find(root, "format");
+    const TomlValue* name = format == nullptr ? nullptr : Find(*format, "name");
+    if (name == nullptr || !name->is_string() || name->as_string() != expected_name) {
+        Fail("", "[format].name must be \"" + std::string(expected_name) + "\"",
+             LineOfTable(format));
+    }
+    const TomlValue* version = Find(*format, "version");
+    const bool well_formed =
+            version != nullptr && version->is_array()
+            && version->as_array().size() == 2
+            && version->as_array()[0].is_integer()
+            && version->as_array()[1].is_integer();
+    if (!well_formed) {
+        Fail("", "[format].version must be two integers [major, minor]: "
+                 + (version == nullptr ? std::string("(missing)")
+                                       : FormatValue(*version)),
+             LineOfTable(format));
+    }
+    const std::array<int, 2> result = {
+            static_cast<int>(version->as_array()[0].as_integer()),
+            static_cast<int>(version->as_array()[1].as_integer())};
+    if (result[0] != supported_version[0]) {
+        Fail("", "unsupported format version: " + FormatVersion(result)
+                 + " (supported major " + std::to_string(supported_version[0]) + ")",
+             LineOf(*version));
+    }
+    if (result[1] > supported_version[1]) {
+        Warn(warnings, "[format]",
+             "format version " + FormatVersion(result)
+             + " has a newer minor than the supported "
+             + FormatVersion(supported_version)
+             + " (unsupported keys are ignored)",
+             LineOf(*version));
+    }
+    return result;
+}
+
+UnitScales ReadUnits(const TomlValue& root) {
+    const UnitScales defaults;
+    const TomlValue* units = Find(root, "units");
+    if (units == nullptr) return defaults;
+    EnsureTable(*units, "[units] is not a table");
+    const std::string length =
+            OptionalString(*units, "length", "[units]")
+                    .value_or(std::string(LengthUnitName(defaults.length_unit)));
+    const std::string angle =
+            OptionalString(*units, "angle", "[units]")
+                    .value_or(std::string(AngleUnitName(defaults.angle_unit)));
+    const auto length_unit = ParseLengthUnit(length);
+    if (!length_unit.has_value()) {
+        Fail("", "invalid [units].length: " + length, LineOf(*units));
+    }
+    const auto angle_unit = ParseAngleUnit(angle);
+    if (!angle_unit.has_value()) {
+        Fail("", "invalid [units].angle: " + angle, LineOf(*units));
+    }
+    return MakeUnitScales(*length_unit, *angle_unit);
+}
+
+std::optional<std::string> ReadDateTimeText(const TomlValue& table,
+                                            const std::string& key,
+                                            const std::string& context) {
+    const TomlValue* value = Find(table, key);
+    if (value == nullptr) return std::nullopt;
+    if (value->is_string()) return value->as_string();
+    if (value->is_local_date() || value->is_local_datetime()
+        || value->is_offset_datetime()) {
+        return toml::format(*value);
+    }
+    Fail(context, key + " is neither a date-time nor a string: " + FormatValue(*value),
+         LineOf(*value));
+}
+
+OpaqueToml ToOpaque(const std::string& key, const TomlValue& value) {
+    // キー付きの文書として整形する (テーブルは`[key]`、テーブル配列は`[[key]]`、
+    // それ以外は`key = value`の形になる). キーの引用はtoml11に任せる
+    TomlValue root((toml::ordered_table()));
+    root.as_table_fmt().fmt = toml::table_format::multiline;
+    root[key] = value;
+    std::string text = toml::format(root);
+    // テーブルの後に付く空行を落とし、末尾の改行を1つにそろえる
+    while (text.size() >= 2 && text[text.size() - 1] == '\n'
+           && text[text.size() - 2] == '\n') {
+        text.pop_back();
+    }
+    return OpaqueToml(std::move(text));
+}
+
+
+
+/**
  * ---- 幾何要素 ----
  */
 
@@ -400,17 +607,19 @@ void CheckFilePath(const std::string& raw, const std::string& context,
     }
 }
 
-std::optional<GeometrySpec> ReadGeometry(
+std::optional<GeometryEntry> ReadGeometry(
         const TomlValue& geometry,
         const std::string& context, const GeometryContext& ctx,
-        std::vector<Diagnostic>& warnings, PathIssues& issues) {
+        std::vector<Diagnostic>& warnings, PathIssues& issues,
+        const bool keep_unsupported) {
     EnsureTable(geometry, context + ": not a table");
     const bool has_file = Find(geometry, "file") != nullptr;
     if (has_file == (Find(geometry, "primitive") != nullptr)) {
         Fail(context, "specify exactly one of file and primitive",
              LineOf(geometry));
     }
-    GeometrySpec spec;
+    GeometryEntry entry;
+    GeometrySpec& spec = entry.geometry;
     spec.line = LineOf(geometry);
     if (const TomlValue* opacity = Find(geometry, "opacity"); opacity != nullptr) {
         const double value = AsReal(*opacity, context + ".opacity");
@@ -420,22 +629,22 @@ std::optional<GeometrySpec> ReadGeometry(
         }
         spec.opacity = static_cast<float>(value);
     }
-    const igesio::Vector3d origin =
+    entry.placement.origin =
             ReadVec3Or(geometry, "origin", igesio::Vector3d::Zero(), context)
             * ctx.scales.length;
-    const igesio::Matrix3d rotation = ReadRotation(geometry, context, ctx.scales.angle);
-    spec.placement = ctx.local_frame * MakeRigid(rotation, origin);
+    entry.placement.rotation = ReadRotation(geometry, context, ctx.scales.angle);
 
     if (!has_file) {
         spec.source = ReadPrimitive(geometry, context, ctx.scales.length);
-    } else if (!ReadFileSource(geometry, context, ctx, warnings, issues, spec)) {
+    } else if (!ReadFileSource(geometry, context, ctx, warnings, issues, spec)
+               && !keep_unsupported) {
         return std::nullopt;
     }
     spec.name = OptionalString(geometry, "name", context).value_or("");
     spec.color = ReadColor(geometry, context);
-    spec.collision = OptionalBool(geometry, "collision", true, context);
-    spec.visible = OptionalBool(geometry, "visible", true, context);
-    return spec;
+    entry.collision = OptionalBool(geometry, "collision", true, context);
+    entry.visible = OptionalBool(geometry, "visible", true, context);
+    return entry;
 }
 
 }  // namespace igesio::extensions::machines::detail

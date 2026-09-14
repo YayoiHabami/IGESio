@@ -44,6 +44,7 @@ using detail::TomlValue;
 using detail::Fail;
 using detail::Find;
 using detail::LineOf;
+using detail::LineOfTable;
 using detail::Warn;
 
 /// @brief ルートコンポーネントの予約名 (`kBaseComponentName`の`std::string`版)
@@ -80,11 +81,6 @@ std::string ContextOf(const std::string& name) {
     return "component[" + name + "]";
 }
 
-/// @brief テーブルの行番号 (暗黙のbaseは0)
-int LineOfTable(const TomlValue* table) {
-    return table == nullptr ? 0 : LineOf(*table);
-}
-
 /// @brief 名前列を`[a, b]`の形にする
 std::string JoinNames(const std::vector<std::string>& names) {
     std::string text = "[";
@@ -93,11 +89,6 @@ std::string JoinNames(const std::vector<std::string>& names) {
         text += names[i];
     }
     return text + "]";
-}
-
-/// @brief `[a, b]`形式のバージョン表記
-std::string FormatVersion(const std::array<int, 2>& version) {
-    return "[" + std::to_string(version[0]) + ", " + std::to_string(version[1]) + "]";
 }
 
 /// @brief 文字列2要素の配列を読む (干渉ペアの対象)
@@ -115,78 +106,8 @@ std::array<std::string, 2> ReadNamePair(const TomlValue& value,
 
 
 /**
- * ---- TOML本体の解析 ----
- */
-
-/// @brief toml11の例外を`DataFormatError`に変換してファイルを解析する
-TomlValue ParseTomlFile(const std::filesystem::path& path,
-                        const std::string& source_name) {
-    try {
-        return toml::parse(path.string());
-    } catch (const toml::exception& e) {
-        throw igesio::DataFormatError(
-                source_name + ": TOML parse error: " + e.what());
-    }
-}
-
-/// @brief toml11の例外を`DataFormatError`に変換して文字列を解析する
-TomlValue ParseTomlString(const std::string& text, const std::string& source_name) {
-    try {
-        return toml::parse_str(text);
-    } catch (const toml::exception& e) {
-        throw igesio::DataFormatError(
-                source_name + ": TOML parse error: " + e.what());
-    }
-}
-
-
-
-/**
  * ---- セクション ----
  */
-
-/// @brief `[format]`を検証する
-/// @return フォーマットバージョン
-std::array<int, 2> ReadFormat(const TomlValue& root,
-                              std::vector<Diagnostic>& warnings) {
-    const TomlValue* format = Find(root, "format");
-    const TomlValue* name = format == nullptr ? nullptr : Find(*format, "name");
-    if (name == nullptr || !name->is_string()
-        || name->as_string() != kMachineFormatName) {
-        Fail("", "[format].name must be \"" + std::string(kMachineFormatName)
-                 + "\"", LineOfTable(format));
-    }
-    const TomlValue* version = Find(*format, "version");
-    const bool well_formed =
-            version != nullptr && version->is_array()
-            && version->as_array().size() == 2
-            && version->as_array()[0].is_integer()
-            && version->as_array()[1].is_integer();
-    if (!well_formed) {
-        Fail("", "[format].version must be two integers [major, minor]: "
-                 + (version == nullptr ? std::string("(missing)")
-                                       : detail::FormatValue(*version)),
-             LineOfTable(format));
-    }
-    const std::array<int, 2> result = {
-            static_cast<int>(version->as_array()[0].as_integer()),
-            static_cast<int>(version->as_array()[1].as_integer())};
-    if (result[0] != kMachineFormatVersion[0]) {
-        Fail("", "unsupported format version: " + FormatVersion(result)
-                 + " (supported major "
-                 + std::to_string(kMachineFormatVersion[0]) + ")",
-             LineOf(*version));
-    }
-    if (result[1] > kMachineFormatVersion[1]) {
-        Warn(warnings, "[format]",
-             "format version " + FormatVersion(result)
-             + " has a newer minor than the supported "
-             + FormatVersion(kMachineFormatVersion)
-             + " (unsupported keys are ignored)",
-             LineOf(*version));
-    }
-    return result;
-}
 
 /// @brief `[machine]`を読み込む
 void ReadMachineMeta(const TomlValue& root, MachineDefinition& definition) {
@@ -202,39 +123,8 @@ void ReadMachineMeta(const TomlValue& root, MachineDefinition& definition) {
             detail::OptionalString(*machine, "description", "[machine]").value_or("");
     definition.author =
             detail::OptionalString(*machine, "author", "[machine]").value_or("");
-    if (const TomlValue* date = Find(*machine, "date"); date != nullptr) {
-        if (date->is_string()) {
-            definition.date = date->as_string();
-        } else if (date->is_local_date()) {
-            definition.date = toml::format(*date);
-        } else {
-            Fail("[machine]", "date is neither a date nor a string: "
-                              + detail::FormatValue(*date), LineOf(*date));
-        }
-    }
-}
-
-/// @brief `[units]`を読み込む. 既定は`UnitScales`の既定値 (mm・deg)
-UnitScales ReadUnits(const TomlValue& root) {
-    const UnitScales defaults;
-    const TomlValue* units = Find(root, "units");
-    if (units == nullptr) return defaults;
-    detail::EnsureTable(*units, "[units] is not a table");
-    const std::string length =
-            detail::OptionalString(*units, "length", "[units]")
-                    .value_or(std::string(LengthUnitName(defaults.length_unit)));
-    const std::string angle =
-            detail::OptionalString(*units, "angle", "[units]")
-                    .value_or(std::string(AngleUnitName(defaults.angle_unit)));
-    const auto length_unit = ParseLengthUnit(length);
-    if (!length_unit.has_value()) {
-        Fail("", "invalid [units].length: " + length, LineOf(*units));
-    }
-    const auto angle_unit = ParseAngleUnit(angle);
-    if (!angle_unit.has_value()) {
-        Fail("", "invalid [units].angle: " + angle, LineOf(*units));
-    }
-    return MakeUnitScales(*length_unit, *angle_unit);
+    definition.date =
+            detail::ReadDateTimeText(*machine, "date", "[machine]").value_or("");
 }
 
 /// @brief `[kinematics]`を読み込む. 既定は`MachineDefinition::branch`の既定値
@@ -464,7 +354,8 @@ Structure ValidateStructure(const ComponentTables& tables) {
  * ---- コンポーネントの要素 ----
  */
 
-/// @brief `component.local_frame`からローカル座標系の配置C_cを作る
+/// @brief `component.local_frame`からコンポーネント座標系→ゼロポーズ機械座標系への
+///        同次変換C_cを作る
 igesio::Matrix4d ReadLocalFrame(const TomlValue& table, const std::string& name,
                                 const UnitScales& scales) {
     const TomlValue* frame = Find(table, "local_frame");
@@ -477,7 +368,8 @@ igesio::Matrix4d ReadLocalFrame(const TomlValue& table, const std::string& name,
     return MakeRigid(detail::ReadRotation(*frame, context, scales.angle), origin);
 }
 
-/// @brief マウントの`frame` (`component.frame`) からゼロポーズ機械座標での配置Hを作る
+/// @brief マウントの`frame` (`component.frame`) から
+///        取り付け先座標系→ゼロポーズ機械座標系の同次変換Hを作る
 igesio::Matrix4d ReadFrame(const TomlValue& frame, const igesio::Matrix4d& local_frame,
                            const UnitScales& scales, const std::string& context) {
     detail::EnsureTable(frame, context + ": not a table");
@@ -691,8 +583,7 @@ ComponentSpec ReadComponent(
         spec.frame_placement = ReadFrame(*Find(*table, "frame"), spec.local_frame,
                                          scales, ContextOf(name) + ".frame");
     }
-    ReadGeometries(*table, spec,
-                   detail::GeometryContext{base_dir, scales, spec.local_frame},
+    ReadGeometries(*table, spec, detail::GeometryContext{base_dir, scales},
                    warnings, issues);
     return spec;
 }
@@ -916,7 +807,8 @@ std::optional<CollisionSettings> ReadCollision(
         Fail("", "invalid [collision].mode: " + mode, LineOf(*collision));
     }
     settings.mode = *parsed_mode;
-    if (const TomlValue* value = Find(*collision, "default_clearance"); value != nullptr) {
+    if (const TomlValue* value = Find(*collision, "default_clearance");
+        value != nullptr) {
         settings.default_clearance =
                 detail::AsPositive(*value, "[collision].default_clearance", true)
                 * scales.length;
@@ -972,7 +864,8 @@ std::map<std::string, ComponentSpec> ReadAllComponents(
     for (const std::string& name : order) {
         ComponentSpec spec = ReadComponent(name, tables, structure, scales, base_dir,
                                            warnings, issues);
-        if (spec.axis.has_value() && !registers.insert(spec.axis->register_name).second) {
+        if (spec.axis.has_value() &&
+            !registers.insert(spec.axis->register_name).second) {
             Fail("", "duplicate register: " + spec.axis->register_name,
                  spec.line);
         }
@@ -996,9 +889,10 @@ MachineDefinition ParseDocument(const TomlValue& root,
     MachineDefinition definition;
     definition.source_dir = base_dir;
     definition.source_name = source_name;
-    definition.format_version = ReadFormat(root, definition.warnings);
+    definition.format_version = detail::ReadFormat(
+            root, kMachineFormatName, kMachineFormatVersion, definition.warnings);
     ReadMachineMeta(root, definition);
-    definition.units = ReadUnits(root);
+    definition.units = detail::ReadUnits(root);
     const ComponentTables tables = CollectComponentTables(root);
     const std::vector<std::string> order = TopologicalOrder(tables);
     const Structure structure = ValidateStructure(tables);
@@ -1024,14 +918,14 @@ MachineDefinition ReadMachineDefinition(const std::filesystem::path& path) {
         throw igesio::FileOpenError(path.string());
     }
     const std::string source_name = path.filename().string();
-    const TomlValue root = ParseTomlFile(path, source_name);
+    const TomlValue root = detail::ParseTomlFile(path, source_name);
     return ParseDocument(root, path.parent_path(), source_name);
 }
 
 MachineDefinition ReadMachineDefinitionFromString(
         const std::string& toml, const std::filesystem::path& base_dir,
         const std::string& source_name) {
-    const TomlValue root = ParseTomlString(toml, source_name);
+    const TomlValue root = detail::ParseTomlString(toml, source_name);
     return ParseDocument(root, base_dir, source_name);
 }
 

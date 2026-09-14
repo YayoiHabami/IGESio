@@ -1,0 +1,47 @@
+# ライブラリ参照形式の工具を持つプロジェクト (工具ライブラリ2つ・別名必須)
+# ライブラリファイルの内容は本拡張では読まない (存在確認のみ)。
+
+[format]
+name = "machining-project"
+version = [1, 0]
+
+[project]
+name = "library reference"
+
+[machine]
+library = "t-ZYX-b-AC-w.toml"
+
+[[tool_library]]
+alias = "std"
+library = "tools/dummy.json"
+
+[[tool_library]]
+alias = "special"
+library = "tools/dummy.json"
+
+[[tool]]
+number = 1
+source = "std"
+assembly = 2
+
+[[tool]]
+number = 2
+name = "Special 7"
+source = "special"
+assembly = 7
+gauge_length = 150.0
+control_point = "gauge"
+
+[[tool]]
+number = 3
+
+[tool.simple]
+cutter = "square"
+diameter = 12.0
+cutting_length = 30.0
+tool_length = 90.0
+overhang = 50.0
+
+[tool.simple.holder]
+diameter = 50.0
+length = 80.0
