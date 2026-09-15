@@ -31,6 +31,7 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/core/test_units.cpp
         machines/core/test_formatting.cpp
         machines/core/test_rotation.cpp
+        machines/core/test_text_file.cpp
         machines/machine/test_machine_io.cpp
         machines/machine/test_machine_writer.cpp
         machines/machine/test_primitives.cpp
@@ -43,6 +44,13 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/project/test_project_io.cpp
         machines/project/test_project_writer.cpp
         machines/project/test_setup.cpp
+        machines/toolpath/test_cl_program.cpp
+        machines/toolpath/test_cl_transform.cpp
+        machines/toolpath/test_cl_io.cpp
+        machines/toolpath/test_nc_block.cpp
+        machines/toolpath/test_nc_dialect.cpp
+        machines/toolpath/test_nc_interpreter.cpp
+        machines/toolpath/test_nc_writer.cpp
     )
 endif()
 

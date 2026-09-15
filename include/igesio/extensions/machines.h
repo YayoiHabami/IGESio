@@ -13,7 +13,7 @@
  *                     運動学モデル、順/逆運動学
  *       - tools/      工具輪郭とその実体化
  *       - project/    プロジェクト定義とセットアップ
- *       - toolpath/   工具経路の公開型とNC/CLの読込
+ *       - toolpath/   工具経路 (CLプログラム) とNC/CLの読み書き
  *       - simulation/ 動作生成とアニメーション生成
  *       - scene/      形状読込、シーン構築
  * @note 全モジュールがGL非依存 (models層まで) であり、ヘッドレスでも利用できる.
@@ -30,6 +30,7 @@
 #include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
 #include "igesio/extensions/machines/core/opaque_toml.h"
+#include "igesio/extensions/machines/core/text_file.h"
 
 // 機械定義・運動学
 #include "igesio/extensions/machines/machine/machine_definition.h"
@@ -50,5 +51,13 @@
 #include "igesio/extensions/machines/project/project_io.h"
 #include "igesio/extensions/machines/project/setup.h"
 
+// 工具経路 (CLプログラムとNC/CLの読み書き)
+#include "igesio/extensions/machines/toolpath/cl_program.h"
+#include "igesio/extensions/machines/toolpath/cl_transform.h"
+#include "igesio/extensions/machines/toolpath/cl_io.h"
+#include "igesio/extensions/machines/toolpath/nc_block.h"
+#include "igesio/extensions/machines/toolpath/nc_dialect.h"
+#include "igesio/extensions/machines/toolpath/nc_interpreter.h"
+#include "igesio/extensions/machines/toolpath/nc_writer.h"
 
 #endif  // IGESIO_EXTENSIONS_MACHINES_H_

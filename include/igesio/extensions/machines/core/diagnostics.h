@@ -29,7 +29,8 @@ enum class Severity {
 /// @brief 警告/infoの内容
 /// @note `context`は発生箇所を示す文字列で、TOMLでは`"component[A].axis"`・
 ///       `"[collision].pairs[0]"`のようにテーブルの経路を,
-///       NCでは`"block 1234"`のようにブロック番号を入れる.
+///       NC/CLの読込では空にし、行番号は`line`に格納する (`FormatDiagnostic`で
+///       `" (line N)"`を付けるため、行番号を`context`に含めない).
 struct Diagnostic {
     /// @brief 重大度
     Severity severity = Severity::kWarning;

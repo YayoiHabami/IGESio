@@ -44,6 +44,7 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/core/units.cpp
         machines/core/formatting.cpp
         machines/core/rotation.cpp
+        machines/core/text_file.cpp
         machines/machine/machine_definition.cpp
         machines/machine/toml_reading.cpp
         machines/machine/toml_writing.cpp
@@ -62,6 +63,15 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/project/project_writing.cpp
         machines/project/project_io.cpp
         machines/project/setup.cpp
+        machines/toolpath/cl_program.cpp
+        machines/toolpath/cl_transform.cpp
+        machines/toolpath/cl_io.cpp
+        machines/toolpath/nc_block.cpp
+        machines/toolpath/nc_dialect.cpp
+        machines/toolpath/nc_modal.cpp
+        machines/toolpath/nc_interpreter.cpp
+        machines/toolpath/nc_writer.cpp
+        machines/toolpath/text_utils.cpp
     )
     if(MINGW)
         # toml11のテンプレート展開とデバッグ情報でCOFFのセクション数上限 (2^16) を
