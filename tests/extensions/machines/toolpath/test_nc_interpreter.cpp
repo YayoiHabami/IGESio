@@ -6,8 +6,8 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: InterpretNc / InterpretNcFile / NcState
  *       - 正常系: 動作コードとモーダル、G90/G91、G20/G21、G43系の各形式、
- *         G53/G28/G30、ワークオフセット、G68.2/G53.1/G69、円弧 (IJK/R/全円/平面),
- *         G04、T/M06、S/M03〜M05/M08/M09、サブプログラム (同一ファイル/外部),
+ *         G53/G28/G30、ワークオフセット、G68.2/G53.1/G69、円弧 (IJK/R/全円/平面.
+ *         TCP無効時は座標語の`ClGoto`列に折れ線化される), G04、T/M06、S/M03〜M05/M08/M09、サブプログラム (同一ファイル/外部),
  *         M30、未知のG/M、コメント、状態の引き継ぎ、実機NCの体裁
  *       - 正常系 (境界値・退化): 座標語のみのブロック、Gのみのブロック、IJK省略,
  *         無効化コードの表記揺れ
@@ -95,6 +95,32 @@ void ExpectVector(const Vector3d& actual, const double x, const double y,
     EXPECT_NEAR(actual.x(), x, tol);
     EXPECT_NEAR(actual.y(), y, tol);
     EXPECT_NEAR(actual.z(), z, tol);
+}
+
+/// @brief 座標語のみの`ClGoto`列を点列にする (未指定の成分は直前の値、初期値は0)
+/// @note TCP無効時の円弧は座標語の`ClGoto`列に折れ線化されるので、通過点の
+///       幾何 (中心からの距離、終点、向き) をこの点列で検証する
+std::vector<Vector3d> AxisWordPoints(const mc::ClProgram& program) {
+    std::vector<Vector3d> points;
+    Vector3d current = Vector3d::Zero();
+    for (const mc::ClGoto* motion : Records<mc::ClGoto>(program)) {
+        if (motion->point.has_value()) continue;
+        current.x() = motion->axis_words.GetOr("X", current.x());
+        current.y() = motion->axis_words.GetOr("Y", current.y());
+        current.z() = motion->axis_words.GetOr("Z", current.z());
+        points.push_back(current);
+    }
+    return points;
+}
+
+/// @brief 先頭を除く点列が中心から一定距離にあることを検証する
+void ExpectOnCircle(const std::vector<Vector3d>& points, const Vector3d& center,
+                    const double radius) {
+    ASSERT_GE(points.size(), 3u);
+    for (std::size_t i = 1; i < points.size(); ++i) {
+        EXPECT_NEAR((points[i] - center).norm(), radius, kLooseTol)
+                << "point " << i << ": " << points[i].transpose();
+    }
 }
 
 }  // namespace
@@ -206,12 +232,17 @@ TEST(NcInterpreterTest, G20_ScalesLinearWordsAndFeed) {
 TEST(NcInterpreterTest, G20_ScalesArcCenterAndRadius) {
     const mc::ClProgram program =
             Interpret("G20 G90 G01 X0. Y0. F10\nG02 X1. Y1. I1. J0.\nG03 X0. Y0. R1.\n");
-    const auto arcs = Records<mc::ClArc>(program);
-    ASSERT_EQ(arcs.size(), 2u);
-    ExpectVector(arcs[0]->end, 25.4, 25.4, 0.0);
-    ExpectVector(arcs[0]->center, 25.4, 0.0, 0.0);
-    // R = 1 inch の劣弧 (反時計回り): 中心は弦の左側の (1, 0) inch
-    ExpectVector(arcs[1]->center, 25.4, 0.0, 0.0, kLooseTol);
+    EXPECT_EQ(Count<mc::ClArc>(program), 0u);
+    // どちらの円弧も中心 (1, 0) inch・半径1 inch (R = 1 inch の劣弧は弦の左側が中心)
+    const std::vector<Vector3d> points = AxisWordPoints(program);
+    ExpectOnCircle(points, Vector3d(25.4, 0.0, 0.0), 25.4);
+    ExpectVector(points.back(), 0.0, 0.0, 0.0, kLooseTol);
+    bool reached_corner = false;
+    for (const Vector3d& point : points) {
+        reached_corner = reached_corner
+                         || (point - Vector3d(25.4, 25.4, 0.0)).norm() < kLooseTol;
+    }
+    EXPECT_TRUE(reached_corner);
 }
 
 TEST(NcInterpreterTest, G20_DoesNotScaleRotaryWords) {
@@ -424,58 +455,86 @@ TEST(NcInterpreterTest, G531_WithoutG682Warns) {
 TEST(NcInterpreterTest, Arc_IjkOnXyPlane) {
     const mc::ClProgram program =
             Interpret("G90 G01 X0. Y0. F100\nG02 X10. Y10. I10. J0.\n");
-    const auto arcs = Records<mc::ClArc>(program);
-    ASSERT_EQ(arcs.size(), 1u);
-    EXPECT_EQ(arcs[0]->kind, mc::MotionKind::kArcCw);
-    ExpectVector(arcs[0]->end, 10.0, 10.0, 0.0);
-    ExpectVector(arcs[0]->center, 10.0, 0.0, 0.0);
-    ExpectVector(arcs[0]->normal, 0.0, 0.0, 1.0);
-    EXPECT_EQ(arcs[0]->full_turns, 0);
+    // TCP無効の円弧は登録値相対の座標語の列になる (点は持たない)
+    EXPECT_EQ(Count<mc::ClArc>(program), 0u);
+    EXPECT_FALSE(HasWarning(program, "linearized"));
+    const std::vector<Vector3d> points = AxisWordPoints(program);
+    ExpectOnCircle(points, Vector3d(10.0, 0.0, 0.0), 10.0);
+    ExpectVector(points.back(), 10.0, 10.0, 0.0);
+    // 時計回りの1/4円: 通過点は x ≤ 10、y ≥ 0 の範囲 (反時計回りなら (10, -10) を通る)
+    for (const Vector3d& point : points) {
+        EXPECT_LE(point.x(), 10.0 + kLooseTol);
+        EXPECT_GE(point.y(), -kLooseTol);
+    }
+    for (const mc::ClGoto* motion : Records<mc::ClGoto>(program)) {
+        EXPECT_EQ(motion->kind, mc::MotionKind::kLinear);
+        EXPECT_FALSE(motion->axis_words.Contains("Z"));
+    }
 }
 
 TEST(NcInterpreterTest, Arc_RPositiveIsMinorArc) {
     const mc::ClProgram program =
             Interpret("G90 G01 X0. Y0. F100\nG03 X10. Y10. R10.\n");
-    const auto arcs = Records<mc::ClArc>(program);
-    ASSERT_EQ(arcs.size(), 1u);
-    ExpectVector(arcs[0]->center, 0.0, 10.0, 0.0, kLooseTol);
+    // 中心は弦の左側 (0, 10). 劣弧なので通過点は x ≥ 0
+    const std::vector<Vector3d> points = AxisWordPoints(program);
+    ExpectOnCircle(points, Vector3d(0.0, 10.0, 0.0), 10.0);
+    ExpectVector(points.back(), 10.0, 10.0, 0.0);
+    for (const Vector3d& point : points) EXPECT_GE(point.x(), -kLooseTol);
 }
 
 TEST(NcInterpreterTest, Arc_RNegativeIsMajorArc) {
     const mc::ClProgram program =
             Interpret("G90 G01 X0. Y0. F100\nG03 X10. Y10. R-10.\n");
-    const auto arcs = Records<mc::ClArc>(program);
-    ASSERT_EQ(arcs.size(), 1u);
-    ExpectVector(arcs[0]->center, 10.0, 0.0, 0.0, kLooseTol);
+    // 中心は弦の右側 (10, 0). 優弧なので (20, 0) 付近を通る
+    const std::vector<Vector3d> points = AxisWordPoints(program);
+    ExpectOnCircle(points, Vector3d(10.0, 0.0, 0.0), 10.0);
+    ExpectVector(points.back(), 10.0, 10.0, 0.0);
+    bool far_side = false;
+    for (const Vector3d& point : points) far_side = far_side || point.x() > 15.0;
+    EXPECT_TRUE(far_side);
 }
 
 TEST(NcInterpreterTest, Arc_ClockwiseRPositiveMirrorsCenter) {
     const mc::ClProgram program =
             Interpret("G90 G01 X0. Y0. F100\nG02 X10. Y10. R10.\n");
-    const auto arcs = Records<mc::ClArc>(program);
-    ASSERT_EQ(arcs.size(), 1u);
-    ExpectVector(arcs[0]->center, 10.0, 0.0, 0.0, kLooseTol);
+    // 時計回りでは中心が弦の右側 (10, 0) になり、劣弧なので通過点は x ≤ 10
+    const std::vector<Vector3d> points = AxisWordPoints(program);
+    ExpectOnCircle(points, Vector3d(10.0, 0.0, 0.0), 10.0);
+    for (const Vector3d& point : points) EXPECT_LE(point.x(), 10.0 + kLooseTol);
 }
 
 TEST(NcInterpreterTest, Arc_SameStartAndEndWithIjkIsFullCircle) {
     const mc::ClProgram program =
             Interpret("G90 G01 X10. Y40. F100\nG02 X10. Y40. I5. J0.\n");
-    const auto arcs = Records<mc::ClArc>(program);
-    ASSERT_EQ(arcs.size(), 1u);
-    EXPECT_EQ(arcs[0]->full_turns, 1);
-    ExpectVector(arcs[0]->center, 15.0, 40.0, 0.0);
+    // 全円: 中心 (15, 40)・半径5を一周して始点に戻る (反対側 (20, 40) を通る)
+    const std::vector<Vector3d> points = AxisWordPoints(program);
+    EXPECT_GE(points.size(), 20u);
+    ExpectOnCircle(points, Vector3d(15.0, 40.0, 0.0), 5.0);
+    ExpectVector(points.back(), 10.0, 40.0, 0.0);
+    bool far_side = false;
+    for (const Vector3d& point : points) far_side = far_side || point.x() > 19.0;
+    EXPECT_TRUE(far_side);
 }
 
 TEST(NcInterpreterTest, Arc_G18AndG19PlanesUseTheirNormals) {
     const mc::ClProgram program = Interpret(
             "G90 G01 X0. Y0. Z0. F100\nG18 G02 X20. Z40. K10. I0.\n"
             "G19 G03 Y50. Z50. J10. K0.\n");
-    const auto arcs = Records<mc::ClArc>(program);
-    ASSERT_EQ(arcs.size(), 2u);
-    ExpectVector(arcs[0]->normal, 0.0, 1.0, 0.0);
-    ExpectVector(arcs[0]->center, 0.0, 0.0, 10.0);
-    ExpectVector(arcs[1]->normal, 1.0, 0.0, 0.0);
-    ExpectVector(arcs[1]->center, 20.0, 10.0, 40.0);
+    // 平面の2成分の座標語だけを持つ (G18: Z/X、G19: Y/Z)
+    const auto gotos = Records<mc::ClGoto>(program);
+    ASSERT_GE(gotos.size(), 3u);
+    const mc::ClGoto* zx = gotos[1];
+    EXPECT_TRUE(zx->axis_words.Contains("X"));
+    EXPECT_TRUE(zx->axis_words.Contains("Z"));
+    EXPECT_FALSE(zx->axis_words.Contains("Y"));
+    const mc::ClGoto* yz = gotos.back();
+    EXPECT_TRUE(yz->axis_words.Contains("Y"));
+    EXPECT_TRUE(yz->axis_words.Contains("Z"));
+    EXPECT_FALSE(yz->axis_words.Contains("X"));
+    EXPECT_NEAR(yz->axis_words.At("Y"), 50.0, kTol);
+    EXPECT_NEAR(yz->axis_words.At("Z"), 50.0, kTol);
+    const std::vector<Vector3d> points = AxisWordPoints(program);
+    ExpectVector(points.back(), 20.0, 50.0, 50.0);
 }
 
 TEST(NcInterpreterTest, Arc_HelicalPitchWordWarns) {
@@ -865,7 +924,8 @@ TEST(NcInterpreterTest, File_CodesCoverageParsesWithoutError) {
             mc::InterpretNcFile(kNcDir / "codes.nc", lex, options, nullptr);
     EXPECT_EQ(Count<mc::ClEnd>(program), 1u);
     EXPECT_EQ(Count<mc::ClDwell>(program), 2u);
-    EXPECT_EQ(Count<mc::ClArc>(program), 6u);
+    // 6つの円弧はいずれもTCP無効 (G43) 下にあり、座標語の`ClGoto`列になる
+    EXPECT_EQ(Count<mc::ClArc>(program), 0u);
     EXPECT_EQ(program.sources.back().program_index, 3);
     // ブロックスキップ1の行は読まれず、2の行は読まれる
     bool found_98 = false;

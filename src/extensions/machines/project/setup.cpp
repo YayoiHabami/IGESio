@@ -521,12 +521,18 @@ MachiningSetup::MachiningSetup(const ProjectDefinition& project,
         WorkOffsetSpec implicit;
         implicit.id = std::string(kImplicitWorkOffsetId);
         const AttachFrame frame = ResolveWorkOffset(resolver, implicit);
-        work_frames_.push_back(WorkFrame{implicit.id, frame.first, frame.second});
+        work_frames_.push_back(
+                WorkFrame{implicit.id, frame.first, frame.second, NcValues{}});
     }
     for (const WorkOffsetSpec& spec : project_.work_offsets) {
         const AttachFrame frame = Resolve(resolver, spec.id, WorkOffsetContext(spec.id),
                                           spec.line);
-        work_frames_.push_back(WorkFrame{spec.id, frame.first, frame.second});
+        std::optional<NcValues> registered;
+        if (const auto* values = std::get_if<NcValues>(&spec.placement)) {
+            registered = *values;
+        }
+        work_frames_.push_back(
+                WorkFrame{spec.id, frame.first, frame.second, std::move(registered)});
     }
     for (const ModelSpec& spec : project_.models) {
         const AttachFrame frame =

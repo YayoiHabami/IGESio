@@ -29,7 +29,7 @@ namespace igesio::extensions::machines::detail {
 
 namespace {
 
-/// @brief 回転軸の指令つきの円弧を折れ線化する弦誤差 [mm]
+/// @brief 回転軸の指令つきの円弧と登録値相対の円弧を折れ線化する弦誤差 [mm]
 constexpr double kArcLinearizeTolerance = 0.05;
 
 /// @brief 始点と終点の一致判定の許容誤差 [mm]
@@ -50,7 +50,7 @@ double LengthScale(const NcState& state) {
     return state.metric ? 1.0 : kInchToMillimeter;
 }
 
-/// @brief 直進軸の軸アドレス (X/Y/Z) を成分索引に変換する
+/// @brief 直進軸の軸アドレス (X/Y/Z) をインデックス (0/1/2) に変換する
 /// @param address アドレス
 /// @return 0/1/2. X/Y/Z以外なら`std::nullopt`
 std::optional<std::size_t> LinearIndex(const char address) {
@@ -69,9 +69,10 @@ igesio::Vector3d PlaneNormal(const ArcPlane plane) {
     return igesio::Vector3d::UnitZ();
 }
 
-/// @brief 平面の中心指定に使うアドレスと成分索引を取得する
+/// @brief 平面の中心指定に使うアドレスとインデックスを取得する
 /// @param plane 円弧の平面
-/// @return {アドレス, 成分索引}の組を第1成分、第2成分の順に2つ
+/// @return {アドレス, インデックス}の組を第1成分、第2成分の順に2つ
+/// @note ZX平面なら{K,2},{I,0}、YZ平面なら{J,1},{K,2}、XY平面なら{I,0},{J,1}
 std::vector<std::pair<char, std::size_t>> PlaneCenterWords(const ArcPlane plane) {
     if (plane == ArcPlane::kZX) return {{'K', 2}, {'I', 0}};
     if (plane == ArcPlane::kYZ) return {{'J', 1}, {'K', 2}};
@@ -342,6 +343,37 @@ ClArc MakeArc(InterpretContext& context, const BlockWords& words,
     return arc;
 }
 
+/// @brief 登録値相対の円弧 (`kOff`) を座標語の`ClGoto`列にする
+/// @param context 変換の作業状態
+/// @param words ブロックのワード
+/// @param arc 円弧 (座標語の座標系)
+/// @param start 始点 (座標語の座標系)
+/// @param rotary 明示された回転軸の指令 (最終点に付ける)
+/// @note TCP無効時の座標語は登録値相対の直進軸の指令であり、`ClArc` (ワーク座標)
+///       では表せないので、平面の2成分の座標語を持つ`ClGoto`の列にする. 動作生成が
+///       直線ブロックと同様に扱えるようにするため、`point`は持たせない
+void EmitRegisteredArc(InterpretContext& context, const BlockWords& words,
+                       const ClArc& arc, const igesio::Vector3d& start,
+                       const NcValues& rotary) {
+    const std::vector<igesio::Vector3d> points =
+            DiscretizeArc(start, arc, kArcLinearizeTolerance);
+    const std::map<char, std::string>& table =
+            context.options.dialect.linear_address_to_register;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        ClGoto motion;
+        motion.kind = MotionKind::kLinear;
+        for (const auto& [address, index] : PlaneCenterWords(context.state.plane)) {
+            // 平面の中心指定のアドレス (I/J/K) と同じ成分の座標語 (X/Y/Z) を出す
+            const char coordinate = "XYZ"[index];
+            const auto it = table.find(coordinate);
+            if (it == table.end()) continue;
+            motion.axis_words.Set(it->second, points[i][index]);
+        }
+        if (i + 1 == points.size()) motion.axis_words.Merge(rotary);
+        context.Emit(motion, words.line);
+    }
+}
+
 /// @brief 円弧 (G02/G03) のレコードを生成する
 /// @param context 変換の作業状態
 /// @param words ブロックのワード
@@ -351,7 +383,12 @@ ClArc MakeArc(InterpretContext& context, const BlockWords& words,
 void EmitArc(InterpretContext& context, const BlockWords& words,
              const igesio::Vector3d& start, const NcValues& rotary) {
     const ClArc arc = MakeArc(context, words, start);
-    if (context.state.tcp != NcState::Tcp::kRotaryWords) {
+    const NcState::Tcp tcp = context.state.tcp;
+    if (tcp == NcState::Tcp::kOff) {
+        EmitRegisteredArc(context, words, arc, start, rotary);
+        return;
+    }
+    if (tcp != NcState::Tcp::kRotaryWords) {
         context.Emit(arc, words.line);
         return;
     }

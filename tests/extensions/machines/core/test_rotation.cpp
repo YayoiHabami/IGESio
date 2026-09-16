@@ -6,7 +6,7 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: RotationAboutAxis / RotationFromEulerIjk / RotationFromColumns /
  *       ResolveRotation / MakeRigid / Translation / RotationAboutLine / RigidInverse /
- *       RotationPart / TranslationPart / ApplyPoint / ApplyDirection
+ *       RotationPart / TranslationPart / ApplyPoint / ApplyDirection / Slerp
  *       - 正常系: 軸角・オイラー[I,J,K]・軸ベクトル指定の3形式が同じ姿勢で一致、
  *         Rodriguesの式の性質 (軸の不動・直交性・det=+1)、オイラー角の適用順
  *         (Rz(K) Ry(J) Rx(I))、`ResolveRotation`の分岐。角度はrad
@@ -17,6 +17,8 @@
  *       - 異常系: 単位長の許容誤差の外側 (1+1.1e-3)、ゼロ軸、非直交、鏡映 (行列式が負)
  *       - 剛体変換: MakeRigid/Translation/RigidInverseの往復、RotationAboutLineが
  *         軸上の点を不動点にすること、ApplyPoint/ApplyDirectionの並進の扱い
+ *       - 球面線形補間: 中点が二等分方向で単位長、端点で始点/終点に一致,
+ *         平行 (同方向/逆方向) なら終点
  */
 #include <gtest/gtest.h>
 
@@ -221,4 +223,25 @@ TEST(MachinesRotationTest, ApplyDirection_IgnoresTranslation) {
     EXPECT_TRUE(mc::ApplyDirection(m, Vector3d::UnitX()).isApprox(Vector3d::UnitY(), kTol));
     EXPECT_TRUE(mc::ApplyPoint(m, Vector3d::UnitX())
                         .isApprox(Vector3d(7.0, 9.0, 9.0), kTol));
+}
+
+
+// ---- 球面線形補間 ----
+
+TEST(MachinesRotationTest, Slerp_MidpointBisectsAndEndpointsMatch) {
+    const Vector3d from = Vector3d::UnitZ();
+    const Vector3d to = Vector3d::UnitX();
+    const Vector3d mid = mc::Slerp(from, to, 0.5);
+    EXPECT_NEAR(mid.norm(), 1.0, kTol);
+    EXPECT_NEAR(mid.dot(from), std::cos(mc::kQuarterTurn / 2.0), 1e-12);
+    EXPECT_NEAR(mid.dot(to), std::cos(mc::kQuarterTurn / 2.0), 1e-12);
+    EXPECT_TRUE(mc::Slerp(from, to, 0.0).isApprox(from, kTol));
+    EXPECT_TRUE(mc::Slerp(from, to, 1.0).isApprox(to, kTol));
+}
+
+TEST(MachinesRotationTest, Slerp_ParallelReturnsTarget) {
+    const Vector3d z = Vector3d::UnitZ();
+    EXPECT_TRUE(mc::Slerp(z, z, 0.3).isApprox(z, kTol));
+    // 逆方向は補間面が定まらないので終点を返す
+    EXPECT_TRUE(mc::Slerp(z, -z, 0.3).isApprox(-z, kTol));
 }

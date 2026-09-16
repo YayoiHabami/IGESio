@@ -82,6 +82,15 @@ inline bool operator!=(const JointVector& lhs, const JointVector& rhs) {
     return !(lhs == rhs);
 }
 
+/// @brief 2つの軸変位量を線形補間する
+/// @param from 始点の軸変位量
+/// @param to 終点の軸変位量
+/// @param t 補間係数 (0.0〜1.0)
+/// @return `from + t (to - from)` (軸ごと)
+/// @throw std::invalid_argument 2つの長さが異なる場合
+/// @note 動作生成で軸空間の補間 (回転軸の指令、座標語、機械座標の区間) に用いる
+JointVector Lerp(const JointVector& from, const JointVector& to, double t);
+
 /// @brief NC指令値の1項目 (軸名と値)
 struct NcEntry {
     /// @brief 軸名 (NCのレジスタ名; "X","A"等)

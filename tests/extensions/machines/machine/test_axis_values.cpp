@@ -4,16 +4,17 @@
  * @author Yayoi Habami
  * @date 2026-09-10
  * @copyright 2026 Yayoi Habami
- * @note 対象: JointVector (構築子3種 / Size / Empty / operator[] / Values / ==) と
+ * @note 対象: JointVector (構築子3種 / Size / Empty / operator[] / Values / == / Lerp) と
  *       NcValues (初期化子リスト構築 / Get / GetOr / At / Contains / Set / Merge /
  *       Size / Empty / Entries / ==)
  *       - 正常系 (代表値): 長さ指定と配列からの構築、添字の読み書き、
  *         初期化子リストの重複キーは後勝ち、`Set`は位置を保って上書き、
  *         `Merge`は重ねる側が勝ち新規軸は末尾、`==`は順序を無視
  *       - 正常系 (境界値・退化): 既定構築の空、`{}`からの構築、長さ0同士の一致
- *       - 異常系: 未指定の軸で`At`が`std::out_of_range`
- *       TODO: `JointVector`の異常系は該当なし (添字は境界検査を持たない設計で,
- *       軸数の検査は運動学関数の入口で行う. `test_forward_kinematics.cpp`で検証)
+ *       - 異常系: 未指定の軸で`At`が`std::out_of_range`、長さの異なる`Lerp`が
+ *         `std::invalid_argument`
+ *       TODO: `JointVector`の添字は境界検査を持たない設計で、軸数の検査は
+ *       運動学関数の入口で行う (`test_forward_kinematics.cpp`で検証)
  * @note 運動学モデルとの結合 (`JointsFromNc`の反復順等) は
  *       `test_forward_kinematics.cpp`側にある.
  */
@@ -91,6 +92,24 @@ TEST(AxisValuesTest, JointVector_EqualityIsExact) {
     EXPECT_TRUE(a != differs);
     EXPECT_TRUE(a != longer);
     EXPECT_TRUE(mc::JointVector() == mc::JointVector());
+}
+
+TEST(AxisValuesTest, JointVector_LerpInterpolatesPerAxis) {
+    const mc::JointVector from(std::vector<double>{0.0, 10.0});
+    const mc::JointVector to(std::vector<double>{4.0, -10.0});
+    const mc::JointVector mid = mc::Lerp(from, to, 0.25);
+    ASSERT_EQ(mid.Size(), 2u);
+    EXPECT_DOUBLE_EQ(mid[0], 1.0);
+    EXPECT_DOUBLE_EQ(mid[1], 5.0);
+    EXPECT_TRUE(mc::Lerp(from, to, 0.0) == from);
+    EXPECT_TRUE(mc::Lerp(from, to, 1.0) == to);
+    EXPECT_TRUE(mc::Lerp(mc::JointVector(), mc::JointVector(), 0.5).Empty());
+}
+
+TEST(AxisValuesTest, JointVector_LerpThrowsInvalidArgumentWhenSizesDiffer) {
+    const mc::JointVector a(std::vector<double>{1.0, 2.0});
+    const mc::JointVector b(std::vector<double>{1.0});
+    EXPECT_THROW(mc::Lerp(a, b, 0.5), std::invalid_argument);
 }
 
 

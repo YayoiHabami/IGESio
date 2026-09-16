@@ -60,4 +60,9 @@
 #include "igesio/extensions/machines/toolpath/nc_interpreter.h"
 #include "igesio/extensions/machines/toolpath/nc_writer.h"
 
+// 動作生成 (工具軸→回転角の計算、プログラム読込、動作のサンプル列)
+#include "igesio/extensions/machines/simulation/axis_resolution.h"
+#include "igesio/extensions/machines/simulation/program_loading.h"
+#include "igesio/extensions/machines/simulation/motion.h"
+
 #endif  // IGESIO_EXTENSIONS_MACHINES_H_

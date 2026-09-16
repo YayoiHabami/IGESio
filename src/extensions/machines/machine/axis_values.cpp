@@ -24,6 +24,19 @@ JointVector::JointVector(const std::size_t axis_count, const double value)
 JointVector::JointVector(std::vector<double> values)
     : values_(std::move(values)) {}
 
+JointVector Lerp(const JointVector& from, const JointVector& to, const double t) {
+    if (from.Size() != to.Size()) {
+        throw std::invalid_argument("Lerp: axis counts differ ("
+                                    + std::to_string(from.Size()) + " vs "
+                                    + std::to_string(to.Size()) + ")");
+    }
+    JointVector result(from.Size());
+    for (std::size_t i = 0; i < from.Size(); ++i) {
+        result[i] = from[i] + t * (to[i] - from[i]);
+    }
+    return result;
+}
+
 
 
 NcValues::NcValues(const std::initializer_list<NcEntry> entries) {

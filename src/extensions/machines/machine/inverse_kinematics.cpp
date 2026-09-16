@@ -55,11 +55,18 @@ struct LinearSystem {
     std::vector<std::size_t> axes;
 };
 
+/// @brief 可動範囲外・ストローク外の警告の`context`
+constexpr const char* kLimitsContext = "limits";
+/// @brief 特異姿勢・傾斜角不定の警告の`context`
+constexpr const char* kSingularContext = "singular";
+
 /// @brief 警告を追加する
 /// @param[out] warnings 警告の追記先
+/// @param context 警告の種別 (`kLimitsContext` / `kSingularContext`)
 /// @param message 内容
-void Warn(std::vector<Diagnostic>& warnings, const std::string& message) {
-    warnings.push_back(Diagnostic{Severity::kWarning, "", message, 0});
+void Warn(std::vector<Diagnostic>& warnings, const char* context,
+          const std::string& message) {
+    warnings.push_back(Diagnostic{Severity::kWarning, context, message, 0});
 }
 
 /// @brief ベクトルを正規化する
@@ -132,7 +139,7 @@ std::vector<Branch> TiltCandidates(
     std::vector<double> tilts;
     if (rho < kZeroTolerance) {
         // 内側軸が工具軸に平行 (または両軸が平行) の場合は傾斜角が寄与しない
-        Warn(warnings, "tilt angle is indeterminate; set to 0");
+        Warn(warnings, kSingularContext, "tilt angle is indeterminate; set to 0");
         tilts.push_back(0.0);
     } else {
         const double delta = std::atan2(b, a);
@@ -194,7 +201,8 @@ Branch SelectBranch(
     if (valid.empty()) {
         Branch fallback = candidates.front();
         fallback.swivel = NormalizeToTurn(fallback.swivel, 0.0);
-        Warn(warnings, "rotary axes out of range: " + inner.register_name + "="
+        Warn(warnings, kLimitsContext,
+            "rotary axes out of range: " + inner.register_name + "="
                        + FormatDegrees(fallback.tilt, kMessageDigits) + ", "
                        + outer.register_name + "="
                        + FormatDegrees(fallback.swivel, kMessageDigits));
@@ -230,7 +238,7 @@ IkSolution SolveSingleRotary(const MachineModel& model,
     IkSolution solution;
     double angle = SwivelAngle(v, z_s, t, &solution.singular);
     if (solution.singular) {
-        Warn(solution.warnings,
+        Warn(solution.warnings, kSingularContext,
              "singular orientation (swivel angle is indeterminate); set to 0");
     }
     const std::optional<double> wrapped = WrapAngleIntoLimits(angle, axis);
@@ -238,8 +246,9 @@ IkSolution SolveSingleRotary(const MachineModel& model,
         angle = *wrapped;
     } else {
         angle = NormalizeToTurn(angle, 0.0);
-        Warn(solution.warnings, "rotary axis out of range: " + axis.register_name
-                                + "=" + FormatDegrees(angle, kMessageDigits));
+        Warn(solution.warnings, kLimitsContext,
+             "rotary axis out of range: " + axis.register_name
+             + "=" + FormatDegrees(angle, kMessageDigits));
     }
     solution.nc.Set(axis.register_name, angle);
     return solution;
@@ -266,7 +275,7 @@ IkSolution SolveTwoRotaries(
                                        solution.warnings);
     solution.singular = chosen.singular;
     if (chosen.singular) {
-        Warn(solution.warnings,
+        Warn(solution.warnings, kSingularContext,
              "singular orientation (swivel angle is indeterminate); set to 0");
     }
     solution.nc.Set(inner.register_name, chosen.tilt);
@@ -326,7 +335,8 @@ void CheckStroke(const AxisInfo& axis, const double nc,
     // 範囲内として返らなかった以上、`limits`は必ず値を持つ
     const double lo = (*axis.limits)[0];
     const double hi = (*axis.limits)[1];
-    Warn(warnings, "linear axis out of stroke: " + axis.register_name + "="
+    Warn(warnings, kLimitsContext,
+         "linear axis out of stroke: " + axis.register_name + "="
                    + FormatFixed(nc, kMessageDigits) + " (range ["
                    + FormatFixed(lo, kMessageDigits) + ", "
                    + FormatFixed(hi, kMessageDigits) + "])");

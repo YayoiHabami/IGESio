@@ -11,9 +11,13 @@
  *       (ii) 直進軸はちょうど3本
  * @note 入力の座標系はすべてゼロポーズ機械座標である. ワーク座標系で与えられた
  *       工具軸ベクトル・目標点は、呼び出し側がワーク座標系→ゼロポーズ機械座標系の
- *       同次変換W_0で写してから渡す.
- * @note 警告 (`Diagnostic`) の`context`は空で返す.
- *       動作生成などでブロック番号等を指定する場合は呼び出し側が与えること.
+ *       同次変換W_0で写してから渡す. 制御点`control_local`も`tool_mount`
+ *       コンポーネントに固定したゼロポーズ機械座標 (現在姿勢では`F_tm(q)`で移る)
+ *       であり、`tool_mount`フレーム座標cは取り付けフレームの剛体変換H_tm
+ *       (`MountPlacement(kToolMount)`) を掛けてから渡すこと.
+ * @note 警告 (`Diagnostic`) の`context`は種別を表す. 可動範囲外・ストローク外は
+ *       `"limits"`、特異姿勢・傾斜角不定は`"singular"`. 動作生成はこれで
+ *       可動範囲外の警告を識別し、レコード番号等の発生箇所は呼び出し側が付け直すこと.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_MACHINE_INVERSE_KINEMATICS_H_
 #define IGESIO_EXTENSIONS_MACHINES_MACHINE_INVERSE_KINEMATICS_H_
@@ -75,7 +79,7 @@ IkSolution SolveOrientation(const MachineModel& model,
 /// @brief 回転軸の計算結果を用いて、制御点を目標点に一致させる直進軸の指令値を計算する (位置IK)
 /// @param model 運動学モデル
 /// @param target_home 目標点 (ゼロポーズ機械座標)
-/// @param control_local 制御点の`tool_mount`フレームでの座標
+/// @param control_local 制御点のゼロポーズ機械座標 (`tool_mount`に固定. H_tm適用済)
 /// @param rotary_nc 回転軸の指令値
 ///        (`SolveOrientation`の`nc`、またはNCでの回転軸指令値)
 /// @param base_q 全軸の変位量の基準 (チェーン外の軸・未指定の軸の値に用いる)
@@ -94,7 +98,7 @@ IkSolution SolvePosition(const MachineModel& model,
 /// @param model 運動学モデル
 /// @param tool_axis_home 目標の工具軸方向 (ゼロポーズ機械座標)
 /// @param target_home 目標点 (ゼロポーズ機械座標)
-/// @param control_local 制御点の`tool_mount`フレームでの座標
+/// @param control_local 制御点のゼロポーズ機械座標 (`tool_mount`に固定. H_tm適用済)
 /// @param base_q 全軸の変位量の基準
 /// @param prev_nc 直前の指令値 (`BranchPolicy::kContinuous`での符号決定に用いる.
 ///        該当軸が無ければ0として比較し、両軸とも無ければ`kPositive`と同じとする)
@@ -117,7 +121,7 @@ IkSolution Solve(const MachineModel& model, const igesio::Vector3d& tool_axis_ho
 /// @param q 全軸の変位量
 /// @param tool_axis_home 目標の工具軸方向 (ゼロポーズ機械座標)
 /// @param target_home 目標点 (ゼロポーズ機械座標)
-/// @param control_local 制御点の`tool_mount`フレームでの座標
+/// @param control_local 制御点のゼロポーズ機械座標 (`tool_mount`に固定. H_tm適用済)
 /// @return 現在姿勢で以下の誤差を返す：
 ///         工具軸 F[tm].R·z_tool とワークに固定された目標方向F[wm].R·t のなす角,
 ///         および制御点 F[tm]·x_control と目標点 F[wm]·x_target の距離.

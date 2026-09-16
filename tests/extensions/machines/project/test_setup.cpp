@@ -219,6 +219,12 @@ TEST(SetupTest, WorkFrame_RegisteredValues) {
     // ゲージ点 (0,-180,250.5) をテーブル中心へ置く機械位置なので原点は機械原点
     EXPECT_TRUE(mc::TranslationPart(g54.w0).isZero(kTol)) << g54.w0;
     EXPECT_TRUE(mc::RotationPart(g54.w0).isIdentity(kTol));
+    // 登録値は動作生成 (TCP無効時の座標語) のために保持する
+    ASSERT_TRUE(g54.registered.has_value());
+    EXPECT_NEAR(g54.registered->At("Y"), 180.0, kTol);
+    EXPECT_NEAR(g54.registered->At("Z"), -250.5, kTol);
+    EXPECT_FALSE(g54.registered->Contains("A"));
+    EXPECT_FALSE(setup.WorkFrames()[1].registered.has_value());
     EXPECT_EQ(setup.InitialWorkOffset(), "G54");
     EXPECT_EQ(setup.FindWorkFrame("G55"), &setup.WorkFrames()[1]);
     EXPECT_EQ(setup.FindWorkFrame("G59"), nullptr);
@@ -280,6 +286,8 @@ TEST(SetupTest, WorkFrame_ImplicitG54) {
     const auto setup = MakeSetup(none);
     ASSERT_EQ(setup.WorkFrames().size(), 1u);
     EXPECT_EQ(setup.WorkFrames()[0].id, "G54");
+    ASSERT_TRUE(setup.WorkFrames()[0].registered.has_value());
+    EXPECT_TRUE(setup.WorkFrames()[0].registered->Empty());
     EXPECT_EQ(setup.InitialWorkOffset(), "G54");
     // 全軸0 (初期姿勢のZ=100は工具側なのでp_fromに効く) のゲージ点がワーク原点
     const Matrix4d expected = ExpectedRegisteredFrame(setup, mc::NcValues{}, true);

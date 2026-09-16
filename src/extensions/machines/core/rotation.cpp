@@ -7,6 +7,7 @@
  */
 #include "igesio/extensions/machines/core/rotation.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -141,6 +142,17 @@ igesio::Vector3d ApplyPoint(const igesio::Matrix4d& transform,
 igesio::Vector3d ApplyDirection(const igesio::Matrix4d& transform,
                                 const igesio::Vector3d& direction) {
     return RotationPart(transform) * direction;
+}
+
+igesio::Vector3d Slerp(const igesio::Vector3d& from, const igesio::Vector3d& to,
+                       const double t) {
+    const double cos_angle = std::clamp(from.dot(to), -1.0, 1.0);
+    const double angle = std::acos(cos_angle);
+    if (std::abs(std::sin(angle)) < kDegenerateTolerance) return to;
+
+    const double wa = std::sin((1.0 - t) * angle) / std::sin(angle);
+    const double wb = std::sin(t * angle) / std::sin(angle);
+    return (from * wa + to * wb).normalized();
 }
 
 }  // namespace igesio::extensions::machines

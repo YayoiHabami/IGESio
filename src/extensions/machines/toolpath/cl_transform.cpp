@@ -68,22 +68,6 @@ std::size_t DivisionCount(const double sweep, const double radius,
     return static_cast<std::size_t>(std::max(1.0, std::ceil(sweep / step)));
 }
 
-/// @brief 2つの単位ベクトルを球面線形補間する
-/// @param from 始点の方向 (正規化済み)
-/// @param to 終点の方向 (正規化済み)
-/// @param t 補間係数 (0.0〜1.0)
-/// @return 補間した方向 (正規化済み). 両者がほぼ平行なら`to`
-igesio::Vector3d Slerp(const igesio::Vector3d& from, const igesio::Vector3d& to,
-                       const double t) {
-    const double cos_angle = std::clamp(from.dot(to), -1.0, 1.0);
-    const double angle = std::acos(cos_angle);
-    if (std::abs(std::sin(angle)) < kDegenerateTolerance) return to;
-
-    const double wa = std::sin((1.0 - t) * angle) / std::sin(angle);
-    const double wb = std::sin(t * angle) / std::sin(angle);
-    return (from * wa + to * wb).normalized();
-}
-
 /// @brief ソース位置をコピーして指定数並べる
 /// @param source コピーするソース位置 (無ければ何もしない)
 /// @param count 個数
@@ -189,7 +173,7 @@ std::vector<ClPathRange> EnumerateByRapids(const ClProgram& program) {
 
 /// @brief 区間の先頭または末尾の動作の位置と工具軸
 struct PathEndpoint {
-    /// @brief 動作レコードの索引
+    /// @brief 動作レコードのインデックス
     std::size_t index = 0;
     /// @brief 制御点 (ワーク座標)
     igesio::Vector3d point = igesio::Vector3d::Zero();

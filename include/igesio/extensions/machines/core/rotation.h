@@ -113,6 +113,15 @@ igesio::Vector3d ApplyPoint(const igesio::Matrix4d& transform,
 igesio::Vector3d ApplyDirection(const igesio::Matrix4d& transform,
                                 const igesio::Vector3d& direction);
 
+/// @brief 2つの単位ベクトルを球面線形補間する
+/// @param from 始点の方向 (正規化済)
+/// @param to 終点の方向 (正規化済)
+/// @param t 補間係数 (0.0〜1.0)
+/// @return 補間した方向 (正規化済). 両者がほぼ平行 (同方向または逆方向) なら`to`
+/// @note 円弧の途中の工具軸方向 (始点値と終点値の間) の計算に用いる
+igesio::Vector3d Slerp(const igesio::Vector3d& from, const igesio::Vector3d& to,
+                       double t);
+
 }  // namespace igesio::extensions::machines
 
 #endif  // IGESIO_EXTENSIONS_MACHINES_CORE_ROTATION_H_

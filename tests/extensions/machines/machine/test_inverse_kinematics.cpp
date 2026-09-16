@@ -131,12 +131,15 @@ std::string OnlyA() {
                    "name = \"C\"\ntype = \"fixed\"\nparent = \"A\"\n");
 }
 
-/// @brief 警告がちょうど1件で識別語を含むことを検証する
+/// @brief 警告がちょうど1件で識別語を含み、`context`が種別と一致することを検証する
+/// @param context 種別 (`"limits"` / `"singular"`)
 void ExpectSingleWarning(const std::vector<mc::Diagnostic>& warnings,
-                         const std::string& keyword) {
+                         const std::string& keyword,
+                         const std::string& context) {
     ASSERT_EQ(warnings.size(), 1u);
     EXPECT_NE(warnings[0].message.find(keyword), std::string::npos)
             << "message: " << warnings[0].message;
+    EXPECT_EQ(warnings[0].context, context);
 }
 
 /// @brief 可動範囲`[-90°, 90°]`の回転軸
@@ -281,7 +284,7 @@ TEST(InverseKinematicsTest, Limits_NoValidBranchWarnsAndReturnsPositive) {
     const Pose pose = PoseFromNc(model, Command("A", 45.0, "C", 300.0, kPositions[0]));
     const auto solution = mc::SolveOrientation(model, pose.tool_axis, {},
                                                mc::BranchPolicy::kPositive);
-    ExpectSingleWarning(solution.warnings, "out of range");
+    ExpectSingleWarning(solution.warnings, "out of range", "limits");
     EXPECT_NEAR(solution.nc.At("A"), ToRadians(45.0), kTol);
     EXPECT_GE(solution.nc.At("C"), 0.0);
     EXPECT_LT(solution.nc.At("C"), mc::kFullTurn);
@@ -320,7 +323,7 @@ TEST(InverseKinematicsTest, SingleRotary_ToolAxisAlongAxisIsSingular) {
     const auto solution = mc::SolveOrientation(model, Vector3d::UnitZ(), {},
                                                mc::BranchPolicy::kPositive);
     EXPECT_TRUE(solution.singular);
-    ExpectSingleWarning(solution.warnings, "singular");
+    ExpectSingleWarning(solution.warnings, "singular", "singular");
     EXPECT_NEAR(solution.nc.At("A"), 0.0, kTol);
 }
 
@@ -402,7 +405,7 @@ TEST(InverseKinematicsTest, Singular_ToolAxisAlongSpindleGivesZeroSwivel) {
                                               mc::InitialJoints(model), {},
                                               mc::BranchPolicy::kPositive);
     EXPECT_TRUE(solution.singular);
-    ExpectSingleWarning(solution.warnings, "singular");
+    ExpectSingleWarning(solution.warnings, "singular", "singular");
     EXPECT_NEAR(solution.nc.At("A"), 0.0, kTol);
     EXPECT_NEAR(solution.nc.At("C"), 0.0, kTol);
     EXPECT_NEAR(solution.nc.At("X"), 10.0, kTol);
@@ -424,6 +427,7 @@ TEST(InverseKinematicsTest, Degenerate_ParallelAxesMakeTiltIndeterminate) {
     EXPECT_NEAR(solution.nc.At("C"), 0.0, kTol);
     ASSERT_EQ(solution.warnings.size(), 2u);
     EXPECT_NE(solution.warnings[0].message.find("indeterminate"), std::string::npos);
+    EXPECT_EQ(solution.warnings[0].context, "singular");
     EXPECT_THROW(mc::SolveOrientation(model, Vector3d(0.0, 0.1, 1.0), {},
                                       mc::BranchPolicy::kPositive),
                  mc::KinematicsError);
@@ -481,7 +485,7 @@ TEST(InverseKinematicsTest, Position_WarnsOutsideStroke) {
                                                 Vector3d(0.0, -10.0, 0.0)));
     const auto solution = mc::SolvePosition(model, pose.target, kControl, {},
                                             mc::InitialJoints(model));
-    ExpectSingleWarning(solution.warnings, "out of stroke");
+    ExpectSingleWarning(solution.warnings, "out of stroke", "limits");
     EXPECT_NE(solution.warnings[0].message.find("Y=-10.000"), std::string::npos);
     EXPECT_NEAR(solution.nc.At("Y"), -10.0, kTol);
     // ストローク端 (Y = 0) は警告なし

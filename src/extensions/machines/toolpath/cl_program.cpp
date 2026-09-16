@@ -118,7 +118,7 @@ struct KindNamer {
 
 /// @brief 1レコードの整合性を検査する
 /// @param record 検査するレコード
-/// @param index レコード索引 (文言用)
+/// @param index レコードインデックス (文言用)
 /// @param line 行番号 (不明なら0)
 /// @param[out] warnings 警告の追記先
 void ValidateRecord(const ClRecord& record,
@@ -175,7 +175,7 @@ std::vector<Diagnostic> ValidateClProgram(const ClProgram& program) {
     if (!program.sources.empty() && !program.HasSources()) {
         detail::PushWarning(
             &warnings,
-            "sources has " + std::to_string(program.sources.size()) + "entries"
+            "sources has " + std::to_string(program.sources.size()) + " entries"
             " for " + std::to_string(program.records.size()) + " records");
     }
     const bool sources_usable = program.HasSources();

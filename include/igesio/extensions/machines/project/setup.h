@@ -67,6 +67,11 @@ struct WorkFrame {
     std::size_t carrier = 0;
     /// @brief ゼロポーズでの同次変換W_0 (ワーク座標→ゼロポーズ機械座標)
     igesio::Matrix4d w0 = igesio::Matrix4d::Identity();
+    /// @brief 登録値 (`[[work_offset]].values`)
+    /// @note 単位はmm/rad. 省略した軸は含めない. 登録値形式のみ持ち、幾何形式では
+    ///       `std::nullopt`. 暗黙のG54は空の登録値. TCP無効時の座標語 (登録値相対の
+    ///       NC指令値) を機械のNC指令値に変換する動作生成で用いる
+    std::optional<NcValues> registered;
 };
 
 /// @brief ゼロポーズ機械座標系で定義されたモデル

@@ -68,7 +68,8 @@ struct ToolAssemblySpec {
 /// @return `kGauge`: (0, 0, 0)、G43有効時は (0, 0, -g43_length).
 ///         `kTip`: (0, 0, command_point_z - GaugeLength) (G43は無視する)
 /// @note 座標系は先端を原点とする工具座標ではなく、取り付け点 (`tool_mount`) の
-///       座標系であり、`SolvePosition`の`control_local`へ直接渡せる.
+///       座標系. `SolvePosition`の`control_local` (ゼロポーズ機械座標) にするには
+///       取り付けフレームの剛体変換 (`MountPlacement(kToolMount)`) を掛けること.
 igesio::Vector3d ControlLocal(const ToolAssemblySpec& spec,
                               std::optional<double> g43_length = std::nullopt);
 

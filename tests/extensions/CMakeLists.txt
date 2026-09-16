@@ -51,6 +51,9 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/toolpath/test_nc_dialect.cpp
         machines/toolpath/test_nc_interpreter.cpp
         machines/toolpath/test_nc_writer.cpp
+        machines/simulation/test_motion.cpp
+        machines/simulation/test_axis_resolution.cpp
+        machines/simulation/test_program_loading.cpp
     )
 endif()
 

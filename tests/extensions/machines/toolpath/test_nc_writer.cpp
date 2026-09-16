@@ -18,6 +18,7 @@
  */
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -1165,7 +1166,10 @@ TEST(NcWriterTest, Golden_D200z) {
     std::vector<mc::Diagnostic> warnings;
     const std::string text = mc::WriteNcToString(
             program, toolpath_test::MakinoD200zDialect(), options, &warnings);
-    const std::string expected = mc::ReadTextFile(kDataDir / "nc" / "expected_d200z.nc");
+    // 期待出力ファイルはgitの改行変換 (autocrlf) でCRLFになることがあるので,
+    // 出力 (LF固定) と比較する前にCRを除く
+    std::string expected = mc::ReadTextFile(kDataDir / "nc" / "expected_d200z.nc");
+    expected.erase(std::remove(expected.begin(), expected.end(), '\r'), expected.end());
     EXPECT_EQ(text, expected);
     EXPECT_EQ(CountWarnings(warnings, "no length offset"), 1u);
 }

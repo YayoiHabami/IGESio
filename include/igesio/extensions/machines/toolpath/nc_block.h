@@ -65,13 +65,13 @@ class ProgramTable {
  public:
     /// @brief プログラム定義を登録する
     /// @param number O番号
-    /// @param block_index 開始ブロックの索引 (`NcLexResult::blocks`)
+    /// @param block_index 開始ブロックのインデックス (`NcLexResult::blocks`)
     /// @note 同じO番号は後の登録で上書きする
     void Register(int number, std::size_t block_index);
 
     /// @brief O番号の開始ブロックを探す
     /// @param number O番号
-    /// @return `NcLexResult::blocks`の索引. 未定義なら`std::nullopt`
+    /// @return `NcLexResult::blocks`のインデックス. 未定義なら`std::nullopt`
     std::optional<std::size_t> Find(int number) const;
 
     /// @brief 登録されたプログラム定義の数
@@ -81,7 +81,7 @@ class ProgramTable {
     bool Empty() const { return start_block_.empty(); }
 
  private:
-    /// @brief O番号 → 開始ブロックの索引
+    /// @brief O番号 → 開始ブロックのインデックス
     std::map<int, std::size_t> start_block_;
 };
 

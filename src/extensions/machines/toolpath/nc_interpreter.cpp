@@ -191,7 +191,7 @@ void CallSubprogram(Runner& runner, const NcLexResult& source,
 /// @brief ブロック列を走査する
 /// @param runner 走査の設定
 /// @param source ブロック列
-/// @param start 開始ブロックの索引
+/// @param start 開始ブロックのインデックス
 /// @param depth サブプログラムの深さ (主プログラムは0)
 /// @param is_subprogram サブプログラムとして走査しているか (M99で復帰する)
 /// @throw igesio::DataFormatError ブロックの処理またはサブプログラムの呼び出しに

@@ -81,9 +81,9 @@ std::string PlaneCode(const NcVocabulary& vocab, const ArcPlane plane) {
     }
 }
 
-/// @brief 平面内の2成分の索引 (0 = X, 1 = Y, 2 = Z) を取得する
+/// @brief 平面内の2成分のインデックス (0 = X, 1 = Y, 2 = Z) を取得する
 /// @param plane 円弧の平面
-/// @return 平面内の成分の索引 (昇順)
+/// @return 平面内の成分のインデックス (昇順)
 std::pair<int, int> InPlaneComponents(const ArcPlane plane) {
     switch (plane) {
         case ArcPlane::kZX: return {0, 2};
