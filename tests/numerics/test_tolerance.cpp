@@ -154,6 +154,27 @@ TEST(ToleranceTest, NearestRotation_DegenerateZeroColumnReturnsInput) {
     EXPECT_TRUE(i_num::IsApproxEqual(i_num::NearestRotation(zero), zero));
 }
 
+TEST(ToleranceTest, RigidInverse_RoundTripsToIdentity) {
+    // 任意軸回転+並進の剛体変換に対し、F·F⁻¹ と F⁻¹·F が単位行列になり、
+    // 一般の逆行列計算とも一致する
+    const igesio::Matrix3d r = igesio::AngleAxisd(
+            0.9, igesio::Vector3d(1.0, 2.0, 3.0).normalized()).toRotationMatrix();
+    igesio::Matrix4d f = igesio::Matrix4d::Identity();
+    f.block<3, 3>(0, 0) = r;
+    f.block<3, 1>(0, 3) = igesio::Vector3d(10.0, -5.0, 2.5);
+
+    const igesio::Matrix4d inv = i_num::RigidInverse(f);
+    EXPECT_TRUE(i_num::IsApproxIdentity(igesio::Matrix4d(f * inv), 1e-12));
+    EXPECT_TRUE(i_num::IsApproxIdentity(igesio::Matrix4d(inv * f), 1e-12));
+    EXPECT_TRUE(i_num::IsApproxEqual(inv, igesio::Matrix4d(f.inverse()), 1e-12));
+}
+
+TEST(ToleranceTest, RigidInverse_IdentityIsFixedPoint) {
+    // 単位行列の逆変換は単位行列
+    const igesio::Matrix4d inv = i_num::RigidInverse(igesio::Matrix4d::Identity());
+    EXPECT_TRUE(i_num::IsApproxIdentity(inv, 1e-15));
+}
+
 TEST(ToleranceTest, TryClampToRange_WithinRange) {
     // 範囲内の値はそのまま返る
     auto r = i_num::TryClampToRange(0.5, 0.0, 1.0);

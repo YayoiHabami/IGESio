@@ -8,6 +8,8 @@
  * 対象: EntityRenderer::SetScene 設定時のDrawが、Assemblyツリーを走査して
  *       - 各エンティティのワールド変換を累積変換でリフレッシュし(model行列へ反映)、
  *       - 非表示/抑制サブツリーを描画から除外すること。
+ *       また、Point (116) の描画ではmodel行列にエンティティ自身の変換行列
+ *       (M_entity) が含まれること (VBOは定義空間座標のため).
  * TODO: dirtyゲート(非dirty再描画で走査をスキップ)は走査回数の観測手段が無いため
  *       本テスト対象外(描画出力は不変のため正しさは他テストで担保).
  */
@@ -21,6 +23,8 @@
 #include "igesio/common/errors.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/entities/curves/circular_arc.h"
+#include "igesio/entities/curves/point.h"
+#include "igesio/entities/transformations/transformation_matrix.h"
 #include "igesio/models/assembly.h"
 #include "igesio/models/scene.h"
 #include "igesio/graphics/renderer.h"
@@ -83,6 +87,36 @@ TEST(SceneWalkTest, NestedTransform_AccumulatedIntoModel) {
     // 累積 = translate(1,0,0)·translate(0,2,0) = translate(1,2,0) (M_entity=単位)
     EXPECT_NEAR(m[12], 1.0f, kTol);
     EXPECT_NEAR(m[13], 2.0f, kTol);
+    EXPECT_NEAR(m[14], 0.0f, kTol);
+}
+
+// Point (116) のmodel行列にはエンティティ自身の変換行列 (M_entity) が含まれる
+// (VBOは定義空間座標のため、これが無いとM_entityが描画に反映されない)
+TEST(SceneWalkTest, PointModelIncludesEntityTransform) {
+    auto gl = std::make_shared<MockOpenGL>();
+    i_graph::EntityRenderer renderer(gl);
+    try {
+        renderer.Initialize();
+    } catch (const igesio::ImplementationError& e) {
+        GTEST_SKIP() << "シェーダー初期化不可: " << e.what();
+    }
+
+    auto root = i_mod::MakeAssembly();
+    root->SetGlobalTransform(Translate(1.0, 0.0, 0.0));
+    auto point = i_ent::MakePoint(igesio::Vector3d(0.0, 0.0, 0.0));
+    ASSERT_TRUE(point->OverwriteTransformationMatrix(
+            i_ent::MakeTranslation(igesio::Vector3d(0.0, 5.0, 0.0))));
+    root->AddEntity(point);
+    i_mod::Scene scene(root);
+    renderer.SetScene(&scene);
+
+    renderer.Draw();
+
+    ASSERT_EQ(gl->last_matrix_by_name.count("model"), 1u);
+    const auto& m = gl->last_matrix_by_name.at("model");  // 列優先16要素
+    // model = G_root·M_entity = translate(1,0,0)·translate(0,5,0) = translate(1,5,0)
+    EXPECT_NEAR(m[12], 1.0f, kTol);
+    EXPECT_NEAR(m[13], 5.0f, kTol);
     EXPECT_NEAR(m[14], 0.0f, kTol);
 }
 

@@ -120,9 +120,10 @@ EntityRenderer::Draw()
   ├─ EnsureSynced()  ← モデルリビジョン (構造・変換・表示状態) の突き合わせ
   │   ├─ (synced_root_, synced_revision_) が現rootと一致すれば何もしない
   │   ├─ Sweep: FindOwner(id)==nullptr のキャッシュを Cleanup() して破棄
-  │   └─ WalkAssembly(node, 累積変換, 色/不透明度の最近接オーバーライド)
+  │   └─ RebuildDrawList(): 走査 (初期の累積変換 = 表示座標系の逆行列)
+  │       ├─ DisplayFilter で隠したアセンブリの部分木は走査しない (キャッシュ維持)
   │       ├─ 非表示/抑制サブツリー (node.Display()) はスキップ
-  │       ├─ 物理従属エンティティ・DisplayFilter除外型はスキップ (キャッシュ温存)
+  │       ├─ 物理従属エンティティ・DisplayFilter除外型はスキップ (キャッシュ維持)
   │       ├─ キャッシュ未在席なら CreateEntityGraphics で遅延生成
   │       ├─ 各エンティティの world_transform_・色をリフレッシュ (PULLした値を反映)
   │       └─ GetShaderIds() でシェーダー別に draw_list_ へ、エンティティ毎に
@@ -142,12 +143,14 @@ EntityRenderer::Draw()
 
 ツリーの編集(構造・大域変換・表示状態)は`Assembly`のモデルリビジョン(`Revision()`)へ自動で集約されるため、編集側からレンダラへの通知は不要である。カメラ操作や選択変更だけの再描画ではリビジョンが変化しないため、ツリー走査を行わず`draw_list_`を再利用する(`ExecuteDrawList`は毎フレーム`DrawContext`から選択を読み直すため、ハイライトは再走査なしに更新される)。
 
+走査規則（アセンブリ単位のフィルタ→可視/抑制→物理従属→型フィルタ）と累積変換は、描画リスト構築と可視バウンディングボックスの計算（`FitView`・自動クリップ球）で共有されており、両者の対象集合は常に一致する。可視バウンディングボックスはエンティティ自身のBBから求めるため描画キャッシュにもGLにも依存せず、`FitView`はDraw前やGLバックエンド未設定でも呼べる。
+
 ## 5. 描画オブジェクトの生成と破棄 (Reconcile)
 
 描画オブジェクトはアプリケーションが登録するのではなく、`EnsureSynced()`のツリー走査がキャッシュ未在席のエンティティに対して遅延生成する。生成はfactoryが担う。
 
 ```
-WalkAssembly() 内の遅延生成
+走査 (RebuildDrawList) 内の遅延生成
   └─ CreateEntityGraphics(entity, gl)  ← factory.cpp
       ├─ dynamic_cast で ICurve か ISurface か Point かを判定
       ├─ ICurveの場合 → CreateCurveGraphics()
@@ -166,14 +169,14 @@ WalkAssembly() 内の遅延生成
 | 状態 | キャッシュ | 描画 | ピック |
 | --- | --- | --- | --- |
 | ツリーに在席・可視 | 在席(なければ生成) | ○ | ○ |
-| `visible=false` / `suppressed` | 温存(再表示が安価) | × | × |
-| `DisplayFilter`で除外 | 温存(生成は抑止) | × | × |
+| `visible=false` / `suppressed` | 維持(再表示が安価) | × | × |
+| `DisplayFilter`で除外(型・アセンブリ) | 維持(生成は抑止) | × | × |
 | ツリーから削除 | Sweepで破棄 | × | × |
 | 生成失敗(型起因) | `nullptr`負キャッシュ | × | × |
 
 物理従属エンティティ(複合曲線の構成要素・トリム面の境界等)は親エンティティの描画オブジェクトが子として描画するため、独立した描画対象にならない(二重描画と重複ピックの防止)。
 
-`DisplayFilter`はエンティティ型単位の表示フィルタで、レンダラ毎に保持するビュー状態である(`SetDisplayFilter()`)。除外された型は描画もピックもされないが、キャッシュは温存される。
+`DisplayFilter`はエンティティ型単位（`hidden_types`）とアセンブリ単位（`hidden_assemblies`）の表示フィルタで、レンダラ毎に保持するビュー状態である（`SetDisplayFilter()`）。除外された型・アセンブリは描画もピックもされないが、キャッシュは維持される。隠したアセンブリは部分木ごと走査しないため、そのレンダラでは描画オブジェクトの生成（テッセレーション・GPU転送）自体が生じない。
 
 ## 6. シェーダーコードの管理
 
@@ -252,7 +255,8 @@ const auto my_shader_id = igesio::graphics::ShaderRegistry::Register(std::move(i
 - `models::SelectionSet`: 選択中のID集合とアンカー(主選択)を保持する純粋クラス。GL非依存でヘッドレスでも操作できる。
 - `models::AssemblyMetadata`: 各ノードの注釈(`name`・`role_tag`)とロックを保持する。live読みされるためmutable参照経由で自由に編集できる。
 - `models::DisplayState`: 各ノードの可視/抑制/色・不透明度オーバーライドを保持する。setter経由でのみ変更でき、変更はモデルリビジョンとして描画層へ自動伝搬する。走査時に祖先方向へ合成する(可視=AND、抑制=OR、色/不透明度=最近接優先、選択ロック=AND)。
-- `graphics::DisplayFilter`(レンダラ単位のビュー状態): エンティティ型単位の表示フィルタ。複数ビューで異なる種別表示を可能にするため、Sceneではなくレンダラが保持する。
+- `graphics::DisplayFilter`（レンダラ単位のビュー状態）: エンティティ型単位・アセンブリ単位の表示フィルタ。複数ビューで異なる表示範囲を可能にするため、Sceneではなくレンダラが保持する（`Assembly::SetVisible`は全ビュー共有の状態）。
+- 表示座標系（レンダラ単位のビュー状態）: `EntityRenderer::SetViewFrame(frame)`で設定する剛体変換。走査の初期累積変換をその逆行列にすることで、シーン全体を`frame`の座標系に固定して表示する。描画・ピック結果（レイ・交点座標）・光源位置・自動クリップ球はいずれも表示座標系の値になる。同じSceneを共有する別のレンダラに、動くアセンブリのワールド配置（`Assembly::GetWorldTransform()`）を毎フレーム与えると、そのアセンブリが静止して見えるビューになる。
 - `graphics::DrawContext`: 描画時に降ろす参照の束(選択セット・ハイライト色・表示モード)。各描画オブジェクトはこれを通じて自分が選択中かの判定や、表示モードに応じた描画内容の選択(メッシュのエッジ集合切り替え等)を行う。選択色はオブジェクトへ焼き込まない。
 
 選択や色は非GUI層が保持・操作でき、外部がツリーや選択を書き換えても次フレームの描画へ自動反映される。

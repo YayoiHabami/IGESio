@@ -16,6 +16,8 @@
 #include <type_traits>
 #include <variant>
 
+#include "igesio/numerics/core/tolerance.h"
+
 namespace igesio::extensions::machines {
 
 namespace {
@@ -122,8 +124,8 @@ igesio::Matrix4d RotationAboutLine(const igesio::Vector3d& direction,
 }
 
 igesio::Matrix4d RigidInverse(const igesio::Matrix4d& transform) {
-    const igesio::Matrix3d rotation_t = RotationPart(transform).transpose();
-    return MakeRigid(rotation_t, -rotation_t * TranslationPart(transform));
+    // 実体は本体のnumericsに一元化する (描画側の表示座標系と共用)
+    return igesio::numerics::RigidInverse(transform);
 }
 
 igesio::Matrix3d RotationPart(const igesio::Matrix4d& transform) {

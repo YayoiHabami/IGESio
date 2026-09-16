@@ -8,6 +8,9 @@
  *       Subfigure Definition (Type 308) への参照を持つことがあり、この場合
  *       点をSubfigure Definitionで定義された図形で描画する必要があるため、
  *       独立した描画クラスを用意する.
+ * @note 座標の空間規約: VBOには定義空間の座標を格納し、model行列には
+ *       エンティティ自身の変換行列を含める (use_entity_transform_=true).
+ *       ピック・範囲選択も同じ行列×定義座標で位置を求めるため、描画位置と一致する
  */
 #ifndef IGESIO_GRAPHICS_CURVES_POINT_GRAPHICS_H_
 #define IGESIO_GRAPHICS_CURVES_POINT_GRAPHICS_H_

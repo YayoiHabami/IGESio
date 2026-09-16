@@ -23,7 +23,8 @@
   - [9. レンダラのセットアップ](#9-レンダラのセットアップ)
   - [10. 描画の基本フロー（Reconcile）](#10-描画の基本フローreconcile)
   - [11. ビュー状態の制御](#11-ビュー状態の制御)
-    - [DisplayFilter（エンティティ型単位の表示フィルタ）](#displayfilterエンティティ型単位の表示フィルタ)
+    - [DisplayFilter（エンティティ型・アセンブリ単位の表示フィルタ）](#displayfilterエンティティ型アセンブリ単位の表示フィルタ)
+    - [表示座標系（SetViewFrame）](#表示座標系setviewframe)
     - [マテリアルオーバーライド（エンティティ毎の描画プロパティ）](#マテリアルオーバーライドエンティティ毎の描画プロパティ)
     - [GraphicsSettings・背景・サイズ](#graphicssettings背景サイズ)
   - [12. カメラと光源](#12-カメラと光源)
@@ -170,7 +171,8 @@ root->AddEntity(circle);
 
 空間検索・事前計算には以下を用いる。
 
-- `GetWorldBoundingBox()`: 子孫の幾何メンバを包含するワールド空間AABB（`FitView`等の基礎）
+- `GetWorldTransform()`: このノードのワールド空間への変換（ルートからの大域変換の積。動くアセンブリの現在の姿勢を他の座標系の基準にする際に使う）
+- `GetWorldBoundingBox()`: 子孫の幾何メンバを包含するワールド空間AABB（表示状態やレンダラのビュー状態は考慮しない。描画側の`FitView`は可視エンティティのみを対象に別途計算する）
 - `PrepareGeometryCaches(recursive)`: 重い遅延キャッシュ（トリム面の領域判定等）の並列事前構築。読み込み・構造編集の完了後、並列読み取りや描画を始める前に1回呼ぶと初回アクセスのスパイクを避けられる
 
 ### 5. 構造編集
@@ -349,14 +351,27 @@ while (running) {
 
 以下はモデル（セッション）ではなくレンダラ毎に保持されるビュー状態であり、複数ビューで異なる設定にできる。
 
-#### DisplayFilter（エンティティ型単位の表示フィルタ）
+#### DisplayFilter（エンティティ型・アセンブリ単位の表示フィルタ）
 
 ```cpp
 igesio::graphics::DisplayFilter filter;
 filter.hidden_types.insert(igesio::entities::EntityType::kCircularArc);
-renderer.SetDisplayFilter(filter);      // 円弧を非表示（描画もピックもされない）
+filter.hidden_assemblies.insert(machine_assembly->GetID());   // 部分木ごと非表示
+renderer.SetDisplayFilter(filter);      // 円弧と当該アセンブリを非表示（描画もピックもされない）
 renderer.SetDisplayFilter({});          // 解除（キャッシュは温存されており再生成しない）
 ```
+
+`hidden_assemblies`は、当該ビューでその部分木を扱わないことを指定するためのレンダラ単位の設定で、`Assembly::SetVisible(false)`（全ビュー共有の状態）とは区別される。隠した部分木は走査自体を行わないため、そのレンダラでは描画オブジェクトの生成（テッセレーション・GPU転送）も起きない。`FitView`と自動クリップ球も隠した部分木を含めない。
+
+#### 表示座標系（SetViewFrame）
+
+```cpp
+// table_assembly の座標系に固定して表示する（テーブルに載ったワークが静止して見える）
+renderer.SetViewFrame(table_assembly->GetWorldTransform());
+renderer.SetViewFrame(igesio::Matrix4d::Identity());   // ワールド座標系へ戻す
+```
+
+`SetViewFrame(frame)`は剛体変換`frame`（左上3x3が回転行列。そうでなければ`std::invalid_argument`）の座標系にシーン全体を固定して表示する。内部では走査の初期累積変換を`frame⁻¹`にするだけなので、描画・ピック・光源・自動クリップ球は既存の経路のまま表示座標系の値で整合する。変更時は次回の描画/ピックで再走査するが、再テッセレーションやGPU再転送は生じない。現在値と同じ行列を渡した場合は何もしないため、動くアセンブリを追従させる用途で毎フレーム呼んでよい。
 
 #### マテリアルオーバーライド（エンティティ毎の描画プロパティ）
 
@@ -392,9 +407,9 @@ setterはGLコンテキスト前提を持たない（GL操作は次回描画時�
 - 対話操作: `Rotate(dx, dy)`（ターゲット周りの軌道）/ `Pan(dx, dy)` / `Zoom(delta)`
 - 定型ビュー: `SetStandardView(StandardView::kFront / kBack / kTop / kBottom / kRight / kLeft)`
 - 投影: `SetProjectionMode(ProjectionMode::kPerspective / kOrthographic / kOblique)`、`SetFov`、斜投影の`SetObliqueFactors`
-- フィット: `renderer.FitView()`がシーン全体のワールドBBoxと現在のアスペクト比から自動調整する（`Camera::FitToBoundingBox`を直接呼ぶこともできる）
+- フィット: `renderer.FitView()`が可視エンティティ全体（可視/抑制・表示フィルタ・表示座標系を反映）のBBoxと現在のアスペクト比から自動調整する。GLコンテキスト前提を持たないため、読み込み直後やDraw前にも呼べる（`Camera::FitToBoundingBox`を直接呼ぶこともできる）
 
-near/farクリッピング面は通常、自動クリッピングで決定される。レンダラがシーンの外接球を自動登録し（`SetScene`時と描画時の同期で更新）、カメラ位置に応じてnear/farが毎回導出されるため、ズームやパンでシーンがクリップされない。`SetClippingPlanes(near, far)`を呼ぶと自動クリッピングは解除され手動値に固定される（`ClearAutoClipSphere()`はカメラ側の解除API）。
+near/farクリッピング面は通常、自動クリッピングで決定される。レンダラが可視エンティティの外接球を自動登録し（`SetScene`時と描画時の同期で更新）、カメラ位置に応じてnear/farが毎回導出されるため、ズームやパンでシーンがクリップされない。`SetClippingPlanes(near, far)`を呼ぶと自動クリッピングは解除され手動値に固定される（`ClearAutoClipSphere()`はカメラ側の解除API）。
 
 なお、`kOblique`投影ではピッキング（レイ生成・矩形選択）が未対応である。
 
@@ -413,11 +428,11 @@ point.SetPoint({0.0f, 5.0f, 0.0f},                 // 点光源: 位置
 lights.push_back(point);
 ```
 
-光源計算は曲面系シェーダーのみが行う（曲線・点の描画は光源と無関係）。
+光源計算は曲面系シェーダーのみが行う（曲線・点の描画は光源と無関係）。光源の位置・方向とカメラは表示座標系（`SetViewFrame`）で解釈されるため、表示座標系を動くアセンブリに追従させても光源は画面に対して固定されたままになる。
 
 ### 13. ピッキングと選択
 
-ピッキングは「レンダラがヒットIDを返し、選択の確定は`Scene`が行う」という分担である。可視リストを走査するため、削除済み・非表示・抑制中・型フィルタ除外のエンティティは構造的にヒットしない。
+ピッキングは「レンダラがヒットIDを返し、選択の確定は`Scene`が行う」という分担である。可視リストを走査するため、削除済み・非表示・抑制中・フィルタ除外（型・アセンブリ）のエンティティは構造的にヒットしない。レイと交点座標は表示座標系（`SetViewFrame`。既定はワールド座標系）の値であり、ワールド座標が必要なら`ViewFrame()`を掛けて戻す。
 
 #### クリックピック
 
@@ -456,7 +471,9 @@ for (const auto& id : ids) scene.TrySelectWithLock(scene.ActiveSelection(), id);
 ### 14. スクリーンショットと複数ビュー
 
 - `CaptureScreenshot()`: 現在の描画状態をオフスクリーンFBOへ描画して`Texture`として返す。`SaveTextureToFile(path, texture)`でファイル保存できる
-- 複数ビュー: 同一の`Scene`を複数の`EntityRenderer`へ`SetScene`してよい。各レンダラが独立に同期状態・ビュー状態（カメラ・フィルタ・マテリアル・表示モード）を保持するため、同じモデルを異なる見た目で同時表示できる。モデル編集は全ビューへ自動反映される
+- 複数ビュー: 同一の`Scene`を複数の`EntityRenderer`へ`SetScene`してよい。各レンダラが独立に同期状態・ビュー状態（カメラ・フィルタ・マテリアル・表示モード・表示座標系）を保持するため、同じモデルを異なる見た目で同時表示できる。モデル編集と選択は全ビューへ自動反映される（選択セットは`Scene`が持つため、一方のビューで選択したものは他方でも強調される）
+- 座標系を固定したビュー: 同じ`Scene`の第2レンダラに、毎フレーム`SetViewFrame(moving_assembly->GetWorldTransform())`を与え、そのビューで見せないアセンブリを`hidden_assemblies`に入れる。第1レンダラ（ワールド座標系）では全体の動きが、第2レンダラでは当該アセンブリに載った物体が静止した状態で見える。姿勢の更新（`SetGlobalTransform`やアニメーション）は共有のアセンブリに対して1回行えばよい。各レンダラは描画キャッシュを独立に持つため、両方に表示する物体はテッセレーションとGPUリソースが2重になる（隠した部分木は走査しないので2重にならない）
+- 1つのGLコンテキストに複数ビューを並べる場合: `Draw()`はバインド中のフレームバッファ全体をクリアして描画するため、ビューごとにFBOを用意してバインドした状態で`Draw()`を呼び、その結果をテクスチャとして画面に配置する
 
 ## 付録: 典型レシピ
 

@@ -9,11 +9,16 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "igesio/common/parallel.h"
+#include "igesio/numerics/core/tolerance.h"
+#include "igesio/entities/entity_base.h"
+#include "igesio/entities/interfaces/i_geometry.h"
 #include "igesio/graphics/graphics_registry.h"
 #include "igesio/graphics/shader_registry.h"
 
@@ -24,6 +29,104 @@ namespace {
 namespace i_graph = igesio::graphics;
 namespace gl = igesio::graphics::gl;
 using EntityRenderer = igesio::graphics::EntityRenderer;
+
+/// @brief 2つの4x4行列が要素ごとに厳密に等しいか
+/// @param a 行列1
+/// @param b 行列2
+/// @return 全要素が等しい場合はtrue
+/// @note 表示座標系の同値判定用. 同じ入力から再計算した行列は同じビット列になる
+///       ため厳密比較で足りる (両行列バックエンドで動く要素比較にする)
+bool SameMatrix(const igesio::Matrix4d& a, const igesio::Matrix4d& b) {
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            if (a(i, j) != b(i, j)) return false;
+        }
+    }
+    return true;
+}
+
+/// @brief 頂点列を包含する軸平行バウンディングボックスを合成する
+/// @param pts 頂点列
+/// @return 軸平行BB. 頂点が無い、または2軸以上が幅0 (点・直線状) でAABBを
+///         構成できない場合はnullopt
+/// @note 退化の扱いはAssembly::GetWorldBoundingBoxと同じ (1軸のみ幅0の2次元BBは許す)
+std::optional<igesio::numerics::BoundingBox> ComposeAabb(
+        const std::vector<igesio::Vector3d>& pts) {
+    if (pts.empty()) return std::nullopt;
+    igesio::Vector3d lo = pts.front();
+    igesio::Vector3d hi = pts.front();
+    for (const auto& p : pts) {
+        lo = lo.cwiseMin(p);
+        hi = hi.cwiseMax(p);
+    }
+    const igesio::Vector3d sizes = hi - lo;
+    int zero_axes = 0;
+    if (sizes.x() <= 0.0) ++zero_axes;
+    if (sizes.y() <= 0.0) ++zero_axes;
+    if (sizes.z() <= 0.0) ++zero_axes;
+    if (zero_axes >= 2) return std::nullopt;
+    return igesio::numerics::BoundingBox(lo, hi);
+}
+
+/// @brief 走査規則に従い、Assemblyツリーの可視エンティティおよび累積変換を列挙する
+/// @tparam Fn 呼び出し可能オブジェクト. シグネチャは
+///         void(const ObjectID& id, const std::shared_ptr<IEntityIdentifier>& entity,
+///              const Matrix4d& accum, const std::optional<Color>& color_ovr,
+///              const std::optional<float>& opacity_ovr)
+/// @param node 走査中のノード
+/// @param parent_accum 親までの累積変換 (ルートでは表示座標系の逆行列)
+/// @param inherited_color 親までの最近接の色オーバーライド (無ければnullopt)
+/// @param inherited_opacity 親までの最近接の不透明度オーバーライド (無ければnullopt)
+/// @param filter 表示フィルタ (アセンブリ単位・型単位)
+/// @param fn 各可視エンティティに対する処理
+/// @note 走査規則 (アセンブリ単位のフィルタ→可視/抑制→物理従属→型フィルタ) を
+///       描画リスト構築 (RebuildDrawList) とBB計算 (ComputeVisibleBoundingBox) で
+///       共有し、両者の可視集合と累積変換を常に一致させる. 除外した部分木は走査しない
+///       (描画キャッシュは温存され、このレンダラでは生成もされない).
+///       色/不透明度のオーバーライドは最近接が優先 (子の設定が祖先を上書きする)
+template <class Fn>
+void VisitVisibleEntities(const igesio::models::Assembly& node,
+                          const igesio::Matrix4d& parent_accum,
+                          const std::optional<igesio::Color>& inherited_color,
+                          const std::optional<float>& inherited_opacity,
+                          const i_graph::DisplayFilter& filter, Fn&& fn) {
+    // ビュー状態のアセンブリ単位フィルタ (部分木ごと走査しない)
+    if (!filter.ShouldRenderAssembly(node.GetID())) return;
+    const auto& disp = node.Display();
+    // 非表示・抑制のサブツリーは描画対象から除外する
+    if (!disp.visible || disp.suppressed) return;
+
+    const igesio::Matrix4d accum = parent_accum * node.GetGlobalTransform();
+    const auto color_ovr =
+            disp.color_override ? disp.color_override : inherited_color;
+    const auto opacity_ovr =
+            disp.opacity_override ? disp.opacity_override : inherited_opacity;
+
+    for (const auto& [id, entity] : node.GetEntities()) {
+        if (!entity) continue;
+        // 物理従属エンティティは親 (複合曲線・トリム面等) の描画オブジェクトが
+        // 子として描画するため、独立した描画対象としない
+        // (二重描画と重複ピックの防止)
+        // (従属スイッチはDEステータス由来のためEntityBaseのみが持つ.
+        //  非IGESエンティティは常に独立扱い=描画対象)
+        const auto eb =
+                std::dynamic_pointer_cast<igesio::entities::EntityBase>(entity);
+        if (eb && eb->GetSubordinateEntitySwitch()
+                == igesio::entities::SubordinateEntitySwitch::kPhysicallyDependent) {
+            continue;
+        }
+        // ビュー状態の型フィルタ (キャッシュは温存し、収集のみ抑止する)
+        if (!filter.ShouldRender(entity->GetType())) continue;
+
+        fn(id, entity, accum, color_ovr, opacity_ovr);
+    }
+
+    for (const auto& child : node.GetChildAssemblies()) {
+        if (child) {
+            VisitVisibleEntities(*child, accum, color_ovr, opacity_ovr, filter, fn);
+        }
+    }
+}
 
 /// @brief 表示モードに応じて当該シェーダーを描画すべきか判定する
 /// @param id シェーダーの識別子
@@ -339,7 +442,8 @@ void EntityRenderer::Initialize() {
 }
 
 void EntityRenderer::Cleanup() {
-    // 描画オブジェクトのクリーンアップ (nullptrは負キャッシュのためスキップ)
+    // 描画オブジェクトのクリーンアップ (nullptrは負キャッシュのためスキップ.
+    // 各オブジェクトは生成時のGLバックエンドを自前で保持する)
     for (auto& [id, object] : graphics_cache_) {
         if (object) object->Cleanup();
     }
@@ -348,6 +452,10 @@ void EntityRenderer::Cleanup() {
     draw_list_.clear();
     visible_list_.clear();
     local_dirty_ = true;
+
+    // GLバックエンド未設定 (nullptr構築のまま未Initializeで破棄される経路) では
+    // GL関連のリソースは存在しないため、CPU側状態の破棄のみで終える
+    if (gl_ == nullptr) return;
 
     // シェーダープログラムの削除
     for (auto& [shader_id, program_id] : shader_programs_) {
@@ -640,13 +748,55 @@ void EntityRenderer::SetScene(const models::Scene* scene) {
     UpdateAutoClipSphere();
 }
 
+void EntityRenderer::SetViewFrame(const igesio::Matrix4d& frame) {
+    // 同値なら何もしない (毎フレームの設定で再走査させないため)
+    if (SameMatrix(frame, view_frame_)) return;
+    // 逆行列は回転の直交性から求めるため、剛体変換であること
+    // (非剛体ではBBの変換 (IsRotation) も退化し、FitView・ピック深度が成立しない)
+    const igesio::Matrix3d rotation = frame.block<3, 3>(0, 0);
+    if (!numerics::IsRotation(rotation)) {
+        throw std::invalid_argument(
+                "EntityRenderer::SetViewFrame: frame must be a rigid transform "
+                "(upper-left 3x3 must be a rotation matrix)");
+    }
+    view_frame_ = frame;
+    view_frame_inverse_ = numerics::RigidInverse(frame);
+    // 累積変換が変わるため再走査する (形状は不変なので再テッセレーションは生じない)
+    local_dirty_ = true;
+}
+
+std::optional<igesio::numerics::BoundingBox>
+EntityRenderer::ComputeVisibleBoundingBox() const {
+    if (scene_ == nullptr) return std::nullopt;
+
+    // 描画リスト構築と同じ走査規則で可視エンティティのBB頂点を集める.
+    // 描画オブジェクト (キャッシュ) には依存せず、エンティティ自身のBBを使う
+    std::vector<igesio::Vector3d> pts;
+    VisitVisibleEntities(
+            scene_->Root(), view_frame_inverse_, std::nullopt, std::nullopt,
+            display_filter_,
+            [&pts](const ObjectID&,
+                   const std::shared_ptr<entities::IEntityIdentifier>& entity,
+                   const igesio::Matrix4d& accum,
+                   const std::optional<Color>&, const std::optional<float>&) {
+        const auto geom =
+                std::dynamic_pointer_cast<const entities::IGeometry>(entity);
+        if (!geom) return;
+        // 点・直線状(0/1次元)に退化したメンバはBBに寄与しない
+        // (Assembly::GetWorldBoundingBoxと同じ除外規則)
+        if (geom->GetDefinedBoundingBox().Dimension() < 2) return;
+        for (const auto& v : geom->GetBoundingBox(accum).GetFiniteVertices()) {
+            pts.push_back(v);
+        }
+    });
+    return ComposeAabb(pts);
+}
+
 void EntityRenderer::UpdateAutoClipSphere() {
-    if (scene_ != nullptr) {
-        if (const auto bbox = scene_->Root().GetWorldBoundingBox()) {
-            if (const auto sphere = ComputeBoundingSphere(*bbox)) {
-                camera_.SetAutoClipSphere(sphere->first, sphere->second);
-                return;
-            }
+    if (const auto bbox = ComputeVisibleBoundingBox()) {
+        if (const auto sphere = ComputeBoundingSphere(*bbox)) {
+            camera_.SetAutoClipSphere(sphere->first, sphere->second);
+            return;
         }
     }
     camera_.ClearAutoClipSphere();
@@ -656,7 +806,7 @@ void EntityRenderer::FitView() {
     if (scene_ == nullptr) return;
     if (display_width_ <= 0 || display_height_ <= 0) return;
 
-    const auto bbox = scene_->Root().GetWorldBoundingBox();
+    const auto bbox = ComputeVisibleBoundingBox();
     if (!bbox.has_value()) return;
 
     const float aspect =
@@ -669,79 +819,59 @@ void EntityRenderer::RebuildDrawList() {
     // ここでは可視リストのみ再構築する
     visible_list_.clear();
     if (scene_ == nullptr) return;
-    WalkAssembly(scene_->Root(), igesio::Matrix4d::Identity(),
-                 std::nullopt, std::nullopt);
+    // 初期累積変換は表示座標系の逆行列 (単位行列ならワールド座標系のまま)
+    VisitVisibleEntities(
+            scene_->Root(), view_frame_inverse_, std::nullopt, std::nullopt,
+            display_filter_,
+            [this](const ObjectID& id,
+                   const std::shared_ptr<entities::IEntityIdentifier>& entity,
+                   const igesio::Matrix4d& accum,
+                   const std::optional<Color>& color_ovr,
+                   const std::optional<float>& opacity_ovr) {
+        CollectVisibleEntity(id, entity, accum, color_ovr, opacity_ovr);
+    });
 }
 
-void EntityRenderer::WalkAssembly(
-        const models::Assembly& node, const igesio::Matrix4d& parent_accum,
-        const std::optional<Color>& inherited_color,
-        const std::optional<float>& inherited_opacity) {
-    const auto& disp = node.Display();
-    // 非表示・抑制のサブツリーは描画対象から除外する
-    if (!disp.visible || disp.suppressed) return;
+void EntityRenderer::CollectVisibleEntity(
+        const ObjectID& id,
+        const std::shared_ptr<entities::IEntityIdentifier>& entity,
+        const igesio::Matrix4d& accum,
+        const std::optional<Color>& color_ovr,
+        const std::optional<float>& opacity_ovr) {
+    // キャッシュに存在しない場合は遅延生成 (負キャッシュのnullptrはスキップ)
+    auto* graphics = FindOrCreateGraphics(id, entity);
+    if (graphics == nullptr) return;
 
-    const igesio::Matrix4d accum = parent_accum * node.GetGlobalTransform();
-
-    // 色/不透明度のオーバーライドは最近接が優先 (子の設定が祖先を上書きする)
-    const auto color_ovr = disp.color_override ? disp.color_override : inherited_color;
-    const auto opacity_ovr =
-            disp.opacity_override ? disp.opacity_override : inherited_opacity;
-
-    for (const auto& [id, entity] : node.GetEntities()) {
-        if (!entity) continue;
-        // 物理従属エンティティは親 (複合曲線・トリム面等) の描画オブジェクトが
-        // 子として描画するため、独立した描画対象としない
-        // (二重描画と重複ピックの防止)
-        // (従属スイッチはDEステータス由来のためEntityBaseのみが持つ.
-        //  非IGESエンティティは常に独立扱い=描画対象)
-        const auto eb = std::dynamic_pointer_cast<entities::EntityBase>(entity);
-        if (eb && eb->GetSubordinateEntitySwitch()
-                == entities::SubordinateEntitySwitch::kPhysicallyDependent) {
-            continue;
-        }
-        // ビュー状態の型フィルタ (キャッシュは温存し、収集のみ抑止する)
-        if (!display_filter_.ShouldRender(entity->GetType())) continue;
-
-        // キャッシュ未在席なら遅延生成する (負キャッシュのnullptrはスキップ)
-        auto* graphics = FindOrCreateGraphics(id, entity);
-        if (graphics == nullptr) continue;
-
-        // マテリアルの遅延適用 (setterはGLを触らないため、GL前提のここで行う)
-        if (pending_material_ids_.erase(id) > 0) {
-            auto mat_it = material_overrides_.find(id);
-            graphics->MaterialProperty() =
-                    (mat_it != material_overrides_.end())
-                    ? mat_it->second : i_graph::MaterialProperty();
-            graphics->SyncTexture();
-        }
-
-        // ピッキング/描画の整合のためワールド変換をリフレッシュする.
-        // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける).
-        // 正準値はdoubleで保持し、単精度化はGPUアップロード時のみ行う
-        graphics->SetWorldTransform(accum);
-
-        // 解決したオーバーライドをフレーム毎にPUSHする (world_transform_と同じ派生キャッシュ).
-        // まずentity固有色へ戻し、指定があるRGB/不透明度のみ差し替える
-        // (選択ハイライトは描画時にPULLされ、これより優先される).
-        // color_overrideのα成分は無視し、不透明度はopacity_overrideのみが決める
-        graphics->ResetColor();
-        if (color_ovr || opacity_ovr) {
-            const Color natural = graphics->GetColor();  // {base_rgb, material_opacity}
-            Color composed = color_ovr ? color_ovr->WithAlpha(natural.a) : natural;
-            if (opacity_ovr) composed.a = *opacity_ovr;
-            graphics->SetColor(composed);
-        }
-
-        // ピック用の平坦リストへエンティティ毎に一意に収集する.
-        // シェーダー別バケット (draw_list_) はCPU準備フェーズ後にRebuildDrawBucketsで
-        // 構築する (遅延生成の子・テッセレーション結果で型集合が確定してから振り分けるため)
-        visible_list_.emplace_back(id, graphics);
+    // マテリアルの遅延適用 (setterではGLを触らないためここで行う)
+    if (pending_material_ids_.erase(id) > 0) {
+        auto mat_it = material_overrides_.find(id);
+        graphics->MaterialProperty() =
+                (mat_it != material_overrides_.end())
+                ? mat_it->second : i_graph::MaterialProperty();
+        graphics->SyncTexture();
     }
 
-    for (const auto& child : node.GetChildAssemblies()) {
-        if (child) WalkAssembly(*child, accum, color_ovr, opacity_ovr);
+    // ピッキングおよび描画の整合のためワールド変換を再更新する.
+    // M_entityは含めない (各描画オブジェクトが内部で処理するため二重適用を避ける).
+    // 正準値はdoubleで保持し、単精度化はGPUアップロード時のみ行う
+    graphics->SetWorldTransform(accum);
+
+    // 解決したオーバーライドをフレーム毎にPUSHする (world_transform_と同じ派生キャッシュ).
+    // まずentity固有色へ戻し、指定があるRGB/不透明度のみ差し替える
+    // (選択ハイライトは描画時にPULLされ、これより優先される).
+    // color_overrideのα成分は無視し、不透明度はopacity_overrideのみが決める
+    graphics->ResetColor();
+    if (color_ovr || opacity_ovr) {
+        const Color natural = graphics->GetColor();  // {base_rgb, material_opacity}
+        Color composed = color_ovr ? color_ovr->WithAlpha(natural.a) : natural;
+        if (opacity_ovr) composed.a = *opacity_ovr;
+        graphics->SetColor(composed);
     }
+
+    // ピック用の平坦リストへエンティティ毎に一意に収集する.
+    // シェーダー別バケット (draw_list_) はCPU準備フェーズ後にRebuildDrawBucketsで
+    // 構築する (遅延生成の子・テッセレーション結果で型集合が確定してから振り分けるため)
+    visible_list_.emplace_back(id, graphics);
 }
 
 void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {

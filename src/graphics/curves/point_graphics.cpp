@@ -24,7 +24,10 @@ using igesio::graphics::PointGraphics;
 PointGraphics::PointGraphics(
         const std::shared_ptr<const entities::Point>& entity,
         const std::shared_ptr<IOpenGL>& gl)
-        : EntityGraphics(entity, gl, ShaderId::kPoint, false) {
+        : EntityGraphics(entity, gl, ShaderId::kPoint, true) {
+    // VBOには定義空間の座標を格納するため、model行列にはエンティティ自身の
+    // 変換行列 (M_entity) を含める (GPUパラメトリック方式と同じ規約.
+    // 描画・ピック・範囲選択がいずれもGetWorldTransform()×定義座標で一致する)
     // 同期 (CPU構築+GL転送) はレンダラのreconcile経路が駆動する (ctorでは行わない)
 }
 

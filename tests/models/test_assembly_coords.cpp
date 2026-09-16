@@ -9,6 +9,7 @@
  *   - CoordFrame: Definition / EntityLocal / World / RelativeTo / GetKind /
  *                 GetRelativeBase
  *   - Assembly::ResolvePlacement
+ *   - Assembly::GetWorldTransform
  *   - Assembly::GetCurveView / GetSurfaceView
  *   - Assembly::GetWorldBoundingBox
  *
@@ -335,6 +336,41 @@ TEST_F(AssemblyCoordsTest, ResolvePlacement_ThrowsWhenRelativeBaseNotAncestor) {
         c.root->ResolvePlacement(c.line_id,
                                  CoordFrame::RelativeTo(outsider->GetID())),
         std::invalid_argument);
+}
+
+
+
+/**
+ * GetWorldTransform
+ */
+
+// 孫ノードのワールド配置はルートからの大域変換の積 G_root·G_a·G_b (自身を含む)
+TEST_F(AssemblyCoordsTest, GetWorldTransform_ComposesAncestors) {
+    const Matrix4d g_root = MakeTranslation({1, 2, 3});
+    const Matrix4d g_a = MakeTransform(kPiHalf, {0, 0, 1}, {4, 0, 0});
+    const Matrix4d g_b = MakeTranslation({0, 5, 0});
+    auto c = BuildChain(g_root, g_a, g_b);
+
+    EXPECT_TRUE(i_num::IsApproxEqual(c.b->GetWorldTransform(),
+                                     Matrix4d(g_root * g_a * g_b)));
+    EXPECT_TRUE(i_num::IsApproxEqual(c.a->GetWorldTransform(),
+                                     Matrix4d(g_root * g_a)));
+    // 所有エンティティのWorld配置 (ResolvePlacement) と一致する
+    const auto pl = c.root->ResolvePlacement(c.line_id, CoordFrame::World());
+    ASSERT_TRUE(pl.has_value());
+    EXPECT_TRUE(i_num::IsApproxEqual(c.b->GetWorldTransform(), *pl));
+}
+
+// ルートノードでは自身の大域変換と一致する
+TEST_F(AssemblyCoordsTest, GetWorldTransform_RootReturnsOwnGlobalTransform) {
+    const Matrix4d g_root = MakeTransform(kPiHalf, {1, 0, 0}, {7, 8, 9});
+    auto c = BuildChain(g_root, Matrix4d::Identity(), Matrix4d::Identity());
+    EXPECT_TRUE(i_num::IsApproxEqual(c.root->GetWorldTransform(), g_root));
+
+    // 大域変換の更新は即座に反映される (キャッシュを持たない)
+    const Matrix4d moved = MakeTranslation({-1, 0, 0});
+    c.root->SetGlobalTransform(moved);
+    EXPECT_TRUE(i_num::IsApproxEqual(c.root->GetWorldTransform(), moved));
 }
 
 

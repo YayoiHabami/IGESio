@@ -674,6 +674,12 @@ class Assembly : public std::enable_shared_from_this<Assembly> {
     std::shared_ptr<entities::SurfaceView>
     GetSurfaceView(const ObjectID& id, const CoordFrame& frame) const;
 
+    /// @brief このノードのローカル空間からワールド空間への配置行列を取得する
+    /// @return ルートまでの大域変換の積 G_root·…·G_this (このノード自身の大域変換を含む)
+    /// @note ルートノードでは自身の大域変換と一致する. アセンブリの現在の姿勢を
+    ///       他の座標系の基準 (描画の表示座標系等) に用いる場合などに使用する
+    igesio::Matrix4d GetWorldTransform() const;
+
     /// @brief 子孫の幾何メンバを包含するワールド空間のバウンディングボックスを取得する
     /// @return 軸平行なバウンディングボックス. 幾何メンバがない、または全体が退化(点・
     ///         直線状)してAABBを構成できない場合は`std::nullopt`

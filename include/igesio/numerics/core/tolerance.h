@@ -169,6 +169,14 @@ bool IsRotation(const Matrix3d&, double tolerance = kFloatGeometryTolerance);
 ///       除去する用途. 入力が回転から大きく外れる場合の結果は保証しない.
 Matrix3d NearestRotation(const Matrix3d&);
 
+/// @brief 剛体変換 (左上3x3が回転行列R、右上3x1が並進t) の逆変換を返す
+/// @param transform 剛体変換 [R, t; 0, 1]
+/// @return 逆変換 [Rᵀ, -Rᵀt; 0, 1]
+/// @note 一般の逆行列計算を避け、回転の直交性を利用して求める. 回転性は
+///       検証しない (必要なら呼び出し側でIsRotationを使う). 非剛体 (スケール・
+///       せん断) を渡した場合の結果は逆行列にならない.
+Matrix4d RigidInverse(const Matrix4d&);
+
 /// @brief a < b かどうかを判定する
 /// @param a 判定する値1
 /// @param b 判定する値2

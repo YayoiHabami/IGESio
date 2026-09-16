@@ -369,8 +369,13 @@ class IEntityGraphics {
     /// @brief レイとエンティティの交差点を求める
     /// @param ray ワールド空間のレイ (kRayとして扱う)
     /// @param params 探索制御パラメータ
-    /// @return 交差点のリスト (distance昇順). CanIntersect()がfalseの場合は空リスト
+    /// @return 交差点のリスト (distance昇順. 交点座標・距離ともにワールド空間).
+    ///         CanIntersect()がfalseの場合は空リスト
     /// @note デフォルト実装は空リストを返す
+    /// @note 実装はworld_transform_ (親空間→ワールド) を反映すること. 親空間で
+    ///       評価されるエンティティは、レイをTransformRayToLocalで親空間に移して
+    ///       判定し、交点をTransformHitToWorldでワールドに戻す
+    ///       (GetWorldBoundingBox/GetSelectionSamplesと同じ空間規約)
     /// @note ピック・選択系 (CanIntersect/本関数/GetSelectionSamples) はエンティティを
     ///       解析的に読み、GPUメッシュに依存しない (GPU転送なしで成立)。委譲型は
     ///       `PrewarmCpu`後に子へ委譲してよい。

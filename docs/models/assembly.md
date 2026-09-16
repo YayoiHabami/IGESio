@@ -148,6 +148,8 @@ Note that changes to the structure, the transform, and the display state are agg
 
 ## Spatial Query
 
+`GetWorldTransform()` returns the placement of this node from its local space to world space, i.e. the product of the global transforms from the root down to and including this node. For the root node it equals the node's own global transform. It is the way to obtain the current pose of a moving assembly when that pose is needed as the reference of another coordinate system (for example, the view frame of a renderer).
+
 `GetWorldBoundingBox()` returns an axis-aligned bounding box that encloses the geometric members of the descendants, computed in world space (applying all global transforms up to the root, including this node). It targets only geometric, non-physically-dependent members, and excludes degenerate bounding boxes (point- or line-shaped) following the existing guard. It returns `std::nullopt` if there are no geometric members, or if the whole is degenerate and cannot form an AABB.
 
 ## Relationship with Scene

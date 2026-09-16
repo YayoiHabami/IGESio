@@ -693,6 +693,10 @@ Assembly::GetSurfaceView(const ObjectID& id, const CoordFrame& frame) const {
     return std::make_shared<entities::SurfaceView>(surface, *placement);
 }
 
+Matrix4d Assembly::GetWorldTransform() const {
+    return WorldPlacementOf(this);
+}
+
 std::optional<igesio::numerics::BoundingBox>
 Assembly::GetWorldBoundingBox() const {
     // 自ノードのローカル空間からワールド空間への配置を求める

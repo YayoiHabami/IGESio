@@ -511,8 +511,14 @@ class EntityGraphics : public IEntityGraphics {
         }
 
         // ②能力ディスパッチ (ISurface/ICurve)
-        // ray.directionが単位ベクトルのため、線パラメータが原点からの距離に等しい
-        const Vector3d p1 = ray.origin + ray.direction;
+        // エンティティは親空間 (M_entity適用済み) で評価されるため、レイを
+        // world_transform_ (親→ワールド) の逆で親空間に移して判定し、交点を
+        // ワールドに戻す (GetWorldBoundingBox/GetSelectionSamplesと同じ空間規約).
+        // 距離はワールド空間で再計算する (親空間の線パラメータは非剛体変換では
+        // ワールド距離と一致しないため)
+        const auto local = TransformRayToLocal(ray, world_transform_);
+        if (!local) return {};
+        const auto& [p0, p1] = *local;
         constexpr auto kRay = numerics::BoundingBox::DirectionType::kRay;
 
         std::vector<RayHit> result;
@@ -525,8 +531,9 @@ class EntityGraphics : public IEntityGraphics {
             sp.convergence_tol = params.convergence_tol;
             sp.dedup_tol = params.dedup_tol;
             for (const auto& h : entities::IntersectSurfaceWithLine(
-                    *surf, ray.origin, p1, kRay, sp)) {
-                result.push_back({h.position, h.t});
+                    *surf, p0, p1, kRay, sp)) {
+                result.push_back(
+                        TransformHitToWorld(h.position, world_transform_, ray));
             }
             return result;
         }
@@ -537,11 +544,14 @@ class EntityGraphics : public IEntityGraphics {
             cp.curve_samples = params.curve_samples;
             cp.convergence_tol = params.convergence_tol;
             cp.dedup_tol = params.dedup_tol;
-            // ピッキング経路ではPickEntitiesがワールド換算した値で上書き済み
+            // ピッキング経路ではPickEntitiesがワールド換算した値で上書き済み.
+            // 親空間の距離としてそのまま渡す (剛体変換では一致する. 非剛体の場合は
+            // 親空間の距離として解釈される)
             cp.hit_tolerance = params.curve_hit_tolerance;
             for (const auto& h : entities::IntersectCurveWithLine(
-                    *curve, ray.origin, p1, kRay, cp)) {
-                result.push_back({h.position, h.t_line});
+                    *curve, p0, p1, kRay, cp)) {
+                result.push_back(
+                        TransformHitToWorld(h.position, world_transform_, ray));
             }
             return result;
         }

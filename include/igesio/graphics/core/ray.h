@@ -17,6 +17,7 @@
 #define IGESIO_GRAPHICS_CORE_RAY_H_
 
 #include <optional>
+#include <utility>
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/graphics/core/camera.h"
@@ -166,6 +167,27 @@ std::optional<Vector3d> WorldToScreen(const Matrix4d& view_proj, int w, int h,
 /// @note near面クリッピングのように、w除算前の座標で線形補間したい場合に用いる。
 ///       near面の内側判定は (clip.z + clip.w >= 0)
 Vector4d WorldToClip(const Matrix4d& view_proj, const Vector3d& world);
+
+/// @brief ワールド空間のレイをローカル (親) 空間に変換する
+/// @param ray ワールド空間のレイ (direction正規化済み)
+/// @param world_transform ローカル→ワールドの変換行列
+/// @return {ローカル空間の始点, ローカル空間の通過点 (始点+方向)}.
+///         world_transformが非可逆 (逆行列が有限でない) の場合はstd::nullopt
+/// @note 方向は正規化しない (非剛体変換では線パラメータがワールド距離と一致しないため).
+///       ワールドの距離はTransformHitToWorldで再計算する
+/// @note 親空間で評価されるエンティティ (ICurve/ISurface/メッシュ等) に対して、
+///       IEntityGraphics::Intersectの実装がworld_transform_を反映するためのもの
+std::optional<std::pair<Vector3d, Vector3d>> TransformRayToLocal(
+        const Ray& ray, const Matrix4d& world_transform);
+
+/// @brief ローカル空間の交点をワールド空間の交差結果に変換する
+/// @param local_position ローカル空間の交点
+/// @param world_transform ローカル→ワールドの変換行列
+/// @param ray ワールド空間のレイ (direction正規化済み)
+/// @return ワールド座標の交点と、ray.originからの距離 (レイ方向への射影.
+///         数値誤差による負値は0にクランプする)
+RayHit TransformHitToWorld(const Vector3d& local_position,
+                           const Matrix4d& world_transform, const Ray& ray);
 
 }  // namespace igesio::graphics
 

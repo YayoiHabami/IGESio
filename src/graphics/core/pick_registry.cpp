@@ -7,7 +7,6 @@
  */
 #include "igesio/graphics/core/pick_registry.h"
 
-#include <algorithm>
 #include <typeindex>
 #include <unordered_map>
 #include <utility>
@@ -48,37 +47,28 @@ std::vector<Vector3d> TransformMeshVertices(
 /// @param ray ワールド空間のレイ (direction正規化済み)
 /// @param params 探索制御パラメータ (dedup_tolのみ使用する)
 /// @return 交差点のリスト (distance昇順). 変換行列が非可逆の場合は空リスト
-/// @note レイをローカル空間へ逆変換して全三角形と判定し、交点をワールドへ
-///       戻す. 距離はワールド空間で再計算するため、非一様スケールを含む
-///       変換でも正しい距離を返す
+/// @note レイをローカル空間へ逆変換して全三角形と判定し、交点をワールドへ戻す
+///       (TransformRayToLocal/TransformHitToWorld). 距離はワールド空間で再計算
+///       するため、非一様スケールを含む変換でも正しい距離を返す
 std::vector<i_graph::RayHit> IntersectMeshEntity(
         const i_ent::MeshEntity& entity, const Matrix4d& world_transform,
         const i_graph::Ray& ray, const i_graph::RayIntersectionParams& params) {
-    const Matrix4d inverse = world_transform.inverse();
-    if (!inverse.allFinite()) return {};  // 退化した変換では判定できない
-
-    const Vector3d origin_local =
-            (inverse * ray.origin.homogeneous()).hnormalized();
-    const Vector3d direction_local =
-            inverse.topLeftCorner<3, 3>() * ray.direction;
+    const auto local = i_graph::TransformRayToLocal(ray, world_transform);
+    if (!local) return {};
+    const auto& [origin_local, p1_local] = *local;
 
     i_num::MeshIntersectionParams mesh_params;
     mesh_params.dedup_tol = params.dedup_tol;
     const auto local_hits = i_num::IntersectMeshWithLine(
-            entity.Mesh(), origin_local, origin_local + direction_local,
+            entity.Mesh(), origin_local, p1_local,
             i_num::BoundingBox::DirectionType::kRay, mesh_params);
 
     // ローカルのt昇順はワールドの距離昇順と一致する (同一レイ上の単調変換のため)
     std::vector<i_graph::RayHit> hits;
     hits.reserve(local_hits.size());
     for (const auto& hit : local_hits) {
-        const Vector3d world_position =
-                (world_transform * hit.position.homogeneous()).hnormalized();
-        // direction正規化済みのため、レイ方向への射影が距離に等しい
-        // (数値誤差による僅かな負値は0へクランプする)
-        const double distance = std::max(
-                0.0, (world_position - ray.origin).dot(ray.direction));
-        hits.push_back({world_position, distance});
+        hits.push_back(
+                i_graph::TransformHitToWorld(hit.position, world_transform, ray));
     }
     return hits;
 }

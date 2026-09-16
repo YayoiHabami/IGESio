@@ -33,6 +33,17 @@
 | `SetGlobalParam(param)` | 描画グローバルパラメータを設定する |
 | `MaterialProperty()` | マテリアルプロパティへの参照を返す |
 
+**ピック・選択関数**
+
+いずれもワールド空間で入出力し、`world_transform_`（親空間→ワールド）を反映する。エンティティは親の空間（自身のDE変換行列を適用済み）で評価されるため、既定実装はレイを`TransformRayToLocal()`で親空間に移して判定し、交点を`TransformHitToWorld()`でワールドに戻す（`include/igesio/graphics/core/ray.h`）。`PickRegistry`に登録する関数も同じ規約に従う（`world_transform`を引数で受け取る）。
+
+| 関数 | 説明 |
+|---|---|
+| `CanIntersect()` | レイ交差判定が可能か（`PickRegistry`登録、または`ICurve`/`ISurface`） |
+| `Intersect(ray, params)` | ワールド空間のレイとの交点をdistance昇順で返す（交点・距離ともにワールド空間） |
+| `GetSelectionSamples(params)` | 範囲選択用のサンプル点列をワールド空間で返す |
+| `GetWorldBoundingBox()` | エンティティのBBに`world_transform_`を適用したワールド空間のBBを返す（回転でない変換では`std::nullopt`） |
+
 ### `EntityGraphics<T, has_surfaces>` (`include/igesio/graphics/core/entity_graphics.h`)
 
 `IEntityGraphics`の汎用テンプレート実装。具体的なGraphicsクラスはこれを継承する。子のGraphicsを持てば複合ノードも担う。使用する`ShaderId`はテンプレート引数ではなく、コンストラクタ引数として渡してメンバ`shader_id_`に保持する。
@@ -98,13 +109,15 @@
 | `SetBackgroundColor(color)` / `GetBackgroundColor()` | 背景色 (`igesio::Color`; RGBA) を設定・取得する |
 | `SetAmbientColor(color)` / `GetAmbientColor()` | 環境光の色 (`igesio::Color`; α成分は無視) を設定・取得する |
 | `SetScene(scene)` | 描画対象の`models::Scene`を設定する (rootと選択を一元管理) |
-| `SetDisplayFilter(filter)` / `GetDisplayFilter()` | エンティティ型単位の表示フィルタ(レンダラ単位のビュー状態)を設定・取得する |
+| `SetDisplayFilter(filter)` / `GetDisplayFilter()` | エンティティ型単位・アセンブリ単位の表示フィルタ(レンダラ単位のビュー状態)を設定・取得する |
+| `SetViewFrame(frame)` / `ViewFrame()` | 表示座標系（剛体変換）を設定・取得する。シーン全体を`frame`の座標系に固定して表示する（描画・ピック・光源・自動クリップ球は表示座標系の値になる）。非剛体は`std::invalid_argument`。同値の再設定は何もしない |
+| `FitView()` | 走査規則（可視/抑制・表示フィルタ・表示座標系）を反映した可視エンティティ全体が画面に収まるようにカメラを調整する（GLコンテキスト前提を持たない） |
 | `SetMaterialProperty(id, material)` / `ClearMaterialProperty(id)` | エンティティ毎の描画プロパティのオーバーライドを設定・解除する(GLコンテキスト前提を持たず、適用は次回の描画/ピック時) |
 | `PickEntities(...)` / `PickEntitiesInRect(...)` | レイ/矩形でヒットしたエンティティIDを返す(可視リスト走査のため、削除済み・非表示・抑制中・フィルタ除外のエンティティはヒットしない) |
 
 描画オブジェクトはSceneツリーの派生キャッシュとして管理される。描画/ピックの冒頭でツリーと突き合わせ(Reconcile)、未在席の描画オブジェクトを遅延生成し、ツリーから削除されたものをSweepで破棄する。ツリーの編集(構造・大域変換・表示状態)は`Assembly`のモデルリビジョンで、エンティティの形状編集はジオメトリリビジョン(同期キー)で自動検知されるため、編集後にレンダラへ通知するAPIは存在しない。詳細は`overview.md`§4-5を参照。
 
-`DisplayFilter`は非表示にするエンティティ型の集合(`hidden_types`)を保持する構造体で、`ShouldRender(type)`で描画対象かを判定する。除外された型の描画オブジェクトは温存され、解除時に再利用される。
+`DisplayFilter`は非表示にするエンティティ型の集合（`hidden_types`）とアセンブリIDの集合（`hidden_assemblies`）を保持する構造体で、`ShouldRender(type)`/`ShouldRenderAssembly(id)`で描画対象かを判定する。除外された型・アセンブリの描画オブジェクトは温存され、解除時に再利用される。隠したアセンブリは部分木ごと走査しないため、そのレンダラでは描画オブジェクトが生成されない。
 
 選択状態はレンダラではなく`models::Scene`/`SelectionSet`が保持する。レンダラはピッキングでIDを返すのみで、選択の確定は`Scene`(対話では`TrySelectWithLock`)が行う。
 
@@ -197,8 +210,8 @@ IGESが保持しない、描画専用のマテリアルプロパティ。
 
 ### クリッピング面
 
-- 近接/遠方クリッピング面(near/far)は、通常は自動クリッピングにより決定される。`SetAutoClipSphere`で登録されたシーンの外接球と現在のカメラ位置からnear/farが毎回導出されるため、ズームやパンでカメラが移動してもシーンがクリップされない。
-- 外接球はレンダラがシーンの設定時(`SetScene`)と描画/ピック時の同期(ツリー変更・形状変更の検知時)に自動で更新するほか、`Camera::FitToBoundingBox`(FitView)でも登録される。
+- 近接/遠方クリッピング面（near/far）は、通常は自動クリッピングにより決定される。`SetAutoClipSphere`で登録されたシーンの外接球と現在のカメラ位置からnear/farが毎回導出されるため、ズームやパンでカメラが移動してもシーンがクリップされない。
+- 外接球はレンダラがシーンの設定時（`SetScene`）と描画/ピック時の同期（ツリー変更・形状変更・ビュー状態の変更の検知時）に、走査規則（可視/抑制・表示フィルタ・表示座標系）を反映した可視エンティティのバウンディングボックスから自動で更新するほか、`Camera::FitToBoundingBox`（FitView）でも登録される。
 - `SetClippingPlanes`を呼ぶと自動クリッピングは解除され、設定した手動値に固定される。シーン未設定時のフォールバック値は`kDefaultNearPlane`/`kDefaultFarPlane`である。
 
 ## Light (`include/igesio/graphics/core/light.h`)

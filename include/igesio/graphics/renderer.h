@@ -20,6 +20,8 @@
 
 #include "igesio/common/color.h"
 #include "igesio/common/errors.h"
+#include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/models/scene.h"
 #include "igesio/graphics/core/i_open_gl.h"
@@ -72,19 +74,31 @@ struct GraphicsSettings {
 };
 
 /// @brief 表示フィルタ (レンダラ単位のビュー状態)
-/// @note 除外された型は描画リスト/可視リストに収集されず、描画もピックもされない.
-///       キャッシュ済み描画オブジェクトは温存される (再表示が安価).
+/// @note 除外された型・アセンブリは描画リスト/可視リストに収集されず、描画もピックも
+///       されない. キャッシュ済み描画オブジェクトは温存される
+///       (再表示を低コストにするため).
 ///       Scene (セッション状態) ではなくレンダラ毎に保持し、複数ビューで
-///       異なる種別表示を可能にする
+///       ビューごとに表示範囲を変更可能にする (Assembly::SetVisibleは全ビュー共有)
 struct DisplayFilter {
     /// @brief 非表示にするエンティティ型の集合
     std::unordered_set<entities::EntityType> hidden_types;
+    /// @brief 非表示にするアセンブリのID集合 (部分木ごと走査しない)
+    /// @note 走査しなかった部分木では、このレンダラの描画オブジェクトは
+    ///       生成されない (テッセレーション・GPU転送も生じない)
+    std::unordered_set<ObjectID> hidden_assemblies;
 
     /// @brief 指定型を描画対象とするか
     /// @param type エンティティ型
     /// @return 描画対象とする場合はtrue
     bool ShouldRender(const entities::EntityType type) const {
         return hidden_types.count(type) == 0;
+    }
+
+    /// @brief 指定アセンブリ (の部分木) を描画対象とするか
+    /// @param id アセンブリのID
+    /// @return 描画対象とする場合はtrue
+    bool ShouldRenderAssembly(const ObjectID& id) const {
+        return hidden_assemblies.count(id) == 0;
     }
 };
 
@@ -96,9 +110,14 @@ struct DisplayFilter {
 ///       内部の変更は`local_dirty_`で表す。編集後の手動通知は不要。
 /// @note GL前提のメソッド (`Initialize`/`Cleanup`/`EnsureSynced`/`ResyncGeometries`/
 ///       `Draw`) はGLコンテキストをカレントにしたスレッドから呼ぶこと。
-///       setter (`SetScene`/`SetMaterialProperty`/`SetDisplayFilter`等) はGLを触らず
-///       フラグ/キュー操作のみ行い、GLを要する適用 (マテリアル・テクスチャ) は
-///       reconcile走査へ遅延する。
+///       setter (`SetScene`/`SetMaterialProperty`/`SetDisplayFilter`/`SetViewFrame`等)
+///       と`FitView`はGLを触らずフラグ/キュー操作のみ行い、GLを要する適用
+///       (マテリアル・テクスチャ) はreconcile走査へ遅延する。
+/// @note ビュー状態 (レンダラ単位): カメラ、光源、`DisplayFilter` (型・アセンブリ単位の
+///       表示フィルタ)、`MaterialProperty`、表示モード、背景、表示座標系 (`SetViewFrame`)。
+///       表示座標系は走査の初期累積変換をその逆行列にすることで実現し、以降の描画・
+///       ピック・照明・自動クリップ球は表示座標系の値で整合する (同じSceneを別の
+///       レンダラで別の座標系に固定して表示できる)。
 /// @note 描画は「3フェーズ整流」で行う:
 ///       (A) `EnsureSynced` 構造突き合わせ (`visible_list_`構築) →
 ///       (B) `PrepareCpuGeometries` CPU準備を並列前倒し →
@@ -205,6 +224,12 @@ class EntityRenderer {
     bool draw_buckets_dirty_ = true;
     /// @brief 表示フィルタ (ビュー状態)
     DisplayFilter display_filter_;
+    /// @brief 表示座標系 (ビュー状態. 剛体変換)
+    /// @note シーンをこの座標系に固定して表示する. 単位行列ならワールド座標系のまま
+    igesio::Matrix4d view_frame_ = igesio::Matrix4d::Identity();
+    /// @brief 表示座標系の逆行列 (走査の初期累積変換)
+    /// @note SetViewFrameで一度だけ計算し、走査毎の逆行列計算を避ける
+    igesio::Matrix4d view_frame_inverse_ = igesio::Matrix4d::Identity();
     /// @brief エンティティ毎の描画プロパティのオーバーライド
     /// @note 生成時に適用するほか、設定変更はEnsureSyncedの走査で遅延適用する
     ///       (setterはGLを触らない). Sweepで所有者を失ったエントリは破棄する
@@ -254,6 +279,9 @@ class EntityRenderer {
 
     /// @brief OpenGLリソースを解放する
     /// @note 子要素も含めた、全てのOpenGLリソースを解放する
+    /// @note GLバックエンドが未設定 (nullptr構築のまま) の場合はGLに触れず、
+    ///       描画キャッシュ/可視リスト等のCPU側状態の破棄のみ行う
+    ///       (デストラクタから呼ばれるため、未Initializeの破棄を許す)
     void Cleanup();
 
 
@@ -271,8 +299,9 @@ class EntityRenderer {
     void SetScene(const models::Scene* scene);
 
     /// @brief 表示フィルタを設定する
-    /// @param filter 表示フィルタ (非表示にするエンティティ型の集合)
-    /// @note 除外された型の描画オブジェクトは温存され、解除時に再利用される
+    /// @param filter 表示フィルタ (非表示にするエンティティ型・アセンブリの集合)
+    /// @note 除外された型・アセンブリの描画オブジェクトは温存され、解除時に
+    ///       再利用される
     void SetDisplayFilter(const DisplayFilter& filter) {
         display_filter_ = filter;
         local_dirty_ = true;
@@ -280,6 +309,22 @@ class EntityRenderer {
     /// @brief 表示フィルタを取得する
     /// @return 現在の表示フィルタ
     const DisplayFilter& GetDisplayFilter() const { return display_filter_; }
+
+    /// @brief 表示座標系を設定する
+    /// @param frame 表示座標系のワールド配置 (剛体変換. 左上3x3が回転行列であること)
+    /// @throw std::invalid_argument 左上3x3が回転行列でない場合
+    /// @note シーン全体をこの座標系に固定して表示する (各物体のワールド変換に
+    ///       frame⁻¹を前掛けする). 例えばアセンブリの現在のワールド配置
+    ///       (`Assembly::GetWorldTransform`) を与えると、そのアセンブリが静止して
+    ///       見えるビューになる. 描画・ピック結果 (レイ・交点座標)・光源位置・
+    ///       自動クリップ球はいずれも表示座標系の値になる.
+    /// @note 現在値と同じなら何もしない (毎フレーム呼んでも再走査は生じない).
+    ///       変更時は次回の描画/ピックで再走査するが、再テッセレーションや
+    ///       GPU再転送は生じない. GLコンテキスト前提を持たない
+    void SetViewFrame(const igesio::Matrix4d& frame);
+    /// @brief 表示座標系を取得する
+    /// @return 表示座標系のワールド配置 (既定は単位行列)
+    const igesio::Matrix4d& ViewFrame() const { return view_frame_; }
 
     /// @brief エンティティの描画プロパティのオーバーライドを設定する
     /// @param id エンティティのID
@@ -349,11 +394,13 @@ class EntityRenderer {
     /// @note カメラの各変数などはこの参照を通じて設定する
     graphics::Camera& Camera() { return camera_; }
 
-    /// @brief シーン全体が画面に収まるようにカメラを調整する (FitView)
-    /// @note scene->Root()のワールドバウンディングボックスと現在の表示サイズから
-    ///       アスペクト比を求め、Camera::FitToBoundingBoxを呼ぶ. シーン未設定・
-    ///       バウンディングボックスが空・表示サイズが無効な場合は何もしない.
-    /// @note 反映には別途Draw()の呼び出しが必要.
+    /// @brief 可視エンティティ全体が画面に収まるようにカメラを調整する (FitView)
+    /// @note 走査規則 (可視/抑制・表示フィルタ・表示座標系) を反映した可視エンティティの
+    ///       バウンディングボックスと現在の表示サイズからアスペクト比を求め、
+    ///       Camera::FitToBoundingBoxを呼ぶ. 非表示・フィルタ除外の物体は対象に含めない.
+    ///       シーン未設定・バウンディングボックスが空・表示サイズが無効な場合は何もしない.
+    /// @note GLコンテキスト前提を持たず、Draw前やGLバックエンド未設定でも呼べる.
+    ///       反映には別途Draw()の呼び出しが必要.
     void FitView();
 
     /// @brief 光源リストの参照を取得する (const)
@@ -572,32 +619,45 @@ class EntityRenderer {
     /// @note 所有権は移譲しない (graphics_cache_が保持し続ける)
     IEntityGraphics* FindGraphics(const ObjectID&);
 
-    /// @brief シーンのワールドBBoxから外接球を計算し、カメラの自動クリップ球を更新する
-    /// @note カメラ操作でシーンがクリップされないよう、同期経路から呼ぶ.
+    /// @brief 可視エンティティ全体を包含するバウンディングボックスを計算する
+    /// @return 表示座標系での軸平行BB. シーン未設定・可視な幾何メンバが無い・全体が
+    ///         退化 (点・直線状) の場合は`std::nullopt`
+    /// @note 描画リスト構築と同じ走査規則 (可視/抑制・表示フィルタ・表示座標系) で
+    ///       ツリーを走査し、各エンティティのBB (`IGeometry::GetBoundingBox(累積変換)`)
+    ///       の頂点から合成する. 描画キャッシュには依存せず、GLにも触れないため
+    ///       走査前・GLバックエンド未設定でも呼べる (FitView/自動クリップ球の基礎)
+    std::optional<numerics::BoundingBox> ComputeVisibleBoundingBox() const;
+
+    /// @brief 可視エンティティのBBoxから外接球を計算し、カメラの自動クリップ球を更新する
+    /// @note カメラ操作でシーンがクリップされないよう、シーン設定時と同期経路から呼ぶ.
     ///       シーン未設定またはBBoxが空の場合は自動クリッピングを解除する
     void UpdateAutoClipSphere();
 
     /// @brief scene_を走査して可視リスト (visible_list_) を再構築し、ワールド変換と
     ///        色をリフレッシュする (EnsureSyncedのWalkステップ)
-    /// @note draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが構築するため
+    /// @note 走査規則はComputeVisibleBoundingBoxと共有し、初期累積変換は表示座標系の
+    ///       逆行列とする. 各可視エンティティの処理はCollectVisibleEntity.
+    ///       draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが構築するため
     ///       ここでは扱わない
     void RebuildDrawList();
 
-    /// @brief Assemblyツリーを再帰走査する (RebuildDrawListの実体)
-    /// @param node 走査中のノード
-    /// @param parent_accum 親までの累積変換 (G_root·…·G_{n-1})
-    /// @param inherited_color 親までの最近接の色オーバーライド (無ければnullopt)
-    /// @param inherited_opacity 親までの最近接の不透明度オーバーライド (無ければnullopt)
-    /// @note 可視/抑制サブツリー (node.Display()で判定) と表示フィルタ除外型は
-    ///       スキップする (キャッシュは温存). 未在席の描画オブジェクトは遅延生成し、
-    ///       適用待ちマテリアルを適用する. node大域変換を掛けた累積をworld_transform_へ
-    ///       流し (M_entityは含めない)、エンティティ毎に一意にvisible_list_へ収集する
-    ///       (シェーダー別バケットdraw_list_はRebuildDrawBucketsが構築). 色/不透明度の
-    ///       最近接オーバーライドを解決し、各描画オブジェクトへフレーム毎にPUSHする.
-    void WalkAssembly(const models::Assembly& node,
-                      const igesio::Matrix4d& parent_accum,
-                      const std::optional<Color>& inherited_color,
-                      const std::optional<float>& inherited_opacity);
+    /// @brief 走査で見つかった可視エンティティを描画対象として収集する
+    ///        (RebuildDrawListのエンティティ単位の処理)
+    /// @param id エンティティのID
+    /// @param entity エンティティ
+    /// @param accum 所有ノードまでの累積変換 (表示座標系の逆行列·G_root·…·G_owner)
+    /// @param color_ovr 最近接の色オーバーライド (無ければnullopt)
+    /// @param opacity_ovr 最近接の不透明度オーバーライド (無ければnullopt)
+    /// @note 未在席の描画オブジェクトは遅延生成し、適用待ちマテリアルを適用する.
+    ///       accumをworld_transform_へ流し (M_entityは含めない)、エンティティ毎に一意に
+    ///       visible_list_へ収集する (シェーダー別バケットdraw_list_はRebuildDrawBucketsが
+    ///       構築). 色/不透明度のオーバーライドを各描画オブジェクトへフレーム毎にPUSHする.
+    void CollectVisibleEntity(
+            const ObjectID& id,
+            const std::shared_ptr<entities::IEntityIdentifier>& entity,
+            const igesio::Matrix4d& accum,
+            const std::optional<Color>& color_ovr,
+            const std::optional<float>& opacity_ovr);
 
     /// @brief キャッシュした描画リストをシェーダー単位で描画する
     /// @param ctx 表示コンテキスト (選択ハイライト等をPULLする)

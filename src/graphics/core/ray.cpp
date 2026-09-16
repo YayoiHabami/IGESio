@@ -7,6 +7,9 @@
  */
 #include "igesio/graphics/core/ray.h"
 
+#include <algorithm>
+#include <utility>
+
 
 
 namespace igesio::graphics {
@@ -106,6 +109,36 @@ std::optional<igesio::Vector3d> WorldToScreen(
     const igesio::Matrix4d v = camera.GetViewMatrix().cast<double>();
     const igesio::Matrix4d p = camera.GetProjectionMatrix(aspect).cast<double>();
     return WorldToScreen(p * v, w, h, world);
+}
+
+
+
+/**
+ * ローカル空間でのピック判定の補助
+ */
+
+std::optional<std::pair<igesio::Vector3d, igesio::Vector3d>>
+TransformRayToLocal(const Ray& ray, const igesio::Matrix4d& world_transform) {
+    const igesio::Matrix4d inverse = world_transform.inverse();
+    // 退化した (非可逆な) 変換ではローカル空間のレイを定義できない
+    if (!inverse.allFinite()) return std::nullopt;
+
+    const igesio::Vector3d origin_local =
+            (inverse * ray.origin.homogeneous()).hnormalized();
+    const igesio::Vector3d p1_local =
+            origin_local + inverse.topLeftCorner<3, 3>() * ray.direction;
+    return std::make_pair(origin_local, p1_local);
+}
+
+RayHit TransformHitToWorld(const igesio::Vector3d& local_position,
+                           const igesio::Matrix4d& world_transform,
+                           const Ray& ray) {
+    const igesio::Vector3d world_position =
+            (world_transform * local_position.homogeneous()).hnormalized();
+    // direction正規化済みのため、レイ方向への射影が距離に等しい
+    const double distance = std::max(
+            0.0, (world_position - ray.origin).dot(ray.direction));
+    return RayHit{world_position, distance};
 }
 
 }  // namespace igesio::graphics

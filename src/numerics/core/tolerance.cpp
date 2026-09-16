@@ -61,6 +61,18 @@ igesio::Matrix3d i_num::NearestRotation(const igesio::Matrix3d& rot) {
     return result;
 }
 
+igesio::Matrix4d i_num::RigidInverse(const igesio::Matrix4d& transform) {
+    // [R, t]⁻¹ = [Rᵀ, -Rᵀt] (Rの直交性を利用する)
+    const igesio::Matrix3d rotation_t =
+            igesio::Matrix3d(transform.block<3, 3>(0, 0)).transpose();
+    const igesio::Vector3d translation = transform.block<3, 1>(0, 3);
+
+    igesio::Matrix4d inverse = igesio::Matrix4d::Identity();
+    inverse.block<3, 3>(0, 0) = rotation_t;
+    inverse.block<3, 1>(0, 3) = -(rotation_t * translation);
+    return inverse;
+}
+
 bool i_num::IsApproxLessThan(const double a, const double b, const double tolerance) {
     return (b - a) > tolerance;  // b - a が許容誤差より大きい場合はtrue
 }
