@@ -104,8 +104,9 @@ TEST(SceneWalkTest, PointModelIncludesEntityTransform) {
     auto root = i_mod::MakeAssembly();
     root->SetGlobalTransform(Translate(1.0, 0.0, 0.0));
     auto point = i_ent::MakePoint(igesio::Vector3d(0.0, 0.0, 0.0));
-    ASSERT_TRUE(point->OverwriteTransformationMatrix(
-            i_ent::MakeTranslation(igesio::Vector3d(0.0, 5.0, 0.0))));
+    // DEフィールドは非所有参照 (weak_ptr) のため、変換行列はテスト側で保持する
+    const auto m_entity = i_ent::MakeTranslation(igesio::Vector3d(0.0, 5.0, 0.0));
+    ASSERT_TRUE(point->OverwriteTransformationMatrix(m_entity));
     root->AddEntity(point);
     i_mod::Scene scene(root);
     renderer.SetScene(&scene);

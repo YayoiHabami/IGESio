@@ -272,6 +272,11 @@ struct GeometrySpec {
     float opacity = 1.0f;
     /// @brief TOMLの行番号 (診断用)
     int line = 0;
+
+    /// @brief 表示名を取得する
+    /// @return `name`. 空ならファイル名 (`raw_path`の末尾要素),
+    ///         プリミティブなら種別名
+    std::string DisplayName() const;
 };
 
 /// @brief コンポーネントの部分形状

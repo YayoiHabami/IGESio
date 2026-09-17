@@ -18,6 +18,7 @@
  *       - イベントトラック: AddEvent/FindEventTrack、ActiveEventValue、
  *         EventKeysBetweenの前進 (左開右閉)・後退・同時刻・範囲外、異常系
  *       - Duration: 3種のキーの最大時刻の共有と下限検査
+ *       - 総時間つき構築: 構築時の総時間の固定・負値の拒否・超過キーの拒否
  */
 #include <gtest/gtest.h>
 
@@ -176,6 +177,29 @@ TEST(AnimationClipTest, Duration_EmptyClipIsZero) {
     const anim::AnimationClip clip;
     EXPECT_DOUBLE_EQ(clip.Duration(), 0.0);
     EXPECT_TRUE(clip.Tracks().empty());
+}
+
+TEST(AnimationClipTest, Constructor_FixesDuration) {
+    // 既定構築は最大キー時刻、総時間つき構築はその値を保つ
+    anim::AnimationClip clip(5.0);
+    EXPECT_DOUBLE_EQ(clip.Duration(), 5.0);
+    clip.AddKey(MakeTargetId(), 3.0, Matrix4d::Identity());
+    EXPECT_DOUBLE_EQ(clip.Duration(), 5.0);
+
+    // 総時間ちょうどのキーは受理し、超えるキーは拒否する
+    EXPECT_NO_THROW(clip.AddVisibilityKey(MakeTargetId(), 5.0, true));
+    EXPECT_THROW(clip.AddEvent("e", 5.5, 1), std::invalid_argument);
+
+    // 総時間0のクリップも成立する (時刻0のキーのみ受理)
+    anim::AnimationClip empty(0.0);
+    EXPECT_DOUBLE_EQ(empty.Duration(), 0.0);
+    EXPECT_NO_THROW(empty.AddKey(MakeTargetId(), 0.0, Matrix4d::Identity()));
+    EXPECT_THROW(empty.AddKey(MakeTargetId(), 0.1, Matrix4d::Identity()),
+                 std::invalid_argument);
+}
+
+TEST(AnimationClipTest, Constructor_ThrowsInvalidArgumentWhenNegative) {
+    EXPECT_THROW(anim::AnimationClip(-1.0), std::invalid_argument);
 }
 
 

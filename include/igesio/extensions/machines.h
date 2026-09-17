@@ -14,11 +14,13 @@
  *       - tools/      工具輪郭とその実体化
  *       - project/    プロジェクト定義とセットアップ
  *       - toolpath/   工具経路 (CLプログラム) とNC/CLの読み書き
- *       - simulation/ 動作生成とアニメーション生成
- *       - scene/      形状読込、シーン構築
+ *       - simulation/ 動作生成、アニメーション生成、動作の表示オブジェクト
+ *       - scene/      形状読込、シーン構築、工具軌跡
  * @note 全モジュールがGL非依存 (models層まで) であり、ヘッドレスでも利用できる.
  *       描画は既存の描画クラス (SurfaceOfRevolution・MeshEntity・LinearPath等)
- *       を利用するため、描画クラスの追加はない.
+ *       を利用するため、描画クラスの追加はない. 工具軌跡はinspection拡張の
+ *       `InstancedEntity`で表示するため、描画側では
+ *       `RegisterInstancedEntityGraphics()`を一度呼ぶこと.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_H_
 #define IGESIO_EXTENSIONS_MACHINES_H_
@@ -64,5 +66,16 @@
 #include "igesio/extensions/machines/simulation/axis_resolution.h"
 #include "igesio/extensions/machines/simulation/program_loading.h"
 #include "igesio/extensions/machines/simulation/motion.h"
+
+// シーン (形状読込、シーン構築)
+#include "igesio/extensions/machines/scene/geometry_loader.h"
+#include "igesio/extensions/machines/scene/machine_scene.h"
+
+// アニメーション (動作のサンプル列からのクリップ生成)
+#include "igesio/extensions/machines/simulation/animation_bridge.h"
+
+// 表示オブジェクト (工具軌跡、動作軌跡)
+#include "igesio/extensions/machines/scene/tool_trajectory.h"
+#include "igesio/extensions/machines/simulation/motion_scene.h"
 
 #endif  // IGESIO_EXTENSIONS_MACHINES_H_

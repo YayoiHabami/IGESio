@@ -54,6 +54,11 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/simulation/test_motion.cpp
         machines/simulation/test_axis_resolution.cpp
         machines/simulation/test_program_loading.cpp
+        machines/scene/test_geometry_loader.cpp
+        machines/scene/test_machine_scene.cpp
+        machines/scene/test_tool_trajectory.cpp
+        machines/simulation/test_animation_bridge.cpp
+        machines/simulation/test_motion_scene.cpp
     )
 endif()
 

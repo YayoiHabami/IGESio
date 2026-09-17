@@ -76,6 +76,11 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/simulation/motion.cpp
         machines/simulation/axis_resolution.cpp
         machines/simulation/program_loading.cpp
+        machines/scene/geometry_loader.cpp
+        machines/scene/machine_scene.cpp
+        machines/scene/tool_trajectory.cpp
+        machines/simulation/animation_bridge.cpp
+        machines/simulation/motion_scene.cpp
     )
     if(MINGW)
         # toml11のテンプレート展開とデバッグ情報でCOFFのセクション数上限 (2^16) を

@@ -21,7 +21,7 @@
 #   - IGESIO_ENABLE_INSPECTION_EXTENSION: Enable the inspection extension (coordinate frame groups etc.) (default: OFF)
 #   - IGESIO_ENABLE_ANIMATION_EXTENSION: Enable the keyframe animation extension (default: OFF)
 #   - IGESIO_ENABLE_MACHINES_EXTENSION: Enable the machine-tool kinematics and simulation extension (default: OFF)
-#     - if IGESIO_ENABLE_MACHINES_EXTENSION is ON, the STL, OBJ and animation extensions are also set to ON
+#     - if IGESIO_ENABLE_MACHINES_EXTENSION is ON, the STL, OBJ, inspection and animation extensions are also set to ON
 #
 # Defined macros:
 #   - IGESIO_ENABLE_BOOST: Defined when Boost support is enabled
@@ -252,12 +252,14 @@ if(IGESIO_ENABLE_ALL_EXTENSIONS)
   set(IGESIO_ENABLE_MACHINES_EXTENSION ON)
   message(STATUS "All IGESio extensions enabled")
 endif()
-# The machines extension reads STL/OBJ geometry and drives the animation player
+# The machines extension reads STL/OBJ geometry, shows tool trajectories with
+# instanced entities and drives the animation player
 if(IGESIO_ENABLE_MACHINES_EXTENSION)
   set(IGESIO_ENABLE_STL_EXTENSION ON)
   set(IGESIO_ENABLE_OBJ_EXTENSION ON)
+  set(IGESIO_ENABLE_INSPECTION_EXTENSION ON)
   set(IGESIO_ENABLE_ANIMATION_EXTENSION ON)
-  message(STATUS "Machines extension enabled (STL, OBJ and animation extensions forced ON)")
+  message(STATUS "Machines extension enabled (STL, OBJ, inspection and animation extensions forced ON)")
 endif()
 if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION
     OR IGESIO_ENABLE_INSPECTION_EXTENSION OR IGESIO_ENABLE_ANIMATION_EXTENSION

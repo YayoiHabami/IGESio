@@ -56,6 +56,10 @@ Track& FindOrCreateTrack(std::vector<Track>* tracks, Pred pred, Make make) {
 
 
 
+AnimationClip::AnimationClip(const double duration_sec) {
+    SetDuration(duration_sec);
+}
+
 void AnimationClip::AddKey(const ObjectID& target, const double time_sec,
                            const igesio::Matrix4d& transform) {
     ValidateKeyTime(time_sec);

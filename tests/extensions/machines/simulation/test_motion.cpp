@@ -49,18 +49,24 @@
 #include "igesio/extensions/machines/toolpath/nc_dialect.h"
 #include "igesio/extensions/machines/toolpath/nc_interpreter.h"
 #include "../machine/machines_for_testing.h"
-#include "../project/projects_for_testing.h"
+#include "motion_for_testing.h"
 
 namespace {
 
 namespace mc = igesio::extensions::machines;
 using igesio::Vector3d;
 using mc::ToRadians;
-using machines_test::MinimalXyzAc;
 using projects_test::MinimalProject;
-using projects_test::ReadProjectText;
-using projects_test::ReadProjectWithMachine;
 using projects_test::Replace;
+using motion_test::CountWarnings;
+using motion_test::Goto;
+using motion_test::MakeSetup;
+using motion_test::MakeSetupThreeAxis;
+using motion_test::MakeSetupWithoutDynamics;
+using motion_test::Plan;
+using motion_test::Program;
+using motion_test::Words;
+using motion_test::WithTool;
 
 /// @brief 数値比較の許容誤差
 constexpr double kTol = 1e-9;
@@ -73,79 +79,6 @@ constexpr double kLinearFeed = 100.0;
 /// @brief NCのテストデータのディレクトリ
 const std::filesystem::path kNcDir = machines_test::kFixturePath.parent_path() / "nc";
 
-/// @brief 実例機 (動特性あり) の最小構成プロジェクトからセットアップを作る
-mc::MachiningSetup MakeSetup(const std::string& toml = MinimalProject()) {
-    return mc::MachiningSetup(ReadProjectText(toml));
-}
-
-/// @brief 動特性の無い機械 (`MinimalXyzAc`. 幾何は実例機と同じ) でセットアップを作る
-mc::MachiningSetup MakeSetupWithoutDynamics() {
-    const std::string body = Replace(MinimalProject(),
-                                     "[machine]\nlibrary = \"t-ZYX-b-AC-w.toml\"\n", "");
-    return mc::MachiningSetup(ReadProjectWithMachine(MinimalXyzAc(), body,
-                                                     "igesio_motion_no_dynamics"));
-}
-
-/// @brief 3軸機 (`ThreeAxis`. 工具取り付け点 (0,0,100)) でセットアップを作る
-/// @note G54の登録値は工具取り付け点を原点に置く {Z = -100} にする (W_0 = I)
-mc::MachiningSetup MakeSetupThreeAxis() {
-    std::string body = Replace(MinimalProject(),
-                               "[machine]\nlibrary = \"t-ZYX-b-AC-w.toml\"\n", "");
-    body = Replace(body, "values = { X = 0.0, Y = 180.0, Z = -250.5 }",
-                   "values = { X = 0.0, Y = 0.0, Z = -100.0 }");
-    return mc::MachiningSetup(ReadProjectWithMachine(machines_test::ThreeAxis(), body,
-                                                     "igesio_motion_three_axis"));
-}
-
-/// @brief 制御点と工具軸方向を持つ移動を作る
-mc::ClGoto Goto(const Vector3d& point,
-                const std::optional<Vector3d>& axis = std::nullopt,
-                const mc::MotionKind kind = mc::MotionKind::kLinear) {
-    mc::ClGoto motion;
-    motion.kind = kind;
-    motion.point = point;
-    motion.tool_axis = axis;
-    return motion;
-}
-
-/// @brief 軸の指令のみの移動 (登録値相対の座標語、または機械座標) を作る
-mc::ClGoto Words(const mc::NcValues& words,
-                 const mc::MotionFrame frame = mc::MotionFrame::kWork,
-                 const mc::MotionKind kind = mc::MotionKind::kLinear) {
-    mc::ClGoto motion;
-    motion.kind = kind;
-    motion.axis_words = words;
-    motion.frame = frame;
-    return motion;
-}
-
-/// @brief レコード列からプログラムを作る (行番号は索引+1)
-mc::ClProgram Program(std::vector<mc::ClRecord> records) {
-    mc::ClProgram program;
-    program.records = std::move(records);
-    for (std::size_t i = 0; i < program.records.size(); ++i) {
-        program.sources.push_back(mc::SourceLocation{0, static_cast<int>(i) + 1});
-    }
-    return program;
-}
-
-/// @brief 工具#1を選択してから始まるプログラムを作る
-mc::ClProgram WithTool(std::vector<mc::ClRecord> records) {
-    records.insert(records.begin(), mc::ClLoadTool{1});
-    return Program(std::move(records));
-}
-
-/// @brief 可動範囲外を無視して動作を生成する
-/// @note フィクスチャのZ軸は-90 mmが下限で、テーブル上面付近の制御点は
-///       可動範囲外になる. 可動範囲外の扱い自体は`Overtravel_*`で検証する
-mc::MotionTrack Plan(const mc::MachiningSetup& setup, const mc::ClProgram& program,
-                     mc::MotionOptions options = {}) {
-    if (!options.overtravel.has_value()) {
-        options.overtravel = mc::OvertravelPolicy::kIgnore;
-    }
-    return mc::PlanMotion(setup, program, options);
-}
-
 /// @brief レコードの終点のサンプルを索引順に集める
 std::vector<mc::MotionSample> CommandSamples(const mc::MotionTrack& track) {
     std::vector<mc::MotionSample> found;
@@ -153,16 +86,6 @@ std::vector<mc::MotionSample> CommandSamples(const mc::MotionTrack& track) {
         if (sample.is_command_point) found.push_back(sample);
     }
     return found;
-}
-
-/// @brief 文言に部分文字列を含む警告の数
-std::size_t CountWarnings(const std::vector<mc::Diagnostic>& warnings,
-                          const std::string& text) {
-    std::size_t count = 0;
-    for (const mc::Diagnostic& warning : warnings) {
-        if (warning.message.find(text) != std::string::npos) ++count;
-    }
-    return count;
 }
 
 /// @brief 工具#1の制御点 (先端) のゼロポーズ機械座標 (`tool_mount`に固定. H_tm·c)

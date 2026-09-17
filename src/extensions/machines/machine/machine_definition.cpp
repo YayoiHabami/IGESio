@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 
 #include "igesio/extensions/machines/core/rotation.h"
 
@@ -85,6 +86,15 @@ std::optional<PrimitiveSpec::Kind> ParsePrimitiveKind(const std::string_view tex
 
 std::string_view PrimitiveKindName(const PrimitiveSpec::Kind kind) {
     return kind == PrimitiveSpec::Kind::kCylinder ? "cylinder" : "box";
+}
+
+std::string GeometrySpec::DisplayName() const {
+    if (!name.empty()) return name;
+    if (const auto* primitive = std::get_if<PrimitiveSpec>(&source);
+        primitive != nullptr) {
+        return std::string(PrimitiveKindName(primitive->kind));
+    }
+    return std::filesystem::path(raw_path).filename().generic_string();
 }
 
 GeometryFileFormat ClassifyGeometryFile(const std::filesystem::path& path) {

@@ -110,10 +110,22 @@ struct EventTrack : TrackBase<EventKey> {
 };
 
 /// @brief キーフレームアニメーションのクリップ (トラックの集合＋総時間)
-/// @note 総時間 (Duration) の既定値は全種類のキーの最大時刻.
+/// @note 総時間 (Duration) のデフォルト値は全種類のキーの最大時刻.
 ///       最終キーの状態を一定時間表示したい場合は、`SetDuration`で延長する.
+///       総時間が先に決まっている場合 (動作のサンプル列から作る場合等) は,
+///       総時間を指定して構築する (キー時刻の検証はコンストラクタを参照).
 class AnimationClip {
  public:
+    /// @brief 総時間が未設定のクリップを構築する
+    AnimationClip() = default;
+
+    /// @brief 総時間を指定してクリップを構築する
+    /// @param duration_sec 総時間 [s]
+    /// @throw std::invalid_argument 負の場合
+    /// @note `SetDuration`を構築時に行ったものと同じ. 以後に追加する全キーの
+    ///       時刻が総時間以下であることを検証する
+    explicit AnimationClip(double duration_sec);
+
     /// @brief キーフレームを追加する
     /// @param target 対象AssemblyのID
     /// @param time_sec キー時刻 [s] (>= 0)
