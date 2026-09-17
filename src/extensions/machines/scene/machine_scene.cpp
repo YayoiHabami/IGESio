@@ -336,6 +336,7 @@ void MachineScene::Build(const MachiningSetup& setup,
             auto node = MakeChildAssembly(work_mount, name);
             nodes_[node->Metadata().name] = node;
         }
+        if (options.lock_selection) LockSelection();
         SetActiveTool(setup.InitialTool());
     } catch (...) {
         Clear();
@@ -361,8 +362,20 @@ void MachineScene::BuildGeometries(const MachiningSetup& setup,
         node.carrier = instance.carrier;
         node.role = instance.role;
         node.visible = instance.visible;
-        node.assembly = TryLoadGeometry(instance, options.geometry,
-                                        GeometryContext(instance), warnings_);
+        if (options.geometry_provider) {
+            node.assembly = options.geometry_provider(instance);
+        }
+        if (node.assembly) {
+            // 供給されたアセンブリが他の木に属していれば、そちらから取り除く
+            // (`AddChildAssembly`は旧親の子の一覧から除去しない)
+            if (const auto previous = node.assembly->GetParent().lock()) {
+                previous->RemoveChildAssembly(node.assembly->GetID(),
+                                              i_mod::RemovalPolicy::kOrphan);
+            }
+        } else {
+            node.assembly = TryLoadGeometry(instance, options.geometry,
+                                            GeometryContext(instance), warnings_);
+        }
         if (node.assembly) {
             node.assembly->Metadata().name = GeometryNodeName(instance);
             node.assembly->Metadata().role_tag = GeometryRoleTag(instance);
@@ -422,6 +435,22 @@ void MachineScene::BuildWorkFrames(const SceneBuildOptions& options) {
         auto attach = MakeChildAssembly(
                 carrier, PrefixedName(kAttachAssemblyPrefix, frame.id), frame.w0);
         nodes_[attach->Metadata().name] = attach;
+    }
+}
+
+void MachineScene::LockSelection() {
+    for (const GeometryNode& node : geometries_) {
+        if (node.assembly && node.kind == GeometryInstance::Kind::kMachinePart) {
+            node.assembly->Metadata().lock.selectable = false;
+        }
+    }
+    for (const auto& [number, tool] : tool_assemblies_) {
+        tool->Metadata().lock.selectable = false;
+    }
+    // 名前付きアセンブリのうち、呼び出し側の追加物の取り付け先だけは対象外
+    for (const auto& [name, node] : nodes_) {
+        if (name.rfind(kAttachAssemblyPrefix, 0) == 0) continue;
+        node->Metadata().lock.selectable = false;
     }
 }
 

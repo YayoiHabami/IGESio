@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include "igesio/extensions/machines/core/units.h"
 
@@ -22,6 +23,18 @@ namespace {
 
 /// @brief 色表記の文字数 (`#`と16進6桁)
 constexpr std::size_t kHexColorLength = 7;
+
+/// @brief 短縮形 (`RGB`/`RGBA`) の各桁を2回繰り返して`RRGGBB`/`RRGGBBAA`にする
+/// @param digits `#`を除いた16進の桁 (3桁または4桁)
+/// @return 展開した桁
+std::string ExpandShortHex(const std::string_view digits) {
+    std::string expanded;
+    for (const char c : digits) {
+        expanded += c;
+        expanded += c;
+    }
+    return expanded;
+}
 
 }  // namespace
 
@@ -42,6 +55,16 @@ std::optional<Color> ParseHexColor(const std::string_view text) {
     // `#`の省略・8桁はここで弾く
     if (text.size() != kHexColorLength || text.front() != '#') return std::nullopt;
     return Color::TryParseHex(text);
+}
+
+std::optional<Color> ParseHexColorRgba(const std::string_view text) {
+    if (text.empty() || text.front() != '#') return std::nullopt;
+    const std::string_view digits = text.substr(1);
+    // 16進かどうかの検査と6桁/8桁の変換はColor::TryParseHexで行う
+    if (digits.size() == 3 || digits.size() == 4) {
+        return Color::TryParseHex(ExpandShortHex(digits));
+    }
+    return Color::TryParseHex(digits);
 }
 
 std::string FormatHexColor(const Color& color) {

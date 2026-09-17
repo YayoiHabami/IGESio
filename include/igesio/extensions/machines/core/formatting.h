@@ -7,6 +7,7 @@
  * @note 以下のフォーマット指定・変換関数を提供する
  *       - 診断・例外等のテキスト出力時に数値を含める際の整形 (固定小数・deg換算)
  *       - 機械定義・プロジェクト定義で共通の色表記`"#rrggbb"`の相互変換
+ *         (ホスト側の短縮形・不透明度付きの表記は`ParseHexColorRgba`)
  *       - テキストファイル (NC/CL等) の改行・文字コード関連
  * @note TOML側では色を`#rrggbb`形式でのみ表現するため、`igesio::Color`との
  *       互換関数をここに記述する.
@@ -40,6 +41,16 @@ std::string FormatDegrees(double radians, int digits = 3);
 /// @note 機械定義・プロジェクト定義の色表記は`#RRGGBB`に限定する.
 ///       `Color::TryParseHex`で指定可能な`#`の省略や8桁 (`#RRGGBBAA`) は対象外とする.
 std::optional<Color> ParseHexColor(std::string_view text);
+
+/// @brief 短縮形と不透明度を含む16進の色文字列を`Color`構造体に変換する
+/// @param text 色文字列 (`#RGB`/`#RGBA`/`#RRGGBB`/`#RRGGBBAA`.
+///        大文字小文字を区別しない)
+/// @return `Color`構造体 (不透明度の無い形式はa = 1.0). 形式が異なる場合は
+///         `std::nullopt`
+/// @note 短縮形は各桁を2回繰り返して展開する (`#f80` → `#ff8800`). CSS等の
+///       色表記をそのまま受け取るホスト用. 機械定義・プロジェクト定義の読込は
+///       `ParseHexColor` (`#RRGGBB`のみ) を用いる
+std::optional<Color> ParseHexColorRgba(std::string_view text);
 
 /// @brief 色を`"#rrggbb"`形式の文字列に変換する
 /// @param color 変換する色. RGBの0~1の範囲外はクランプし、α成分は無視する

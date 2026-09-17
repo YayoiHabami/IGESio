@@ -6,7 +6,9 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: MachineScene
  *       - 構築: 木の形 (コンポーネント、形状、工具、ワーク座標系、置き場)、干渉専用
- *         形状の非表示、読込失敗の警告化、置き場のIDの安定、再構築、Clear
+ *         形状の非表示、読込失敗の警告化、置き場のIDの安定、再構築、Clear,
+ *         呼び出し側から供給した形状のアセンブリ (`geometry_provider`)、選択不可の
+ *         設定 (`lock_selection`)
  *       - 姿勢と工具: ApplyPose/ResetToZeroPoseの大域変換、工具の選択とホルダ,
  *         工具軸線と制御点マーカー、3軸
  *       - 経路線: ワークオフセットと種別による分割、円弧の折れ線化、機械座標の移動
@@ -239,6 +241,109 @@ TEST(MachineSceneTest, Build_LoadFailureIsWarning) {
     EXPECT_EQ(scene.GeometryAssembly(1), nullptr);
     EXPECT_NE(scene.GeometryAssembly(2), nullptr);
     EXPECT_EQ(scene.GeometryAssembly(3), nullptr);
+}
+
+TEST(MachineSceneTest, GeometryProvider_UsesSuppliedAssembly) {
+    // ストックの形状を存在しないファイルにしても、供給されたアセンブリを使うので
+    // 読込は行われず警告も出ない
+    const auto setup = MakeSetupWithMachine(
+            MinimalXyzAc(), "igesio_scene_provider",
+            Replace(MinimalProject(),
+                    "primitive = \"box\"\nsize = [40.0, 30.0, 40.0]\n",
+                    "file = \"missing_stock.stl\"\n"));
+    auto supplied = i_mod::MakeAssembly("caller-owned");
+    auto point = i_ent::MakePoint(Vector3d(1.0, 2.0, 3.0));
+    supplied->AddEntity(point);
+    auto caller_root = i_mod::MakeAssembly("caller-root");
+    caller_root->AddChildAssembly(supplied);
+
+    BuiltScene built;
+    mc::SceneBuildOptions options;
+    std::size_t calls = 0;
+    options.geometry_provider =
+            [&](const mc::GeometryInstance& instance)
+                    -> std::shared_ptr<i_mod::Assembly> {
+        ++calls;
+        if (instance.kind == mc::GeometryInstance::Kind::kModel) return supplied;
+        return nullptr;
+    };
+    built.scene.Build(setup, built.root, options);
+    const mc::MachineScene& scene = built.scene;
+    EXPECT_EQ(calls, 2u);
+    EXPECT_TRUE(scene.Warnings().empty());
+
+    // 供給されたアセンブリはそのまま木に入り、名前・変換・親は`Build`が設定する
+    EXPECT_EQ(scene.ModelAssembly("stock"), supplied);
+    EXPECT_EQ(supplied->Metadata().name, "model:stock");
+    EXPECT_EQ(supplied->Metadata().role_tag, "stock");
+    EXPECT_EQ(supplied->GetParent().lock(), scene.WorkMountAssembly());
+    EXPECT_TRUE(supplied->GetGlobalTransform().isApprox(
+            mc::Translation(Vector3d(0.0, 0.0, 20.0)), kTol));
+    EXPECT_EQ(supplied->GetEntityCount(), 1u);
+    // 旧親の子からは取り除かれ、エンティティの逆引きは新しいルート側に移る
+    EXPECT_TRUE(caller_root->GetChildAssemblies().empty());
+    EXPECT_EQ(caller_root->FindOwner(point->GetID()), nullptr);
+    EXPECT_EQ(built.root->FindOwner(point->GetID()), supplied.get());
+
+    // `nullptr`を返した機械部品は通常どおり読み込まれる
+    ASSERT_NE(scene.GeometryAssembly(0), nullptr);
+    EXPECT_EQ(scene.GeometryAssembly(0)->Metadata().name, "geometry:x-box");
+
+    // `Clear`後も供給側の`shared_ptr`で生き続け、親は無くなる
+    built.scene.Clear();
+    EXPECT_EQ(supplied->GetParent().lock(), nullptr);
+    EXPECT_EQ(supplied->GetEntityCount(), 1u);
+}
+
+TEST(MachineSceneTest, GeometryProvider_NullFallsBackToLoad) {
+    mc::SceneBuildOptions options;
+    options.geometry_provider = [](const mc::GeometryInstance&) { return nullptr; };
+    const BuiltScene built = MakeScene(options);
+    ASSERT_EQ(built.scene.GeometryCount(), 2u);
+    EXPECT_NE(built.scene.GeometryAssembly(0), nullptr);
+    EXPECT_NE(built.scene.ModelAssembly("stock"), nullptr);
+    EXPECT_TRUE(built.scene.Warnings().empty());
+}
+
+TEST(MachineSceneTest, LockSelection_ModelsRemainSelectable) {
+    mc::SceneBuildOptions options;
+    options.lock_selection = true;
+    BuiltScene built = MakeScene(options);
+    mc::MachineScene& scene = built.scene;
+    scene.RebuildPaths(WithTool({Goto(Vector3d(0.0, 0.0, 10.0)),
+                                 Goto(Vector3d(10.0, 0.0, 10.0))}));
+    auto marker = i_ent::MakePoint(Vector3d::Zero());
+    scene.AttachAssembly("G54")->AddEntity(marker);
+    const i_mod::Assembly& root = *built.root;
+
+    // 選択可能なままのもの: モデルと呼び出し側の追加物
+    for (const auto& id : scene.ModelAssembly("stock")->GetEntityIDs(true)) {
+        EXPECT_TRUE(root.IsEffectivelySelectable(id));
+    }
+    EXPECT_TRUE(root.IsEffectivelySelectable(marker->GetID()));
+
+    // 選択不可になるもの: 機械部品、工具、3軸、経路線
+    const std::vector<std::shared_ptr<i_mod::Assembly>> locked = {
+            scene.GeometryAssembly(0), scene.ToolAssembly(1),
+            FindChild(*scene.MachineAssembly(), mc::kMachineTriadName),
+            scene.WorkFrameAssembly("G54"), scene.PathsAssembly("G54")};
+    for (const auto& node : locked) {
+        ASSERT_NE(node, nullptr);
+        EXPECT_FALSE(node->Metadata().lock.selectable) << node->Metadata().name;
+        const auto ids = node->GetEntityIDs(true);
+        EXPECT_FALSE(ids.empty()) << node->Metadata().name;
+        for (const auto& id : ids) EXPECT_FALSE(root.IsEffectivelySelectable(id));
+    }
+    for (const auto& node : {scene.TrajectoryAssembly(), scene.MachineTraceAssembly(),
+                             scene.WorkTraceAssembly()}) {
+        EXPECT_FALSE(node->Metadata().lock.selectable);
+    }
+    EXPECT_TRUE(scene.AttachAssembly("G54")->Metadata().lock.selectable);
+
+    // 既定では何も変更しない
+    const BuiltScene unlocked = MakeScene();
+    EXPECT_TRUE(unlocked.scene.GeometryAssembly(0)->Metadata().lock.selectable);
+    EXPECT_TRUE(unlocked.scene.ToolAssembly(1)->Metadata().lock.selectable);
 }
 
 TEST(MachineSceneTest, Build_StableNodesExistAndRebuildReplaces) {

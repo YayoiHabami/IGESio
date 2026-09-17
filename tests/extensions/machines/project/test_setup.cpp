@@ -5,14 +5,15 @@
  * @date 2026-09-12
  * @copyright 2026 Yayoi Habami
  * @note 対象: MachiningSetup (BaseQ / Tools / WorkFrames / Models / Geometries /
- *       ToolOffsets / InitialWorkOffset / ResolveAttach)
+ *       ToolOffsets / InitialWorkOffset / ResolveAttach)、MakeProjectDefinition
  *       - 正常系: 初期姿勢の重ね合わせ (σを含む)、簡易工具の解決とゲージ長、
  *         ライブラリ参照工具のコールバック解決、ワーク座標系の登録値形式
  *         (直進のみ・回転軸あり・`from = "machine"`) と幾何形式 (取り付け先・
  *         モデル経由)、暗黙のG54、モデルの同次変換と所属、形状の同次変換一覧 (機械部品→
  *         モデルの順・`local_frame`の合成・干渉専用形状の保持)、工具オフセットの
  *         既定値、干渉ペア規則の正常系、取り付け先の解決
- *       - 正常系 (退化): ワークオフセット・モデルが無い定義
+ *       - 正常系 (退化): ワークオフセット・モデルが無い定義、メモリ上で組み立てた
+ *         定義 (`MakeProjectDefinition`. デフォルト値と機械定義の警告の転記)
  *       - 異常系: ワーク座標系の取り付け先が`work_mount`に至らない、チェーン外の
  *         `values`、取り付け先の不在・閉路、ペア規則の各違反
  *       TODO: `MachineModel`構築失敗の`invalid_argument`は読込済みの定義では
@@ -536,4 +537,49 @@ TEST(SetupTest, ResolveAttach_ReservedAndNames) {
     EXPECT_TRUE(g55_frame.isApprox(setup.WorkFrames()[1].w0, kTol));
     EXPECT_EQ(g55_index, setup.Model().WorkMountIndex());
     EXPECT_THROW(setup.ResolveAttach("nowhere"), std::invalid_argument);
+}
+
+
+
+/**
+ * ---- メモリ上のプロジェクト定義 ----
+ */
+
+TEST(SetupTest, MakeProjectDefinition_DefaultsAndMachineWarnings) {
+    mc::MachineDefinition machine = machines_test::ReadDefinition(MinimalXyzAc());
+    machine.warnings.push_back(mc::Diagnostic{
+            mc::Severity::kWarning, "[[component]]", "sample warning", 12});
+    machine.warnings.push_back(
+            mc::Diagnostic{mc::Severity::kInfo, "", "no context", 0});
+    const mc::ProjectDefinition project =
+            mc::MakeProjectDefinition(machine, "in-memory");
+    EXPECT_EQ(project.format_version, mc::kProjectFormatVersion);
+    EXPECT_EQ(project.name, "in-memory");
+    EXPECT_EQ(project.source_name, "in-memory");
+    EXPECT_EQ(project.machine.name, "minimal-xyz-ac");
+    EXPECT_EQ(project.units.length_unit, mc::LengthUnit::kMillimeter);
+    EXPECT_EQ(project.units.angle_unit, mc::AngleUnit::kDegree);
+    EXPECT_TRUE(project.machine_ref.raw.empty());
+    EXPECT_TRUE(project.tools.empty());
+    EXPECT_TRUE(project.work_offsets.empty());
+    EXPECT_TRUE(project.models.empty());
+    EXPECT_TRUE(project.programs.empty());
+    EXPECT_EQ(project.initial_tool, mc::kNoTool);
+    EXPECT_FALSE(project.initial_work_offset.has_value());
+    // 機械定義の警告は読込と同じく`context = "machine"`で転記する
+    ASSERT_EQ(project.warnings.size(), 2u);
+    EXPECT_EQ(project.warnings[0].context, "machine");
+    EXPECT_EQ(project.warnings[0].message, "[[component]]: sample warning");
+    EXPECT_EQ(project.warnings[0].line, 12);
+    EXPECT_EQ(project.warnings[0].severity, mc::Severity::kWarning);
+    EXPECT_EQ(project.warnings[1].message, "no context");
+    EXPECT_EQ(project.warnings[1].severity, mc::Severity::kInfo);
+
+    // 工具もワークオフセットも無いままセットアップを作れる (暗黙のG54)
+    const mc::MachiningSetup setup(project);
+    EXPECT_TRUE(setup.Warnings().empty());
+    EXPECT_TRUE(setup.Tools().empty());
+    ASSERT_EQ(setup.WorkFrames().size(), 1u);
+    EXPECT_EQ(setup.WorkFrames()[0].id, mc::kImplicitWorkOffsetId);
+    EXPECT_EQ(setup.InitialTool(), mc::kNoTool);
 }

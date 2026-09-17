@@ -123,6 +123,11 @@ struct MotionOptions {
     std::optional<BranchPolicy> branch;
     /// @brief 可動範囲外の扱い (省略時はプロジェクトの`[run].overtravel`)
     std::optional<OvertravelPolicy> overtravel;
+    /// @brief 通過点ごとの所要時間を固定する [s] (送りと軸の動特性を無視する)
+    /// @note 指定時は各通過点 (円弧の分割点、ドウェルを含む) の区間時間をこの値に
+    ///       する. 送りの無いCLデータの点列を一定の間隔で確認する用途.
+    ///       `interpolate = true`との併用も可 (一定時間の区間をfpsで補間する)
+    std::optional<double> fixed_record_seconds;
 };
 
 /// @brief CLプログラムから動作のサンプリング点列を作成する
@@ -133,8 +138,8 @@ struct MotionOptions {
 /// @throw KinematicsError `overtravel == kError`で可動範囲外になった場合,
 ///        またはTCP無効の座標語が幾何形式のワークオフセットで指令された場合
 /// @throw igesio::NotImplementedError 逆運動学が対応しない軸構成の場合
-/// @throw std::invalid_argument `fps`/`fallback_feed`/`arc_chord_tolerance`が
-///        正でない、または`max_samples`が0の場合
+/// @throw std::invalid_argument `fps`/`fallback_feed`/`arc_chord_tolerance`/
+///        `fixed_record_seconds`が正でない、または`max_samples`が0の場合
 /// @note 到達不能な通過点は警告して直前の姿勢を保つ (例外にしない)
 MotionTrack PlanMotion(const MachiningSetup& setup, const ClProgram& program,
                        const MotionOptions& options = {});
@@ -145,6 +150,19 @@ MotionTrack PlanMotion(const MachiningSetup& setup, const ClProgram& program,
 /// @return `time <= time_sec`を満たす最大のインデックス. 先頭より前なら0,
 ///         `samples`が空なら0
 std::size_t SampleIndexAtTime(const MotionTrack& track, double time_sec);
+
+/// @brief レコードの終点のサンプリング点のインデックスを取得する
+/// @param track サンプリング点列
+/// @param record_index レコードのインデックス (`ClProgram::records`)
+/// @return `record_index`の動作レコードの`is_command_point == true`の
+///         サンプリング点. 動作レコードでない、サンプリング点が無い、または
+///         `record_index`が`record_first_sample`の範囲外なら`std::nullopt`
+/// @note `record_first_sample[r]`はrが状態レコードのときは次の動作レコードを
+///       指し、`interpolate = true`では区間の先頭の補間点を指す. 終点の
+///       サンプリング点 (工具軌跡の`skip_sample`、スライダーの同期に用いる) は
+///       本関数で求めること
+std::optional<std::size_t> CommandSampleOfRecord(const MotionTrack& track,
+                                                 std::size_t record_index);
 
 /// @brief 軸変位量を表示用のNC指令値に変換する
 /// @param model 運動学モデル

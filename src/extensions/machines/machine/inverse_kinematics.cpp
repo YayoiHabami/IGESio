@@ -6,7 +6,8 @@
  * @copyright 2026 Yayoi Habami
  * @note 姿勢IKは統一形 T = R(v, θ_R) R(u, θ_I) z_s (v: 外側軸, u: 内側軸,
  *       z_s: ゼロポーズの工具軸) を閉形式で解く. 傾斜角θ_I = δ ± Δ の符号を
- *       可動範囲と回転角の選択方針で選び、旋回角θ_Rを求める.
+ *       可動範囲と回転角の選択方針で選び、旋回角θ_Rを求める. 特異姿勢 (θ_Rが不定)
+ *       では`kContinuous`で直前の指令値を保ち、他の方針では0にする.
  */
 #include "igesio/extensions/machines/machine/inverse_kinematics.h"
 
@@ -64,9 +65,11 @@ constexpr const char* kSingularContext = "singular";
 /// @param[out] warnings 警告の追記先
 /// @param context 警告の種別 (`kLimitsContext` / `kSingularContext`)
 /// @param message 内容
+/// @param severity 重大度 (省略時は警告)
 void Warn(std::vector<Diagnostic>& warnings, const char* context,
-          const std::string& message) {
-    warnings.push_back(Diagnostic{Severity::kWarning, context, message, 0});
+          const std::string& message,
+          const Severity severity = Severity::kWarning) {
+    warnings.push_back(Diagnostic{severity, context, message, 0});
 }
 
 /// @brief ベクトルを正規化する
@@ -112,6 +115,28 @@ double SwivelAngle(const igesio::Vector3d& v, const igesio::Vector3d& z_1,
     const double q = z_1.dot(t) - v.dot(z_1) * v.dot(t);
     *singular = std::hypot(p, q) < kSingularTolerance;
     return *singular ? 0.0 : std::atan2(p, q);
+}
+
+/// @brief 特異姿勢 (旋回角が不定) での旋回角を回転角の解の選択方針に従って決める
+/// @param outer 旋回軸 (外側軸)
+/// @param prev_nc 直前の指令値
+/// @param policy 回転角の解の選択方針
+/// @param[out] warnings `kContinuous`以外で追加する情報の追記先
+/// @return `kContinuous`なら直前の指令値の旋回軸の値 (無ければ0).
+///         それ以外は0で、`Severity::kInfo`の情報を追加する
+/// @note 制御装置は不定の軸を動かさないため、`kContinuous`では直前の指令値を保つ.
+///       工具軸方向が旋回軸と平行な経路 (3軸経路等) では通過点ごとに
+///       特異姿勢になるため、警告ではなく情報にする
+double SingularSwivel(const AxisInfo& outer, const NcValues& prev_nc,
+                      const BranchPolicy policy,
+                      std::vector<Diagnostic>& warnings) {
+    if (policy == BranchPolicy::kContinuous) {
+        return prev_nc.GetOr(outer.register_name, 0.0);
+    }
+    Warn(warnings, kSingularContext,
+         "singular orientation (swivel angle is indeterminate); set to 0",
+         Severity::kInfo);
+    return 0.0;
 }
 
 /// @brief 候補の傾斜角と旋回角を求める (回転軸2つ)
@@ -223,10 +248,13 @@ Branch SelectBranch(
 /// @brief 1つの回転軸の姿勢IK (旋回角のみ)
 /// @param model 運動学モデル
 /// @param t 目標の工具軸 (単位ベクトル)
+/// @param prev_nc 直前の指令値 (特異姿勢の旋回角に用いる)
+/// @param policy 回転角の解の選択方針 (特異姿勢の旋回角に用いる)
 /// @return 解 (回転軸1つの指令値と警告)
 /// @throw KinematicsError 到達不能な工具姿勢の場合
 IkSolution SolveSingleRotary(const MachineModel& model,
-                             const igesio::Vector3d& t) {
+                             const igesio::Vector3d& t,
+                             const NcValues& prev_nc, const BranchPolicy policy) {
     const AxisInfo& axis = model.Axes()[model.OrientationAxes().front()];
     const igesio::Vector3d v = axis.direction_world;
     const igesio::Vector3d z_s = model.ToolAxisHome();
@@ -238,8 +266,7 @@ IkSolution SolveSingleRotary(const MachineModel& model,
     IkSolution solution;
     double angle = SwivelAngle(v, z_s, t, &solution.singular);
     if (solution.singular) {
-        Warn(solution.warnings, kSingularContext,
-             "singular orientation (swivel angle is indeterminate); set to 0");
+        angle = SingularSwivel(axis, prev_nc, policy, solution.warnings);
     }
     const std::optional<double> wrapped = WrapAngleIntoLimits(angle, axis);
     if (wrapped.has_value()) {
@@ -268,16 +295,23 @@ IkSolution SolveTwoRotaries(
     const AxisInfo& outer = model.Axes()[orientation[0]];
     const AxisInfo& inner = model.Axes()[orientation[1]];
     IkSolution solution;
-    const std::vector<Branch> candidates = TiltCandidates(
+    std::vector<Branch> candidates = TiltCandidates(
             outer.direction_world, inner.direction_world, model.ToolAxisHome(), t,
             solution.warnings);
+    // 特異姿勢は目標の工具軸が旋回軸と平行な場合であり、全候補で同時に起きる.
+    // 旋回角を可動範囲の検査と候補の選択の前に決め、情報は1件だけ追加する
+    std::optional<double> singular_swivel;
+    for (Branch& candidate : candidates) {
+        if (!candidate.singular) continue;
+        if (!singular_swivel.has_value()) {
+            singular_swivel =
+                    SingularSwivel(outer, prev_nc, policy, solution.warnings);
+        }
+        candidate.swivel = *singular_swivel;
+    }
     const Branch chosen = SelectBranch(candidates, inner, outer, prev_nc, policy,
                                        solution.warnings);
     solution.singular = chosen.singular;
-    if (chosen.singular) {
-        Warn(solution.warnings, kSingularContext,
-             "singular orientation (swivel angle is indeterminate); set to 0");
-    }
     solution.nc.Set(inner.register_name, chosen.tilt);
     solution.nc.Set(outer.register_name, chosen.swivel);
     return solution;
@@ -357,7 +391,7 @@ IkSolution SolveOrientation(const MachineModel& model,
                 + " rotary axes is not supported (up to 2)");
     }
     if (count == 2) return SolveTwoRotaries(model, t, prev_nc, policy);
-    if (count == 1) return SolveSingleRotary(model, t);
+    if (count == 1) return SolveSingleRotary(model, t, prev_nc, policy);
     const igesio::Vector3d z_s = model.ToolAxisHome();
     if ((t - z_s).norm() > kReachTolerance) {
         const double angle = std::acos(std::clamp(t.dot(z_s), -1.0, 1.0));

@@ -1,6 +1,7 @@
 /**
  * @file extensions/machines/simulation/axis_resolution.cpp
- * @brief 工具軸方向から回転軸の指令への変換
+ * @brief 工具軸方向から回転軸の指令への変換、および1点の制御点と工具軸方向からの
+ *        軸変位量の計算
  * @author Yayoi Habami
  * @date 2026-09-15
  * @copyright 2026 Yayoi Habami
@@ -9,18 +10,49 @@
 
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/extensions/machines/machine/forward_kinematics.h"
+#include "igesio/extensions/machines/machine/inverse_kinematics.h"
 #include "igesio/extensions/machines/machine/machine_model.h"
 #include "extensions/machines/simulation/motion_planning.h"
 
 namespace igesio::extensions::machines {
 
 namespace {
+
+/// @brief `SolveClTarget`の警告を追加する
+/// @param[out] warnings 追加先 (`nullptr`なら何もしない)
+/// @param message 内容
+void WarnTarget(std::vector<Diagnostic>* warnings, const std::string& message) {
+    if (warnings == nullptr) return;
+    warnings->push_back(Diagnostic{Severity::kWarning, "", message, 0});
+}
+
+/// @brief `ClTarget`の制御点の`tool_mount`フレーム座標を計算する
+/// @param setup 加工セットアップ
+/// @param target 制御点と工具軸方向 (工具番号と工具長補正を用いる)
+/// @param[out] warnings 工具表に無い番号の警告の追加先
+/// @return 工具表にある工具なら`ControlLocal`、それ以外はゲージライン
+igesio::Vector3d TargetControlLocal(const MachiningSetup& setup,
+                                    const ClTarget& target,
+                                    std::vector<Diagnostic>* warnings) {
+    const std::optional<igesio::Vector3d> control =
+            detail::ToolControlLocal(setup, target.tool, target.g43_length);
+    if (control.has_value()) return *control;
+    if (target.tool != kNoTool) {
+        WarnTarget(warnings, "tool #" + std::to_string(target.tool)
+                             + " is unresolved; the gauge line is used as the "
+                             "control point");
+    }
+    return detail::GaugeControlLocal(target.g43_length);
+}
 
 /// @brief 姿勢IKの警告と到達不能をレコードの警告として記録する
 /// @param state 作業状態 (警告の格納先)
@@ -116,6 +148,55 @@ ClProgram ResolveAxisWords(const MachiningSetup& setup, const ClProgram& program
         state.cl.Apply(program.records[i]);
     }
     return resolved;
+}
+
+std::optional<IkSolution> SolveClTarget(
+        const MachiningSetup& setup, const ClTarget& target,
+        const JointVector& prev_q, const std::optional<BranchPolicy>& branch,
+        std::vector<Diagnostic>* warnings) {
+    const MachineModel& model = setup.Model();
+    const std::string& id = target.work_offset.empty() ? setup.InitialWorkOffset()
+                                                       : target.work_offset;
+    const WorkFrame* frame = setup.FindWorkFrame(id);
+    if (frame == nullptr) {
+        throw std::invalid_argument("SolveClTarget: work offset '" + id
+                                    + "' is not defined");
+    }
+    const NcValues prev_nc = NcFromJoints(model, prev_q);
+    const igesio::Vector3d axis_home = ApplyDirection(frame->w0, target.tool_axis);
+    const igesio::Vector3d point_home = ApplyPoint(frame->w0, target.point);
+    const igesio::Vector3d control_home =
+            ApplyPoint(model.MountPlacement(MountKind::kToolMount),
+                       TargetControlLocal(setup, target, warnings));
+    const BranchPolicy policy = branch.value_or(model.Definition().branch);
+
+    // 姿勢IKと回転方向の正規化は動作生成と同じ関数で行う
+    const detail::OrientationResult orientation =
+            detail::SolveToolAxis(model, prev_nc, axis_home, policy);
+    if (orientation.unreachable.has_value()) {
+        WarnTarget(warnings, "unreachable: " + *orientation.unreachable);
+        return std::nullopt;
+    }
+    IkSolution solution;
+    try {
+        solution = SolvePosition(model, point_home, control_home, orientation.rotary,
+                                 prev_q);
+    } catch (const KinematicsError& e) {
+        WarnTarget(warnings, std::string("unreachable: ") + e.what());
+        return std::nullopt;
+    }
+    solution.nc = NcFromJoints(model, *solution.q);
+    solution.singular = orientation.singular;
+    solution.warnings.insert(solution.warnings.begin(),
+                             orientation.warnings.begin(),
+                             orientation.warnings.end());
+    solution.error = CheckSolution(model, *solution.q, axis_home, point_home,
+                                   control_home);
+    if (warnings != nullptr) {
+        warnings->insert(warnings->end(), solution.warnings.begin(),
+                         solution.warnings.end());
+    }
+    return solution;
 }
 
 }  // namespace igesio::extensions::machines

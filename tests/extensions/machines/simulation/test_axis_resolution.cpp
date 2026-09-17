@@ -4,12 +4,17 @@
  * @author Yayoi Habami
  * @date 2026-09-15
  * @copyright 2026 Yayoi Habami
- * @note 対象: ResolveAxisWords
+ * @note 対象: ResolveAxisWords / SolveClTarget
  *       - 正常系: 回転軸の指令の書き込みと姿勢IKとの一致、`keep_tool_axis`,
- *         回転角の解の連続性、直前の指令値の引き継ぎ、G43.4形式での出力
+ *         回転角の解の連続性、直前の指令値の引き継ぎ、G43.4形式での出力,
+ *         1点の解と動作生成のサンプルの一致、工具長補正、無制限回転軸の回転方向,
+ *         特異姿勢
  *       - 正常系 (退化): 対象外のレコード (機械座標、制御点なし、回転軸の指令あり)
- *         は変更しない、工具軸方向の無いプログラム (+Zの仮定)
- *       - 警告: 到達不能で直前の回転軸の指令を書く
+ *         は変更しない、工具軸方向の無いプログラム (+Zの仮定)、工具なしと
+ *         工具表に無い番号 (ゲージライン)
+ *       - 警告: 到達不能で直前の回転軸の指令を書く、1点の解の到達不能 (`nullopt`)
+ *       - 異常系: 未定義のワークオフセット、ゼロベクトルの工具軸方向、軸数と異なる
+ *         `prev_q` (`std::invalid_argument`)
  *       TODO: 対応しない軸構成の`NotImplementedError`は逆運動学側で検証済み
  */
 #include <gtest/gtest.h>
@@ -17,6 +22,7 @@
 #include <cmath>
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -29,11 +35,14 @@
 #include "igesio/extensions/machines/machine/inverse_kinematics.h"
 #include "igesio/extensions/machines/project/setup.h"
 #include "igesio/extensions/machines/simulation/axis_resolution.h"
+#include "igesio/extensions/machines/simulation/motion.h"
+#include "igesio/extensions/machines/tools/tool_assembly.h"
 #include "igesio/extensions/machines/toolpath/cl_program.h"
 #include "igesio/extensions/machines/toolpath/nc_dialect.h"
 #include "igesio/extensions/machines/toolpath/nc_writer.h"
 #include "../machine/machines_for_testing.h"
 #include "../project/projects_for_testing.h"
+#include "motion_for_testing.h"
 
 namespace {
 
@@ -91,6 +100,25 @@ std::vector<const T*> Records(const mc::ClProgram& program) {
         if (const T* value = std::get_if<T>(&record)) found.push_back(value);
     }
     return found;
+}
+
+/// @brief 工具#1で高さ200 mmの点に工具軸方向`axis`で置く`ClTarget`を作る
+/// @note 実例機の可動範囲 (Z ≥ -90 mm) に収まる高さにする
+mc::ClTarget TargetAt(const Vector3d& axis,
+                      const Vector3d& point = Vector3d(0.0, 0.0, 200.0)) {
+    mc::ClTarget target;
+    target.point = point;
+    target.tool_axis = axis;
+    target.tool = 1;
+    return target;
+}
+
+/// @brief 2つの軸変位量が許容誤差内で一致することを検証する
+void ExpectSameJoints(const mc::JointVector& actual, const mc::JointVector& expected) {
+    ASSERT_EQ(actual.Size(), expected.Size());
+    for (std::size_t i = 0; i < actual.Size(); ++i) {
+        EXPECT_NEAR(actual[i], expected[i], kIkTol) << "axis " << i;
+    }
 }
 
 }  // namespace
@@ -222,4 +250,131 @@ TEST(AxisResolutionTest, Resolve_ThenWriteRotaryWords) {
     EXPECT_NE(text.find("A"), std::string::npos);
     EXPECT_NE(text.find("C"), std::string::npos);
     EXPECT_EQ(text.find("I0"), std::string::npos);
+}
+
+
+
+/**
+ * ---- SolveClTarget ----
+ */
+
+TEST(AxisResolutionTest, SolveClTarget_MatchesPlanMotion) {
+    const auto setup = MakeSetup();
+    const mc::ClTarget target = TargetAt(Tilted(20.0));
+    // 同じ制御点と工具軸方向を1レコードのプログラムにして動作生成した終点と一致する
+    const mc::ClGoto motion = Goto(target.point, target.tool_axis);
+    mc::MotionOptions options;
+    options.interpolate = false;
+    const mc::MotionTrack track =
+            mc::PlanMotion(setup, WithHead({motion}), options);
+    ASSERT_EQ(track.samples.size(), 2u);
+    std::vector<mc::Diagnostic> warnings;
+    const auto solution = mc::SolveClTarget(setup, target, setup.BaseQ(),
+                                            std::nullopt, &warnings);
+    ASSERT_TRUE(solution.has_value());
+    EXPECT_TRUE(warnings.empty());
+    ASSERT_TRUE(solution->q.has_value());
+    ExpectSameJoints(*solution->q, track.samples.back().q);
+    // `nc`は全軸、`error`は自己検証の結果
+    EXPECT_EQ(solution->nc.Size(), setup.Model().Axes().size());
+    ASSERT_TRUE(solution->error.has_value());
+    EXPECT_LT(solution->error->angle, kIkTol);
+    EXPECT_LT(solution->error->position, kIkTol);
+    EXPECT_FALSE(solution->singular);
+
+    // 工具軸方向が+Z (旋回軸と平行) なら特異姿勢. 診断は追加しない
+    const auto singular = mc::SolveClTarget(setup, TargetAt(Vector3d::UnitZ()),
+                                            setup.BaseQ(), std::nullopt, &warnings);
+    ASSERT_TRUE(singular.has_value());
+    EXPECT_TRUE(singular->singular);
+    EXPECT_TRUE(warnings.empty());
+    EXPECT_NEAR(singular->nc.At("A"), 0.0, kIkTol);
+}
+
+TEST(AxisResolutionTest, SolveClTarget_ControlPointFromToolAndG43) {
+    const auto setup = MakeSetup();
+    // 工具#1の先端 (ゲージ長90) と、工具なしのゲージライン、工具長補正50の比較.
+    // W_0 = Iで工具軸は+Zなので、制御点が下がる分だけZが上がる
+    mc::ClTarget tip = TargetAt(Vector3d::UnitZ());
+    mc::ClTarget gauge = tip;
+    gauge.tool = mc::kNoTool;
+    mc::ClTarget compensated = gauge;
+    compensated.g43_length = 50.0;
+    std::vector<mc::Diagnostic> warnings;
+    const auto at_tip = mc::SolveClTarget(setup, tip, setup.BaseQ());
+    const auto at_gauge = mc::SolveClTarget(setup, gauge, setup.BaseQ(),
+                                            std::nullopt, &warnings);
+    const auto at_g43 = mc::SolveClTarget(setup, compensated, setup.BaseQ());
+    ASSERT_TRUE(at_tip.has_value());
+    ASSERT_TRUE(at_gauge.has_value());
+    ASSERT_TRUE(at_g43.has_value());
+    // 工具なし (`kNoTool`) は警告しない
+    EXPECT_TRUE(warnings.empty());
+    EXPECT_NEAR(at_tip->nc.At("Z") - at_gauge->nc.At("Z"), 90.0, kIkTol);
+    EXPECT_NEAR(at_g43->nc.At("Z") - at_gauge->nc.At("Z"), 50.0, kIkTol);
+}
+
+TEST(AxisResolutionTest, SolveClTarget_UnresolvedToolWarnsAndUsesGaugeLine) {
+    const auto setup = MakeSetup();
+    mc::ClTarget unresolved = TargetAt(Vector3d::UnitZ());
+    unresolved.tool = 9;
+    mc::ClTarget gauge = unresolved;
+    gauge.tool = mc::kNoTool;
+    std::vector<mc::Diagnostic> warnings;
+    const auto solution = mc::SolveClTarget(setup, unresolved, setup.BaseQ(),
+                                            std::nullopt, &warnings);
+    const auto expected = mc::SolveClTarget(setup, gauge, setup.BaseQ());
+    ASSERT_TRUE(solution.has_value());
+    ASSERT_TRUE(expected.has_value());
+    ASSERT_EQ(warnings.size(), 1u);
+    EXPECT_NE(warnings[0].message.find("tool #9"), std::string::npos);
+    EXPECT_NE(warnings[0].message.find("gauge line"), std::string::npos);
+    ExpectSameJoints(*solution->q, *expected->q);
+}
+
+TEST(AxisResolutionTest, SolveClTarget_ContinuesUnlimitedRotaryFromPrevious) {
+    const auto setup = MakeSetup();
+    const mc::MachineModel& model = setup.Model();
+    const mc::ClTarget target = TargetAt(Tilted(20.0));
+    const auto first = mc::SolveClTarget(setup, target, setup.BaseQ());
+    ASSERT_TRUE(first.has_value());
+    // 直前の姿勢のCを1回転進めておくと、同じ目標でも1回転進んだ側の解になる
+    const double c0 = first->nc.At("C");
+    const mc::JointVector turned = mc::JointsFromNc(
+            model, mc::NcValues{{"C", c0 + mc::kFullTurn}}, *first->q);
+    const auto second = mc::SolveClTarget(setup, target, turned);
+    ASSERT_TRUE(second.has_value());
+    EXPECT_NEAR(second->nc.At("C"), c0 + mc::kFullTurn, kIkTol);
+    EXPECT_NEAR(second->nc.At("A"), first->nc.At("A"), kIkTol);
+}
+
+TEST(AxisResolutionTest, SolveClTarget_UnreachableReturnsNullopt) {
+    // 回転軸の無い3軸機では、傾いた工具軸方向は到達不能
+    const auto setup = motion_test::MakeSetupThreeAxis();
+    std::vector<mc::Diagnostic> warnings;
+    const auto solution = mc::SolveClTarget(setup, TargetAt(Tilted(0.0)),
+                                            setup.BaseQ(), std::nullopt, &warnings);
+    EXPECT_FALSE(solution.has_value());
+    ASSERT_EQ(warnings.size(), 1u);
+    EXPECT_NE(warnings[0].message.find("unreachable"), std::string::npos);
+    // +Zなら到達できる
+    EXPECT_TRUE(mc::SolveClTarget(setup, TargetAt(Vector3d::UnitZ()),
+                                  setup.BaseQ()).has_value());
+}
+
+TEST(AxisResolutionTest, SolveClTarget_ThrowsInvalidArgumentOnBadInput) {
+    const auto setup = MakeSetup();
+    mc::ClTarget unknown_offset = TargetAt(Vector3d::UnitZ());
+    unknown_offset.work_offset = "G99";
+    EXPECT_THROW(mc::SolveClTarget(setup, unknown_offset, setup.BaseQ()),
+                 std::invalid_argument);
+    // 定義済みのidと空 (初期ワークオフセット) は受理する
+    mc::ClTarget known_offset = TargetAt(Vector3d::UnitZ());
+    known_offset.work_offset = "G54";
+    EXPECT_NO_THROW(mc::SolveClTarget(setup, known_offset, setup.BaseQ()));
+    EXPECT_THROW(mc::SolveClTarget(setup, TargetAt(Vector3d::Zero()), setup.BaseQ()),
+                 std::invalid_argument);
+    EXPECT_THROW(mc::SolveClTarget(setup, TargetAt(Vector3d::UnitZ()),
+                                   mc::JointVector(2, 0.0)),
+                 std::invalid_argument);
 }

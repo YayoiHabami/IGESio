@@ -358,6 +358,18 @@ const WorkFrame& CurrentWorkFrame(const MachiningSetup& setup, PlannerState& sta
     return *state.frame;
 }
 
+igesio::Vector3d GaugeControlLocal(const std::optional<double> g43_length) {
+    return igesio::Vector3d(0.0, 0.0, g43_length.has_value() ? -*g43_length : 0.0);
+}
+
+std::optional<igesio::Vector3d> ToolControlLocal(
+        const MachiningSetup& setup, const int tool,
+        const std::optional<double> g43_length) {
+    const auto it = setup.Tools().find(tool);
+    if (tool == kNoTool || it == setup.Tools().end()) return std::nullopt;
+    return ControlLocal(it->second, g43_length);
+}
+
 igesio::Vector3d ControlLocalFor(const MachiningSetup& setup, PlannerState& state,
                                  const std::size_t index, const int line) {
     std::optional<double> g43;
@@ -373,10 +385,8 @@ igesio::Vector3d ControlLocalFor(const MachiningSetup& setup, PlannerState& stat
     }
 
     const int tool = state.cl.tool;
-    const auto it = setup.Tools().find(tool);
-    if (tool != kNoTool && it != setup.Tools().end()) {
-        return ControlLocal(it->second, g43);
-    }
+    const std::optional<igesio::Vector3d> control = ToolControlLocal(setup, tool, g43);
+    if (control.has_value()) return *control;
     if (state.once.unresolved_tools.insert(tool).second) {
         WarnRecord(state, tool == kNoTool
                           ? std::string("no tool is selected; the gauge line is used "
@@ -385,7 +395,7 @@ igesio::Vector3d ControlLocalFor(const MachiningSetup& setup, PlannerState& stat
                             "gauge line is used as the control point",
                    index, line);
     }
-    return igesio::Vector3d(0.0, 0.0, g43.has_value() ? -*g43 : 0.0);
+    return GaugeControlLocal(g43);
 }
 
 bool HasRotaryWords(const MachineModel& model, const NcValues& words) {
@@ -442,6 +452,7 @@ OrientationResult SolveToolAxis(
     try {
         const IkSolution solution =
                 SolveOrientation(model, axis_home, prev_nc, policy);
+        result.singular = solution.singular;
         for (const Diagnostic& warning : solution.warnings) {
             if (warning.context != kSingularContext) {
                 result.warnings.push_back(warning);

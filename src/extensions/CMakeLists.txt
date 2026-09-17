@@ -55,6 +55,7 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/machine/machine_model.cpp
         machines/machine/forward_kinematics.cpp
         machines/machine/inverse_kinematics.cpp
+        machines/machine/virtual_machines.cpp
         machines/tools/tool_profile.cpp
         machines/tools/tool_assembly.cpp
         machines/tools/tool_entities.cpp

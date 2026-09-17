@@ -12,7 +12,8 @@
  *         (無制限軸の畳み込みを含む)、可動範囲による枝の強制
  *       - 正常系 (回転軸数): 0本 (3軸機)・1本 (旋回角のみ) の解
  *       - 正常系 (境界値): `WrapAngleIntoLimits`の範囲端と±2πシフト、ストローク端
- *       - 正常系 (退化): 特異姿勢 (工具軸が主軸方向)、傾斜角が寄与しない構成
+ *       - 正常系 (退化): 特異姿勢 (工具軸が主軸方向. `kPositive`では旋回角0と情報,
+ *         `kContinuous`では直前の指令値を保ち診断なし)、傾斜角が寄与しない構成
  *       - 異常系: 到達不能 (`KinematicsError`)、可動範囲外の警告、ストローク外の警告、
  *         回転軸3本・直進軸2本 (`NotImplementedError`)、方程式の退化、零ベクトル入力、
  *         直進軸への`WrapAngleIntoLimits` (`std::invalid_argument`)
@@ -320,11 +321,32 @@ TEST(InverseKinematicsTest, SingleRotary_ToolAxisAlongAxisIsSingular) {
     const mc::MachineModel model =
             ReadModel(Replace(OnlyA(), "direction = [1, 0, 0]\npoint = [0, 0, 60]",
                               "direction = [0, 0, 1]\npoint = [0, 0, 60]"));
-    const auto solution = mc::SolveOrientation(model, Vector3d::UnitZ(), {},
+    const auto solution = mc::SolveOrientation(model, Vector3d::UnitZ(),
+                                               {{"A", ToRadians(30.0)}},
                                                mc::BranchPolicy::kPositive);
     EXPECT_TRUE(solution.singular);
     ExpectSingleWarning(solution.warnings, "singular", "singular");
+    EXPECT_EQ(solution.warnings[0].severity, mc::Severity::kInfo);
     EXPECT_NEAR(solution.nc.At("A"), 0.0, kTol);
+}
+
+TEST(InverseKinematicsTest, SingleRotary_SingularKeepsPreviousWhenContinuous) {
+    const mc::MachineModel model =
+            ReadModel(Replace(OnlyA(), "direction = [1, 0, 0]\npoint = [0, 0, 60]",
+                              "direction = [0, 0, 1]\npoint = [0, 0, 60]"));
+    // 直前の指令値があればその値を保ち、診断は追加しない
+    const auto kept = mc::SolveOrientation(model, Vector3d::UnitZ(),
+                                           {{"A", ToRadians(30.0)}},
+                                           mc::BranchPolicy::kContinuous);
+    EXPECT_TRUE(kept.singular);
+    EXPECT_TRUE(kept.warnings.empty());
+    EXPECT_NEAR(kept.nc.At("A"), ToRadians(30.0), kTol);
+    // 直前の指令値が無ければ0
+    const auto zero = mc::SolveOrientation(model, Vector3d::UnitZ(), {},
+                                           mc::BranchPolicy::kContinuous);
+    EXPECT_TRUE(zero.singular);
+    EXPECT_TRUE(zero.warnings.empty());
+    EXPECT_NEAR(zero.nc.At("A"), 0.0, kTol);
 }
 
 TEST(InverseKinematicsTest, NoRotary_RequiresSpindleDirection) {
@@ -400,12 +422,15 @@ TEST(InverseKinematicsTest, WrapAngleIntoLimits_ThrowsForLinearAxis) {
 
 TEST(InverseKinematicsTest, Singular_ToolAxisAlongSpindleGivesZeroSwivel) {
     const mc::MachineModel model = ReadModel(MinimalXyzAc());
+    // `kPositive`では直前の指令値によらず旋回角を0にし、情報を1件追加する
     const mc::IkSolution solution = mc::Solve(model, Vector3d::UnitZ(),
                                               Vector3d(10.0, 20.0, -100.0), kControl,
-                                              mc::InitialJoints(model), {},
+                                              mc::InitialJoints(model),
+                                              {{"C", ToRadians(45.0)}},
                                               mc::BranchPolicy::kPositive);
     EXPECT_TRUE(solution.singular);
     ExpectSingleWarning(solution.warnings, "singular", "singular");
+    EXPECT_EQ(solution.warnings[0].severity, mc::Severity::kInfo);
     EXPECT_NEAR(solution.nc.At("A"), 0.0, kTol);
     EXPECT_NEAR(solution.nc.At("C"), 0.0, kTol);
     EXPECT_NEAR(solution.nc.At("X"), 10.0, kTol);
@@ -414,6 +439,32 @@ TEST(InverseKinematicsTest, Singular_ToolAxisAlongSpindleGivesZeroSwivel) {
     ASSERT_TRUE(solution.error.has_value());
     EXPECT_LT(solution.error->angle, kTol);
     EXPECT_LT(solution.error->position, kTol);
+}
+
+TEST(InverseKinematicsTest, Singular_ContinuousKeepsPreviousSwivel) {
+    const mc::MachineModel model = ReadModel(MinimalXyzAc());
+    // `kContinuous`では旋回軸を直前の指令値に保ち、診断を追加しない.
+    // 制御点はCの回転に追従するので、直進軸の解も変わる
+    const mc::IkSolution kept = mc::Solve(model, Vector3d::UnitZ(),
+                                          Vector3d(10.0, 20.0, -100.0), kControl,
+                                          mc::InitialJoints(model),
+                                          {{"C", ToRadians(45.0)}},
+                                          mc::BranchPolicy::kContinuous);
+    EXPECT_TRUE(kept.singular);
+    EXPECT_TRUE(kept.warnings.empty());
+    EXPECT_NEAR(kept.nc.At("A"), 0.0, kTol);
+    EXPECT_NEAR(kept.nc.At("C"), ToRadians(45.0), kTol);
+    ASSERT_TRUE(kept.error.has_value());
+    EXPECT_LT(kept.error->angle, kTol);
+    EXPECT_LT(kept.error->position, kTol);
+    // 直前の指令値が無ければ0
+    const mc::IkSolution zero = mc::Solve(model, Vector3d::UnitZ(),
+                                          Vector3d(10.0, 20.0, -100.0), kControl,
+                                          mc::InitialJoints(model), {},
+                                          mc::BranchPolicy::kContinuous);
+    EXPECT_TRUE(zero.singular);
+    EXPECT_TRUE(zero.warnings.empty());
+    EXPECT_NEAR(zero.nc.At("C"), 0.0, kTol);
 }
 
 TEST(InverseKinematicsTest, Degenerate_ParallelAxesMakeTiltIndeterminate) {

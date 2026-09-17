@@ -18,6 +18,10 @@
  * @note 警告 (`Diagnostic`) の`context`は種別を表す. 可動範囲外・ストローク外は
  *       `"limits"`、特異姿勢・傾斜角不定は`"singular"`. 動作生成はこれで
  *       可動範囲外の警告を識別し、レコード番号等の発生箇所は呼び出し側が付け直すこと.
+ * @note 特異姿勢 (工具軸方向が旋回軸と平行で旋回角が不定) では、旋回角を
+ *       `BranchPolicy::kContinuous`なら直前の指令値 (無ければ0) にして診断を
+ *       追加せず、`kPositive`/`kNegative`なら0にして`Severity::kInfo`の情報を
+ *       追加する. 傾斜角不定 (`"singular"`) は構成の問題であるため警告のまま.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_MACHINE_INVERSE_KINEMATICS_H_
 #define IGESIO_EXTENSIONS_MACHINES_MACHINE_INVERSE_KINEMATICS_H_
@@ -50,8 +54,9 @@ struct IkSolution {
     /// @note `base_q`を取らない`SolveOrientation`では`std::nullopt`.
     ///       指令値から再度求める場合は`JointsFromNc`を用いる
     std::optional<JointVector> q;
-    /// @brief 特異姿勢 (旋回角が不定) で旋回角を0としたか
-    /// @note 回転軸を解かない`SolvePosition`では常に`false`
+    /// @brief 特異姿勢 (旋回角が不定) か
+    /// @note 旋回角は`BranchPolicy::kContinuous`なら直前の指令値、それ以外は0.
+    ///       回転軸を解かない`SolvePosition`では常に`false`
     bool singular = false;
     /// @brief 順運動学による解の自己検証の誤差
     /// @note 検証を行わない`SolveOrientation`/`SolvePosition`では`std::nullopt`
@@ -64,11 +69,12 @@ struct IkSolution {
 /// @brief 工具軸方向を実現する回転軸の指令値を計算する (姿勢IK)
 /// @param model 運動学モデル
 /// @param tool_axis_home 目標の工具軸方向 (ゼロポーズ機械座標. 内部で正規化する)
-/// @param prev_nc 直前の指令値 (`BranchPolicy::kContinuous`での符号決定に用いる.
-///        該当軸が無ければ0として比較し、両軸とも無ければ`kPositive`と同じとする)
+/// @param prev_nc 直前の指令値 (`BranchPolicy::kContinuous`での符号決定と特異姿勢の
+///        旋回角に用いる. 符号決定では該当軸が無ければ0として比較し、両軸とも無ければ
+///        `kPositive`と同じとする)
 /// @param policy 回転角の解の選択方針 (通常は`model.Definition().branch`)
 /// @return 解 (回転軸の指令値`nc`と警告. `q`・`error`は設定しない).
-///         回転軸が1本以下なら`policy`・`prev_nc`は使わない
+///         回転軸が無ければ`policy`・`prev_nc`は使わない
 /// @throw std::invalid_argument `tool_axis_home`がゼロベクトルの場合
 /// @throw igesio::NotImplementedError IK対象の回転軸が3本以上の場合
 /// @throw KinematicsError 到達不能な工具姿勢の場合
@@ -100,8 +106,9 @@ IkSolution SolvePosition(const MachineModel& model,
 /// @param target_home 目標点 (ゼロポーズ機械座標)
 /// @param control_local 制御点のゼロポーズ機械座標 (`tool_mount`に固定. H_tm適用済)
 /// @param base_q 全軸の変位量の基準
-/// @param prev_nc 直前の指令値 (`BranchPolicy::kContinuous`での符号決定に用いる.
-///        該当軸が無ければ0として比較し、両軸とも無ければ`kPositive`と同じとする)
+/// @param prev_nc 直前の指令値 (`BranchPolicy::kContinuous`での符号決定と特異姿勢の
+///        旋回角に用いる. 符号決定では該当軸が無ければ0として比較し、両軸とも無ければ
+///        `kPositive`と同じとする)
 /// @param policy 回転角の解の選択方針 (通常は`model.Definition().branch`)
 /// @return 解 (全フィールドを設定する). `q`は`base_q`のコピーに回転軸・直進軸の
 ///         変位量を書き込んだもの、`error`は`CheckSolution`の結果

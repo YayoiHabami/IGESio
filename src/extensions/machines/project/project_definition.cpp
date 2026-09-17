@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace igesio::extensions::machines {
 
@@ -119,6 +120,35 @@ std::string DisplayName(const ProgramSpec& program) {
     if (!program.name.empty()) return program.name;
     return program.file.resolved.filename().string();
 }
+
+
+
+/**
+ * ---- 組み立て ----
+ */
+
+ProjectDefinition MakeProjectDefinition(MachineDefinition machine,
+                                        const std::string_view name) {
+    ProjectDefinition project;
+    project.format_version = kProjectFormatVersion;
+    project.name = std::string(name);
+    project.source_name = std::string(name);
+    for (const Diagnostic& diagnostic : machine.warnings) {
+        const std::string prefix =
+                diagnostic.context.empty() ? "" : diagnostic.context + ": ";
+        project.warnings.push_back(Diagnostic{
+                diagnostic.severity, "machine", prefix + diagnostic.message,
+                diagnostic.line});
+    }
+    project.machine = std::move(machine);
+    return project;
+}
+
+
+
+/**
+ * ---- 検索 ----
+ */
 
 const ToolEntry* FindTool(const ProjectDefinition& project, const int number) {
     for (const ToolEntry& tool : project.tools) {

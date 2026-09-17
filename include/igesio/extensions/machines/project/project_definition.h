@@ -515,6 +515,19 @@ struct ProjectDefinition {
     std::vector<Diagnostic> warnings;
 };
 
+/// @brief 機械定義からプロジェクト定義を作る
+/// @param machine 機械定義 (読込済み、または`MakeVirtualMachineDefinition`の結果)
+/// @param name プロジェクト名
+/// @return `format_version = kProjectFormatVersion`、`units`はデフォルト
+///         (mm/deg)、`machine`、`name`、`source_name` (`name`と同じ) を設定し,
+///         他は空. 機械定義の警告は読込と同じく`context = "machine"`で
+///         `warnings`に転記する
+/// @note プロジェクト定義ファイルを経由しない場合は基本的にこの関数を使う
+/// @note 工具、ワークオフセット、モデル、プログラムは呼び出し側が追加すること.
+///       ワークオフセットが無ければ`MachiningSetup`で暗黙のG54を補う
+ProjectDefinition MakeProjectDefinition(MachineDefinition machine,
+                                        std::string_view name);
+
 /// @brief `[[tool]]`を探す
 /// @param project プロジェクト定義
 /// @param number 工具番号

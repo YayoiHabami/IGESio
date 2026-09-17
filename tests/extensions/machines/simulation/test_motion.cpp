@@ -4,9 +4,10 @@
  * @author Yayoi Habami
  * @date 2026-09-15
  * @copyright 2026 Yayoi Habami
- * @note 対象: PlanMotion / SampleIndexAtTime / DisplayNc
- *       - 正常系: 区間時間の閉形式 (早送り/切削/送り不明)、ドウェル、初期姿勢
- *         サンプル、回転方向の正規化、fpsの低減、TCP区間と直接指令の補間,
+ * @note 対象: PlanMotion / SampleIndexAtTime / CommandSampleOfRecord / DisplayNc
+ *       - 正常系: 区間時間の閉形式 (早送り/切削/送り不明)、ドウェル、通過点ごとの
+ *         固定時間 (`fixed_record_seconds`)、初期姿勢サンプル、回転方向の正規化,
+ *         fpsの低減、TCP区間と直接指令の補間、レコードの終点のサンプル,
  *         登録値相対の座標語と工具長補正、機械座標、工具軸方向の継続と仮定,
  *         到達不能、可動範囲外の扱い、円弧の分割、回転角の解の連続性、制御点,
  *         工具交換、動作でないレコード、時刻の二分探索、表示用の指令値,
@@ -182,6 +183,46 @@ TEST(MotionTest, Time_Dwell) {
     EXPECT_EQ(commands[1].record_index, 2u);
     // ドウェルは補間しないので、サンプルは終点の1つだけ
     EXPECT_EQ(track.record_first_sample[2] + 1, track.samples.size());
+}
+
+TEST(MotionTest, Time_FixedRecordSeconds) {
+    const auto setup = MakeSetup();
+    mc::ClArc arc;
+    arc.kind = mc::MotionKind::kArcCcw;
+    arc.end = Vector3d(-10.0, 0.0, 0.0);
+    arc.center = Vector3d::Zero();
+    arc.normal = Vector3d::UnitZ();
+    // 早送り (軸の動特性で2.6 s)、切削 (F = 5 mm/sで10 s)、ドウェル2.5 s、円弧
+    const mc::ClProgram program = WithTool({
+            mc::ClFeed{5.0},
+            Goto(Vector3d(10.0, 0.0, 0.0), Vector3d::UnitZ(), mc::MotionKind::kRapid),
+            Goto(Vector3d(10.0, 50.0, 0.0)),
+            mc::ClDwell{2.5},
+            Goto(Vector3d(10.0, 0.0, 0.0)),
+            arc});
+    mc::MotionOptions options;
+    options.interpolate = false;
+    options.fixed_record_seconds = 0.1;
+    const mc::MotionTrack track = Plan(setup, program, options);
+    // 送り・動特性・ドウェル時間によらず、通過点 (円弧は分割点ごと) の間隔が0.1 s
+    ASSERT_GE(track.samples.size(), 6u);
+    for (std::size_t i = 1; i < track.samples.size(); ++i) {
+        EXPECT_NEAR(track.samples[i].time - track.samples[i - 1].time, 0.1, kTol)
+                << "sample " << i;
+    }
+    EXPECT_NEAR(track.stats.duration_sec,
+                0.1 * static_cast<double>(track.samples.size() - 1), kIkTol);
+    EXPECT_EQ(CountWarnings(track.warnings, "fallback feed"), 0u);
+
+    // 補間との併用では、一定時間の区間をfpsで分割する (切削の区間は
+    // 0.1 s × 30 fps = 3点で、終点の時刻は早送りと合わせて0.2 s)
+    options.interpolate = true;
+    options.fps = 30.0;
+    const mc::MotionTrack interpolated = Plan(setup, program, options);
+    EXPECT_EQ(interpolated.record_first_sample[4] - interpolated.record_first_sample[3],
+              3u);
+    EXPECT_NEAR(interpolated.samples[interpolated.record_first_sample[4] - 1].time,
+                0.2, kIkTol);
 }
 
 
@@ -702,6 +743,44 @@ TEST(MotionTest, SampleIndexAtTime_Bisects) {
     EXPECT_EQ(mc::SampleIndexAtTime(mc::MotionTrack{}, 1.0), 0u);
 }
 
+TEST(MotionTest, CommandSampleOfRecord_FindsEndPoint) {
+    const auto setup = MakeSetup();
+    mc::ClArc arc;
+    arc.kind = mc::MotionKind::kArcCcw;
+    arc.end = Vector3d(-10.0, 0.0, 0.0);
+    arc.center = Vector3d::Zero();
+    arc.normal = Vector3d::UnitZ();
+    // [0] 工具、[1] 送り、[2] 早送り、[3] 切削、[4] ドウェル、[5] 円弧、[6] 終了
+    const mc::ClProgram program = WithTool({
+            mc::ClFeed{5.0},
+            Goto(Vector3d(10.0, 0.0, 0.0), Vector3d::UnitZ(), mc::MotionKind::kRapid),
+            Goto(Vector3d(10.0, 50.0, 0.0)),
+            mc::ClDwell{2.5},
+            arc,
+            mc::ClEnd{}});
+    for (const bool interpolate : {true, false}) {
+        mc::MotionOptions options;
+        options.interpolate = interpolate;
+        const mc::MotionTrack track = Plan(setup, program, options);
+        for (const std::size_t record : {2u, 3u, 4u, 5u}) {
+            const auto index = mc::CommandSampleOfRecord(track, record);
+            ASSERT_TRUE(index.has_value()) << "record " << record;
+            const mc::MotionSample& sample = track.samples[*index];
+            EXPECT_TRUE(sample.is_command_point);
+            EXPECT_EQ(sample.record_index, record);
+            // 終点は同じレコードの最後のサンプル
+            EXPECT_TRUE(*index + 1 == track.samples.size()
+                        || track.samples[*index + 1].record_index != record);
+        }
+        // 状態レコード (先頭は次の動作レコードを指す) と範囲外は`nullopt`
+        for (const std::size_t record : {0u, 1u, 6u, 7u}) {
+            EXPECT_FALSE(mc::CommandSampleOfRecord(track, record).has_value())
+                    << "record " << record;
+        }
+    }
+    EXPECT_FALSE(mc::CommandSampleOfRecord(mc::MotionTrack{}, 0).has_value());
+}
+
 TEST(MotionTest, DisplayNc_WrapsUnlimitedOnly) {
     const auto setup = MakeSetup();
     const mc::MachineModel& model = setup.Model();
@@ -729,6 +808,12 @@ TEST(MotionTest, Options_ThrowsInvalidArgument) {
     options = {};
     options.fallback_feed = -1.0;
     EXPECT_THROW(Plan(setup, program, options), std::invalid_argument);
+    options = {};
+    options.fixed_record_seconds = 0.0;
+    EXPECT_THROW(Plan(setup, program, options), std::invalid_argument);
+    options = {};
+    options.fixed_record_seconds = 1e-9;
+    EXPECT_NO_THROW(Plan(setup, program, options));
     options = {};
     options.max_samples = 1;
     EXPECT_NO_THROW(Plan(setup, program, options));

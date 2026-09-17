@@ -42,6 +42,7 @@
 #include "igesio/extensions/machines/machine/machine_model.h"
 #include "igesio/extensions/machines/machine/forward_kinematics.h"
 #include "igesio/extensions/machines/machine/inverse_kinematics.h"
+#include "igesio/extensions/machines/machine/virtual_machines.h"
 
 // 工具輪郭
 #include "igesio/extensions/machines/tools/tool_profile.h"

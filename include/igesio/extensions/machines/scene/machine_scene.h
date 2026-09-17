@@ -49,6 +49,7 @@
 
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -119,6 +120,11 @@ constexpr Color kCutPathColor = Color::FromRGB255(184, 184, 184);
 constexpr Color kToolAxisColor = Color::FromRGB255(242, 32, 0);
 /// @brief 工具軸線を輪郭の最上端から延ばす長さ [mm]
 constexpr double kToolAxisExtraLength = 30.0;
+/// @brief 工具の金属材質の金属度 (`MetallicSurfaceIds`の面に設定する値)
+/// @note 描画側の材質パラメータに対応する. GUI間で値を共有するために置く
+constexpr float kToolMetallic = 0.2f;
+/// @brief 工具の金属材質の粗さ (`MetallicSurfaceIds`の面に設定する値)
+constexpr float kToolRoughness = 0.4f;
 
 /// @brief シーン構築の設定
 struct SceneBuildOptions {
@@ -135,6 +141,26 @@ struct SceneBuildOptions {
     /// @brief 工具軸線を輪郭の最上端から延ばす長さ [mm]
     /// @note 0以下なら工具軸線と制御点マーカーを作らない
     double tool_axis_extra = kToolAxisExtraLength;
+    /// @brief 形状のアセンブリを呼び出し側から供給する関数
+    /// @note `MachiningSetup::Geometries()`の各形状について`LoadGeometry`の前に
+    ///       呼ぶ. `nullptr`以外を返した場合はそれを形状のアセンブリとして用い,
+    ///       ファイルは読まない. `nullptr`を返した場合、または未設定の場合は
+    ///       `LoadGeometry`で読む. 呼び出し側で読み込み済みのアセンブリ
+    ///       (CAM側が所有するワーク等) を二重に読まずに木に組み込む用途
+    /// @note 供給されたアセンブリの名前 (`Metadata().name`)、大域変換、可視性は
+    ///       `Build`で上書きする. 既に他の親を持つ場合はその親から取り除いて
+    ///       (`RemovalPolicy::kOrphan`) 所属コンポーネントの子にする.
+    ///       `Clear`で`machine:<name>`ごと木から取り除かれるため、供給側は
+    ///       `shared_ptr`を保持し続けること
+    std::function<std::shared_ptr<models::Assembly>(const GeometryInstance&)>
+            geometry_provider;
+    /// @brief 機械部品と表示専用の要素を選択不可 (`lock.selectable = false`) にするか
+    /// @note 対象は機械部品の形状 (`geometry:<name>`)、工具 (`tool:<n>`)、3軸
+    ///       (`triad:*`/`workframe:<id>`)、経路線 (`paths:<id>`)、工具軌跡
+    ///       (`trajectory:`)、動作軌跡 (`trace:*`). モデル (`model:<name>`) と
+    ///       `attach:<id>`は対象外で、CAM側の面選択等の対象のまま残る.
+    ///       アセンブリの選択可否は祖先方向にANDで合成されるため部分木全体に効く
+    bool lock_selection = false;
 };
 
 /// @brief ワークビュー (ワーク座標系に固定した表示) の設定
@@ -393,6 +419,9 @@ class MachineScene {
     /// @brief ワーク座標系ごとに3軸、経路線の配置先、取り付け先を作る
     /// @param options 構築の設定
     void BuildWorkFrames(const SceneBuildOptions& options);
+    /// @brief 機械部品と表示専用の要素を選択不可にする (`lock_selection`)
+    /// @note モデル (`model:<name>`) と`attach:<id>`は変更しない
+    void LockSelection();
 
     /// @brief 運動学モデル (未構築なら`std::nullopt`)
     std::optional<MachineModel> model_;

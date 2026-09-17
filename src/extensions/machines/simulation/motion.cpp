@@ -57,8 +57,8 @@ struct PlannedTarget {
 
 /// @brief 設定の値を検証する
 /// @param options 設定
-/// @throw std::invalid_argument `fps`/`fallback_feed`/`arc_chord_tolerance`が
-///        正でない, または`max_samples`が0の場合
+/// @throw std::invalid_argument `fps`/`fallback_feed`/`arc_chord_tolerance`/
+///        `fixed_record_seconds`が正でない, または`max_samples`が0の場合
 void ValidateOptions(const MotionOptions& options) {
     if (!(options.fps > 0.0)) {
         throw std::invalid_argument("MotionOptions::fps must be positive");
@@ -72,6 +72,11 @@ void ValidateOptions(const MotionOptions& options) {
     if (!(options.arc_chord_tolerance > 0.0)) {
         throw std::invalid_argument(
                 "MotionOptions::arc_chord_tolerance must be positive");
+    }
+    if (options.fixed_record_seconds.has_value()
+        && !(*options.fixed_record_seconds > 0.0)) {
+        throw std::invalid_argument(
+                "MotionOptions::fixed_record_seconds must be positive");
     }
 }
 
@@ -152,10 +157,12 @@ double SegmentLength(const MachineModel& model, const detail::PlannerState& stat
 /// @param length 制御点の移動距離 [mm]
 /// @param options 設定
 /// @return 軸ごとの`|Δq| / v`の最大と、切削なら`L / F`との最大 [s].
-///         ドウェルは`dwell_sec`. 軸の動特性が無い軸は無視する
+///         ドウェルは`dwell_sec`. 軸の動特性が無い軸は無視する.
+///         `fixed_record_seconds`の指定時は通過点の種類によらずその値
 double SegmentDuration(const MachineModel& model, detail::PlannerState& state,
                        const detail::Target& target, const JointVector& q_end,
                        const double length, const MotionOptions& options) {
+    if (options.fixed_record_seconds.has_value()) return *options.fixed_record_seconds;
     if (target.dwell_sec > 0.0) return target.dwell_sec;
 
     const bool rapid = target.kind == MotionKind::kRapid;
@@ -495,6 +502,20 @@ std::size_t SampleIndexAtTime(const MotionTrack& track, const double time_sec) {
             });
     if (upper == track.samples.begin()) return 0;
     return static_cast<std::size_t>(std::distance(track.samples.begin(), upper)) - 1;
+}
+
+std::optional<std::size_t> CommandSampleOfRecord(const MotionTrack& track,
+                                                 const std::size_t record_index) {
+    if (record_index >= track.record_first_sample.size()) return std::nullopt;
+
+    // 先頭サンプリング点から同じレコードの間を走査する. 状態レコードでは先頭が
+    // 次の動作レコードを指すため、レコードのインデックスが一致せず見つからない
+    for (std::size_t i = track.record_first_sample[record_index];
+         i < track.samples.size() && track.samples[i].record_index == record_index;
+         ++i) {
+        if (track.samples[i].is_command_point) return i;
+    }
+    return std::nullopt;
 }
 
 NcValues DisplayNc(const MachineModel& model, const JointVector& q) {

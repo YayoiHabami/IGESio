@@ -4,10 +4,13 @@
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
- * @note 対象: FormatFixed / FormatDegrees / ParseHexColor / FormatHexColor
+ * @note 対象: FormatFixed / FormatDegrees / ParseHexColor / ParseHexColorRgba /
+ *       FormatHexColor
  *       - 正常系: 固定小数の桁数と丸め、rad→degの換算、`#RRGGBB`の解釈
- *         (大文字・小文字)、整形の往復
- *       - 正常系 (境界値): 桁数0、成分0と255、0..1の外の成分のクランプ
+ *         (大文字・小文字)、短縮形と不透明度付き (`#RGB`/`#RGBA`/`#RRGGBBAA`)
+ *         の解釈、整形の往復
+ *       - 正常系 (境界値): 桁数0、成分0と255、0..1の外の成分のクランプ,
+ *         不透明度0と255
  *       - 正常系 (退化): 負のゼロ
  *       - 異常系 (解釈失敗): 長さ違い、先頭が`#`でない、16進でない文字、8桁
  *         (`std::nullopt`を返し例外は投げない)
@@ -85,6 +88,57 @@ TEST(FormattingTest, ParseHexColor_ReturnsNulloptWhenMalformed) {
     EXPECT_FALSE(mc::ParseHexColor("#ff80gg").has_value());     // 16進でない
     EXPECT_FALSE(mc::ParseHexColor("").has_value());            // 空
     EXPECT_FALSE(mc::ParseHexColor("#ff800080").has_value());   // 8桁 (α付き) は不可
+}
+
+// ---- ParseHexColorRgba ----
+
+TEST(FormattingTest, ParseHexColorRgba_ReadsAllForms) {
+    const auto rgb = mc::ParseHexColorRgba("#ff8000");
+    const auto rgba = mc::ParseHexColorRgba("#FF800080");
+    const auto short_rgb = mc::ParseHexColorRgba("#f80");
+    const auto short_rgba = mc::ParseHexColorRgba("#f808");
+    ASSERT_TRUE(rgb.has_value());
+    ASSERT_TRUE(rgba.has_value());
+    ASSERT_TRUE(short_rgb.has_value());
+    ASSERT_TRUE(short_rgba.has_value());
+    // 6桁は`ParseHexColor`と同じ結果 (不透明)
+    EXPECT_EQ(*rgb, *mc::ParseHexColor("#ff8000"));
+    EXPECT_NEAR(rgb->a, 1.0, kColorTol);
+    // 8桁は不透明度を持つ
+    EXPECT_NEAR(rgba->r, 1.0, kColorTol);
+    EXPECT_NEAR(rgba->g, 128.0 / 255.0, kColorTol);
+    EXPECT_NEAR(rgba->a, 128.0 / 255.0, kColorTol);
+    // 短縮形は各桁を2回繰り返す (`#f80` → `#ff8800`)
+    EXPECT_NEAR(short_rgb->r, 1.0, kColorTol);
+    EXPECT_NEAR(short_rgb->g, 136.0 / 255.0, kColorTol);
+    EXPECT_NEAR(short_rgb->b, 0.0, kColorTol);
+    EXPECT_NEAR(short_rgb->a, 1.0, kColorTol);
+    EXPECT_NEAR(short_rgba->a, 136.0 / 255.0, kColorTol);
+}
+
+TEST(FormattingTest, ParseHexColorRgba_BoundaryComponents) {
+    const auto transparent = mc::ParseHexColorRgba("#0000");
+    const auto opaque = mc::ParseHexColorRgba("#ffffffff");
+    ASSERT_TRUE(transparent.has_value());
+    ASSERT_TRUE(opaque.has_value());
+    EXPECT_NEAR(transparent->a, 0.0, kColorTol);
+    for (std::size_t i = 0; i < 3; ++i) {
+        EXPECT_NEAR((*transparent)[i], 0.0, kColorTol);
+        EXPECT_NEAR((*opaque)[i], 1.0, kColorTol);
+    }
+    EXPECT_NEAR(opaque->a, 1.0, kColorTol);
+}
+
+TEST(FormattingTest, ParseHexColorRgba_ReturnsNulloptWhenMalformed) {
+    EXPECT_FALSE(mc::ParseHexColorRgba("").has_value());            // 空
+    EXPECT_FALSE(mc::ParseHexColorRgba("#").has_value());           // 桁なし
+    EXPECT_FALSE(mc::ParseHexColorRgba("f80").has_value());         // `#`がない
+    EXPECT_FALSE(mc::ParseHexColorRgba("#ff").has_value());         // 2桁
+    EXPECT_FALSE(mc::ParseHexColorRgba("#ff800").has_value());      // 5桁
+    EXPECT_FALSE(mc::ParseHexColorRgba("#ff80000").has_value());    // 7桁
+    EXPECT_FALSE(mc::ParseHexColorRgba("#ff8000800").has_value());  // 9桁
+    EXPECT_FALSE(mc::ParseHexColorRgba("#ggg").has_value());        // 16進でない (短縮形)
+    EXPECT_FALSE(mc::ParseHexColorRgba("#ff80gg").has_value());     // 16進でない
 }
 
 // ---- FormatHexColor ----

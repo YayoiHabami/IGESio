@@ -129,8 +129,10 @@ struct PlannerState {
 struct OrientationResult {
     /// @brief 回転軸の指令値 (到達不能なら直前の指令値の回転軸)
     NcValues rotary;
+    /// @brief 特異姿勢 (旋回角が不定) か (`IkSolution::singular`)
+    bool singular = false;
     /// @brief 逆運動学の警告 (`context`は種別)
-    /// @note 特異姿勢 (`"singular"`) の警告は含めない. 工具軸方向が+Zの
+    /// @note 特異姿勢 (`"singular"`) の診断は含めない. 工具軸方向が+Zの
     ///       通常の姿勢で毎回発生するため、動作生成と、工具軸方向から回転軸指令値
     ///       を計算する処理ではいずれも無視する
     std::vector<Diagnostic> warnings;
@@ -181,6 +183,21 @@ int LineOf(const ClProgram& program, std::size_t index);
 const WorkFrame& CurrentWorkFrame(const MachiningSetup& setup,
                                   PlannerState& state,
                                   std::size_t index, int line);
+
+/// @brief 工具が無いときの制御点 (ゲージライン) の`tool_mount`フレーム座標を計算する
+/// @param g43_length 有効な工具長補正 [mm] (無ければ`std::nullopt`)
+/// @return (0, 0, -g43_length). 工具長補正が無ければ原点
+igesio::Vector3d GaugeControlLocal(std::optional<double> g43_length);
+
+/// @brief 工具表の工具から制御点の`tool_mount`フレーム座標を計算する
+/// @param setup 加工セットアップ
+/// @param tool 工具番号
+/// @param g43_length 有効な工具長補正 [mm] (無ければ`std::nullopt`)
+/// @return `ControlLocal(spec, g43_length)`. 工具表に無い番号 (`kNoTool`を含む)
+///         なら`std::nullopt`
+std::optional<igesio::Vector3d> ToolControlLocal(const MachiningSetup& setup,
+                                                 int tool,
+                                                 std::optional<double> g43_length);
 
 /// @brief 現在の工具と工具長補正から制御点の`tool_mount`フレーム座標を計算する
 /// @param setup 加工セットアップ
@@ -237,8 +254,9 @@ std::optional<igesio::Vector3d> ToolAxisOrFallback(
 /// @param prev_nc 直前の指令値
 /// @param axis_home 工具軸方向 (ゼロポーズ機械座標)
 /// @param policy 回転角の解の選択方針
-/// @return 回転軸の指令 (無制限軸は直前の指令値に近い回転方向に正規化) と警告.
-///         到達不能なら`unreachable`に理由を設定し、`prev_nc`の回転軸の値を返す
+/// @return 回転軸の指令 (無制限軸は直前の指令値に近い回転方向に正規化)、特異姿勢か,
+///         および警告. 到達不能なら`unreachable`に理由を設定し、`prev_nc`の
+///         回転軸の値を返す
 /// @throw igesio::NotImplementedError 対応しない軸構成の場合
 OrientationResult SolveToolAxis(const MachineModel& model, const NcValues& prev_nc,
                                 const igesio::Vector3d& axis_home,
