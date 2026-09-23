@@ -1,6 +1,6 @@
 /**
  * @file entities/curves/nurbs_algorithms.cpp
- * @brief 任意曲線の NURBS 近似アルゴリズムの実装
+ * @brief 任意曲線の NURBS 近似・補間アルゴリズムの実装
  * @author Yayoi Habami
  * @date 2026-04-11
  * @copyright 2026 Yayoi Habami
@@ -9,8 +9,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <functional>
+#include <iterator>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -573,37 +576,94 @@ std::vector<double> ComputeErrors(
     return errors;
 }
 
-/// @brief 誤差が閾値を超えるサンプル区間にノットを挿入する
-/// @param knots  現在のノットベクトル（変更される）
-/// @param errors サンプル毎の近似誤差
-/// @param t_bar  コード長パラメータ
+/// @brief ノットスパンの最小幅、および挿入位置と既存ノットの最小間隔
+constexpr double kMinSpanWidth = 1e-12;
+
+/// @brief スパンを分割するノット位置を決定する
+/// @param beg  スパン内部 (t_lo, t_hi) にあるサンプルの先頭
+/// @param end  同、終端
+/// @param t_lo スパン下端
+/// @param t_hi スパン上端
+/// @return 挿入位置。分割不能な場合はstd::nullopt
+/// @note 分割後の両半スパンに内部サンプルが1点以上残る位置のみを返す。
+///       重複点により同一パラメータのサンプルが複数存在しうるため、
+///       判定は相異なるパラメータ値の上で行う
+std::optional<double> FindSplitPosition(
+        std::vector<double>::const_iterator beg,
+        std::vector<double>::const_iterator end,
+        double t_lo, double t_hi) {
+    // スパン内部の相異なるパラメータ値の個数を数える
+    std::size_t n_distinct = 0;
+    for (auto it = beg; it != end; it = std::upper_bound(it, end, *it)) {
+        ++n_distinct;
+    }
+    // 相異なる値が2点未満のスパンは、どこで割っても片側が空になる
+    if (n_distinct < 2) return std::nullopt;
+
+    // 中点分割で両半スパンに内部サンプルが残るなら中点へ（従来と同一の挙動）
+    const double mid = (t_lo + t_hi) * 0.5;
+    double pos = mid;
+    if (!(*beg < mid && mid < *std::prev(end))) {
+        // 残らない場合は、相異なる値の中央にある隣接2値の中間へ挿入する
+        auto it = beg;
+        for (std::size_t c = 0; c + 1 < n_distinct / 2; ++c) {
+            it = std::upper_bound(it, end, *it);
+        }
+        pos = 0.5 * (*it + *std::upper_bound(it, end, *it));
+    }
+    if (pos - t_lo < kMinSpanWidth || t_hi - pos < kMinSpanWidth) {
+        return std::nullopt;
+    }
+    return pos;
+}
+
+/// @brief 誤差が閾値を超えるサンプルのスパンにノットを挿入する
+/// @param knots  現在のノットベクトル（挿入に成功した場合のみ変更される）
+/// @param errors サンプル毎の近似誤差（t_barと同数）
+/// @param t_bar  コード長パラメータ（昇順）
 /// @param eps    許容誤差
 /// @return ノット挿入に成功した場合は true
+/// @note 内部サンプルを持たないスパンにのみ台をもつ基底は最小二乗で拘束されず、
+///       B̂の該当列が微小値となって制御点が発散する（接線不連続を含む点列で
+///       実際に発生した）。そのため分割後の両半スパンに内部サンプルが残る
+///       分割のみを行い、対象スパンが分割不能な場合は誤差降順に
+///       次のサンプルのスパンを試す
 bool InsertKnot(
         std::vector<double>& knots,
         const std::vector<double>& errors,
         const std::vector<double>& t_bar,
         double eps) {
-    // 誤差最大のサンプルを特定する
-    const auto it_max = std::max_element(errors.begin(), errors.end());
-    if (*it_max <= eps) return false;
+    // 許容誤差を超えるサンプルのみを誤差降順に並べる
+    std::vector<std::size_t> order;
+    order.reserve(errors.size());
+    for (std::size_t l = 0; l < errors.size(); ++l) {
+        if (errors[l] > eps) order.push_back(l);
+    }
+    std::sort(order.begin(), order.end(),
+              [&errors](std::size_t a, std::size_t b) {
+                  return errors[a] > errors[b];
+              });
 
-    const size_t l_max =
-        static_cast<size_t>(it_max - errors.begin());
-    const double t = t_bar[l_max];
+    for (const auto l : order) {
+        // t_bar[l]を含むノットスパン [t_lo, t_hi) を二分探索で特定する
+        const auto it_hi =
+            std::upper_bound(knots.begin(), knots.end(), t_bar[l]);
+        if (it_hi == knots.begin() || it_hi == knots.end()) continue;
+        const double t_hi = *it_hi;
+        const double t_lo = *std::prev(it_hi);
+        if (t_hi - t_lo < kMinSpanWidth) continue;
 
-    // tを含むノットスパン [t_lo, t_hi] を二分探索で特定し、中点を挿入位置とする
-    // 中点は既存ノットと必ず異なるため、重複チェックが不要
-    const auto it_hi =
-        std::upper_bound(knots.begin(), knots.end(), t);
-    if (it_hi == knots.begin() || it_hi == knots.end()) return false;
+        // スパン内部 (t_lo, t_hi) にあるサンプルの範囲 [beg, end) を求める
+        const auto beg = std::upper_bound(t_bar.begin(), t_bar.end(), t_lo);
+        const auto end = std::lower_bound(t_bar.begin(), t_bar.end(), t_hi);
 
-    const double t_hi = *it_hi;
-    const double t_lo = *std::prev(it_hi);
-    if (t_hi - t_lo < 1e-12) return false;
+        const auto pos = FindSplitPosition(beg, end, t_lo, t_hi);
+        if (!pos) continue;
 
-    knots.insert(it_hi, (t_lo + t_hi) * 0.5);
-    return true;
+        knots.insert(it_hi, *pos);
+        return true;
+    }
+    return false;
 }
 
 
@@ -674,6 +734,290 @@ void RunApproxLoop(
         }
         ++k;
     }
+}
+
+
+
+// =========================================================================
+// 局所エルミート補間: 点列の前処理
+// =========================================================================
+
+/// @brief 点列の相対的な同一点判定の係数 (折れ線長に対する比)
+/// @note ノットの間隔が倍精度の分解能を下回らないようにする
+constexpr double kRelativeDuplicateTolerance = 1e-12;
+
+/// @brief 連続重複点を統合した点列
+struct DistinctPoints {
+    /// @brief 相異なる点列 P_0, ..., P_n
+    std::vector<Vector3d> points;
+    /// @brief 各入力点が統合された先のインデックス (入力点と同数)
+    std::vector<std::size_t> index_of_input;
+};
+
+/// @brief 補間オプションの値を検証する
+/// @param options 補間オプション
+/// @throw std::invalid_argument いずれかの値が範囲外または非有限の場合
+void ValidateInterpOptions(const i_ent::NurbsInterpOptions& options) {
+    if (!(options.corner_angle > 0.0 && options.corner_angle <= kPi / 2.0)) {
+        throw std::invalid_argument(
+            "InterpolateWithNurbs: corner_angle must be in (0, pi/2].");
+    }
+    if (!(options.tangent_tolerance >= 0.0
+          && options.tangent_tolerance <= kPi / 2.0)) {
+        throw std::invalid_argument(
+            "InterpolateWithNurbs: tangent_tolerance must be in [0, pi/2].");
+    }
+    if (!(options.duplicate_tolerance >= 0.0
+          && std::isfinite(options.duplicate_tolerance))) {
+        throw std::invalid_argument(
+            "InterpolateWithNurbs: duplicate_tolerance must be"
+            " finite and non-negative.");
+    }
+}
+
+/// @brief 連続重複点を統合する
+/// @param points    入力点列 (全点が有限であること)
+/// @param tolerance 同一点とみなす距離の絶対値
+/// @return 統合後の点列と入力点との対応
+/// @note 距離の閾値にはtoleranceと折れ線長の相対値の大きい方を使う。
+///       統合した点の座標は、最初に現れた入力点のものとする
+DistinctPoints MergeDuplicatePoints(
+        const std::vector<Vector3d>& points, double tolerance) {
+    double polyline_length = 0.0;
+    for (std::size_t i = 1; i < points.size(); ++i) {
+        polyline_length += (points[i] - points[i - 1]).norm();
+    }
+    const double tol = std::max(
+        tolerance, kRelativeDuplicateTolerance * polyline_length);
+
+    DistinctPoints result;
+    result.points.reserve(points.size());
+    result.index_of_input.reserve(points.size());
+    for (const auto& p : points) {
+        if (result.points.empty() || (p - result.points.back()).norm() > tol) {
+            result.points.push_back(p);
+        }
+        result.index_of_input.push_back(result.points.size() - 1);
+    }
+    return result;
+}
+
+/// @brief 2つのベクトルのなす角を計算する
+/// @param a 零でないベクトル
+/// @param b 零でないベクトル
+/// @return なす角 [rad] (0.0〜π)
+double AngleBetween(const Vector3d& a, const Vector3d& b) {
+    return std::atan2(a.cross(b).norm(), a.dot(b));
+}
+
+/// @brief 点列の各点が角点かを判定する
+/// @param dirs         各弦の単位方向ベクトル u_0, ..., u_{n-1}
+/// @param corner_angle 角点とみなす折れ角の閾値 [rad]
+/// @return 点ごとの判定結果 (サイズn+1、両端点は常にfalse)
+std::vector<bool> DetectCorners(
+        const std::vector<Vector3d>& dirs, double corner_angle) {
+    std::vector<bool> corners(dirs.size() + 1, false);
+    for (std::size_t k = 1; k < dirs.size(); ++k) {
+        corners[k] = AngleBetween(dirs[k - 1], dirs[k]) > corner_angle;
+    }
+    return corners;
+}
+
+
+
+// =========================================================================
+// 局所エルミート補間: 接線の決定
+// =========================================================================
+
+/// @brief 各点の左右の単位接線
+/// @note 角点以外ではincomingとoutgoingは等しい。始点のincomingと
+///       終点のoutgoingは使わない
+struct PointTangents {
+    /// @brief 点に入る側の接線 (前の区間の終端接線)
+    std::vector<Vector3d> incoming;
+    /// @brief 点から出る側の接線 (次の区間の始端接線)
+    std::vector<Vector3d> outgoing;
+};
+
+/// @brief 3点を通る放物線の始端の単位接線を推定する
+/// @param u0 始端側の弦の単位方向
+/// @param u1 次の弦の単位方向
+/// @param h0 始端側の弦長
+/// @param h1 次の弦長
+/// @return 始端の単位接線
+/// @note u0とu1のなす角がπ/2以下であれば、戻り値はu0と鋭角をなす
+Vector3d EstimateEndTangent(
+        const Vector3d& u0, const Vector3d& u1, double h0, double h1) {
+    const double a = h0 / (h0 + h1);
+    return ((1.0 + a) * u0 - a * u1).normalized();
+}
+
+/// @brief 3点を通る放物線の中央点での単位接線を推定する (Bessel法)
+/// @param u_in  点に入る弦の単位方向
+/// @param u_out 点から出る弦の単位方向
+/// @param h_in  点に入る弦の長さ
+/// @param h_out 点から出る弦の長さ
+/// @return 単位接線 (u_inとu_outの正係数の線形結合)
+Vector3d EstimateInteriorTangent(
+        const Vector3d& u_in, const Vector3d& u_out,
+        double h_in, double h_out) {
+    return (h_out * u_in + h_in * u_out).normalized();
+}
+
+/// @brief 角点で区切った各区間列の接線を推定する
+/// @param dirs    各弦の単位方向ベクトル (サイズn)
+/// @param lengths 各弦の長さ (サイズn)
+/// @param corners 各点が角点か (サイズn+1)
+/// @return 各点の左右の単位接線
+/// @note 区間列の端 (始点・終点・角点) では放物線端条件を、内部では
+///       Bessel法を使う。区間列が1区間のみの場合は弦の方向とする
+PointTangents EstimateTangents(
+        const std::vector<Vector3d>& dirs,
+        const std::vector<double>& lengths,
+        const std::vector<bool>& corners) {
+    const std::size_t n = dirs.size();
+    PointTangents result{std::vector<Vector3d>(n + 1, Vector3d::Zero()),
+                         std::vector<Vector3d>(n + 1, Vector3d::Zero())};
+    std::size_t lo = 0;
+    while (lo < n) {
+        // 次の角点または終点までを1つの区間列とする
+        std::size_t hi = lo + 1;
+        while (hi < n && !corners[hi]) ++hi;
+
+        if (hi - lo == 1) {
+            result.outgoing[lo] = dirs[lo];
+            result.incoming[hi] = dirs[lo];
+        } else {
+            result.outgoing[lo] = EstimateEndTangent(
+                dirs[lo], dirs[lo + 1], lengths[lo], lengths[lo + 1]);
+            result.incoming[hi] = -EstimateEndTangent(
+                -dirs[hi - 1], -dirs[hi - 2],
+                lengths[hi - 1], lengths[hi - 2]);
+        }
+        for (std::size_t k = lo + 1; k < hi; ++k) {
+            const Vector3d t = EstimateInteriorTangent(
+                dirs[k - 1], dirs[k], lengths[k - 1], lengths[k]);
+            result.incoming[k] = t;
+            result.outgoing[k] = t;
+        }
+        lo = hi;
+    }
+    return result;
+}
+
+/// @brief 与えられた接線が推定接線と整合するかを判定する
+/// @param given     与えられた単位接線
+/// @param estimated 推定された単位接線
+/// @param chord     隣接する弦の単位方向
+/// @param tolerance 推定接線との角度差の上限 [rad]
+/// @return 整合する場合はtrue
+bool IsConsistentTangent(
+        const Vector3d& given, const Vector3d& estimated,
+        const Vector3d& chord, double tolerance) {
+    return AngleBetween(given, estimated) <= tolerance
+        && given.dot(chord) >= 0.0;
+}
+
+/// @brief 与えられた接線のうち推定接線と整合するものを採用する
+/// @param estimated 推定した各点の左右の単位接線
+/// @param tangents  入力点ごとの接線方向 (空、または入力点と同数)
+/// @param distinct  統合後の点列と入力点との対応
+/// @param dirs      各弦の単位方向ベクトル
+/// @param corners   各点が角点か
+/// @param tolerance 推定接線との角度差の上限 [rad]
+/// @return 採用後の各点の左右の単位接線
+/// @note 統合された点では、最初に現れた有効な接線のみを候補とする
+PointTangents ApplyGivenTangents(
+        PointTangents estimated,
+        const std::vector<std::optional<Vector3d>>& tangents,
+        const DistinctPoints& distinct,
+        const std::vector<Vector3d>& dirs,
+        const std::vector<bool>& corners,
+        double tolerance) {
+    const std::size_t n = dirs.size();
+    std::vector<bool> visited(n + 1, false);
+    for (std::size_t i = 0; i < tangents.size(); ++i) {
+        const std::size_t k = distinct.index_of_input[i];
+        const auto& t = tangents[i];
+        if (visited[k] || corners[k] || !t || !t->allFinite()
+                || !(t->norm() > 0.0)) {
+            continue;
+        }
+        visited[k] = true;
+
+        const Vector3d g = t->normalized();
+        const bool ok_in = k == 0 || IsConsistentTangent(
+            g, estimated.incoming[k], dirs[k - 1], tolerance);
+        const bool ok_out = k == n || IsConsistentTangent(
+            g, estimated.outgoing[k], dirs[k], tolerance);
+        if (!ok_in || !ok_out) continue;
+
+        estimated.incoming[k] = g;
+        estimated.outgoing[k] = g;
+    }
+    return estimated;
+}
+
+
+
+// =========================================================================
+// 局所エルミート補間: B-スプラインの構築
+// =========================================================================
+
+/// @brief エルミート区間を並べたB-スプライン
+struct HermiteBSpline {
+    /// @brief 制御点行列
+    Matrix3Xd control_points;
+    /// @brief ノットベクトル (0.0〜1.0でクランプ)
+    std::vector<double> knots;
+    /// @brief 各点P_kのパラメータ (サイズn+1)
+    std::vector<double> node_params;
+};
+
+/// @brief 各区間の3次ベジエを連結したB-スプラインを構築する
+/// @param points   相異なる点列 P_0, ..., P_n
+/// @param lengths  各弦の長さ h_0, ..., h_{n-1}
+/// @param tangents 各点の左右の単位接線
+/// @param corners  各点が角点か
+/// @return 制御点、ノット、各点のパラメータ
+/// @note 区間kのベジエ制御点をP_k + (h_k/3)T_k、P_{k+1} - (h_k/3)T_{k+1}とし、
+///       パラメータ幅をh_kに比例させることで、角点以外の接続点でC¹連続となる。
+///       そのため接続点を2重ノットとして制御点から除き、角点のみ3重ノット
+///       として点自体を制御点に含める
+HermiteBSpline BuildHermiteBSpline(
+        const std::vector<Vector3d>& points,
+        const std::vector<double>& lengths,
+        const PointTangents& tangents,
+        const std::vector<bool>& corners) {
+    const std::size_t n = lengths.size();
+    HermiteBSpline result;
+    result.node_params.assign(n + 1, 0.0);
+    std::partial_sum(lengths.begin(), lengths.end(),
+                     result.node_params.begin() + 1);
+    const double total = result.node_params.back();
+    for (auto& u : result.node_params) u /= total;
+
+    std::vector<Vector3d> ctrl{points[0]};
+    result.knots.assign(4, 0.0);
+    for (std::size_t k = 0; k < n; ++k) {
+        const double leg = lengths[k] / 3.0;
+        ctrl.push_back(points[k] + leg * tangents.outgoing[k]);
+        ctrl.push_back(points[k + 1] - leg * tangents.incoming[k + 1]);
+        if (k + 1 == n) break;
+
+        const int multiplicity = corners[k + 1] ? 3 : 2;
+        if (corners[k + 1]) ctrl.push_back(points[k + 1]);
+        result.knots.insert(result.knots.end(), multiplicity,
+                            result.node_params[k + 1]);
+    }
+    ctrl.push_back(points[n]);
+    result.knots.insert(result.knots.end(), 4, 1.0);
+
+    result.control_points.resize(3, static_cast<int>(ctrl.size()));
+    for (std::size_t i = 0; i < ctrl.size(); ++i) {
+        result.control_points.col(static_cast<int>(i)) = ctrl[i];
+    }
+    return result;
 }
 
 }  // namespace
@@ -792,6 +1136,57 @@ std::shared_ptr<RationalBSplineCurve> ApproximateWithNurbs(
     // 重みは省略 (全1.0の多項式形式)
     return MakeRationalBSplineCurve(
         m, ctrl, knots, {}, std::array<double, 2>{0.0, 1.0});
+}
+
+NurbsInterpolation InterpolateWithNurbs(
+        const std::vector<Vector3d>& points,
+        const std::vector<std::optional<Vector3d>>& tangents,
+        const NurbsInterpOptions& options) {
+    ValidateInterpOptions(options);
+    if (!tangents.empty() && tangents.size() != points.size()) {
+        throw std::invalid_argument(
+            "InterpolateWithNurbs: tangents must be empty"
+            " or have the same size as points.");
+    }
+    for (const auto& p : points) {
+        if (!p.allFinite()) {
+            throw std::invalid_argument(
+                "InterpolateWithNurbs: points must be finite.");
+        }
+    }
+
+    const auto distinct =
+        MergeDuplicatePoints(points, options.duplicate_tolerance);
+    const auto& pts = distinct.points;
+    if (pts.size() < 2) {
+        throw std::invalid_argument(
+            "InterpolateWithNurbs: at least 2 distinct points are required.");
+    }
+
+    // 弦の方向と長さ、角点を求めて各点の接線を決める
+    std::vector<Vector3d> dirs(pts.size() - 1);
+    std::vector<double> lengths(pts.size() - 1);
+    for (std::size_t k = 0; k + 1 < pts.size(); ++k) {
+        const Vector3d d = pts[k + 1] - pts[k];
+        lengths[k] = d.norm();
+        dirs[k] = d / lengths[k];
+    }
+    const auto corners = DetectCorners(dirs, options.corner_angle);
+    const auto point_tangents = ApplyGivenTangents(
+        EstimateTangents(dirs, lengths, corners), tangents, distinct,
+        dirs, corners, options.tangent_tolerance);
+
+    const auto spline =
+        BuildHermiteBSpline(pts, lengths, point_tangents, corners);
+    NurbsInterpolation result;
+    result.curve = MakeRationalBSplineCurve(
+        3, spline.control_points, spline.knots, {},
+        std::array<double, 2>{0.0, 1.0});
+    result.parameters.reserve(points.size());
+    for (const auto k : distinct.index_of_input) {
+        result.parameters.push_back(spline.node_params[k]);
+    }
+    return result;
 }
 
 }  // namespace igesio::entities

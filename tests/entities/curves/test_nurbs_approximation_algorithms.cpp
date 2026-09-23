@@ -7,8 +7,10 @@
  */
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -74,6 +76,71 @@ bool IsMonotonicallyNonDecreasing(const std::vector<double>& knots) {
     }
     return true;
 }
+
+/// @brief 点列の弦長和を返す
+/// @param pts 点列
+double ChordLength(const std::vector<Vector3d>& pts) {
+    double total = 0.0;
+    for (std::size_t i = 1; i < pts.size(); ++i) {
+        total += (pts[i] - pts[i - 1]).norm();
+    }
+    return total;
+}
+
+/// @brief 点pから折れ線polyへの最短距離を返す
+/// @param p    対象の点
+/// @param poly 折れ線の頂点列（2点以上）
+double DistanceToPolyline(
+        const Vector3d& p, const std::vector<Vector3d>& poly) {
+    double best = std::numeric_limits<double>::infinity();
+    for (std::size_t i = 1; i < poly.size(); ++i) {
+        const Vector3d d = poly[i] - poly[i - 1];
+        const double len2 = d.squaredNorm();
+        const double t = (len2 > 0.0)
+            ? std::clamp((p - poly[i - 1]).dot(d) / len2, 0.0, 1.0) : 0.0;
+        best = std::min(best, (p - (poly[i - 1] + t * d)).norm());
+    }
+    return best;
+}
+
+/// @brief 直線→浅い正弦バルジ→直線 の点列を生成する（xy平面上）
+/// @param n  点数
+/// @param y0 バルジの開始位置
+/// @param w  バルジの長さ
+/// @param a  バルジの深さ
+/// @return y方向に間隔1.0で並ぶ点列
+/// @note バルジの出入口は接線不連続（折れ）となる。nを3の倍数にすると
+///       BuildKnotVectorの内部ノットがサンプルt̄_{n/3}と厳密に一致し、
+///       その近傍を最大誤差サンプルにできる。この構成では、誤差最大の
+///       サンプルが常にノット上に乗るため、ノット挿入が同一スパンを
+///       内部サンプルが尽きるまで二分し続ける状況が再現される
+std::vector<Vector3d> MakeBulgedPath(
+        int n, double y0, double w, double a) {
+    std::vector<Vector3d> pts;
+    pts.reserve(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        const double y = static_cast<double>(i);
+        const double x = (y0 <= y && y <= y0 + w)
+            ? -a * std::sin(kPi * (y - y0) / w) : 0.0;
+        pts.emplace_back(x, y, 0.0);
+    }
+    return pts;
+}
+
+/// @brief MakeBulgedPathの点数。3の倍数とし、内部ノットをt̄_34に一致させる
+constexpr int kBulgePointCount = 102;
+/// @brief MakeBulgedPathのバルジ開始位置
+constexpr double kBulgeStart = 28.0;
+/// @brief MakeBulgedPathのバルジ長さ
+constexpr double kBulgeWidth = 45.0;
+/// @brief 曲線が入力バウンディングボックスから逸脱してよい量 [mm]
+/// @note 修正後の実測逸脱は最大0.021mm、発散時は3e4mmを超える
+constexpr double kBboxMargin = 0.1;
+/// @brief 曲線長と入力弦長の比の上限
+/// @note 修正後の実測は1.00003倍、発散時は1e5〜1e6倍になる
+constexpr double kMaxLengthRatio = 1.5;
+/// @brief 入力点と曲線の距離の許容値 [mm]（折れ点を含むため1e-4は要求しない）
+constexpr double kBulgeApproxTol = 0.05;
 
 }  // namespace
 
@@ -586,4 +653,79 @@ TEST(ApproximateWithNurbsFromCurveTest, Options_MaxControlPointsBinding) {
     const int n_ctrl = static_cast<int>(result->ControlPoints().cols());
     EXPECT_LE(n_ctrl, static_cast<int>(opts.max_control_points))
         << "制御点数 " << n_ctrl << " が上限 " << opts.max_control_points << " を超えている";
+}
+
+
+
+// =========================================================================
+// グループG: 接線不連続を含む点列での数値的破綻の防止
+// =========================================================================
+
+/// @brief バルジの深さを変えて近似の破綻を検査するフィクスチャ
+/// @note パラメータはバルジの深さa [mm]。内部サンプルを持たないスパンの基底は
+///       最小二乗で拘束されないため、そのようなスパンを作るノット挿入は
+///       制御点を発散させる。修正前の実装では下記いずれの深さでも
+///       曲線長が入力弦長の1e5倍以上、制御点が1e7以上に発散する
+class NurbsBulgedPathTest : public ::testing::TestWithParam<double> {};
+
+INSTANTIATE_TEST_SUITE_P(
+    BulgeDepth, NurbsBulgedPathTest,
+    // 浅いバルジから深いバルジまで。いずれも修正前の実装では発散する
+    ::testing::Values(0.2, 0.5, 1.0, 2.0));
+
+/// @brief 接線不連続を含む点列でも曲線が幾何的に破綻しない
+TEST_P(NurbsBulgedPathTest, NoDivergence_TangentDiscontinuousPoints) {
+    const std::vector<Vector3d> pts = MakeBulgedPath(
+        kBulgePointCount, kBulgeStart, kBulgeWidth, GetParam());
+
+    // 両端は直線部にあるため接線は+y方向。両端に接線を与えるとr=2となり、
+    // 端点付近の制御点が固定されて不具合が顕在化する
+    i_ent::NurbsEndpointTangents tangents;
+    tangents.start = Vector3d{0.0, 1.0, 0.0};
+    tangents.end   = Vector3d{0.0, 1.0, 0.0};
+
+    const auto curve = i_ent::ApproximateWithNurbs(pts, tangents);
+    ASSERT_NE(curve, nullptr);
+
+    // 曲線を等パラメータで密にサンプリングする
+    constexpr unsigned int kSamples = 1000;
+    std::vector<Vector3d> sampled;
+    sampled.reserve(kSamples + 1);
+    for (unsigned int i = 0; i <= kSamples; ++i) {
+        const double s = static_cast<double>(i) / kSamples;
+        const auto p = curve->TryGetPointAt(s);
+        ASSERT_TRUE(p.has_value()) << "s=" << s << " で評価に失敗した";
+        ASSERT_TRUE((*p).allFinite()) << "s=" << s << " が非有限値になった";
+        sampled.push_back(*p);
+    }
+
+    // 判定1: 曲線が入力点列のバウンディングボックスから大きく外れない
+    Vector3d lower = pts.front(), upper = pts.front();
+    for (const auto& q : pts) {
+        lower = lower.cwiseMin(q);
+        upper = upper.cwiseMax(q);
+    }
+    double max_dev = 0.0;
+    for (const auto& p : sampled) {
+        max_dev = std::max(max_dev,
+                           std::max((lower - p).maxCoeff(),
+                                    (p - upper).maxCoeff()));
+    }
+    EXPECT_LE(max_dev, kBboxMargin)
+        << "曲線がバウンディングボックスから " << max_dev << " mm 外れている";
+
+    // 判定2: 曲線長が入力弦長から大きく乖離しない
+    const double curve_len = ChordLength(sampled);
+    const double input_len = ChordLength(pts);
+    EXPECT_LE(curve_len, kMaxLengthRatio * input_len)
+        << "曲線長 " << curve_len << " が入力弦長 " << input_len
+        << " の " << kMaxLengthRatio << " 倍を超えている";
+
+    // 判定3: 各入力点が曲線の近傍にある（近似品質の確認）
+    double max_err = 0.0;
+    for (const auto& q : pts) {
+        max_err = std::max(max_err, DistanceToPolyline(q, sampled));
+    }
+    EXPECT_LE(max_err, kBulgeApproxTol)
+        << "入力点から曲線への最大距離 " << max_err << " mm が許容値を超えている";
 }

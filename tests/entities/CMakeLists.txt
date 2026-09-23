@@ -32,6 +32,7 @@ set(TEST_SOURCES
     curves/test_point.cpp
     curves/test_algorithms.cpp
     curves/test_nurbs_approximation_algorithms.cpp
+    curves/test_nurbs_interpolation_algorithms.cpp
     curves/test_composite_curve.cpp
     curves/test_composite_curve_edit.cpp
     curves/test_linear_path.cpp
