@@ -26,6 +26,7 @@ set(GRAPHICS_SHADER_SOURCES
     glsl/curves/wide_line.geom
     glsl/surfaces/general_surface.vert
     glsl/surfaces/general_surface.frag
+    glsl/surfaces/pbr_shading.glsl
     glsl/surfaces/128_nurbs_surface.vert
     glsl/surfaces/128_nurbs_surface.tesc
     glsl/surfaces/128_nurbs_surface.tese

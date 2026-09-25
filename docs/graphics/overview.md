@@ -133,7 +133,9 @@ EntityRenderer::Draw()
   ├─ DrawContext を構築 (scene_->ActiveSelection() と表示モードを参照)
   └─ ExecuteDrawList(ctx)
       └─ (シェーダーごとにループ)
+          ├─ 差し替え (SetShaderOverride) があればプログラムを差し替え先にする
           ├─ glUseProgram + view/projection/light の共通uniformを設定
+          ├─ 差し替えのsetupがあれば呼ぶ (差し替え先固有のuniform)
           └─ draw_list_[shader_id] の各 IEntityGraphics::Draw(program, id, viewport, ctx)
               ├─ ApplyRenderState(shader, ctx) ← model/mainColor/材質をPULLして設定
               │     (選択中は ctx.highlight_color、非選択は GetColor())
@@ -188,13 +190,15 @@ GLSLコードの指定方法は2通りある。
 2. **インライン文字列方式**: C++生文字列リテラル (`R"(...)"`) としてシェーダーコードを `curves.h` / `surfaces.h` に直接記述する。
    例: `kLineShader` の頂点シェーダー・ジオメトリシェーダー
 
-GLSLファイルは `#include "glsl/common/xxx.glsl"` の形で共通コードをインクルードできる。インクルード展開は `shaders.h` の `ExpandShaderIncludes()` がコンパイル直前に自動処理する。参照先のGLSLソースは、CMakeの`add_custom_command`(`cmake/embed_shaders.cmake`)がビルド時に`shader_sources_generated.cpp`へ文字列定数として埋め込むため、ソースを配置しない環境でも動作する。埋め込むファイルは`src/graphics/CMakeLists.txt`の`GRAPHICS_SHADER_SOURCES`に列挙する(パス参照・`#include`参照される全ファイルを漏れなく列挙すること)。
+GLSLファイルは `#include "glsl/common/xxx.glsl"` の形で共通コードをインクルードできる。インクルード展開は `shaders.h` の `ExpandShaderIncludes()` がコンパイル直前に自動処理し、入れ子のインクルード（インクルード先がさらにインクルードするもの）も展開する。展開はコメントを区別しないため、`#include "glsl/..."`の書式をコメント中に書かないこと。参照先のGLSLソースは、CMakeの`add_custom_command`(`cmake/embed_shaders.cmake`)がビルド時に`shader_sources_generated.cpp`へ文字列定数として埋め込むため、ソースを配置しない環境でも動作する。埋め込むファイルは`src/graphics/CMakeLists.txt`の`GRAPHICS_SHADER_SOURCES`に列挙する(パス参照・`#include`参照される全ファイルを漏れなく列挙すること)。
+
+面シェーダーのPBR（Cook-Torrance、環境光、ACESトーンマップとガンマ補正）は`glsl/surfaces/pbr_shading.glsl`で共通化されており、`general_surface.frag`（および、それをインクルードする`128_nurbs_surface.frag`）がインクルードする。スニペットは`ShadePBR(N, V, P_world, albedo)`（線形HDRの放射輝度）と`ToneMapGamma(color)`を提供し、材質（`roughness`/`metallic`/`ao`）と光源のuniformを宣言する。
 
 組み込みシェーダーの定義(パス/ソース+メタ情報)は`curves.h`/`surfaces.h`の`GetBuiltinXXXShaderInfos()`が列挙し、`ShaderRegistry`の初期化時に固定IDで設定される。`EntityRenderer`は`Initialize()`と`Draw()`冒頭の`CompilePendingShaders()`で、レジストリ中の未コンパイルのシェーダーをインクルード展開してコンパイル・リンクする。
 
 ### ユーザーシェーダーの登録
 
-`ShaderRegistry::Register`に`ShaderInfo`を渡すと、新しい`ShaderId`が採番されて返る。このIDを独自描画クラス(`EntityGraphics<T>`派生)のコンストラクタ第3引数として基底へ渡せば、レンダラがシェーダー別バケットへ収集して描画する。
+`ShaderRegistry::Register`に`ShaderInfo`を渡すと、新しい`ShaderId`が採番されて返る。このIDを独自描画クラス(`EntityGraphics<T>`派生)のコンストラクタ第3引数として基底へ渡せば、レンダラがシェーダー別の描画グループへ収集して描画する。
 
 ```cpp
 igesio::graphics::ShaderInfo info;
@@ -209,7 +213,27 @@ const auto my_shader_id = igesio::graphics::ShaderRegistry::Register(std::move(i
 
 - 組み込みシェーダーの差し替えはできない(組み込み名への再登録は`std::invalid_argument`)。
 - レンダラの`Initialize()`後の登録も有効である(次の`Draw()`冒頭で遅延コンパイルされる)。ただしコンパイル失敗はその`Draw()`内で`ImplementationError`になるため、登録内容の誤りは描画時に顕在化する。
-- ユーザーシェーダーでも`#include "glsl/..."`による組み込みスニペットの参照は可能だが、ソースディレクトリの実行時読み込みに依存するうえ、スニペットは安定APIではない。
+- ユーザーシェーダーでも`#include "glsl/..."`による組み込みスニペットの参照や、`"glsl/..."`のパス参照による組み込みステージの流用が可能である（埋め込み済みのソースから展開される）。ただし、スニペットの内容は安定APIではない。
+
+### シェーダーの差し替え (レンダラ単位)
+
+`EntityRenderer::SetShaderOverride(base, ShaderOverride{shader, setup})`は、描画グループ`base`の描画に使うプログラムだけを`shader`に差し替える。描画オブジェクトへ渡すIDと描画グループは元のままであり、描画クラスやGraphicsRegistryを変えずに、面の種別を問わず着色だけを変える用途（解析表示など）に使う。設定はレンダラ単位のビュー状態で、`Cleanup()`では破棄されない。
+
+```cpp
+renderer.SetShaderOverride(
+        igesio::graphics::ShaderId::kGeneralSurface,
+        igesio::graphics::ShaderOverride{
+                my_fill_shader_id,
+                [](igesio::graphics::IOpenGL& gl, igesio::graphics::gl::Uint program) {
+                    gl.Uniform1i(gl.GetUniformLocation(program, "myMode"), 1);
+                }});
+renderer.ClearShaderOverride(igesio::graphics::ShaderId::kGeneralSurface);
+```
+
+- 設定時に検査し、`base`と`shader`が同一、いずれかが未登録、`shader`がコードを持たない、またはカテゴリ（`ShaderDrawCategory`）が一致しない場合は`std::invalid_argument`を送出する。差し替え先のプログラムが描画時に存在しない場合は`ImplementationError`になる。
+- 差し替え先は、元と同じ頂点属性とオブジェクト毎のuniform（`model`/`mainColor`/材質等）を受け取るようにすること。組み込みの頂点/TCS/TESをパス参照で流用し、フラグメントだけを独自にするのが基本形である。
+- 光源uniformの要否は差し替え先の`uses_lighting`で、表示モードでの取捨は元の`base`のカテゴリで判定する。
+- `setup`は、共通uniform（と光源）の設定直後、各オブジェクトの`Draw`の前に、描画スレッドから1フレーム1回（差し替えた描画グループごとに）呼ばれる。第2引数は差し替え先のプログラムIDである。
 
 ### ユニフォーム契約
 
@@ -217,6 +241,8 @@ const auto my_shader_id = igesio::graphics::ShaderRegistry::Register(std::move(i
 
 - 全シェーダー共通: `view`/`projection`(`mat4`)
 - `uses_lighting`のシェーダーのみ: `viewPos_WorldSpace`/`ambientColor`(`vec3`)、`numLights`(`int`)、`lightPositions`/`lightAttenuations`(`vec3[]`)、`lightColors`(`vec4[]`)
+
+シェーダーの差し替えで`setup`を与えた場合は、上記の設定後に`setup`が差し替え先固有のuniformを設定する。
 
 `model`(`mat4`)や`mainColor`(`vec4`)等のオブジェクト毎のuniformは、各描画クラスの`Draw`実装(`EntityGraphics<T>`では`ApplyRenderState()`)が設定する責務を持つ。
 

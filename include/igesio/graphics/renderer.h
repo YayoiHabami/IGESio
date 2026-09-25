@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -102,6 +103,21 @@ struct DisplayFilter {
     }
 };
 
+/// @brief シェーダー差し替えの指定 (用構造体; レンダラ単位のビュー状態)
+/// @note 描画処理は元のShaderIdのまま、描画に使うプログラムだけを差し替える.
+///       差し替え後のシェーダーも元と同じ頂点属性、同じオブジェクト毎のuniform
+///       (model/mainColor等) を受け取るものとする (登録側の責務). 解析表示や
+///       特殊な着色など、オブジェクトに関わらず着色だけを変える用途に使う
+struct ShaderOverride {
+    /// @brief 差し替え先のシェーダー (ShaderRegistry登録済み、元と同じカテゴリ)
+    ShaderId shader;
+    /// @brief 差し替え先固有のuniformを設定する関数 (省略可)
+    /// @note レンダラがview/projection/viewportSize (+光源) を設定した直後、
+    ///       各オブジェクトのDrawの前に、描画スレッドから1フレーム1回呼ばれる.
+    ///       第2引数は差し替え先のプログラムID
+    std::function<void(IOpenGL&, gl::Uint)> setup;
+};
+
 /// @brief エンティティの描画を担当するクラス
 /// @note OpenGLを使用してエンティティの曲線を描画する
 /// @note 保持する描画オブジェクト・各リストはすべてScene (`scene_`) 由来の派生キャッシュ。
@@ -121,15 +137,15 @@ struct DisplayFilter {
 /// @note 描画は「3フェーズ整流」で行う:
 ///       (A) `EnsureSynced` 構造突き合わせ (`visible_list_`構築) →
 ///       (B) `PrepareCpuGeometries` CPU準備を並列前倒し →
-///       (C) `RebuildDrawBuckets` 型確定後にシェーダー別バケット構築 →
+///       (C) `RebuildDrawBuckets` 型確定後にシェーダー別の描画グループ構築 →
 ///       (D) `ResyncGeometries` GPU転送。`Draw`はA〜Dを順に実行する。
 ///       ピック/範囲選択はA→Bのみ行い、`visible_list_`を解析的に走査する
-///       (描画バケット・GPU転送は不要)。
+///       (描画グループ・GPU転送は不要)。
 /// @note 描画リストは2系統。`draw_list_`はシェーダー別バッチ描画用 (複合は子の各型へ
-///       重複登録)、`visible_list_`はピック用 (エンティティ毎に一意)。バケット構築は
+///       重複登録)、`visible_list_`はピック用 (エンティティ毎に一意)。描画グループの構築は
 ///       CPU準備後に行い、型集合が確定してから振り分ける。
 /// @note カメラ操作・選択変更のみのフレームは早期returnと`draw_buckets_dirty_`未更新で
-///       リスト・バケットを再利用する。選択ハイライトは毎フレーム`DrawContext`からPULL
+///       リスト・描画グループを再利用する。選択ハイライトは毎フレーム`DrawContext`からPULL
 ///       するため再走査は不要。
 class EntityRenderer {
     /// @brief OpenGLラッパー
@@ -218,9 +234,9 @@ class EntityRenderer {
     ///       ピックはこちらを走査して二重判定を避ける. 削除済み・非表示・抑制中・
     ///       フィルタ除外のエンティティは構造的に含まれない
     std::vector<std::pair<ObjectID, IEntityGraphics*>> visible_list_;
-    /// @brief draw_list_ (シェーダー別バケット) の再構築が必要か
+    /// @brief draw_list_ (シェーダー別描画グループ) の再構築が必要か
     /// @note 構造再構築 (visible_list_変化) またはCPU準備 (PrewarmCpu) で
-    ///       シェーダー型集合が変わりうる時に立てる. 変化が無い間はバケットを再利用する
+    ///       シェーダー型集合が変わりうる時に立てる. 変化が無い間は描画グループを再利用
     bool draw_buckets_dirty_ = true;
     /// @brief 表示フィルタ (ビュー状態)
     DisplayFilter display_filter_;
@@ -240,6 +256,9 @@ class EntityRenderer {
     ///       (SyncTexture含む) して除去される遅延キュー. SyncTexture (GL操作) を
     ///       setter内で行わないための機構
     std::unordered_set<ObjectID> pending_material_ids_;
+    /// @brief 差し替え中のシェーダー (ビュー状態. キーは元のShaderId)
+    /// @note Cleanupでは破棄しない (プログラムは再Initializeで復元されるため)
+    std::unordered_map<ShaderId, ShaderOverride> shader_overrides_;
 
  public:
     /// @brief コンストラクタ
@@ -345,6 +364,42 @@ class EntityRenderer {
         material_overrides_.erase(id);
         pending_material_ids_.insert(id);
         local_dirty_ = true;
+    }
+    /// @brief エンティティの描画プロパティのオーバーライドを取得する
+    /// @param id エンティティのID
+    /// @return 設定されていればポインタ (次のSet/Clear/Sweepまで有効)、
+    ///         なければnullptr
+    const graphics::MaterialProperty* FindMaterialProperty(
+            const ObjectID& id) const {
+        const auto it = material_overrides_.find(id);
+        return (it != material_overrides_.end()) ? &it->second : nullptr;
+    }
+
+    /// @brief 指定シェーダーの描画に使うプログラムを差し替える
+    /// @param base 差し替え元のShaderId (描画グループのキー)
+    /// @param shader_override 差し替え先と、そのuniform設定
+    /// @throw std::invalid_argument baseとshader_override.shaderが同一の場合、
+    ///        いずれかが未登録の場合、shader_override.shaderがコードを持たない場合,
+    ///        またはカテゴリが一致しない場合
+    /// @note 次回のDrawから有効. 光源uniformの要否は差し替え先のメタ情報で、
+    ///       表示モードによる取捨は元のShaderIdのカテゴリで判定する.
+    ///       差し替え先がInitialize後に登録されたものでも、Draw冒頭の遅延
+    ///       コンパイルで使えるようになる. GLコンテキスト前提を持たない
+    void SetShaderOverride(ShaderId base, ShaderOverride shader_override);
+    /// @brief シェーダーの差し替えを解除する
+    /// @param base 差し替えた元のShaderId
+    /// @return 解除した場合はtrue (未設定ならfalse)
+    bool ClearShaderOverride(ShaderId base) {
+        return shader_overrides_.erase(base) > 0;
+    }
+    /// @brief すべてのシェーダーの差し替えを解除する
+    void ClearShaderOverrides() { shader_overrides_.clear(); }
+    /// @brief シェーダー差し替えの定義を取得する
+    /// @param base 差し替えた元のShaderId
+    /// @return 設定されていればポインタ (次のSet/Clearまで有効)、なければnullptr
+    const ShaderOverride* FindShaderOverride(ShaderId base) const {
+        const auto it = shader_overrides_.find(base);
+        return (it != shader_overrides_.end()) ? &it->second : nullptr;
     }
 
 
@@ -569,7 +624,7 @@ class EntityRenderer {
     /// @note Draw/PickEntities/PickEntitiesInRectの冒頭で呼ぶ. モデルリビジョン
     ///       (synced_root_とのペア比較) とlocal_dirty_が一致する間は何もしない.
     ///       不一致時はSweep→ツリー走査 (遅延生成+visible_list_再構築)→自動クリップ球
-    ///       更新を行い、draw_buckets_dirty_を立てる (draw_list_バケットはCPU準備後に
+    ///       更新を行い、draw_buckets_dirty_を立てる (draw_list_の描画グループはCPU準備後に
     ///       RebuildDrawBucketsが構築する). Sweepのcleanupやマテリアル適用のSyncTextureで
     ///       GLに触れるため、GLコンテキストがカレントなスレッドから呼ぶこと.
     ///       scene_またはgl_が未設定なら何もしない
@@ -596,9 +651,9 @@ class EntityRenderer {
     ///       ピッキングはエンティティを解析的に読むためGPU相は不要 (CPU相のみ呼ぶ)
     void ResyncGeometries();
 
-    /// @brief visible_list_からシェーダー別バケット (draw_list_) を再構築する
+    /// @brief visible_list_からシェーダー別の描画グループ (draw_list_) を再構築する
     /// @note PrepareCpuGeometries後 (CPU状態確定後) に、draw_buckets_dirty_の時のみ呼ぶ.
-    ///       各オブジェクトのGetShaderIds()でバケットへ振り分ける (複合は各子型へ).
+    ///       各オブジェクトのGetShaderIds()で描画グループへ振り分ける (複合は各子型へ).
     void RebuildDrawBuckets();
 
     /// @brief 指定IDの描画オブジェクトを取得し、未在席なら遅延生成する
@@ -637,7 +692,7 @@ class EntityRenderer {
     ///        色をリフレッシュする (EnsureSyncedのWalkステップ)
     /// @note 走査規則はComputeVisibleBoundingBoxと共有し、初期累積変換は表示座標系の
     ///       逆行列とする. 各可視エンティティの処理はCollectVisibleEntity.
-    ///       draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが構築するため
+    ///       draw_list_ (シェーダー別の描画グループ) はRebuildDrawBucketsが構築するため
     ///       ここでは扱わない
     void RebuildDrawList();
 
@@ -650,8 +705,9 @@ class EntityRenderer {
     /// @param opacity_ovr 最近接の不透明度オーバーライド (無ければnullopt)
     /// @note 未在席の描画オブジェクトは遅延生成し、適用待ちマテリアルを適用する.
     ///       accumをworld_transform_へ流し (M_entityは含めない)、エンティティ毎に一意に
-    ///       visible_list_へ収集する (シェーダー別バケットdraw_list_はRebuildDrawBucketsが
-    ///       構築). 色/不透明度のオーバーライドを各描画オブジェクトへフレーム毎にPUSHする.
+    ///       visible_list_へ収集する (シェーダー別の描画グループ). draw_list_は
+    ///       RebuildDrawBucketsが構築). 色/不透明度のオーバーライドを各描画オブジェクトへ
+    ///       フレーム毎にPUSHする.
     void CollectVisibleEntity(
             const ObjectID& id,
             const std::shared_ptr<entities::IEntityIdentifier>& entity,

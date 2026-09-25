@@ -246,9 +246,14 @@ class EntityGraphics : public IEntityGraphics {
     }
 
     /// @brief テクスチャの設定を行う
+    /// @note 貼り直しと解除のいずれでも、生成済みのテクスチャを先に解放する
     void SyncTexture() override {
-        if (!entity_ || !material_property_.IsTextureUsable()) return;
         if (!has_surfaces) return;
+        if (texture_id_ != 0) {
+            gl_->DeleteTextures(1, &texture_id_);
+            texture_id_ = 0;
+        }
+        if (!entity_ || !material_property_.IsTextureUsable()) return;
 
         gl_->GenTextures(1, &texture_id_);
         gl_->BindTexture(gl::kTexture2D, texture_id_);

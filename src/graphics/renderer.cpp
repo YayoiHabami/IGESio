@@ -501,7 +501,7 @@ void EntityRenderer::EnsureSynced() {
     SweepStaleGraphics(root);
     RebuildDrawList();
     UpdateAutoClipSphere();
-    // 可視集合が変わったためバケットの再構築が必要
+    // 可視集合が変わったためシェーダー別の描画グループの再構築が必要
     draw_buckets_dirty_ = true;
 
     synced_revision_ = root.Revision();
@@ -551,7 +551,7 @@ void EntityRenderer::PrepareCpuGeometries() {
     igesio::ParallelForEach(
             dirty, [](i_graph::IEntityGraphics* g) { g->PrewarmCpu(); });
 
-    // 子の遅延生成・型確定でシェーダー型集合が変わりうるためバケットを作り直す
+    // 子の遅延生成・型確定でシェーダー型集合が変わりうるため描画グループを作り直す
     draw_buckets_dirty_ = true;
 }
 
@@ -720,9 +720,9 @@ void EntityRenderer::Draw() {
     // 3フェーズ整流:
     // (1) EnsureSynced: モデルリビジョンと突き合わせ、可視リストを再構築 (構造)
     // (2) PrepareCpuGeometries: 形状のCPU準備を並列前倒し (遅延生成・テッセレーション)
-    // (3) RebuildDrawBuckets: CPU状態確定後にシェーダー別バケットを構築 (変化時のみ)
+    // (3) RebuildDrawBuckets: CPU状態確定後にシェーダー別の描画グループを構築 (変化時のみ)
     // (4) ResyncGeometries: GPUへ直列転送
-    // カメラ操作・選択変更だけの再描画では走査・準備・再バケットを省きキャッシュを再利用する
+    // カメラ操作・選択変更だけの再描画では走査・準備・描画グループの再構築を省きキャッシュを再利用
     // (選択ハイライトは毎フレームctxからPULLされるため再walkは不要)
     EnsureSynced();
     PrepareCpuGeometries();
@@ -763,6 +763,35 @@ void EntityRenderer::SetViewFrame(const igesio::Matrix4d& frame) {
     view_frame_inverse_ = numerics::RigidInverse(frame);
     // 累積変換が変わるため再走査する (形状は不変なので再テッセレーションは生じない)
     local_dirty_ = true;
+}
+
+void EntityRenderer::SetShaderOverride(const ShaderId base,
+                                       ShaderOverride shader_override) {
+    const std::string prefix = "EntityRenderer::SetShaderOverride: ";
+    if (base == shader_override.shader) {
+        throw std::invalid_argument(
+                prefix + "base and override shader must differ (" +
+                ToString(base) + ")");
+    }
+    const auto* base_info = ShaderRegistry::Get(base);
+    const auto* override_info = ShaderRegistry::Get(shader_override.shader);
+    if (base_info == nullptr || override_info == nullptr) {
+        throw std::invalid_argument(
+                prefix + "shader is not registered (base: " + ToString(base) +
+                ", override: " + ToString(shader_override.shader) + ")");
+    }
+    if (override_info->code.IsIncomplete()) {
+        throw std::invalid_argument(
+                prefix + "override shader has no code (" +
+                override_info->name + ")");
+    }
+    // 表示モードでの対応付けは元のIDのカテゴリで行うため、差し替え先と揃っていること
+    if (base_info->category != override_info->category) {
+        throw std::invalid_argument(
+                prefix + "category mismatch between " + base_info->name +
+                " and " + override_info->name);
+    }
+    shader_overrides_[base] = std::move(shader_override);
 }
 
 std::optional<igesio::numerics::BoundingBox>
@@ -815,7 +844,7 @@ void EntityRenderer::FitView() {
 }
 
 void EntityRenderer::RebuildDrawList() {
-    // draw_list_ (シェーダー別バケット) はRebuildDrawBucketsが管理する.
+    // draw_list_ (シェーダー別の描画グループ) はRebuildDrawBucketsが管理する.
     // ここでは可視リストのみ再構築する
     visible_list_.clear();
     if (scene_ == nullptr) return;
@@ -869,7 +898,7 @@ void EntityRenderer::CollectVisibleEntity(
     }
 
     // ピック用の平坦リストへエンティティ毎に一意に収集する.
-    // シェーダー別バケット (draw_list_) はCPU準備フェーズ後にRebuildDrawBucketsで
+    // シェーダー別の描画グループ (draw_list_) はCPU準備フェーズ後にRebuildDrawBucketsで
     // 構築する (遅延生成の子・テッセレーション結果で型集合が確定してから振り分けるため)
     visible_list_.emplace_back(id, graphics);
 }
@@ -902,14 +931,30 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {
         auto it = draw_list_.find(shader_id);
         if (it == draw_list_.end() || it->second.empty()) continue;
 
-        gl_->UseProgram(program_id);
-        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "view"),
+        // 差し替えがある場合は、プログラムと光源の要否だけを差し替え先にする.
+        // 描画オブジェクトへ渡すIDは元のまま (オブジェクト側の分岐を変えないため)
+        gl::Uint program = program_id;
+        ShaderId effective_id = shader_id;
+        const ShaderOverride* shader_override = FindShaderOverride(shader_id);
+        if (shader_override != nullptr) {
+            const auto pit = shader_programs_.find(shader_override->shader);
+            if (pit == shader_programs_.end()) {
+                throw igesio::ImplementationError(
+                        "Override shader is not compiled: " +
+                        ToString(shader_override->shader));
+            }
+            program = pit->second;
+            effective_id = shader_override->shader;
+        }
+
+        gl_->UseProgram(program);
+        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program, "view"),
                               1, gl::kFalse, view_matrix.data());
-        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program_id, "projection"),
+        gl_->UniformMatrix4fv(gl_->GetUniformLocation(program, "projection"),
                               1, gl::kFalse, projection_matrix.data());
         // 太線化GS用の描画領域サイズ [px] (線幅をスクリーン空間で展開するため).
         // 当該uniformを持たないシェーダーでは location=-1 で無害に無視される.
-        gl_->Uniform2f(gl_->GetUniformLocation(program_id, "viewportSize"),
+        gl_->Uniform2f(gl_->GetUniformLocation(program, "viewportSize"),
                        viewport.first, viewport.second);
 
         // 面塗りは真の深度のまま描く (奥へオフセットしない). 面上に乗る曲線・
@@ -917,27 +962,32 @@ void EntityRenderer::ExecuteDrawList(const DrawContext& ctx) {
         // 出すため、面の奥にある曲線は真の前面深度で正しく遮蔽される.
 
         // 光源のパラメータを設定 (配列uniformとして送信)
-        if (UsesLighting(shader_id)) {
+        if (UsesLighting(effective_id)) {
             // 視点位置 (鏡面・アンビエントFresnelで使用) と環境光色を送信
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "viewPos_WorldSpace"),
+            gl_->Uniform3fv(gl_->GetUniformLocation(program, "viewPos_WorldSpace"),
                             1, camera_.GetPosition().data());
-            gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "ambientColor"),
+            gl_->Uniform3fv(gl_->GetUniformLocation(program, "ambientColor"),
                             1, ambient.data());
-            gl_->Uniform1i(gl_->GetUniformLocation(program_id, "numLights"),
+            gl_->Uniform1i(gl_->GetUniformLocation(program, "numLights"),
                            num_lights);
             if (num_lights > 0) {
-                gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightPositions"),
+                gl_->Uniform3fv(gl_->GetUniformLocation(program, "lightPositions"),
                                 num_lights, light_pos.data());
-                gl_->Uniform3fv(gl_->GetUniformLocation(program_id, "lightAttenuations"),
+                gl_->Uniform3fv(gl_->GetUniformLocation(program, "lightAttenuations"),
                                 num_lights, light_att.data());
-                gl_->Uniform4fv(gl_->GetUniformLocation(program_id, "lightColors"),
+                gl_->Uniform4fv(gl_->GetUniformLocation(program, "lightColors"),
                                 num_lights, light_col.data());
             }
         }
 
+        // 差し替え先固有のuniform (共通uniformの設定後、オブジェクト毎の描画前)
+        if (shader_override != nullptr && shader_override->setup) {
+            shader_override->setup(*gl_, program);
+        }
+
         for (auto* graphics : it->second) {
             if (graphics && graphics->IsDrawable()) {
-                graphics->Draw(program_id, shader_id, viewport, ctx);
+                graphics->Draw(program, shader_id, viewport, ctx);
             }
         }
     }
@@ -1364,7 +1414,7 @@ void EntityRenderer::CompilePendingShaders() {
         compiled = true;
     }
 
-    // 新たにコンパイルしたシェーダーを描画バケットへ反映する
+    // 新たにコンパイルしたシェーダーを描画グループへ反映する
     // (プログラム未在席で取りこぼしたIDをRebuildDrawBucketsに拾わせる)
     if (compiled) draw_buckets_dirty_ = true;
 

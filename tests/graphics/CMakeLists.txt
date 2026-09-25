@@ -13,6 +13,8 @@ set(TEST_SOURCES
     test_surface_edge_render.cpp
     test_surface_mesh.cpp
     test_mesh_staging.cpp
+    test_shader_override.cpp
+    test_shader_include_expand.cpp
 )
 
 add_executable(test_graphics ${TEST_SOURCES})

@@ -155,10 +155,11 @@ ExpandAllIncludes(const std::unordered_map<std::string, IncludeShaderCode>& shad
         expanded_map[file_to_process] = shader_map.at(file_to_process);
         auto& current_shader = expanded_map.at(file_to_process);
 
-        // このファイルがインクルードしている各ファイルについて展開処理を行う
-        // 依存ファイルは既に展開済みのはず
+        // このファイルがインクルードしている各ファイルについて展開処理を行う.
+        // 依存ファイルは依存関係に基づき展開済みのため、展開後のコードで置換する
+        // (入れ子のインクルードも1回の置換で解決される)
         for (const auto& include_path : dependencies[file_to_process]) {
-            const auto& included_shader = shader_map.at(include_path);
+            const auto& included_shader = expanded_map.at(include_path);
             current_shader.ExpandInclude(include_path, included_shader.glsl_code);
         }
     }

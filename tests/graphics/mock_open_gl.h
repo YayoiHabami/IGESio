@@ -45,6 +45,8 @@ class MockOpenGL : public IOpenGL {
     int delete_vertex_arrays_calls = 0;
     /// @brief BufferDataの呼び出し回数 (再テッセレーションの観測用)
     int buffer_data_calls = 0;
+    /// @brief DeleteTexturesの呼び出し回数 (テクスチャの解放の観測用)
+    int delete_textures_calls = 0;
 
 
 
@@ -163,7 +165,9 @@ class MockOpenGL : public IOpenGL {
 
     void ActiveTexture(gl::Enum) override {}
     void BindTexture(gl::Enum, gl::Uint) override {}
-    void DeleteTextures(gl::Sizei, const gl::Uint*) override {}
+    void DeleteTextures(gl::Sizei, const gl::Uint*) override {
+        ++delete_textures_calls;
+    }
     void GenerateMipmap(gl::Enum) override {}
     void GenTextures(gl::Sizei n, gl::Uint* textures) override { FillIds(n, textures); }
     void TexImage2D(gl::Enum, gl::Int, gl::Int, gl::Sizei, gl::Sizei, gl::Int,

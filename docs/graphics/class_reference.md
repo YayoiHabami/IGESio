@@ -15,7 +15,7 @@
 | `Synchronize()` | エンティティの状態に基づいてOpenGLリソースを再構築する(非virtual)。実体の`DoSynchronize()`(protected純粋仮想)を実行し、末尾で同期キーを記録する |
 | `CurrentGeometryKey()` | テッセレーションが読む全エンティティの`(ObjectID, GeometryRevision)`をハッシュ結合した同期キーを返す |
 | `NeedsResync()` | 最後の`Synchronize()`以降に同期キーが変化したか(再同期が必要か)を返す |
-| `SyncTexture()` | テクスチャリソースを同期する |
+| `SyncTexture()` | テクスチャリソースを同期する (生成済みのテクスチャは解放してから作り直し、テクスチャ無しの場合は解放のみ行う) |
 | `GetShaderIds()` | このオブジェクト(と子)が使用するShaderIdの集合を返す |
 | `Cleanup()` | OpenGLリソースを解放する |
 | `IsDrawable()` | 描画可能な状態かを返す |
@@ -113,6 +113,8 @@
 | `SetViewFrame(frame)` / `ViewFrame()` | 表示座標系（剛体変換）を設定・取得する。シーン全体を`frame`の座標系に固定して表示する（描画・ピック・光源・自動クリップ球は表示座標系の値になる）。非剛体は`std::invalid_argument`。同値の再設定は何もしない |
 | `FitView()` | 走査規則（可視/抑制・表示フィルタ・表示座標系）を反映した可視エンティティ全体が画面に収まるようにカメラを調整する（GLコンテキスト前提を持たない） |
 | `SetMaterialProperty(id, material)` / `ClearMaterialProperty(id)` | エンティティ毎の描画プロパティのオーバーライドを設定・解除する(GLコンテキスト前提を持たず、適用は次回の描画/ピック時) |
+| `FindMaterialProperty(id)` | 描画プロパティのオーバーライドを取得する (未設定ならnullptr。ポインタは次のSet/Clear/Sweepまで有効) |
+| `SetShaderOverride(base, override)` / `ClearShaderOverride(base)` / `ClearShaderOverrides()` / `FindShaderOverride(base)` | 描画グループ`base`の描画に使うプログラムを差し替える (レンダラ単位のビュー状態。`ShaderOverride`は差し替え先の`shader`とuniform設定関数`setup`を持つ。検査と呼び出しの規則は`overview.md`§6) |
 | `PickEntities(...)` / `PickEntitiesInRect(...)` | レイ/矩形でヒットしたエンティティIDを返す(可視リスト走査のため、削除済み・非表示・抑制中・フィルタ除外のエンティティはヒットしない) |
 
 描画オブジェクトはSceneツリーの派生キャッシュとして管理される。描画/ピックの冒頭でツリーと突き合わせ(Reconcile)、未在席の描画オブジェクトを遅延生成し、ツリーから削除されたものをSweepで破棄する。ツリーの編集(構造・大域変換・表示状態)は`Assembly`のモデルリビジョンで、エンティティの形状編集はジオメトリリビジョン(同期キー)で自動検知されるため、編集後にレンダラへ通知するAPIは存在しない。詳細は`overview.md`§4-5を参照。
