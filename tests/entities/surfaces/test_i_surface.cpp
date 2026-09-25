@@ -520,3 +520,53 @@ TEST(ISurfaceCreaseDefaultTest, GetUCreaseParameters_EmptyForNurbsSurface) {
             << "surface: " << s.name;
     }
 }
+
+
+
+/**
+ * TryClampToParameterDomain
+ */
+
+// 定義域内の(u, v)はそのまま返す
+TEST(TryClampToParameterDomainTest, InsideUnchanged) {
+    const auto surface = i_test::CreateRationalBSplineSurfaces()[0].surface;
+    const auto [u_min, u_max, v_min, v_max] = surface->GetParameterRange();
+    const double u = 0.5 * (u_min + u_max);
+    const double v = 0.25 * v_min + 0.75 * v_max;
+
+    const auto uv = i_ent::TryClampToParameterDomain(*surface, u, v);
+
+    ASSERT_TRUE(uv.has_value());
+    EXPECT_DOUBLE_EQ(uv->x(), u);
+    EXPECT_DOUBLE_EQ(uv->y(), v);
+}
+
+// 許容誤差 (kGeometryTolerance) 以内の範囲外は境界へ丸め、丸めた点で評価できる
+TEST(TryClampToParameterDomainTest, SlightlyOutsideClampedToBoundary) {
+    const auto surface = i_test::CreateRationalBSplineSurfaces()[0].surface;
+    const auto [u_min, u_max, v_min, v_max] = surface->GetParameterRange();
+
+    const auto uv = i_ent::TryClampToParameterDomain(
+            *surface, u_max + 5e-10, v_min - 5e-10);
+
+    ASSERT_TRUE(uv.has_value());
+    EXPECT_DOUBLE_EQ(uv->x(), u_max);
+    EXPECT_DOUBLE_EQ(uv->y(), v_min);
+    EXPECT_TRUE(surface->TryGetPointAt(uv->x(), uv->y()).has_value());
+    // 丸めなければ曲面自身の範囲判定 (kParameterTolerance) で評価できない
+    EXPECT_FALSE(surface->TryGetPointAt(u_max + 5e-10, v_min).has_value());
+}
+
+// 許容誤差を超える範囲外はnullopt (u, vそれぞれで判定する)
+TEST(TryClampToParameterDomainTest, BeyondToleranceNullopt) {
+    const auto surface = i_test::CreateRationalBSplineSurfaces()[0].surface;
+    const auto [u_min, u_max, v_min, v_max] = surface->GetParameterRange();
+
+    EXPECT_FALSE(i_ent::TryClampToParameterDomain(
+            *surface, u_max + 2e-9, v_min).has_value());
+    EXPECT_FALSE(i_ent::TryClampToParameterDomain(
+            *surface, u_min, v_min - 2e-9).has_value());
+    // 許容誤差を明示指定した場合はその値で判定する
+    EXPECT_TRUE(i_ent::TryClampToParameterDomain(
+            *surface, u_max + 2e-9, v_min, 1e-8).has_value());
+}

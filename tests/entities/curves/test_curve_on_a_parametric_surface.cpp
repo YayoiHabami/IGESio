@@ -271,6 +271,36 @@ TEST(CurveOnSurfaceFactoryTest,
         surface, MakeParamLine(0.5, 0.5, 1.0, 0.5)));
 }
 
+// Bが定義域の辺を許容誤差 (kGeometryTolerance) 以内で外れる場合は、生成・評価とも
+// 境界へ丸めて成功する (ファイル由来のBに見られる1e-10程度のはみ出しを想定)
+TEST(CurveOnSurfaceEvaluationTest, BaseCurveSlightlyOutsideDomainIsEvaluated) {
+    const auto surface = MakeBilinearSurface();
+    const double u_edge = 1.0 + 5e-10;
+    const auto base = MakeParamLine(u_edge, 0.2, u_edge, 0.8);
+
+    std::shared_ptr<CurveOnSurface> cos;
+    ASSERT_NO_THROW(cos =
+            i_ent::MakeCurveOnAParametricSurface(surface, base).first);
+    ASSERT_NE(cos, nullptr);
+
+    for (const double t : {0.0, 0.5, 1.0}) {
+        // S(B(t)) = (2u, v, 0) を u=1 へ丸めた点
+        ExpectVectorNear(EvalAt(*cos, t), Vector3d(2.0, 0.2 + 0.6 * t, 0.0));
+    }
+}
+
+// 許容誤差を超えて外れるBは生成時に例外となる (評価時の丸めと同じ基準)
+TEST(CurveOnSurfaceFactoryTest,
+     MakeCurveOnSurface_ThrowsWhenBOutsideDomainBeyondTolerance) {
+    const auto surface = MakeBilinearSurface();
+    const double u_edge = 1.0 + 2e-9;
+
+    EXPECT_THROW(
+        i_ent::MakeCurveOnAParametricSurface(
+            surface, MakeParamLine(u_edge, 0.2, u_edge, 0.8)),
+        igesio::EntityValueError);
+}
+
 
 
 /**

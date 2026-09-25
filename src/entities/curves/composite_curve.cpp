@@ -658,7 +658,10 @@ CompositeCurve::TryGetGlobalParameter(const size_t index,
         t_local > range[1] + i_num::kGeometryTolerance) {
         return std::nullopt;
     }
-    return GetCurveBreakParameters()[index] + (t_local - range[0]);
+    // 当該曲線の範囲へクランプしてから変換する
+    // （戻り値（グローバルパラメータ）が隣接曲線や全体範囲の外を指しうるため）
+    const double t_clamped = std::clamp(t_local, range[0], range[1]);
+    return GetCurveBreakParameters()[index] + (t_clamped - range[0]);
 }
 
 std::vector<std::optional<double>> CompositeCurve::GetJunctionGaps() const {
@@ -680,7 +683,14 @@ std::vector<std::optional<double>> CompositeCurve::GetJunctionGaps() const {
 
 std::optional<std::pair<size_t, double>>
 CompositeCurve::TryGetCurveIndexAtParameter(const double t) const {
+    // NOTE: 許容誤差は全体範囲の両端にのみ適用し、区間の選択は厳密比較で行う。
+    //       区間の選択に許容誤差を用いると、接合点を僅かに超えたtが直前の曲線に
+    //       割り当てられ、その曲線の範囲外のローカルパラメータを渡すことになる
+    //       (構成曲線は自身の許容誤差kParameterToleranceで範囲外と判定する)
+    if (i_num::IsApproxLessThan(t, 0.0)) return std::nullopt;
+
     double accumulated_length = 0.0;
+    std::optional<std::pair<size_t, double>> last_curve_end;
     for (size_t i = 0; i < curves_.size(); ++i) {
         auto curve_container = curves_[i];
         if (auto curve = curve_container.GetEntity<ICurve>()) {
@@ -691,17 +701,20 @@ CompositeCurve::TryGetCurveIndexAtParameter(const double t) const {
             }
             const double current_length = range[1] - range[0];
 
-            // パラメータtが現在の曲線の範囲内にあるかチェック
-            // 浮動小数点数の比較のため、わずかな誤差を許容する
-            if (t >= accumulated_length &&
-                t <= accumulated_length + current_length + i_num::kGeometryTolerance) {
-                // ローカルパラメータを計算
-                // t_local = t_start + (t_global - accumulated_length)
-                const double t_local = range[0] + (t - accumulated_length);
+            if (t <= accumulated_length + current_length) {
+                // t_local = t_start + (t_global - accumulated_length) を、
+                // 丸め誤差や始端側の許容分を除くため曲線の範囲内へ丸める
+                const double t_local = std::clamp(
+                        range[0] + (t - accumulated_length), range[0], range[1]);
                 return std::make_pair(i, t_local);
             }
             accumulated_length += current_length;
+            last_curve_end = std::make_pair(i, range[1]);
         }
+    }
+    // 終端を許容誤差以内で超えた場合は最後の曲線の終端とみなす
+    if (last_curve_end && !i_num::IsApproxGreaterThan(t, accumulated_length)) {
+        return last_curve_end;
     }
     // パラメータtが範囲外の場合
     return std::nullopt;

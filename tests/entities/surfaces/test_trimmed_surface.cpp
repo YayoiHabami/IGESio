@@ -8,7 +8,8 @@
  *       テストする。対象は以下:
  *       - IRestrictedSurface: IsInDomain / TryGetDefinedDerivatives /
  *         GetParameterRange / GetDefinedBoundingBox / IsUClosed / IsVClosed /
- *         GetOuterDomainPolygon / GetInnerDomainPolygons / IsOuterBoundaryOfD
+ *         GetOuterDomainPolygon / GetInnerDomainPolygons / IsOuterBoundaryOfD /
+ *         GetDomainBuildFailures
  *       - TrimmedSurface フック: GetBaseSurface / GetOuterUVBoundary /
  *         GetInnerBoundaryCount / GetInnerUVBoundaryAt
  *       - キャッシュ無効化 (PrepareGeometryCache / Set/Add/Remove系)
@@ -335,6 +336,54 @@ TEST(TrimmedSurfaceDomainPolygons, InnerCountMatches) {
 
 
 /**
+ * 包含多角形の構築失敗の記録 (GetDomainBuildFailures)
+ */
+
+TEST(TrimmedSurfaceDomainFailures, EmptyWhenAllBoundariesBuilt) {
+    auto plane = MakePlane();
+    auto outer = MakeBoundary142(plane, MakeUvRectLoop(0.2, 0.2, 0.8, 0.8));
+    auto hole = MakeBoundary142(plane, MakeUvRectLoop(0.4, 0.4, 0.6, 0.6));
+    auto ts = std::make_shared<TrimmedSurface>(plane, outer);
+    ts->AddInnerBoundary(hole);
+
+    EXPECT_TRUE(ts->GetDomainBuildFailures().empty());
+}
+
+// 外側境界が開曲線で包含多角形を構築できない場合、失敗として記録される
+TEST(TrimmedSurfaceDomainFailures, OpenOuterBoundaryRecorded) {
+    auto plane = MakePlane();
+    auto open_path = i_ent::MakeLinearPath(
+        std::vector<Vector2d>{{0.2, 0.2}, {0.8, 0.2}, {0.8, 0.8}}, false);
+    auto outer = MakeBoundary142(plane, open_path);
+    auto ts = std::make_shared<TrimmedSurface>(plane, outer);
+
+    EXPECT_FALSE(ts->GetOuterDomainPolygon().has_value());
+    const auto& failures = ts->GetDomainBuildFailures();
+    ASSERT_EQ(failures.size(), 1u);
+    EXPECT_FALSE(failures[0].inner_index.has_value());
+    EXPECT_FALSE(failures[0].reason.empty());
+}
+
+// 内側境界の失敗はインデックスつきで記録され、成功した穴の多角形のみが残る
+TEST(TrimmedSurfaceDomainFailures, OpenInnerBoundaryRecordedWithIndex) {
+    auto plane = MakePlane();
+    auto hole = MakeBoundary142(plane, MakeUvRectLoop(0.2, 0.2, 0.35, 0.35));
+    auto open_hole = MakeBoundary142(plane, i_ent::MakeLinearPath(
+        std::vector<Vector2d>{{0.6, 0.6}, {0.75, 0.6}, {0.75, 0.75}}, false));
+    auto ts = std::make_shared<TrimmedSurface>(plane);
+    ts->AddInnerBoundary(hole);
+    ts->AddInnerBoundary(open_hole);
+
+    EXPECT_EQ(ts->GetInnerDomainPolygons().size(), 1u);
+    const auto& failures = ts->GetDomainBuildFailures();
+    ASSERT_EQ(failures.size(), 1u);
+    ASSERT_TRUE(failures[0].inner_index.has_value());
+    EXPECT_EQ(*failures[0].inner_index, 1u);
+}
+
+
+
+/**
  * キャッシュの構築・無効化
  */
 
@@ -474,4 +523,8 @@ TEST(TrimmedSurfaceGraceful, UnresolvedOuterTreatedAsNoRestriction) {
     // 制限を構築できないため、ドメイン判定は常にtrue (制限なし扱い)
     EXPECT_TRUE(ts->IsInDomain(0.5, 0.5));
     EXPECT_TRUE(ts->IsInDomain(0.1, 0.5));
+    // 制限なし扱いとなったことは構築失敗として検知できる
+    const auto& failures = ts->GetDomainBuildFailures();
+    ASSERT_EQ(failures.size(), 1u);
+    EXPECT_FALSE(failures[0].inner_index.has_value());
 }

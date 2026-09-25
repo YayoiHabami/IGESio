@@ -787,6 +787,55 @@ TEST(CompositeCurveIndexAtParameterTest, OutOfRange_Nullopt) {
     EXPECT_FALSE(c.cc->TryGetCurveIndexAtParameter(3.0 + 1e-6).has_value());
 }
 
+// 接合点を僅かに超えたtは直後の曲線に解決され、ローカル値は範囲内に収まる
+// (直前の曲線に割り当てると、その曲線の範囲外のローカル値となり評価できない)
+TEST(CompositeCurveIndexAtParameterTest, JustAfterJunctionBelongsToFollowingCurve) {
+    const auto cc = MakePathNurbsNonZeroRange();  // 接合点 t=1, NURBS range=[2,5]
+
+    const auto result = cc->TryGetCurveIndexAtParameter(1.0 + 1e-12);
+
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->first, 1u);
+    EXPECT_GE(result->second, 2.0);
+    EXPECT_LE(result->second, 5.0);
+    EXPECT_NEAR(result->second, 2.0, kTol);
+}
+
+// 接合点の前後 (許容誤差kGeometryToleranceの範囲を含む) で評価できる
+TEST(CompositeCurveIndexAtParameterTest, EvaluatesAroundJunctions) {
+    const auto cc = MakePathNurbsNonZeroRange();  // 接合点 t=1
+    auto c = MakeChain3Lines();                    // 接合点 t=1, 2
+
+    for (const double offset : {-1e-12, 0.0, 1e-14, 1e-13, 1e-12, 1e-10, 1e-9}) {
+        EXPECT_TRUE(cc->TryGetPointAt(1.0 + offset).has_value())
+            << "offset = " << offset;
+        EXPECT_TRUE(c.cc->TryGetPointAt(1.0 + offset).has_value())
+            << "offset = " << offset;
+        EXPECT_TRUE(c.cc->TryGetPointAt(2.0 + offset).has_value())
+            << "offset = " << offset;
+    }
+}
+
+// 全体範囲の両端は許容誤差 (kParameterTolerance) 以内の超過を端点へ丸める
+TEST(CompositeCurveIndexAtParameterTest, RangeEndsWithinTolerance) {
+    const auto cc = MakePathNurbsNonZeroRange();  // 全体範囲[0,4]
+
+    const auto start = cc->TryGetCurveIndexAtParameter(-1e-15);
+    const auto end = cc->TryGetCurveIndexAtParameter(4.0 + 1e-15);
+
+    ASSERT_TRUE(start.has_value());
+    EXPECT_EQ(start->first, 0u);
+    EXPECT_DOUBLE_EQ(start->second, 0.0);
+    ASSERT_TRUE(end.has_value());
+    EXPECT_EQ(end->first, 1u);
+    EXPECT_DOUBLE_EQ(end->second, 5.0);
+    EXPECT_TRUE(cc->TryGetPointAt(-1e-15).has_value());
+    EXPECT_TRUE(cc->TryGetPointAt(4.0 + 1e-15).has_value());
+    // 許容誤差を超える場合は範囲外
+    EXPECT_FALSE(cc->TryGetCurveIndexAtParameter(4.0 + 1e-12).has_value());
+    EXPECT_FALSE(cc->TryGetCurveIndexAtParameter(-1e-12).has_value());
+}
+
 
 
 /**
@@ -835,6 +884,19 @@ TEST(CompositeCurveGlobalParameterTest, LocalOutOfRange_Nullopt) {
     EXPECT_TRUE(c.cc->TryGetGlobalParameter(1, 1.0).has_value());
     EXPECT_FALSE(c.cc->TryGetGlobalParameter(1, -1e-6).has_value());
     EXPECT_FALSE(c.cc->TryGetGlobalParameter(1, 1.0 + 1e-6).has_value());
+}
+
+// 許容誤差以内の範囲外のt_localは曲線の範囲へ丸めてから変換する
+TEST(CompositeCurveGlobalParameterTest, LocalWithinToleranceIsClamped) {
+    auto c = MakeChain3Lines();  // 各Line range=[0,1], 全体範囲[0,3]
+
+    const auto end = c.cc->TryGetGlobalParameter(2, 1.0 + 1e-10);
+    const auto start = c.cc->TryGetGlobalParameter(1, -1e-10);
+
+    ASSERT_TRUE(end.has_value());
+    EXPECT_DOUBLE_EQ(*end, 3.0);
+    ASSERT_TRUE(start.has_value());
+    EXPECT_DOUBLE_EQ(*start, 1.0);
 }
 
 // エラー: indexが範囲外 (境界両側: index=size-1は有効, index=sizeで例外)

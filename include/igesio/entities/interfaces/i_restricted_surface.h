@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "igesio/numerics/geometric/polygon.h"
@@ -21,6 +22,17 @@
 
 
 namespace igesio::entities {
+
+/// @brief 包含多角形の構築時の失敗について記録する構造体
+/// @note 構築に失敗した境界は内外判定から除外される (外側境界の場合は制限なし,
+///       内側境界の場合は穴なしとして扱われる) ため、利用側で構築の成否を
+///       判断するために用いる
+struct DomainBoundaryFailure {
+    /// @brief 内側境界（穴）のインデックス。外側境界の場合はstd::nullopt
+    std::optional<std::size_t> inner_index;
+    /// @brief 失敗の理由 (例外メッセージ、または境界曲線が未解決である旨)
+    std::string reason;
+};
 
 /// @brief パラメータ範囲の一部が領域外となりうる曲面の共通インターフェース
 /// @note 基底曲面S(u,v)の矩形ドメインDを、UV空間の外側境界ループと任意個の
@@ -40,8 +52,10 @@ class IRestrictedSurface : public virtual ISurface {
         /// @brief 外側境界のUVパラメータ空間における包含多角形
         /// @note outer_is_boundary_of_d_=false かつ構築成功時のみ有効
         std::optional<numerics::CurveContainmentPolygons> outer;
-        /// @brief 内側境界(穴)の包含多角形リスト
+        /// @brief 内側境界(穴)の包含多角形リスト (構築に成功したもののみ)
         std::vector<numerics::CurveContainmentPolygons> inner;
+        /// @brief 包含多角形の構築に失敗した境界についての情報
+        std::vector<DomainBoundaryFailure> failures;
     };
 
  protected:
@@ -58,7 +72,8 @@ class IRestrictedSurface : public virtual ISurface {
     /// @note domain_cache_が有効な場合は何もしない。同一インスタンスに対して同時に
     ///       呼び出してはならない (内部のdomain_cache_を非同期に書き込むため)。
     ///       境界曲線が未解決/退化/非閉でテッセレーションが例外を投げても、当該境界を
-    ///       スキップして処理全体を止めない (グレースフル劣化)。
+    ///       スキップして処理全体を止めない。
+    ///       スキップした境界はGetDomainBuildFailures()で取得できる。
     void BuildDomainCache() const;
 
     /// @brief 領域判定キャッシュを無効化する
@@ -142,12 +157,22 @@ class IRestrictedSurface : public virtual ISurface {
     /// @brief トリム領域の外側包含多角形を取得する (テッセレーション用)
     /// @return 外側境界の包含多角形。outer_is_boundary_of_d_=trueまたは構築失敗時は
     ///         std::nullopt。キャッシュ未構築の場合は構築する。
+    /// @note 構築失敗時は外側境界による制限が無効となる。成否と原因は
+    ///       GetDomainBuildFailures()で確認すること
     const std::optional<numerics::CurveContainmentPolygons>&
     GetOuterDomainPolygon() const;
     /// @brief トリム領域の内側包含多角形(穴)を取得する (テッセレーション用)
     /// @return 内側境界(穴)の包含多角形リスト。キャッシュ未構築の場合は構築する。
+    /// @note 構築に失敗した穴は含まれないため、要素の添字は内側境界のインデックスと
+    ///       一致しない場合がある。失敗した穴はGetDomainBuildFailures()で確認すること
     const std::vector<numerics::CurveContainmentPolygons>&
     GetInnerDomainPolygons() const;
+    /// @brief 包含多角形の構築に失敗した境界の情報を取得する
+    /// @return 失敗した境界の情報 (外側境界、内側境界の順)。すべて成功の場合は空。
+    ///         キャッシュ未構築の場合は構築する。
+    /// @note 構築に失敗した境界は内外判定から除外されるため、空でない場合は
+    ///       IsInDomain等が実際のトリム領域より広い範囲を領域内と判定する
+    const std::vector<DomainBoundaryFailure>& GetDomainBuildFailures() const;
 };
 
 

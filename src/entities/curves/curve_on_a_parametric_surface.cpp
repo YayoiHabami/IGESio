@@ -48,9 +48,13 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
     // 各頂点を曲面上に射影
     std::vector<Vector3d> projected_vertices;
     for (const auto& uv : vertices) {
-        auto pt_opt = surface.TryGetPointAt(uv.x(), uv.y());
+        const auto uv_c =
+                i_ent::TryClampToParameterDomain(surface, uv.x(), uv.y());
+        auto pt_opt = uv_c ? surface.TryGetPointAt(uv_c->x(), uv_c->y())
+                           : std::nullopt;
         if (!pt_opt) {
-            throw igesio::ComputationError("CurveOnAParametricSurface: Failed to project "
+            throw igesio::ComputationError(
+                    "CurveOnAParametricSurface: Failed to project "
                     "base curve point onto surface.");
         }
         projected_vertices.push_back(pt_opt.value());
@@ -64,7 +68,10 @@ std::shared_ptr<i_ent::ICurve> CreateCurveOnSurface(
         auto db_opt = base_curve.TryGetDerivatives(t, 1);
         if (!db_opt) continue;
         const auto& db = db_opt.value();
-        auto ds_opt = surface.TryGetDerivatives(db[0].x(), db[0].y(), 1);
+        const auto uv_c =
+                i_ent::TryClampToParameterDomain(surface, db[0].x(), db[0].y());
+        if (!uv_c) continue;
+        auto ds_opt = surface.TryGetDerivatives(uv_c->x(), uv_c->y(), 1);
         if (!ds_opt) continue;
         const auto& ds = ds_opt.value();
         Vector3d tangent = ds(1, 0)*db[1].x() + ds(0, 1)*db[1].y();
@@ -131,6 +138,9 @@ std::shared_ptr<i_ent::LinearPath> BuildParamSpaceBaseCurve(
 /// @param surface 曲面 S(u,v)
 /// @param base_curve 曲線 B(t)
 /// @throw igesio::EntityValueError B(t)がD外で定義されている場合
+/// @note Dの外にあるかの判定はTryClampToParameterDomainと同じ許容誤差
+///       (kGeometryTolerance) で行い、ここで許容したB(t)は曲面評価時に
+///       境界内に丸めて評価できるようにする
 void ValidateBaseCurveInDomain(const i_ent::ISurface& surface,
                                const i_ent::ICurve& base_curve) {
     auto [umin, umax, vmin, vmax] = surface.GetParameterRange();
@@ -148,9 +158,9 @@ void ValidateBaseCurveInDomain(const i_ent::ISurface& surface,
         auto pt_opt = base_curve.TryGetPointAt(t);
         if (!pt_opt) continue;
 
-        // B(t)がD (surf_bbox) 内にあるか確認
-        Vector3d uv = {(*pt_opt).x(), (*pt_opt).y(), 0.0};
-        if (!surf_bbox.Contains(uv)) {
+        // B(t)がD内にあるか確認
+        if (!i_ent::TryClampToParameterDomain(surface, pt_opt->x(),
+                                              pt_opt->y())) {
             throw igesio::EntityValueError(
                     "CurveOnAParametricSurface: Base curve is not defined "
                     "within the parameter domain D: {(u,v) | u in ["
@@ -473,7 +483,8 @@ std::array<double, 2> CurveOnSurface::GetParameterRange() const {
 
 
 std::optional<i_ent::CurveDerivatives>
-CurveOnSurface::TryGetDefinedDerivatives(const double t, const unsigned int n) const {
+CurveOnSurface::TryGetDefinedDerivatives(const double t,
+                                         const unsigned int n) const {
     if (!base_curve_.IsPointerSet() || !surface_.IsPointerSet()) {
         return std::nullopt;
     }
@@ -483,8 +494,11 @@ CurveOnSurface::TryGetDefinedDerivatives(const double t, const unsigned int n) c
     if (!base_deriv_opt) return std::nullopt;
     const auto& db = base_deriv_opt.value();
 
-    // 曲面の導関数を取得
-    auto surf_deriv_opt = GetSurface()->TryGetDerivatives(db[0].x(), db[0].y(), n);
+    // 曲面の導関数を取得 (B(t)は定義域を僅かに外れうるため、境界内に丸めて評価する)
+    const auto surface = GetSurface();
+    const auto uv_c = TryClampToParameterDomain(*surface, db[0].x(), db[0].y());
+    if (!uv_c) return std::nullopt;
+    auto surf_deriv_opt = surface->TryGetDerivatives(uv_c->x(), uv_c->y(), n);
     if (!surf_deriv_opt) return std::nullopt;
     const auto& ds = surf_deriv_opt.value();
 

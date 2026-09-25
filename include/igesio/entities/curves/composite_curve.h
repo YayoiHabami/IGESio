@@ -248,6 +248,9 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @param t グローバルパラメータ値
     /// @return 構成曲線のインデックスと、その曲線上におけるローカルパラメータ
     ///         の組。tが範囲外の場合はnullopt
+    /// @note 全体範囲の両端は許容誤差 (kParameterTolerance) の下で判定する.
+    ///       接合点ちょうどのtは直前の構成曲線の末端として扱う.
+    ///       ローカルパラメータは常に当該曲線のパラメータ範囲内へ丸めて返す
     std::optional<std::pair<size_t, double>>
     TryGetCurveIndexAtParameter(const double) const;
 
@@ -256,6 +259,8 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @param t_local 当該曲線上のローカルパラメータ
     /// @return グローバルパラメータ。曲線が未解決参照・無限長の場合、
     ///         またはt_localが当該曲線のパラメータ範囲外の場合はnullopt
+    /// @note t_localは許容誤差 (kGeometryTolerance) 以内であれば範囲外の値を許容し,
+    ///       当該曲線のパラメータ範囲へ丸めてから変換する
     /// @throw std::out_of_range indexが範囲外の場合
     std::optional<double>
     TryGetGlobalParameter(const size_t index, const double t_local) const;
@@ -276,8 +281,8 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     ///         座標値の場合は v' = Rv + T、ベクトルの場合は v' = Rv
     /// @note inputがstd::nulloptの場合はそのまま返す
     ///       としてオーバライドすること
-    std::optional<Vector3d> Transform(
-            const std::optional<Vector3d>& input, const bool is_point) const override {
+    std::optional<Vector3d> Transform(const std::optional<Vector3d>& input,
+                                      const bool is_point) const override {
         return TransformImpl(input, is_point);
     }
 

@@ -204,7 +204,11 @@ void igesio::graphics::RestrictedSurfaceGraphics::AppendBoundaryWorldPolyline(
     for (const double t : params) {
         const auto uv = uv_boundary.TryGetPointAt(t);  // (u, v, 0)
         if (!uv) continue;
-        const auto p = base->TryGetPointAt(uv->x(), uv->y());
+        // B(t)は定義域を僅かに外れうるため、境界内に丸めてから評価する
+        const auto uv_c =
+                entities::TryClampToParameterDomain(*base, uv->x(), uv->y());
+        if (!uv_c) continue;
+        const auto p = base->TryGetPointAt(uv_c->x(), uv_c->y());
         if (!p) continue;
         poly.push_back(ToWorld(wtd, *p));
     }

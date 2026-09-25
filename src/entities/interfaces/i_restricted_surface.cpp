@@ -11,7 +11,9 @@
 #include <array>
 #include <limits>
 #include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "igesio/entities/curves/algorithms.h"
 
@@ -110,6 +112,12 @@ IRestrictedSurface::GetInnerDomainPolygons() const {
     return domain_cache_->inner;
 }
 
+const std::vector<i_ent::DomainBoundaryFailure>&
+IRestrictedSurface::GetDomainBuildFailures() const {
+    BuildDomainCache();
+    return domain_cache_->failures;
+}
+
 
 
 /**
@@ -123,15 +131,19 @@ void IRestrictedSurface::BuildDomainCache() const {
 
     // 外側境界 (明示指定のとき)。境界が未解決/退化/非閉でテッセレーションが例外を
     // 投げても処理全体を止めない (グレースフル劣化; 当該境界はスキップ)。
+    // スキップすると領域が実際より広く判定されるため、失敗として記録する。
     if (!outer_is_boundary_of_d_) {
         try {
             auto outer = GetOuterUVBoundary();
             if (outer) {
                 cache.outer = i_ent::ComputeContainmentPolygons(
                         *outer, kContainmentPolygonDivisions, Vector3d(0, 0, 1));
+            } else {
+                cache.failures.push_back(
+                        {std::nullopt, "The outer boundary curve is unresolved."});
             }
-        } catch (const std::exception&) {
-            // 当該境界はスキップ (cache.outerは空のまま)
+        } catch (const std::exception& e) {
+            cache.failures.push_back({std::nullopt, e.what()});
         }
     }
 
@@ -144,9 +156,12 @@ void IRestrictedSurface::BuildDomainCache() const {
             if (inner) {
                 cache.inner.push_back(i_ent::ComputeContainmentPolygons(
                         *inner, kContainmentPolygonDivisions, Vector3d(0, 0, 1)));
+            } else {
+                cache.failures.push_back(
+                        {i, "The inner boundary curve is unresolved."});
             }
-        } catch (const std::exception&) {
-            // 当該境界はスキップ
+        } catch (const std::exception& e) {
+            cache.failures.push_back({i, e.what()});
         }
     }
 
@@ -156,7 +171,7 @@ void IRestrictedSurface::BuildDomainCache() const {
 
 
 /**
- * ドメインUV範囲の取得 (自由関数)
+ * ドメインUV範囲の取得 (非メンバ関数)
  */
 
 std::optional<std::array<double, 4>>

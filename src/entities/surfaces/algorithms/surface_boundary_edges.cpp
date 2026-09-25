@@ -41,7 +41,9 @@ void FlushPolyline(std::vector<Vector3d>& current,
 /// @param uv_curve UV空間の境界曲線B(t) (TryGetPointAtが(u,v,0)を返す)
 /// @param divisions 分割数
 /// @param loops 追加先のループ群
-/// @note Bの評価不能点、または基底曲面のドメイン外で折れ線を分割する
+/// @note Bの評価不能点、または基底曲面のドメイン外で折れ線を分割する.
+///       ただし、点が許容誤差以内でドメイン外にある場合は
+///       TryClampToParameterDomainで境界へ丸めて評価する
 /// @note 等間隔点に加えて境界曲線の角点も評価点に含め、S(B(t))が曲面の角を
 ///       丸めず正確に通過するようにする
 void AppendSurfaceCurveLoop(const ISurface& base, const ICurve& uv_curve,
@@ -57,7 +59,9 @@ void AppendSurfaceCurveLoop(const ISurface& base, const ICurve& uv_curve,
     for (const double t : params) {
         const auto uv = uv_curve.TryGetPointAt(t);
         std::optional<Vector3d> p;
-        if (uv) p = base.TryGetPointAt(uv->x(), uv->y());
+        const auto uv_c = uv ? TryClampToParameterDomain(base, uv->x(), uv->y())
+                             : std::nullopt;
+        if (uv_c) p = base.TryGetPointAt(uv_c->x(), uv_c->y());
 
         if (p) {
             current.push_back(*p);

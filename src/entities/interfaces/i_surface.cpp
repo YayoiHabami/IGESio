@@ -7,7 +7,9 @@
  */
 #include "igesio/entities/interfaces/i_surface.h"
 
+#include <algorithm>
 #include <limits>
+#include <optional>
 #include <utility>
 
 #include "igesio/numerics/core/tolerance.h"
@@ -432,3 +434,18 @@ Vector3d ISurface::GetNormalAt(const double u, const double v) const {
     return *normal;
 }
 
+
+
+/**
+ * 非メンバ関数
+ */
+
+std::optional<Vector2d> i_ent::TryClampToParameterDomain(
+        const ISurface& surface, const double u, const double v,
+        const double tolerance) {
+    const auto [u_min, u_max, v_min, v_max] = surface.GetParameterRange();
+    const auto uc = i_num::TryClampToRange(u, u_min, u_max, tolerance);
+    const auto vc = i_num::TryClampToRange(v, v_min, v_max, tolerance);
+    if (!uc || !vc) return std::nullopt;
+    return Vector2d(*uc, *vc);
+}

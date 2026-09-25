@@ -8,10 +8,12 @@
 #ifndef IGESIO_ENTITIES_INTERFACES_I_SURFACE_H_
 #define IGESIO_ENTITIES_INTERFACES_I_SURFACE_H_
 
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "igesio/numerics/core/matrix.h"
+#include "igesio/numerics/core/tolerance.h"
 #include "igesio/numerics/analysis/integration.h"
 #include "igesio/entities/interfaces/i_entity_identifier.h"
 #include "igesio/entities/interfaces/i_geometry.h"
@@ -353,6 +355,20 @@ class ISurface : public virtual IEntityIdentifier,
     /// @throw std::out_of_range 指定されたパラメータ値がパラメータ範囲外の場合
     Vector3d GetNormalAt(const double, const double) const;
 };
+
+/// @brief (u, v)がわずかに曲面のパラメータ範囲内にない場合、クランプして範囲内に収める
+/// @param surface 対象の曲面
+/// @param u パラメータ値 u
+/// @param v パラメータ値 v
+/// @param tolerance 範囲外として許容する量 (u, vそれぞれに適用する絶対値)
+/// @return クランプした(u, v)。toleranceを超えて範囲外の場合はstd::nullopt
+/// @note 曲面上の曲線 (Type 142の境界曲線B(t)など) から得た(u, v)で曲面を評価する
+///       際に用いる。ファイル由来のB(t)はCADの公差や丸め誤差により定義域を1e-10程度
+///       外れることがあり、曲面自身の範囲判定 (kParameterTolerance) では
+///       評価できないため、この関数で定義域内へクランプしてから評価する
+std::optional<Vector2d> TryClampToParameterDomain(
+        const ISurface& surface, double u, double v,
+        double tolerance = numerics::kGeometryTolerance);
 
 }  // namespace igesio::entities
 
