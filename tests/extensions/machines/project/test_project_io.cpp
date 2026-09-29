@@ -8,7 +8,8 @@
  *       (書き出し WriteProject / WriteProjectToString は`test_project_writer.cpp`)
  *       - 正常系 (実例): `sample.toml`・`library_ref.toml`が警告0件で読め、
  *         参照・工具・ワークオフセット・モデル・プログラム・保持セクションが入ること
- *       - 正常系 (要素): `modified`の表記保持、`library`の検索、機械定義の警告転記、
+ *       - 正常系 (要素): `modified`の表記保持、`library`の検索 (プロジェクトの
+ *         ディレクトリ優先)、機械定義の警告転記、
  *         簡易工具の単位換算、ライブラリ参照の保持、省略値の`nullopt`保持、
  *         ワークオフセットの2形式と単位換算、役割別の`collision`既定、形状の再利用、
  *         `[initial]`・`[[program]]`・`[collision]`・`[run]`の各項目、`retained`
@@ -23,6 +24,7 @@
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <variant>
@@ -169,16 +171,40 @@ TEST(ProjectIoTest, Machine_FileAndLibraryXor) {
     EXPECT_TRUE(project.warnings.empty());
 }
 
-TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenLibraryDirsAreEmpty) {
+TEST(ProjectIoTest, Machine_LibraryIsSearchedInProjectDirFirst) {
+    // プロジェクトのディレクトリに、ライブラリ検索ディレクトリと同名の機械定義
+    // (中身は`MinimalXyzAc`) を置く
+    const fs::path dir = fs::temp_directory_path() / "igesio_project_io_library_local";
+    fs::create_directories(dir);
+    {
+        std::ofstream stream(dir / "t-ZYX-b-AC-w.toml", std::ios::binary | std::ios::trunc);
+        stream << MinimalXyzAc();
+    }
+
+    // 検索ディレクトリが空でもプロジェクトのディレクトリから見つかる
+    const auto local = mc::ReadProjectFromString(
+            MinimalProject(), dir, mc::ReadProjectOptions{}, "<test>");
+    EXPECT_TRUE(local.machine_ref.from_library);
+    EXPECT_EQ(local.machine_ref.raw, "t-ZYX-b-AC-w.toml");
+    EXPECT_EQ(local.machine_ref.resolved,
+              (dir / "t-ZYX-b-AC-w.toml").lexically_normal());
+    EXPECT_EQ(local.machine.name, "minimal-xyz-ac");
+
+    // 検索ディレクトリに同名ファイルがあってもプロジェクトのディレクトリを優先する
+    const auto preferred = mc::ReadProjectFromString(
+            MinimalProject(), dir, DefaultOptions(), "<test>");
+    EXPECT_EQ(preferred.machine_ref.resolved,
+              (dir / "t-ZYX-b-AC-w.toml").lexically_normal());
+    EXPECT_EQ(preferred.machine.name, "minimal-xyz-ac");
+}
+
+TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenLibraryIsNotFound) {
+    // プロジェクトのディレクトリにも検索ディレクトリにも無い
+    ExpectDataFormatError(Replace(MinimalProject(), "t-ZYX-b-AC-w.toml", "missing.toml"),
+                          "not found in the project directory or library directories");
+    // 検索ディレクトリが空で、プロジェクトのディレクトリにも無い
     EXPECT_THROW(ReadProjectText(MinimalProject(), mc::ReadProjectOptions{}),
                  igesio::DataFormatError);
-    try {
-        ReadProjectText(MinimalProject(), mc::ReadProjectOptions{});
-    } catch (const igesio::DataFormatError& e) {
-        EXPECT_NE(std::string(e.what()).find("no library directories"), std::string::npos);
-    }
-    ExpectDataFormatError(Replace(MinimalProject(), "t-ZYX-b-AC-w.toml", "missing.toml"),
-                          "not found in library directories");
 }
 
 TEST(ProjectIoTest, Machine_FileIsResolvedFromBaseDir) {
@@ -220,7 +246,7 @@ TEST(ProjectIoTest, Controller_ReferenceAndDisabledCodes) {
               (std::vector<std::string>{"G68.2", "G43.4"}));
     EXPECT_FALSE(ReadProjectText(MinimalProject()).controller.has_value());
     ExpectDataFormatError(WithSection("[controller]\nlibrary = \"controllers/none.toml\"\n"),
-                          "not found in library directories");
+                          "not found in the project directory or library directories");
 }
 
 

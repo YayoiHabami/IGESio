@@ -12,6 +12,11 @@ This section provides an overview of the sample code included in the `examples` 
     - [Viewer Controls](#viewer-controls)
     - [Assembly Operations and Structural Editing](#assembly-operations-and-structural-editing)
     - [Animation Playback](#animation-playback)
+  - [machining\_viewer.cpp](#machining_viewercpp)
+    - [Building and Starting](#building-and-starting)
+    - [Window Layout](#window-layout-1)
+    - [Viewer Controls](#viewer-controls-1)
+    - [Basic Usage](#basic-usage)
 - [CUI Applications](#cui-applications)
   - [iges\_data\_from\_scratch.cpp](#iges_data_from_scratchcpp)
   - [iges\_data\_io.cpp](#iges_data_iocpp)
@@ -133,6 +138,102 @@ Keyframes switch stepwise without interpolation: each key's value is held until 
 - After binding, the settings can still be changed under "Demo settings" and applied with Rebuild (playback continues from the beginning if it was playing).
 - The bottom of the panel lists the tracks: transform and visibility tracks show the target assembly name, key count, and key time range; event tracks show the name and key count.
 - Camera controls (rotate, pan, zoom) work as usual during playback.
+
+### machining_viewer.cpp
+
+This is a sample application for the machines extension (`igesio/extensions/machines.h`). It loads a machining project (a machine definition, tools, work offsets, models, and NC/CL programs), shows the machine and the workpiece in two views, generates the machine motion from the program, and plays it as an animation.
+
+It is a test application that integrates the extensions of this project: stl/obj (STL/OBJ input and output), inspection (entity duplication, etc.), animation (keyframe animation), and machines (machine definitions, kinematics, and scene building).
+
+<img src="./images/machining_viewer_window.png" alt="Machining Viewer Screenshot" width="720"/>
+
+**Figure: Screenshot of Machining Viewer (right after loading the sample project)**
+
+#### Building and Starting
+
+The executable `machining_viewer` is built when both `IGESIO_BUILD_GUI` and `IGESIO_ENABLE_MACHINES_EXTENSION` are enabled. The machines extension also enables the STL, OBJ, inspection, and animation extensions.
+
+```bash
+machining_viewer [-h|--help] [PROJECT=<path>] [LIB=<dir>]... [MSAA=<samples>]
+```
+
+- `PROJECT`: the machining project (TOML) to load at startup.
+- `LIB`: a directory to search for the `library` keys of the project (machine definitions and tool libraries). It can be repeated. The directory of the project file itself is always searched first, so paths relative to the project file need no `LIB`. The `examples/data` directory of the source tree is always added last, so the sample project finds its machine definition without this argument.
+- `MSAA`: the number of samples for multisample antialiasing (0 disables it; default 4).
+
+The sample project is started as follows. The sample is a 5-axis TCP path (about 39,000 blocks) that machines a workpiece mounted on a LANG round plate and macro grip with an R3 ball end mill, on a tool-side XYZ / table-side AC machine.
+
+```bash
+machining_viewer PROJECT=<source tree>/examples/data/machines/project_sample_tZYXbACw.toml
+```
+
+#### Window Layout
+
+The window consists of a menu bar, a left panel (Project, Programs, and Source tabs), two views in the center with a playback bar below them, a right panel (Machine, Tools, Display, and Log tabs), and a status bar.
+
+- **Machine view**: the whole machine in machine coordinates. The table and the head move as the axes move.
+- **Work view**: the display fixed to the work mount (the table). The machine is not shown, and the tool moves relative to the workpiece.
+- **Playback bar**: the settings and display for animation playback. It also shows the current tool, work offset, program line, NC axis values, and so on.
+- **Status bar**: the project name, the machine name, the state (No project / Ready / Bound / Playing), and the most recent message.
+
+Both views share one scene, so an element selected in one view is highlighted in the other as well. Each view has Fit, Iso, a standard-view selector, and a screenshot button overlaid in its top-left corner.
+
+<img src="./images/machining_viewer_window_layout.svg" alt="Machining Viewer Layout" width="720"/>
+
+> - Dragging the bar between the two views changes their width ratio, and "Layout" in the View menu switches between both views, the machine view only, and the work view only.
+> - "Panels" in the View menu hides the left and right panels.
+
+**Table: Panels and tabs of Machining Viewer**
+
+| Panel | Tab | Contents |
+|:---:|:---|:---|
+| Left | Project | Loading a project and showing information about the loaded project |
+| Left | Programs | The list of loaded programs and the control of motion generation |
+| Left | Source | The source code of the loaded programs |
+| Right | Machine | The kinematic tree of the machine, jogging, and inverse kinematics |
+| Right | Tools | The list of loaded tools and the selection of the tool to use, etc. |
+| Right | Display | Display settings |
+| Right | Log | The log of warnings and information |
+
+#### Viewer Controls
+
+- Camera controls:
+    - Middle drag: Rotate the view.
+    - Ctrl + Middle drag: Pan (move the view).
+    - Mouse wheel (or Shift + Middle drag): Zoom in/out.
+    - F key, or Fit in the top-left of the view: Adjust the camera so the visible elements fit in the view.
+    - "Standard View" in the View menu, or the selector in the top-left of the view: Top, Bottom, Front, Back, Right, Left, or Iso.
+    - "Projection" in the View menu: Switch between perspective and orthographic projection per view.
+- Selection:
+    - Left click: Select the assembly (machine part, model, or tool) under the cursor.
+    - Ctrl + Left click: Toggle selection (multi-select).
+    - Click on empty space, or the Esc key: Clear all selections.
+- Playback (available after generating motion):
+    - Space: Play / Pause.
+    - Left / Right: Previous / Next record.
+    - Home / End: Go to the start / the end.
+    - Ctrl+G: Generate motion.
+- Screenshot: "Screenshot" in the File menu, the button in the top-left of the view, or the button in the Display tab saves the view as a PNG image. A popup asks for the file name.
+
+#### Basic Usage
+
+**Loading a project**
+Click "Open Project..." (Ctrl+O; ① in the figure below) and enter the path of a machining project. Alternatively, "Reload Project" (F5) reloads the same file. Loading builds the machining setup and the scene, and warnings from loading (files not found, unresolved tools, and so on) are shown in the Log tab of the right panel.
+
+**Generating motion**
+Open the Programs tab (② in the figure below), make sure that valid programs are loaded (③ in the figure below), and click "Generate motion" (Ctrl+G; ④ in the figure below). The tool path is converted to axis values with inverse kinematics and sampled on a time axis, and an animation is created from the result. The Programs tab shows the statistics of the generated path.
+
+<img src="./images/machining_viewer_motion_generation_flow.svg" alt="Motion generation flow" width="520"/>
+
+**Figure: Motion generation flow (loading a project → generating motion)**
+
+- The playback bar plays, pauses, and stops the animation, seeks with the time slider, and changes the speed and looping. The "<" and ">" buttons move to the previous and next record.
+- While playing, the current record is highlighted in both views, the Source tab follows the current line, and the playback bar shows the current state.
+- Clicking a path range in the Programs tab or a line in the Source tab moves to that position.
+
+<img src="./images/machining_viewer_playback_bar.png" alt="Playback bar" width="720"/>
+
+**Figure: Playback bar**
 
 ## CUI Applications
 

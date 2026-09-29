@@ -15,6 +15,8 @@ This document lists the third-party libraries used in this project, along with t
   - [glfw (Zlib)](#glfw-zlib)
   - [imgui (MIT)](#imgui-mit)
   - [stb (MIT)](#stb-mit)
+- [For Extensions](#for-extensions)
+  - [toml11 (MIT)](#toml11-mit)
 
 ## For Development
 
@@ -436,4 +438,39 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+## For Extensions
+
+### toml11 (MIT)
+
+This project uses the toml11 library for reading and writing the machine definition and project definition files (TOML) of the machines extension. It is only included when the `IGESIO_ENABLE_MACHINES_EXTENSION` CMake option is enabled during the build process. toml11 is header-only and is not exposed through the public headers of IGESio.
+
+- **Name**: toml11
+- **Website**: [toml11](https://github.com/ToruNiina/toml11)
+- **Version**: 4.4.0
+- **License**: MIT
+
+```plaintext
+The MIT License (MIT)
+
+Copyright (c) 2017 Toru Niina
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 ```

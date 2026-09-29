@@ -127,6 +127,10 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
     # toml11はヘッダオンリーで、.cpp内でのみ使用している. BUILD_INTERFACEで囲い、
     # install(EXPORT)がtoml11ターゲットを要求しないようにする (Boost::mathと同型)
     target_link_libraries(igesio_extensions PRIVATE $<BUILD_INTERFACE:toml11::toml11>)
+    # machinesのgeometry_loaderはIGES形状の読込にReadIges (igesio本体のreader.cpp) を
+    # 用いる. 静的ライブラリの循環参照を明示し、igesio本体をextensionsの後にも
+    # リンクさせる (CMakeは静的ライブラリの循環を許し、リンク行に両者を繰り返す)
+    target_link_libraries(igesio_extensions PUBLIC igesio)
 endif()
 
 # Create an alias for the extensions library

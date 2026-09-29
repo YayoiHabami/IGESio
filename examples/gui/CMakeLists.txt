@@ -90,3 +90,37 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
         imgui_lib
     )
 endforeach()
+
+# Machining viewer (machines extension example). Built separately from the
+# foreach above because it does not share the iges_viewer GUI sources.
+if(IGESIO_ENABLE_MACHINES_EXTENSION)
+    add_executable(machining_viewer
+        machining_viewer.cpp
+        machining_viewer_gui.cpp
+        machining_viewer_panels.cpp
+        machining_view_pane.cpp
+    )
+
+    target_link_options(machining_viewer PRIVATE
+        "-mconsole"
+    )
+
+    target_include_directories(machining_viewer PRIVATE
+        ${INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_BINARY_DIR}/_deps/stb
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+    )
+    target_link_libraries(machining_viewer PRIVATE
+        igesio
+        glfw
+        igesio_glad_gl_core_43
+        OpenGL::GL
+        imgui_lib
+    )
+    # Default library search directory for the sample data (examples/data)
+    target_compile_definitions(machining_viewer PRIVATE
+        MACHINING_VIEWER_DATA_DIR="${PROJECT_SOURCE_DIR}/examples/data"
+    )
+endif()

@@ -180,6 +180,7 @@ This library retrieves third-party dependencies using CMake's FetchContent (sour
 | [GLFW](https://www.glfw.org/) | Zlib | Window creation and input handling | - | `IGESIO_BUILD_GUI` |
 | [Dear ImGui](https://github.com/ocornut/imgui) | MIT | GUI | - | `IGESIO_BUILD_GUI` |
 | [stb](https://github.com/nothings/stb) | MIT | Image loading and saving | - | `IGESIO_ENABLE_TEXTURE_IO` |
+| [toml11](https://github.com/ToruNiina/toml11) | MIT | TOML parsing (machine and project definitions) | - | `IGESIO_ENABLE_MACHINES_EXTENSION` |
 
 **License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) for full license texts.
 

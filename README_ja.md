@@ -182,6 +182,7 @@ ninja --version
 | [GLFW](https://www.glfw.org/) | Zlib | ウィンドウ作成・入力処理 | - | `IGESIO_BUILD_GUI` |
 | [Dear ImGui](https://github.com/ocornut/imgui) | MIT | GUI | - | `IGESIO_BUILD_GUI` |
 | [stb](https://github.com/nothings/stb) | MIT | 画像読み込み・書き出し | - | `IGESIO_ENABLE_TEXTURE_IO` |
+| [toml11](https://github.com/ToruNiina/toml11) | MIT | TOMLの入出力（機械定義とプロジェクト定義） | - | `IGESIO_ENABLE_MACHINES_EXTENSION` |
 
 **ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストは[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md)を参照してください。
 

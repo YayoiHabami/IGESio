@@ -34,16 +34,17 @@ namespace igesio::extensions::machines {
 /// @brief プロジェクトファイルの読込設定
 struct ReadProjectOptions {
     /// @brief ライブラリ検索ディレクトリ (先頭優先)
-    /// @note `library`キーの相対パスを指定された順に探し、最初に見つかった
-    ///       ファイルを読み込む. 空の場合、相対パスの`library`は解決できず
-    ///       `DataFormatError`を投げる
+    /// @note `library`キーの相対パスは、まずプロジェクトファイルのディレクトリ,
+    ///       次にここで指定された順に探し、最初に見つかったファイルを読み込む.
+    ///       空の場合はプロジェクトファイルのディレクトリのみを探す
     ///       (実行ファイルのディレクトリ等は呼び出し側が与える)
     std::vector<std::filesystem::path> library_dirs;
 };
 
 /// @brief プロジェクトファイルを読み込む
 /// @param path プロジェクトファイル (TOML) のパス.
-///        `file`キーの相対パスはこのファイルのディレクトリを基準に解決する
+///        `file`キーの相対パスはこのファイルのディレクトリを基準に解決し,
+///        `library`キーの相対パスはこのファイルのディレクトリを最初に探す
 /// @param options 読込設定
 /// @return 検証済みのプロジェクト定義 (機械定義と警告を含む)
 /// @throw igesio::FileOpenError ファイルが存在しない場合
@@ -55,6 +56,7 @@ ProjectDefinition ReadProject(const std::filesystem::path& path,
 /// @brief プロジェクト定義をTOML文字列から読み込む
 /// @param toml TOML本文
 /// @param base_dir `file`キーの相対パス解決の基準ディレクトリ
+///        (`library`キーの相対パスもここを最初に探す)
 /// @param options 読込の設定
 /// @param source_name 診断・例外の文言に用いる入力の表示名
 /// @return 検証済みのプロジェクト定義 (機械定義と警告を含む)

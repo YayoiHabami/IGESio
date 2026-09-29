@@ -74,6 +74,12 @@ IGESioライブラリのビルドをカスタマイズするためのCMakeオプ
 | `IGESIO_ENABLE_EIGEN` | Eigenサポートを有効にする | OFF |
 | `IGESIO_ENABLE_GRAPHICS` | OpenGL（glad）サポートを有効にする | OFF |
 | `IGESIO_ENABLE_TEXTURE_IO` | 画像ファイルの入出力サポートを有効にする | OFF |
+| `IGESIO_ENABLE_STL_EXTENSION` | STLファイル入出力の拡張を有効にする | OFF |
+| `IGESIO_ENABLE_OBJ_EXTENSION` | OBJ（Wavefront OBJ）ファイル入出力の拡張を有効にする | OFF |
+| `IGESIO_ENABLE_INSPECTION_EXTENSION` | inspection拡張（座標系群、複製表示エンティティなど）を有効にする | OFF |
+| `IGESIO_ENABLE_ANIMATION_EXTENSION` | キーフレームアニメーション拡張を有効にする | OFF |
+| `IGESIO_ENABLE_MACHINES_EXTENSION` | 工作機械の運動学とシミュレーションの拡張（machines拡張）を有効にする<br>※ このオプションがONのとき、STL、OBJ、inspection、animationの各拡張も有効化される。併せて、toml11もインストールされる | OFF |
+| `IGESIO_ENABLE_ALL_EXTENSIONS` | 上記のすべての拡張を有効にする | OFF |
 
 これらのオプションは、IGESioを`FetchContent_MakeAvailable`で有効化する前に設定する必要があります。また、CMakeのコマンドライン引数としても指定可能です（例: `cmake -DIGESIO_BUILD_TESTING=ON ..`）。
 

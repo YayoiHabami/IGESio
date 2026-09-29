@@ -74,6 +74,12 @@ The IGESio library provides the following CMake options to customize the build p
 | `IGESIO_ENABLE_EIGEN` | Enable Eigen support | OFF |
 | `IGESIO_ENABLE_GRAPHICS` | Enable OpenGL (glad) support | OFF |
 | `IGESIO_ENABLE_TEXTURE_IO` | Enable image file I/O support | OFF |
+| `IGESIO_ENABLE_STL_EXTENSION` | Enable the STL (stereolithography) file I/O extension | OFF |
+| `IGESIO_ENABLE_OBJ_EXTENSION` | Enable the OBJ (Wavefront OBJ) file I/O extension | OFF |
+| `IGESIO_ENABLE_INSPECTION_EXTENSION` | Enable the inspection extension (coordinate frame groups, instanced entities, etc.) | OFF |
+| `IGESIO_ENABLE_ANIMATION_EXTENSION` | Enable the keyframe animation extension | OFF |
+| `IGESIO_ENABLE_MACHINES_EXTENSION` | Enable the machine-tool kinematics and simulation extension<br>Note: When this option is ON, the STL, OBJ, inspection, and animation extensions are also enabled, and toml11 is fetched | OFF |
+| `IGESIO_ENABLE_ALL_EXTENSIONS` | Enable all of the extensions above | OFF |
 
 These options must be set before making IGESio available with `FetchContent_MakeAvailable`. They can also be specified as CMake command-line arguments (e.g., `cmake -DIGESIO_BUILD_TESTING=ON ..`).
 

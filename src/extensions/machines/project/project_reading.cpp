@@ -48,9 +48,10 @@ constexpr std::array<const char*, 14> kReadSections = {
 
 /// @brief 読込全体で共有する内容
 struct ReadContext {
-    /// @brief `file`キーの相対パス解決の基準ディレクトリ
+    /// @brief `file`/`library`キーの相対パス解決の基準ディレクトリ
+    ///        (プロジェクトファイルのディレクトリ)
     std::filesystem::path base_dir;
-    /// @brief ライブラリ検索ディレクトリ
+    /// @brief ライブラリ検索ディレクトリ (`base_dir`の次に探す)
     std::vector<std::filesystem::path> library_dirs;
     /// @brief 組み立て中のプロジェクト定義 (単位、機械定義、警告の参照先)
     ProjectDefinition* project = nullptr;
@@ -103,15 +104,17 @@ void CheckReferencePath(const std::string& raw, const std::string& context,
     }
 }
 
-/// @brief `library`キーのパスをライブラリ検索ディレクトリから解決する
+/// @brief `library`キーのパスをプロジェクトのディレクトリと
+///        ライブラリ検索ディレクトリから解決する
 /// @param raw ファイルに記載されたパス
 /// @param context 読込箇所
 /// @param line パスの行番号
 /// @param ctx 読込の文脈
 /// @return 見つかったファイルの正規化済みパス
-/// @throw igesio::DataFormatError 検索ディレクトリが無い,
-///        または見つからない場合
-/// @note `raw`が絶対パスの場合は検索せず、正規化して返す
+/// @throw igesio::DataFormatError いずれのディレクトリでも見つからない場合
+/// @note 相対パスはプロジェクトのディレクトリ (`base_dir`) を最初に探し,
+///       次にライブラリ検索ディレクトリを順に探す. プロジェクト相対の定義を
+///       共有ライブラリ側より優先する. `raw`が絶対パスの場合は検索せず、正規化して返す
 std::filesystem::path ResolveLibraryPath(
         const std::string& raw, const std::string& context, const int line,
         const ReadContext& ctx) {
@@ -120,14 +123,15 @@ std::filesystem::path ResolveLibraryPath(
         return std::filesystem::path(raw).lexically_normal();
     }
 
-    if (ctx.library_dirs.empty()) {
-        Fail(context, "no library directories to search: " + raw, line);
-    }
+    const std::filesystem::path local = (ctx.base_dir / raw).lexically_normal();
+    if (std::filesystem::exists(local)) return local;
     for (const std::filesystem::path& dir : ctx.library_dirs) {
         const std::filesystem::path candidate = (dir / raw).lexically_normal();
         if (std::filesystem::exists(candidate)) return candidate;
     }
-    Fail(context, "not found in library directories: " + raw, line);
+    Fail(context,
+         "not found in the project directory or library directories: " + raw,
+         line);
 }
 
 /// @brief `file`/`library`キーを持つテーブルからファイル参照を読む
