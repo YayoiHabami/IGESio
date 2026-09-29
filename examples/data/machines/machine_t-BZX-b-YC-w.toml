@@ -1,0 +1,193 @@
+# 工具側XZB（B軸45°傾斜）、テーブル側YCの同時5軸機（検証用モデル）
+# チェーン構造は以下のとおりで、基準姿勢における全STLの原点は機械座標系原点に一致する
+#
+#   (table)-C-(table-base)-Y-(base)-X-(z-axis-lane)-Z-(head)-B-(spindle-head)
+#
+# 基準姿勢 (X=Y=Z=0mm, B=C=0°) における基準点:
+#   - 機械座標系原点     : テーブル上面の中心
+#   - B軸               : (0, -20, 733) を通り [0, 1, 1]/√2 方向
+#   - ホルダ差込口       : (0, -180, 454.3)、主軸は-Y方向（手前側）
+#
+# B=-180° (既定) で主軸は垂直下向きとなり、ホルダ差込口は (0, -298.7, 573) に移動する。
+# 実機値が存在しないため、送り速度はシミュレーションにおいて確認しやすい値を設定している。
+# (モデルの参考元はDMU 125 duoBLOCKだが、実機寸法が分からないためかなり適当であり,
+#  かつ可動範囲等はDMU 80 duoBLOCKに近い値を設定している。検証用のモデルである)
+
+[format]
+name = "machine-definition"
+version = [2, 0]
+
+[machine]
+name = "tool-BZX-base-YC-work"
+description = "工具側X-Z-B（B軸45°傾斜）・テーブル側Y-Cの同時5軸機（検証用）"
+author = "Yayoi Habami"
+date = 2026-09-17
+
+[units]
+length = "mm"
+angle = "deg"
+
+# ---- ワーク側: base - Y - C - Attach ----
+
+[[component]]
+name = "Y"
+type = "linear"
+parent = "base"
+
+[component.axis]
+register = "Y"
+direction = [0.0, 1.0, 0.0]
+# テーブル自身の移動範囲は [-600, +200] (NC値と逆向き)。+200でコラム手前40mm
+limits = [-200.0, 600.0]
+
+[component.axis.dynamics]
+rapid_feed = 6000.0
+max_feed = 6000.0
+min_feed = 1.0
+
+[[component.geometry]]
+name = "table-base"
+file = "tool-BZX-base-YC-work/table-base.STL"
+color = "#b4bcc4"
+
+[[component]]
+name = "C"
+type = "rotary"
+parent = "Y"
+
+[component.axis]
+register = "C"
+direction = [0.0, 0.0, 1.0]
+# テーブル上面中心
+point = [0.0, 0.0, 0.0]
+unlimited = true
+wrap_start = 0.0
+
+[component.axis.dynamics]
+rapid_feed = 3600.0
+max_feed = 3600.0
+min_feed = 1.0
+
+[[component.geometry]]
+name = "table"
+file = "tool-BZX-base-YC-work/table.STL"
+color = "#4b697d"
+
+[[component]]
+name = "Attach"
+type = "work_mount"
+parent = "C"
+
+# テーブル上面の中心
+[component.frame]
+origin = [0.0, 0.0, 0.0]
+z_axis = [0.0, 0.0, 1.0]
+
+# ---- 工具側: base - X - Z - B - Spindle - Tool ----
+
+[[component]]
+name = "X"
+type = "linear"
+parent = "base"
+
+[component.axis]
+register = "X"
+direction = [1.0, 0.0, 0.0]
+limits = [-400.0, 400.0]
+
+[component.axis.dynamics]
+rapid_feed = 6000.0
+max_feed = 6000.0
+min_feed = 1.0
+
+[[component.geometry]]
+name = "z-axis-lane"
+file = "tool-BZX-base-YC-work/z-axis-lane.STL"
+color = "#d8d8d8"
+
+[[component]]
+name = "Z"
+type = "linear"
+parent = "X"
+
+[component.axis]
+register = "Z"
+direction = [0.0, 0.0, 1.0]
+limits = [-400.0, 400.0]
+
+[component.axis.dynamics]
+rapid_feed = 6000.0
+max_feed = 6000.0
+min_feed = 1.0
+
+[[component.geometry]]
+name = "head"
+file = "tool-BZX-base-YC-work/head.STL"
+color = "#c8c8c8"
+
+[[component]]
+name = "B"
+type = "rotary"
+parent = "Z"
+
+[component.axis]
+register = "B"
+# 45°傾斜軸、B=0で主軸が水平 (-Y向き)、B=-180で垂直下向き
+direction = [0.0, 0.7071067812, 0.7071067812]
+point = [0.0, -20.0, 733.0]
+limits = [-180.0, 30.0]
+initial = -180.0
+
+[component.axis.dynamics]
+rapid_feed = 3600.0
+max_feed = 3600.0
+min_feed = 1.0
+
+[[component.geometry]]
+name = "spindle-head"
+file = "tool-BZX-base-YC-work/spindle-head.STL"
+color = "#707070"
+
+[[component]]
+name = "Spindle"
+type = "spindle"
+parent = "B"
+
+[[component]]
+name = "Tool"
+type = "tool_mount"
+parent = "Spindle"
+
+# ホルダ差込口 (基準姿勢では工具はここから-Y方向)
+[component.frame]
+origin = [0.0, -180.0, 454.3]
+z_axis = [0.0, 1.0, 0.0]
+
+# ---- ベース ----
+
+[[component]]
+name = "base"
+type = "base"
+
+[[component.geometry]]
+name = "base"
+file = "tool-BZX-base-YC-work/base.STL"
+color = "#969696"
+
+# ---- 規約・干渉設定 ----
+
+[kinematics]
+branch = "positive"
+
+[collision]
+default_clearance = 0.5
+pairs = [
+  ["B", "base"],
+  ["tool", "base"],
+]
+
+# 工具側チェーン (Z以下+工具) と
+# ワーク側チェーン (Y以下+ワーク) の全組み合わせ
+[[collision.pair]]
+targets = ["Z", "Y"]
+subtree = [true, true]

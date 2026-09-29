@@ -1,0 +1,99 @@
+# LANGラウンドプレート＋マクログリップにワークを載せたセットアップ
+# 機械はmachine_t-BZX-b-YC-wを使用する（工具側X-Z-B（B軸45°傾斜）、テーブル側Y-Cの同時5軸機）
+#
+# 治具 (work_mountはテーブル上面中心が基準、zが上方向):
+#   ラウンドプレート上面 = +27、
+#   マクログリップ原点   = +65、
+#   ワーク下端          = +89、
+#   ワーク上面          = +139、
+#   NC原点             = +119 (ワーク上面から-20)
+
+[format]
+name = "machining-project"
+version = [1, 0]
+
+[project]
+name = "multiple_obstacles"
+description = "5-axis TCP path machining a workpiece on a LANG round plate and macro grip with an R3 ball end mill on a tool-side XZB (45-degree B) / table-side YC machine"
+author = "Yayoi Habami"
+
+[units]
+length = "mm"
+angle = "deg"
+
+[machine]
+library = "machine_t-BZX-b-YC-w.toml"
+
+# R3ボールエンドミル (簡易アセンブリ)
+# ゲージラインはデフォルト値 (overhang + holder.length = 120)
+[[tool]]
+number = 12
+name = "Ball R3"
+
+[tool.simple]
+cutter = "ball"
+diameter = 6.0
+cutting_length = 20.0
+tool_length = 80.0
+command_point = "center"
+overhang = 60.0
+
+[tool.simple.holder]
+diameter = 40.0
+length = 60.0
+
+# 工具長補正 (NCのG43.5H12). 長さは工具12のゲージ長をデフォルト値とする
+[[tool_offset]]
+number = 12
+tool = 12
+
+# NC座標系: ワークモデル原点から (-44.57, 0, -20) の点
+# 登録値形式: B=-180 (主軸垂直) でのtool_mountフレーム原点 (0, -298.7, 573)
+# をNC原点 (機械座標 (-89.57, -50, 119)) に置くNC指令値.
+# Yはテーブル側のため、NC値とテーブルの移動が逆向きになる（-50 - Y = -298.7）.
+# Cは省略（ゼロのため）
+[[work_offset]]
+id = "G54"
+values = { X = -89.57, Y = 248.7, Z = -454.0, B = -180.0 }
+
+# ラウンドプレート
+# 原点は上面中央、下面まで27mm
+# ラウンドプレート下面をテーブル上面に置く
+[[model]]
+name = "round_plate"
+role = "fixture"
+file = "jigs/lang_round-plate_45901.STL"
+origin = [0.0, 0.0, 27.0]
+
+# マクログリップ
+# 原点は中央、下面まで-38mm
+# マクログリップ下面をラウンドプレート上面に置き、z軸まわりに90度回転
+[[model]]
+name = "macro_grip"
+role = "fixture"
+file = "jigs/lang_macro-grip_48120-77_slides=100.STL"
+attach = "round_plate"
+origin = [0.0, 0.0, 38.0]
+rotation_axis_angle = { axis = [0.0, 0.0, 1.0], angle = 90.0 }
+
+# ワークモデル
+# 原点は上面の角 (上面中央まで+45, +50)、上面から底面まで-50mm
+# ワーク下端をグリップ原点+24に置く (上面は+74mm). 上面中央をグリップ中央に合わせる
+[[model]]
+name = "work"
+role = "stock"
+file = "work_models/multiple_obstacles.stl"
+attach = "round_plate"
+origin = [-45.0, -50.0, 112.0]
+
+[[program]]
+file = "nc/multiple_obstacles.mcd"
+type = "gcode"
+encoding = "utf-8"
+
+[initial]
+tool = 12
+work_offset = "G54"
+
+[run]
+overtravel = "warning"
