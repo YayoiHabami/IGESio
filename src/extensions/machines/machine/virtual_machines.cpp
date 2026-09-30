@@ -152,6 +152,23 @@ std::string DescriptionOf(const VirtualMachineKind kind) {
 
 
 
+std::optional<VirtualMachineKind>
+ParseVirtualMachineKind(const std::string_view text) {
+    if (text == "three_axis") return VirtualMachineKind::kThreeAxis;
+    if (text == "head_bc") return VirtualMachineKind::kHeadBc;
+    if (text == "table_ac") return VirtualMachineKind::kTableAc;
+    return std::nullopt;
+}
+
+std::string_view VirtualMachineKindName(const VirtualMachineKind kind) {
+    switch (kind) {
+        case VirtualMachineKind::kThreeAxis: return "three_axis";
+        case VirtualMachineKind::kHeadBc: return "head_bc";
+        case VirtualMachineKind::kTableAc: return "table_ac";
+    }
+    return "three_axis";
+}
+
 MachineDefinition MakeVirtualMachineDefinition(const VirtualMachineKind kind,
                                                const VirtualMachineOptions& options) {
     if (options.name.empty()) {
@@ -169,6 +186,10 @@ MachineDefinition MakeVirtualMachineDefinition(const VirtualMachineKind kind,
     definition.branch = options.branch;
     definition.source_name = options.name;
     return definition;
+}
+
+MachineDefinition MakeVirtualMachineDefinition(const VirtualMachineSpec& spec) {
+    return MakeVirtualMachineDefinition(spec.kind, spec.options);
 }
 
 }  // namespace igesio::extensions::machines

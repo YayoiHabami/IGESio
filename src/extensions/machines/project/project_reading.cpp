@@ -4,9 +4,10 @@
  * @author Yayoi Habami
  * @date 2026-09-12
  * @copyright 2026 Yayoi Habami
- * @note 読込順: `[format]` → `[project]` → `[units]` → `[machine]` (参照先の
- *       機械定義も読み込む) → `[controller]` → `[[tool_library]]` →
- *       `[[tool]]` → `[[tool_offset]]` → `[[work_offset]]` → `[[model]]` →
+ * @note 読込順: `[format]` → `[project]` → `[units]` → `[machine]`
+ *       (参照先の機械定義の読込 or 仮想機械の作成) → `[controller]` →
+ *       `[[tool_library]]` → `[[tool]]` → `[[tool_offset]]` →
+ *       `[[work_offset]]` → `[[model]]` →
  *       取り付け先の名前の重複検査 → `[initial]` → `[[program]]` →
  *       `[collision]` → `[run]` → 読み込まなかったトップレベルのキーを
  *       `retained`に格納する.
@@ -67,7 +68,7 @@ struct MachineAxis {
     bool is_rotary = false;
 };
 
-/// @brief `[[section]][i]`形式の文脈文字列を作る
+/// @brief `[[section]][i]`形式の文字列を作る
 /// @param section セクション名 (`"[[tool]]"`等)
 /// @param index 要素の添字
 std::string Indexed(const std::string& section, const std::size_t index) {
@@ -75,7 +76,7 @@ std::string Indexed(const std::string& section, const std::size_t index) {
 }
 
 /// @brief 警告を`ctx.project->warnings`に追加する
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @param context 読込箇所
 /// @param message 警告の文言
 /// @param line 行番号 (該当行が無ければ0)
@@ -92,7 +93,7 @@ void WarnAt(const ReadContext& ctx, const std::string& context,
 /// @param raw ファイルに記載されたパス
 /// @param context 読込箇所
 /// @param line パスの行番号
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 void CheckReferencePath(const std::string& raw, const std::string& context,
                         const int line, const ReadContext& ctx) {
     PathIssues issues;
@@ -111,7 +112,7 @@ void CheckReferencePath(const std::string& raw, const std::string& context,
 /// @param raw ファイルに記載されたパス
 /// @param context 読込箇所
 /// @param line パスの行番号
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return 見つかったファイルの正規化済みパス
 /// @throw igesio::DataFormatError いずれのディレクトリでも見つからない場合
 /// @note 相対パスはプロジェクトのディレクトリ (`base_dir`) を最初に探し,
@@ -139,7 +140,7 @@ std::filesystem::path ResolveLibraryPath(
 /// @brief `file`/`library`キーを持つテーブルからファイル参照を読む
 /// @param table `file`/`library`を持ち得るテーブル
 /// @param context 読込箇所
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @param allow_library `library`キーを許すか (`[[program]]`は`file`のみ)
 /// @param check_exists 解決したファイルの存在を要求するか
 /// @throw igesio::DataFormatError `file`/`library`の択一に反する、パスが空,
@@ -202,7 +203,7 @@ std::unordered_map<std::string, MachineAxis> CollectMachineAxes(
 /// @brief 軸名→NC指令値のテーブル (`values`/`[initial.axes]`) を読む
 /// @param table 軸名をキーとするテーブル
 /// @param context 読込箇所
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @param check_limits `limits`内であることを要求するか
 /// @throw igesio::DataFormatError テーブルでない、機械に無い軸名、実数でない値,
 ///        または`limits`外の場合
@@ -246,7 +247,7 @@ bool IsComponentName(
 /// @param number 工具番号
 /// @param context 読込箇所
 /// @param line 工具番号の行番号
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @param allow_none `kNoTool` (0) を許すか
 /// @throw igesio::DataFormatError 未定義の工具番号の場合
 void CheckToolNumber(
@@ -264,7 +265,7 @@ void CheckToolNumber(
 /// @param id ワークオフセットid
 /// @param context 読込箇所
 /// @param line idの行番号
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError 未定義のidの場合
 /// @note `[[work_offset]]`が無い場合は暗黙の`G54`のみ有効
 void CheckWorkOffsetId(const std::string& id, const std::string& context,
@@ -298,26 +299,80 @@ void ReadProjectMeta(const TomlValue& root, ProjectDefinition& project) {
             ReadDateTimeText(*table, "modified", "[project]").value_or("");
 }
 
-/// @brief `[machine]`を読み、参照先の機械定義を読み込む
-/// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
-/// @throw igesio::DataFormatError `[machine]`が無い、参照先が存在しない,
+/// @brief `[machine]`で指定された仮想機械定義を読み込む
+/// @param table `[machine]`のテーブル (`virtual`キーを持つ)
+/// @param ctx 読込全体で共有する内容
+/// @return 仮想機械の種類と設定. 省略したキーは`VirtualMachineOptions`の既定値
+/// @throw igesio::DataFormatError `file`/`library`と同時に指定された、未知の種類,
+///        `name`が空、未知の`branch`、または`tilt_limit`が正でない場合
+VirtualMachineSpec ReadVirtualMachineSpec(const TomlValue& table,
+                                          const ReadContext& ctx) {
+    const std::string context = "[machine]";
+    if (!PresentKeys(table, {"file", "library"}).empty()) {
+        Fail(context, "specify exactly one of file, library and virtual",
+             LineOf(table));
+    }
+
+    VirtualMachineSpec spec;
+    const std::string kind = RequireString(table, "virtual", context);
+    const auto parsed_kind = ParseVirtualMachineKind(kind);
+    if (!parsed_kind.has_value()) {
+        Fail(context, "unknown virtual machine: " + kind,
+             LineOf(*Find(table, "virtual")));
+    }
+    spec.kind = *parsed_kind;
+    if (const auto name = OptionalString(table, "name", context)) {
+        if (name->empty()) {
+            Fail(context, "name is empty", LineOf(*Find(table, "name")));
+        }
+        spec.options.name = *name;
+    }
+    if (const auto branch = OptionalString(table, "branch", context)) {
+        const auto policy = ParseBranchPolicy(*branch);
+        if (!policy.has_value()) {
+            Fail(context, "unknown branch: " + *branch,
+                 LineOf(*Find(table, "branch")));
+        }
+        spec.options.branch = *policy;
+    }
+    if (const TomlValue* tilt = Find(table, "tilt_limit"); tilt != nullptr) {
+        spec.options.tilt_limit_rad =
+                AsPositive(*tilt, context + ".tilt_limit")
+                * ctx.project->units.angle;
+    }
+    return spec;
+}
+
+/// @brief `[machine]`に基づいて機械定義ファイルを読み込む
+/// @param table `[machine]`のテーブル (`virtual`キーを持たない)
+/// @param ctx 読込全体で共有する内容
+/// @throw igesio::DataFormatError `file`/`library`がどちらも無い、仮想機械専用の
+///        キー (`name`/`tilt_limit`/`branch`) がある、参照先が存在しない,
 ///        または機械定義の読込に失敗した場合
 /// @note 機械定義の読込エラーの文言には先頭に`"[machine]: "`を付ける.
 ///       機械定義の警告は読込箇所を`"machine"`として`project.warnings`に
 ///       転記する
-void ReadMachineSection(const TomlValue& root, const ReadContext& ctx) {
-    const TomlValue* table = Find(root, "machine");
-    if (table == nullptr) Fail("", "[machine] is missing");
-    EnsureTable(*table, "[machine] is not a table");
+void ReadMachineFile(const TomlValue& table, const ReadContext& ctx) {
+    const std::string context = "[machine]";
+    if (PresentKeys(table, {"file", "library"}).empty()) {
+        Fail(context, "specify exactly one of file, library and virtual",
+             LineOf(table));
+    }
+    const auto virtual_only = PresentKeys(table, {"name", "tilt_limit", "branch"});
+    if (!virtual_only.empty()) {
+        Fail(context, virtual_only.front() + " requires virtual",
+             LineOf(*Find(table, virtual_only.front())));
+    }
+
     ProjectDefinition& project = *ctx.project;
-    project.machine_ref =
-            ReadFileReference(*table, "[machine]", ctx, true, true);
+    FileReference reference =
+            ReadFileReference(table, context, ctx, true, true);
     try {
-        project.machine = ReadMachineDefinition(project.machine_ref.resolved);
+        project.machine = ReadMachineDefinition(reference.resolved);
     } catch (const igesio::DataFormatError& e) {
         throw igesio::DataFormatError("[machine]: " + std::string(e.what()));
     }
+    project.machine_source = std::move(reference);
     for (const Diagnostic& diagnostic : project.machine.warnings) {
         const std::string prefix =
                 diagnostic.context.empty() ? "" : diagnostic.context + ": ";
@@ -327,9 +382,30 @@ void ReadMachineSection(const TomlValue& root, const ReadContext& ctx) {
     }
 }
 
+/// @brief `[machine]`に基づいて機械定義を作成・追加する
+/// @param root TOMLのルートテーブル
+/// @param ctx 読込全体で共有する内容
+/// @throw igesio::DataFormatError `[machine]`が無い、テーブルでない,
+///        または記載に不備がある場合 (`ReadVirtualMachineSpec`/
+///        `ReadMachineFile`から伝播)
+/// @note `virtual`キーがあれば仮想機械、無ければ機械定義ファイルの参照として読む
+void ReadMachineSection(const TomlValue& root, const ReadContext& ctx) {
+    const TomlValue* table = Find(root, "machine");
+    if (table == nullptr) Fail("", "[machine] is missing");
+    EnsureTable(*table, "[machine] is not a table");
+    if (Find(*table, "virtual") == nullptr) {
+        ReadMachineFile(*table, ctx);
+        return;
+    }
+
+    const VirtualMachineSpec spec = ReadVirtualMachineSpec(*table, ctx);
+    ctx.project->machine = MakeVirtualMachineDefinition(spec);
+    ctx.project->machine_source = spec;
+}
+
 /// @brief `[controller]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return `[controller]`が無ければ`std::nullopt`
 /// @throw igesio::DataFormatError `[controller]`がテーブルでない場合
 ///        (ファイル参照の不備は`ReadFileReference`から伝播)
@@ -353,7 +429,7 @@ std::optional<ControllerSpec> ReadController(const TomlValue& root,
 
 /// @brief `[[tool_library]]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError ライブラリが2つ以上あるのに`alias`が無い,
 ///        または`alias`が重複する場合 (ファイル参照の不備は
 ///        `ReadFileReference`から伝播)
@@ -385,7 +461,7 @@ std::vector<ToolLibrarySpec> ReadToolLibraries(const TomlValue& root,
 /// @brief `[tool.simple]`を読む
 /// @param table `[tool.simple]`のテーブル
 /// @param context 読込箇所
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError テーブルでない、必須キーが無い,
 ///        未知の`cutter`/`command_point`、`radius`以外の`cutter`に
 ///        `corner_radius`がある、または正でない値の場合
@@ -450,7 +526,7 @@ SimpleToolSpec ReadSimpleTool(
 /// @param spec 簡易アセンブリの定義 (内部単位)
 /// @param context 読込箇所
 /// @param line `[tool.simple]`の行番号
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError 幾何が成立しない場合
 void ValidateSimpleTool(const SimpleToolSpec& spec, const std::string& context,
                         const int line, const ReadContext& ctx) {
@@ -658,7 +734,7 @@ ToolProfileElement ReadProfileElement(
 /// @param table `[tool.profile]`のテーブル
 /// @param name 工具名 (`[[tool]].name`)
 /// @param context 読込箇所
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return 検証済みの輪郭 (内部単位). `gauge_line_z`は未設定
 /// @throw igesio::DataFormatError テーブルでない、`command_point_z`が負,
 ///        `[[tool.profile.element]]`が無い、または`ValidateToolProfile`の検証
@@ -697,7 +773,7 @@ ToolProfile ReadProfileTool(const TomlValue& table, const std::string& name,
 /// @brief `[[tool]]`の`source` (ライブラリ別名) を読んで検証する
 /// @param table `[[tool]]`の要素のテーブル
 /// @param context 読込箇所
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return 記載された別名. 未記載なら空 (ライブラリが1つの場合のみ許す)
 /// @throw igesio::DataFormatError 未記載でライブラリが1つでない,
 ///        または未知の別名の場合
@@ -728,7 +804,7 @@ std::string ReadToolSource(const TomlValue& table, const std::string& context,
 /// @param table `[[tool]]`の要素のテーブル
 /// @param name 工具名 (`[[tool]].name`. 輪郭形式では必須)
 /// @param context 読込箇所
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return 簡易アセンブリ形式、ライブラリ参照形式、または輪郭形式の定義
 /// @throw igesio::DataFormatError `assembly`/`[tool.simple]`/`[tool.profile]`
 ///        の択一に反する、または輪郭形式で`name`が空の場合
@@ -764,7 +840,7 @@ std::variant<SimpleToolSpec, LibraryToolRef, ToolProfile> ReadToolShape(
 /// @brief `[[tool]]`の1要素を読む
 /// @param table 要素のテーブル
 /// @param index `[[tool]]`内の添字 (`number`を読む前の読込箇所に用いる)
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError `number`が正でない、重複する,
 ///        `gauge_length`が正でない、または未知の`control_point`の場合
 ///        (`ReadToolShape`からも伝播)
@@ -803,7 +879,7 @@ ToolEntry ReadTool(const TomlValue& table, const std::size_t index,
 
 /// @brief `[[tool]]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @note 要素は読み次第`project.tools`に追加し、番号の重複検査に用いる
 void ReadTools(const TomlValue& root, const ReadContext& ctx) {
     const std::vector<const TomlValue*> tables =
@@ -815,7 +891,7 @@ void ReadTools(const TomlValue& root, const ReadContext& ctx) {
 
 /// @brief `[[tool_offset]]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError `number`が正でない、重複する,
 ///        または`tool`が未定義の工具番号の場合
 std::vector<ToolOffsetEntry> ReadToolOffsets(const TomlValue& root,
@@ -866,7 +942,7 @@ std::vector<ToolOffsetEntry> ReadToolOffsets(const TomlValue& root,
 /// @brief `[[work_offset]]`の1要素を読む
 /// @param table 要素のテーブル
 /// @param index `[[work_offset]]`内の添字 (`id`を読む前の読込箇所に用いる)
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError `id`が重複する、未知の`from`、`attach`が空,
 ///        または`values`と`origin`/回転の択一に反する場合
 ///        (`values`の不備は`ReadAxisTable`から伝播)
@@ -920,7 +996,7 @@ WorkOffsetSpec ReadWorkOffset(const TomlValue& table, const std::size_t index,
 
 /// @brief `[[work_offset]]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @note 要素は読み次第`project.work_offsets`に追加し、`id`の重複検査に用いる
 void ReadWorkOffsets(const TomlValue& root, const ReadContext& ctx) {
     const std::vector<const TomlValue*> tables =
@@ -934,7 +1010,7 @@ void ReadWorkOffsets(const TomlValue& root, const ReadContext& ctx) {
 /// @param table 要素のテーブル
 /// @param role モデルの役割
 /// @param context 読込箇所
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return `collision`が無ければ役割のデフォルト値
 /// @throw igesio::DataFormatError `role = "display"`で`collision = true`の場合
 /// @note `role = "design"`で`collision = true`の場合は警告する
@@ -958,7 +1034,7 @@ bool ReadModelCollision(const TomlValue& table, const ModelRole role,
 /// @brief `[[model]]`の1要素を読む
 /// @param table 要素のテーブル
 /// @param index `[[model]]`内の添字 (`name`を読む前の読込箇所に用いる)
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @param[out] issues 可搬でないパスの件数の加算先
 /// @throw igesio::DataFormatError 未知の`role`、または`attach`が空の場合
 ///        (形状と`collision`の不備は`ReadGeometry`/`ReadModelCollision`
@@ -993,7 +1069,7 @@ ModelSpec ReadModel(const TomlValue& table, const std::size_t index,
 
 /// @brief `[[model]]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @note 可搬でないパスの警告は要素ごとではなく、件数をまとめて1つ出す
 std::vector<ModelSpec> ReadModels(
         const TomlValue& root, const ReadContext& ctx) {
@@ -1015,8 +1091,8 @@ std::vector<ModelSpec> ReadModels(
     return models;
 }
 
-/// @brief 取り付け先の名前の重複を検査する
-/// @param ctx 読込の文脈
+/// @brief 取り付け先の名前に重複がないか検証する
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError モデル名またはワークオフセットidが他の
 ///        取り付け先の名前と重複する場合
 /// @note 取り付け先の名前 (予約名/コンポーネント名/モデル名/ワークオフセットid)
@@ -1049,7 +1125,7 @@ void CheckAttachNamespace(const ReadContext& ctx) {
 
 /// @brief `[initial]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError テーブルでない、未定義の工具番号,
 ///        または未定義のワークオフセットidの場合
 ///        (`axes`の不備は`ReadAxisTable`から伝播)
@@ -1164,7 +1240,7 @@ void ReadProgramFormat(const TomlValue& table, const std::string& context,
 /// @brief `[[program]]`の1要素を読む
 /// @param table 要素のテーブル
 /// @param index `[[program]]`内の添字
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError `start_line`が1未満、`end_line`が`start_line`
 ///        未満、未定義の工具番号、または未定義のワークオフセットidの場合
 ///        (`file`/形式/`block_skip`の不備は`ReadFileReference`/
@@ -1206,7 +1282,7 @@ ProgramSpec ReadProgram(const TomlValue& table, const std::size_t index,
 
 /// @brief `[[program]]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 std::vector<ProgramSpec> ReadPrograms(
         const TomlValue& root, const ReadContext& ctx) {
     const std::vector<const TomlValue*> tables =
@@ -1224,7 +1300,7 @@ std::vector<ProgramSpec> ReadPrograms(
 
 /// @brief `[[collision.tool_pair]]`を読む
 /// @param collision `[collision]`のテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError 未知の`part`、`target`が`stock`/`fixture`
 ///        以外、ペアが重複する、または`clearance`が正でない場合
 std::vector<ToolPairSpec> ReadToolPairs(const TomlValue& collision,
@@ -1272,7 +1348,7 @@ std::vector<ToolPairSpec> ReadToolPairs(const TomlValue& collision,
 
 /// @brief `[[collision.machine_pair]]`を読む
 /// @param collision `[collision]`のテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError `targets`が文字列2つでない、存在しない名前,
 ///        `subtree`が真偽値2つでない、または`clearance`が正でない場合
 /// @note 検証は名前の存在のみ. ペアの規則は`MachiningSetup`で検証する
@@ -1330,7 +1406,7 @@ std::vector<MachinePairOverride> ReadMachinePairs(const TomlValue& collision,
 
 /// @brief `[collision]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return `[collision]`が無ければ`std::nullopt`
 /// @throw igesio::DataFormatError テーブルでない、または`default_clearance`が
 ///        正でない場合 (ペアの不備は`ReadToolPairs`/`ReadMachinePairs`から伝播)
@@ -1355,7 +1431,7 @@ std::optional<ProjectCollisionSettings> ReadCollision(const TomlValue& root,
 
 /// @brief `[run.output]`を読む
 /// @param run `[run]`のテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return `[run.output]`が無ければ全メンバ未設定
 /// @throw igesio::DataFormatError テーブルでない、または`dir`が空の場合
 /// @note `cut_stock`の拡張子が`.stl`/`.obj`以外の場合は警告する
@@ -1400,7 +1476,7 @@ RunOutput ReadRunOutput(const TomlValue& run, const ReadContext& ctx) {
 
 /// @brief `[run]`を読む
 /// @param root TOMLのルートテーブル
-/// @param ctx 読込の文脈
+/// @param ctx 読込全体で共有する内容
 /// @return `[run]`が無ければデフォルト値
 /// @throw igesio::DataFormatError テーブルでない、未定義の工具番号,
 ///        または未知の`overtravel`/`collision`の場合

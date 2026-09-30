@@ -35,7 +35,7 @@ namespace {
 
 /// @brief 出力の先頭に置く見出しコメント
 constexpr const char* kHeaderComment =
-        "# machining-project 1.1 "
+        "# machining-project 1.2 "
         "(written by the IGESio machines extension)\n\n";
 
 /// @brief 軸名→回転軸かの表
@@ -63,7 +63,7 @@ AxisKinds CollectAxisKinds(const MachineDefinition& machine) {
 /// @param[out] table 書き込み先のテーブル
 /// @param reference ファイル参照
 /// @param context 出力箇所 (例外の文言に用いる)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @throw std::invalid_argument ライブラリ参照で`raw`が空、または`file`参照で
 ///        `raw`/`resolved`とも空の場合
 void PutFileReference(TomlValue& table, const FileReference& reference,
@@ -86,7 +86,7 @@ void PutFileReference(TomlValue& table, const FileReference& reference,
 /// @param values 軸名→NC指令値 (内部単位)
 /// @param kinds 軸名→回転軸かの表
 /// @param context 出力箇所 (例外の文言に用いる)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @param inline_form インライン表 (`values = { ... }`) で書くか
 /// @throw std::invalid_argument 機械に無い軸名を含む場合
 TomlValue MakeAxisTable(const NcValues& values, const AxisKinds& kinds,
@@ -111,7 +111,7 @@ TomlValue MakeAxisTable(const NcValues& values, const AxisKinds& kinds,
 
 /// @brief `[tool.simple]`を書く
 /// @param spec 簡易アセンブリの定義 (内部単位)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 TomlValue MakeSimpleTool(const SimpleToolSpec& spec, const WriteContext& ctx) {
     const double scale = ctx.length_scale;
     TomlValue table = Table();
@@ -191,7 +191,7 @@ TomlValue MakeProfileElement(const ToolProfileElement& element,
 
 /// @brief `[tool.profile]`を書く
 /// @param profile 輪郭 (内部単位)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @note `command_point_z`が0 (先端) なら省略する. ゲージラインは
 ///       `[[tool]].gauge_length`として書くため、`gauge_line_z`は書かない
 /// @throw std::invalid_argument セグメントを持たない部位要素がある場合
@@ -211,7 +211,7 @@ TomlValue MakeProfileTool(const ToolProfile& profile, const WriteContext& ctx) {
 
 /// @brief `[[tool]]`の1要素を書く
 /// @param entry 出力する工具 (内部単位)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @note 形状のサブテーブル (`[tool.simple]`/`[tool.profile]`) はスカラーの
 ///       キーの後に置く
 TomlValue MakeTool(const ToolEntry& entry, const WriteContext& ctx) {
@@ -242,7 +242,7 @@ TomlValue MakeTool(const ToolEntry& entry, const WriteContext& ctx) {
 
 /// @brief `[[tool_offset]]`の1要素を書く
 /// @param entry 出力する工具オフセット (内部単位)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @note 摩耗量が0のキーは省略する
 TomlValue MakeToolOffset(
         const ToolOffsetEntry& entry, const WriteContext& ctx) {
@@ -264,7 +264,7 @@ TomlValue MakeToolOffset(
 /// @brief `[[tool_library]]`の1要素を書く
 /// @param library 出力するライブラリ参照
 /// @param index `[[tool_library]]`内の添字 (例外の文言に用いる)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @throw std::invalid_argument ライブラリ参照で`raw`が空、または`file`参照で
 ///        `raw`/`resolved`とも空の場合 (`PutFileReference`から伝播)
 TomlValue MakeToolLibrary(
@@ -284,7 +284,7 @@ TomlValue MakeToolLibrary(
 /// @brief `[[work_offset]]`の1要素を書く
 /// @param spec 出力するワークオフセット (内部単位)
 /// @param kinds 軸名→回転軸かの表
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @throw std::invalid_argument `values`に機械に無い軸名を含む場合
 ///        (`MakeAxisTable`から伝播)
 TomlValue MakeWorkOffset(const WorkOffsetSpec& spec, const AxisKinds& kinds,
@@ -317,7 +317,7 @@ TomlValue MakeWorkOffset(const WorkOffsetSpec& spec, const AxisKinds& kinds,
 
 /// @brief `[[model]]`の1要素を書く
 /// @param model 出力するモデル (内部単位)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @throw std::invalid_argument STL/OBJの`file_unit_scale`がmm/inchのいずれでも
 ///        ない場合 (`MakeGeometry`から伝播)
 /// @note 形状のキーは`MakeGeometry`で作り、`name`/`role`/`attach`を先頭に置く
@@ -340,7 +340,7 @@ TomlValue MakeModel(const ModelSpec& model, const WriteContext& ctx) {
 /// @brief `[[program]]`の1要素を書く
 /// @param program 出力するプログラム
 /// @param index `[[program]]`内の添字 (例外の文言に用いる)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @throw std::invalid_argument ライブラリ参照のプログラム、または`file`参照で
 ///        `raw`/`resolved`とも空の場合
 TomlValue MakeProgram(const ProgramSpec& program, const std::size_t index,
@@ -402,13 +402,45 @@ TomlValue MakeProjectMeta(const ProjectDefinition& project) {
     return table;
 }
 
+/// @brief `[machine]`の内容を書き込む
+/// @param source `[machine]`のソース
+///        (機械定義ファイルの参照、または仮想機械の指定)
+/// @param ctx TOML出力全体で共有する内容
+/// @throw std::invalid_argument ファイル参照のパスが空の場合
+///        (`PutFileReference`から伝播)
+/// @note 仮想機械の`name`/`branch`/`tilt_limit`は、`VirtualMachineOptions`の
+///       既定値と一致すれば省略する
+TomlValue MakeMachine(
+        const std::variant<FileReference, VirtualMachineSpec>& source,
+        const WriteContext& ctx) {
+    TomlValue table = Table();
+    if (const auto* file = std::get_if<FileReference>(&source);
+        file != nullptr) {
+        PutFileReference(table, *file, "[machine]", ctx);
+        return table;
+    }
+
+    const auto& spec = std::get<VirtualMachineSpec>(source);
+    const VirtualMachineOptions defaults{};
+    table["virtual"] = std::string(VirtualMachineKindName(spec.kind));
+    if (spec.options.name != defaults.name) table["name"] = spec.options.name;
+    if (spec.options.branch != defaults.branch) {
+        table["branch"] = std::string(BranchPolicyName(spec.options.branch));
+    }
+    if (spec.options.tilt_limit_rad.has_value()) {
+        table["tilt_limit"] =
+                Real(*spec.options.tilt_limit_rad / ctx.angle_scale);
+    }
+    return table;
+}
+
 /// @brief `[controller]`を書く
 /// @param controller 出力する制御装置の設定
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @throw std::invalid_argument ライブラリ参照で`raw`が空、または`file`参照で
 ///        `raw`/`resolved`とも空の場合 (`PutFileReference`から伝播)
-TomlValue MakeController(
-        const ControllerSpec& controller, const WriteContext& ctx) {
+TomlValue MakeController(const ControllerSpec& controller,
+                         const WriteContext& ctx) {
     TomlValue table = Table();
     PutFileReference(table, controller.file, "[controller]", ctx);
     if (!controller.disabled_codes.empty()) {
@@ -424,7 +456,7 @@ TomlValue MakeController(
 /// @brief `[initial]`を書く
 /// @param project 出力するプロジェクト定義 (内部単位)
 /// @param kinds 軸名→回転軸かの表
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @return 書く内容が無ければ`std::nullopt`
 /// @throw std::invalid_argument `[initial.axes]`に機械に無い軸名を含む場合
 ///        (`MakeAxisTable`から伝播)
@@ -451,7 +483,7 @@ std::optional<TomlValue> MakeInitial(
 
 /// @brief `[collision]`を書く
 /// @param settings 出力する干渉チェックの設定 (内部単位)
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @note デフォルト値のキーは省略する
 TomlValue MakeCollision(const ProjectCollisionSettings& settings,
                         const WriteContext& ctx) {
@@ -499,7 +531,7 @@ TomlValue MakeCollision(const ProjectCollisionSettings& settings,
 
 /// @brief `[run]`を書く
 /// @param run 出力する実行制御の設定
-/// @param ctx 出力の文脈
+/// @param ctx TOML出力全体で共有する内容
 /// @return 全てデフォルト値なら`std::nullopt`
 std::optional<TomlValue> MakeRun(
         const RunSettings& run, const WriteContext& ctx) {
@@ -565,9 +597,7 @@ std::string FormatProject(const ProjectDefinition& project,
     root["format"] = MakeFormat(kProjectFormatName, kProjectFormatVersion);
     root["project"] = MakeProjectMeta(project);
     root["units"] = MakeUnits(project.units);
-    TomlValue machine = Table();
-    PutFileReference(machine, project.machine_ref, "[machine]", ctx);
-    root["machine"] = machine;
+    root["machine"] = MakeMachine(project.machine_source, ctx);
     if (project.controller.has_value()) {
         root["controller"] = MakeController(*project.controller, ctx);
     }

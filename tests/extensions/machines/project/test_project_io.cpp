@@ -9,13 +9,15 @@
  *       - 正常系 (実例): `sample.toml`・`library_ref.toml`が警告0件で読め、
  *         参照・工具・ワークオフセット・モデル・プログラム・保持セクションが入ること
  *       - 正常系 (要素): `modified`の表記保持、`library`の検索 (プロジェクトの
- *         ディレクトリ優先)、機械定義の警告転記、
+ *         ディレクトリ優先)、機械定義の警告転記、仮想機械の指定 (種類3つ、
+ *         設定と`tilt_limit`の単位換算、`three_axis`での`tilt_limit`の保持)、
  *         簡易工具の単位換算、ライブラリ参照の保持、輪郭形式の読込 (単位換算・
  *         軸上での閉包・円弧中心の補正)、省略値の`nullopt`保持、
  *         ワークオフセットの2形式と単位換算、役割別の`collision`既定、形状の再利用、
  *         `[initial]`・`[[program]]`・`[collision]`・`[run]`の各項目、`retained`
  *       - 正常系 (境界値): `[initial.axes]`の`limits`端と許容誤差、`block_skip`の1と9、
- *         古いminor版の受理、円弧中心の許容誤差、指令点の上限、不透明度の0と1
+ *         古いminor版と現行minor版の受理、円弧中心の許容誤差、指令点の上限,
+ *         不透明度の0と1、微小な正の`tilt_limit`
  *       - 異常系: 仕様§5.1の各項目を代表1件ずつ、例外型と識別語で検証
  *       - 警告: minor版、`overhang < cutting_length`、designの`collision`、
  *         可搬でないパス、`cut_stock`の拡張子
@@ -38,6 +40,7 @@
 #include "igesio/extensions/machines/core/rotation.h"
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
+#include "igesio/extensions/machines/machine/virtual_machines.h"
 #include "igesio/extensions/machines/project/project_definition.h"
 #include "igesio/extensions/machines/project/project_io.h"
 #include "igesio/extensions/machines/tools/tool_assembly.h"
@@ -111,6 +114,20 @@ std::string MinimalWithoutMachine() {
     return Replace(MinimalProject(), "[machine]\nlibrary = \"t-ZYX-b-AC-w.toml\"\n", "");
 }
 
+/// @brief `[machine]`の機械定義ファイルの参照を取得する
+/// @throw std::bad_variant_access 仮想機械の指定である場合
+const mc::FileReference& MachineFile(const mc::ProjectDefinition& project) {
+    return std::get<mc::FileReference>(project.machine_source);
+}
+
+/// @brief `[machine]`を仮想機械の指定に置き換えた最小構成
+/// @param machine_keys `[machine]`に書くキー (`virtual = "head_bc"`等)
+/// @note 仮想機械はX/Y/Zを持ち可動範囲無制限なので、G54の`values`と
+///       `[initial.axes]`のZ (100) はそのまま受理される
+std::string WithVirtualMachine(const std::string& machine_keys) {
+    return Replace(MinimalProject(), "library = \"t-ZYX-b-AC-w.toml\"", machine_keys);
+}
+
 /// @brief 長さ単位をinchにした最小構成
 /// @note `[initial.axes]`のZ (100) はinchでは`limits`を超えるので10 (254 mm) にする
 std::string WithInchUnits(const std::string& toml) {
@@ -132,20 +149,27 @@ std::string WithProfile(const std::string& from, const std::string& to) {
 TEST(ProjectIoTest, Format_ThrowsDataFormatErrorWhenNameOrMajorMismatch) {
     ExpectDataFormatError(Replace(MinimalProject(), "machining-project", "cspace-project"),
                           "machining-project");
-    ExpectDataFormatError(Replace(MinimalProject(), "version = [1, 1]", "version = [2, 0]"),
+    ExpectDataFormatError(Replace(MinimalProject(), "version = [1, 2]", "version = [2, 0]"),
                           "unsupported format version");
 }
 
 TEST(ProjectIoTest, Format_WarnsWhenMinorIsNewer) {
     const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [1, 1]", "version = [1, 2]"));
+            ReadProjectText(Replace(MinimalProject(), "version = [1, 2]", "version = [1, 3]"));
     ExpectSingleWarning(project, "newer minor");
+    EXPECT_EQ(project.format_version[1], 3);
+}
+
+TEST(ProjectIoTest, Format_AcceptsCurrentMinorWithoutWarning) {
+    const auto project =
+            ReadProjectText(Replace(MinimalProject(), "version = [1, 2]", "version = [1, 2]"));
+    EXPECT_TRUE(project.warnings.empty());
     EXPECT_EQ(project.format_version[1], 2);
 }
 
 TEST(ProjectIoTest, Format_AcceptsOlderMinorWithoutWarning) {
     const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [1, 1]", "version = [1, 0]"));
+            ReadProjectText(Replace(MinimalProject(), "version = [1, 2]", "version = [1, 0]"));
     EXPECT_TRUE(project.warnings.empty());
     EXPECT_EQ(project.format_version[1], 0);
 }
@@ -176,11 +200,12 @@ TEST(ProjectIoTest, Machine_FileAndLibraryXor) {
                                   "library = \"t-ZYX-b-AC-w.toml\"\nfile = \"x.toml\""),
                           "exactly one of file and library");
     ExpectDataFormatError(Replace(MinimalProject(), "library = \"t-ZYX-b-AC-w.toml\"", ""),
-                          "exactly one of file and library");
+                          "exactly one of file, library and virtual");
     const auto project = ReadProjectText(MinimalProject());
-    EXPECT_TRUE(project.machine_ref.from_library);
-    EXPECT_EQ(project.machine_ref.raw, "t-ZYX-b-AC-w.toml");
-    EXPECT_EQ(project.machine_ref.resolved,
+    const mc::FileReference& reference = MachineFile(project);
+    EXPECT_TRUE(reference.from_library);
+    EXPECT_EQ(reference.raw, "t-ZYX-b-AC-w.toml");
+    EXPECT_EQ(reference.resolved,
               (kMachinesDir / "t-ZYX-b-AC-w.toml").lexically_normal());
     EXPECT_EQ(project.machine.name, "tool-ZYX-base-AC-work");
     EXPECT_TRUE(project.warnings.empty());
@@ -199,16 +224,16 @@ TEST(ProjectIoTest, Machine_LibraryIsSearchedInProjectDirFirst) {
     // 検索ディレクトリが空でもプロジェクトのディレクトリから見つかる
     const auto local = mc::ReadProjectFromString(
             MinimalProject(), dir, mc::ReadProjectOptions{}, "<test>");
-    EXPECT_TRUE(local.machine_ref.from_library);
-    EXPECT_EQ(local.machine_ref.raw, "t-ZYX-b-AC-w.toml");
-    EXPECT_EQ(local.machine_ref.resolved,
+    EXPECT_TRUE(MachineFile(local).from_library);
+    EXPECT_EQ(MachineFile(local).raw, "t-ZYX-b-AC-w.toml");
+    EXPECT_EQ(MachineFile(local).resolved,
               (dir / "t-ZYX-b-AC-w.toml").lexically_normal());
     EXPECT_EQ(local.machine.name, "minimal-xyz-ac");
 
     // 検索ディレクトリに同名ファイルがあってもプロジェクトのディレクトリを優先する
     const auto preferred = mc::ReadProjectFromString(
             MinimalProject(), dir, DefaultOptions(), "<test>");
-    EXPECT_EQ(preferred.machine_ref.resolved,
+    EXPECT_EQ(MachineFile(preferred).resolved,
               (dir / "t-ZYX-b-AC-w.toml").lexically_normal());
     EXPECT_EQ(preferred.machine.name, "minimal-xyz-ac");
 }
@@ -225,8 +250,8 @@ TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenLibraryIsNotFound) {
 TEST(ProjectIoTest, Machine_FileIsResolvedFromBaseDir) {
     const auto project = ReadProjectWithMachine(MinimalXyzAc(), MinimalWithoutMachine(),
                                                 "igesio_project_io_file");
-    EXPECT_FALSE(project.machine_ref.from_library);
-    EXPECT_EQ(project.machine_ref.raw, "machine.toml");
+    EXPECT_FALSE(MachineFile(project).from_library);
+    EXPECT_EQ(MachineFile(project).raw, "machine.toml");
     EXPECT_EQ(project.machine.name, "minimal-xyz-ac");
     EXPECT_TRUE(project.warnings.empty());
 }
@@ -238,6 +263,122 @@ TEST(ProjectIoTest, Machine_WarningsAreForwarded) {
     ASSERT_EQ(project.warnings.size(), 1u);
     EXPECT_EQ(project.warnings[0].context, "machine");
     EXPECT_NE(project.warnings[0].message.find("newer minor"), std::string::npos);
+}
+
+/// @brief 仮想機械の種類ごとの読込のパラメータ
+struct VirtualKindCase {
+    /// @brief `[machine].virtual`の値
+    std::string text;
+    /// @brief 対応する種類
+    mc::VirtualMachineKind kind;
+};
+
+/// @brief 仮想機械の種類ごとの読込のテスト
+class ProjectIoVirtualKindTest : public ::testing::TestWithParam<VirtualKindCase> {};
+
+TEST_P(ProjectIoVirtualKindTest, Machine_VirtualKindIsBuiltWithDefaultOptions) {
+    const VirtualKindCase& param = GetParam();
+    const auto project = ReadProjectText(
+            WithVirtualMachine("virtual = \"" + param.text + "\""));
+    const auto& spec = std::get<mc::VirtualMachineSpec>(project.machine_source);
+    const mc::VirtualMachineOptions defaults{};
+    EXPECT_EQ(spec.kind, param.kind);
+    EXPECT_EQ(spec.options.name, defaults.name);
+    EXPECT_EQ(spec.options.branch, defaults.branch);
+    EXPECT_FALSE(spec.options.tilt_limit_rad.has_value());
+
+    // 機械定義は同じ指定の`MakeVirtualMachineDefinition`と一致する
+    const mc::MachineDefinition expected = mc::MakeVirtualMachineDefinition(param.kind);
+    EXPECT_EQ(project.machine.name, expected.name);
+    EXPECT_EQ(project.machine.description, expected.description);
+    EXPECT_EQ(project.machine.components.size(), expected.components.size());
+    EXPECT_TRUE(project.warnings.empty());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        Kinds, ProjectIoVirtualKindTest,
+        ::testing::Values(
+                // 工具側X-Y-Z
+                VirtualKindCase{"three_axis", mc::VirtualMachineKind::kThreeAxis},
+                // ヘッド・ヘッド型 (X-Y-Z-C-B)
+                VirtualKindCase{"head_bc", mc::VirtualMachineKind::kHeadBc},
+                // テーブル・テーブル型 (X-Y-Z、A-C)
+                VirtualKindCase{"table_ac", mc::VirtualMachineKind::kTableAc}));
+
+TEST(ProjectIoTest, Machine_VirtualOptionsAreReadInDeclaredUnits) {
+    const auto project = ReadProjectText(WithVirtualMachine(
+            "virtual = \"head_bc\"\nname = \"cam\"\nbranch = \"negative\"\n"
+            "tilt_limit = 110.0"));
+    const auto& spec = std::get<mc::VirtualMachineSpec>(project.machine_source);
+    EXPECT_EQ(spec.options.name, "cam");
+    EXPECT_EQ(spec.options.branch, mc::BranchPolicy::kNegative);
+    ASSERT_TRUE(spec.options.tilt_limit_rad.has_value());
+    EXPECT_NEAR(*spec.options.tilt_limit_rad, ToRadians(110.0), kTol);
+    EXPECT_EQ(project.machine.name, "cam");
+    EXPECT_EQ(project.machine.branch, mc::BranchPolicy::kNegative);
+
+    // `[units].angle = "rad"`では換算しない
+    const auto rad = ReadProjectText(Replace(
+            WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = 1.5"),
+            "[machine]", "[units]\nangle = \"rad\"\n\n[machine]"));
+    EXPECT_NEAR(*std::get<mc::VirtualMachineSpec>(rad.machine_source)
+                         .options.tilt_limit_rad,
+                1.5, kTol);
+}
+
+TEST(ProjectIoTest, Machine_VirtualTiltLimitIsKeptForThreeAxis) {
+    // 回転軸の無い`three_axis`でも受理して保持する (機械定義には効かない)
+    const auto project = ReadProjectText(
+            WithVirtualMachine("virtual = \"three_axis\"\ntilt_limit = 30.0"));
+    const auto& spec = std::get<mc::VirtualMachineSpec>(project.machine_source);
+    ASSERT_TRUE(spec.options.tilt_limit_rad.has_value());
+    EXPECT_NEAR(*spec.options.tilt_limit_rad, ToRadians(30.0), kTol);
+    EXPECT_TRUE(project.warnings.empty());
+}
+
+TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualIsCombinedWithFile) {
+    ExpectDataFormatError(
+            WithVirtualMachine("virtual = \"head_bc\"\nlibrary = \"t-ZYX-b-AC-w.toml\""),
+            "exactly one of file, library and virtual");
+    ExpectDataFormatError(
+            WithVirtualMachine("virtual = \"head_bc\"\nfile = \"machine.toml\""),
+            "exactly one of file, library and virtual");
+}
+
+TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualKindIsUnknown) {
+    ExpectDataFormatError(WithVirtualMachine("virtual = \"head_ac\""),
+                          "unknown virtual machine: head_ac");
+    // 大文字小文字を区別する
+    ExpectDataFormatError(WithVirtualMachine("virtual = \"HEAD_BC\""),
+                          "unknown virtual machine");
+}
+
+TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualOnlyKeyHasNoVirtual) {
+    for (const std::string key : {"name = \"cam\"", "branch = \"positive\"",
+                                  "tilt_limit = 90.0"}) {
+        ExpectDataFormatError(
+                Replace(MinimalProject(), "library = \"t-ZYX-b-AC-w.toml\"",
+                        "library = \"t-ZYX-b-AC-w.toml\"\n" + key),
+                "requires virtual");
+    }
+}
+
+TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualOptionIsInvalid) {
+    ExpectDataFormatError(WithVirtualMachine("virtual = \"head_bc\"\nname = \"\""),
+                          "name is empty");
+    ExpectDataFormatError(
+            WithVirtualMachine("virtual = \"head_bc\"\nbranch = \"nearest\""),
+            "unknown branch: nearest");
+}
+
+TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualTiltLimitIsNotPositive) {
+    ExpectDataFormatError(WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = 0.0"),
+                          "tilt_limit");
+    ExpectDataFormatError(WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = -1.0"),
+                          "tilt_limit");
+    // 正の値であれば微小でも受理する
+    EXPECT_NO_THROW(ReadProjectText(
+            WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = 1e-9")));
 }
 
 TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWithPrefixWhenDefinitionIsInvalid) {

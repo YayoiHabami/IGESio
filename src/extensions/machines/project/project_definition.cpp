@@ -12,6 +12,9 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
+
+#include "igesio/extensions/machines/machine/machine_io.h"
 
 namespace igesio::extensions::machines {
 
@@ -127,8 +130,16 @@ std::string DisplayName(const ProgramSpec& program) {
  * ---- 組み立て ----
  */
 
-ProjectDefinition MakeProjectDefinition(MachineDefinition machine,
-                                        const std::string_view name) {
+namespace {
+
+/// @brief 機械定義を持つプロジェクト定義を作る
+/// @param source 機械定義の指定
+/// @param machine `source`から作った機械定義
+/// @param name プロジェクト名
+/// @return 機械定義の警告は読込と同じく`context = "machine"`で`warnings`に転記する
+ProjectDefinition MakeProjectWithMachine(
+        std::variant<FileReference, VirtualMachineSpec> source,
+        MachineDefinition machine, const std::string_view name) {
     ProjectDefinition project;
     project.format_version = kProjectFormatVersion;
     project.name = std::string(name);
@@ -140,8 +151,26 @@ ProjectDefinition MakeProjectDefinition(MachineDefinition machine,
                 diagnostic.severity, "machine", prefix + diagnostic.message,
                 diagnostic.line});
     }
+    project.machine_source = std::move(source);
     project.machine = std::move(machine);
     return project;
+}
+
+}  // namespace
+
+
+
+ProjectDefinition MakeProjectDefinition(FileReference machine_file,
+                                        const std::string_view name) {
+    MachineDefinition machine = ReadMachineDefinition(machine_file.resolved);
+    return MakeProjectWithMachine(std::move(machine_file), std::move(machine),
+                                  name);
+}
+
+ProjectDefinition MakeProjectDefinition(const VirtualMachineSpec& machine,
+                                        const std::string_view name) {
+    return MakeProjectWithMachine(machine, MakeVirtualMachineDefinition(machine),
+                                  name);
 }
 
 

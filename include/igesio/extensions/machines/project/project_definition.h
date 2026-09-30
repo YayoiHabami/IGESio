@@ -41,6 +41,7 @@
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/axis_values.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
+#include "igesio/extensions/machines/machine/virtual_machines.h"
 #include "igesio/extensions/machines/tools/tool_assembly.h"
 #include "igesio/extensions/machines/tools/tool_profile.h"
 
@@ -52,7 +53,7 @@ constexpr std::string_view kProjectFormatName = "machining-project";
 
 /// @brief 対応するプロジェクトフォーマットのバージョン `[major, minor]`
 /// @note 読込はmajorが一致するものを受理し、出力時は常にこの値を書く
-constexpr std::array<int, 2> kProjectFormatVersion = {1, 1};
+constexpr std::array<int, 2> kProjectFormatVersion = {1, 2};
 
 /// @brief 取り付け先名の予約語 (ワーク取り付け点)
 /// @note `type = "work_mount"`のコンポーネントを名前によらず指す
@@ -84,7 +85,7 @@ struct FileReference {
     ///       その場合は`resolved`を基準ディレクトリから相対化して出力する
     std::string raw;
     /// @brief 解決済みのパス
-    /// @note 読込時に存在を確認済み (`[run.output].dir`のみ確認しない)
+    /// @note 読込時に存在を確認済 (`[run.output].dir`のみ確認しない)
     std::filesystem::path resolved;
     /// @brief `library`キー (ライブラリ検索パスからの相対) で指定されたか
     bool from_library = false;
@@ -475,10 +476,12 @@ struct ProjectDefinition {
     /// @brief 宣言された単位と換算係数
     UnitScales units;
 
-    /// @brief `[machine]`の記載
-    FileReference machine_ref;
-    /// @brief 機械定義 (参照先を読込済み)
-    /// @note 機械定義側の警告は`context = "machine"`で`warnings`へ転記する
+    /// @brief `[machine]`の記述 (機械定義ファイルの参照、または仮想機械の指定)
+    std::variant<FileReference, VirtualMachineSpec> machine_source;
+    /// @brief 機械定義 (`machine_source`の参照先の読込結果、または仮想機械)
+    /// @note 機械定義側の警告は`context = "machine"`で`warnings`に移す
+    /// @note `machine_source`から作られる値であり、出力には`machine_source`
+    ///       のみを用いる (本メンバを書き換えても出力には反映されない)
     MachineDefinition machine;
     /// @brief 制御装置定義の参照
     std::optional<ControllerSpec> controller;
@@ -520,17 +523,31 @@ struct ProjectDefinition {
     std::vector<Diagnostic> warnings;
 };
 
-/// @brief 機械定義からプロジェクト定義を作る
-/// @param machine 機械定義 (読込済み、または`MakeVirtualMachineDefinition`の結果)
+/// @brief 機械定義に基づきプロジェクト定義を作る
+/// @param machine_file 機械定義ファイル
 /// @param name プロジェクト名
 /// @return `format_version = kProjectFormatVersion`、`units`はデフォルト
-///         (mm/deg)、`machine`、`name`、`source_name` (`name`と同じ) を設定し,
-///         他は空. 機械定義の警告は読込と同じく`context = "machine"`で
-///         `warnings`に転記する
-/// @note プロジェクト定義ファイルを経由しない場合は基本的にこの関数を使う
+///         (mm/deg)、`machine_source` (`machine_file`)、`machine`、`name`,
+///         `source_name` (`name`と同じ) を設定し、他は空. 機械定義の警告は
+///         読込と同じく`context = "machine"`で`warnings`に転記する
+/// @throw igesio::FileOpenError `machine_file.resolved`が存在しない場合
+/// @throw igesio::DataFormatError 機械定義の読込に失敗した場合
+/// @note プロジェクト定義ファイルを経由しない場合は基本的にこの関数,
+///       または仮想機械を指定する関数を使う
 /// @note 工具、ワークオフセット、モデル、プログラムは呼び出し側が追加すること.
 ///       ワークオフセットが無ければ`MachiningSetup`で暗黙のG54を補う
-ProjectDefinition MakeProjectDefinition(MachineDefinition machine,
+ProjectDefinition MakeProjectDefinition(FileReference machine_file,
+                                        std::string_view name);
+
+/// @brief 仮想機械からプロジェクト定義を作る
+/// @param machine 仮想機械定義
+/// @param name プロジェクト名
+/// @return `machine_source` (`machine`)と、`MakeVirtualMachineDefinition`で
+///         作った`machine`を設定する. 他はファイル指定版と同じ
+/// @throw std::invalid_argument 仮想機械の設定が不正な場合
+///        (`MakeVirtualMachineDefinition`から伝播)
+/// @note 工具、ワークオフセット、モデル、プログラムは呼び出し側が追加すること
+ProjectDefinition MakeProjectDefinition(const VirtualMachineSpec& machine,
                                         std::string_view name);
 
 /// @brief `[[tool]]`を探す

@@ -14,9 +14,11 @@
  *         モデルの順・`local_frame`の合成・干渉専用形状の保持)、工具オフセットの
  *         既定値、干渉ペア規則の正常系、取り付け先の解決
  *       - 正常系 (退化): ワークオフセット・モデルが無い定義、メモリ上で組み立てた
- *         定義 (`MakeProjectDefinition`. デフォルト値と機械定義の警告の転記)
+ *         定義 (`MakeProjectDefinition`の機械定義ファイル版と仮想機械版.
+ *         デフォルト値と機械定義の警告の転記)
  *       - 異常系: ワーク座標系の取り付け先が`work_mount`に至らない、チェーン外の
- *         `values`、取り付け先の不在・閉路、ペア規則の各違反
+ *         `values`、取り付け先の不在・閉路、ペア規則の各違反,
+ *         `MakeProjectDefinition`の機械定義ファイルの不在と仮想機械の不正な設定
  *       TODO: `MachineModel`構築失敗の`invalid_argument`は読込済みの定義では
  *             起きないため検証しない
  */
@@ -24,10 +26,13 @@
 
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "igesio/common/errors.h"
@@ -37,6 +42,7 @@
 #include "igesio/extensions/machines/machine/axis_values.h"
 #include "igesio/extensions/machines/machine/forward_kinematics.h"
 #include "igesio/extensions/machines/machine/machine_model.h"
+#include "igesio/extensions/machines/machine/virtual_machines.h"
 #include "igesio/extensions/machines/project/project_definition.h"
 #include "igesio/extensions/machines/project/project_io.h"
 #include "igesio/extensions/machines/project/setup.h"
@@ -65,6 +71,21 @@ constexpr double kTol = 1e-9;
 
 /// @brief 実例機の工具取り付け点の原点 (ゼロポーズ機械座標)
 const Vector3d kToolOrigin(0.0, -180.0, 250.5);
+
+/// @brief 機械定義のTOML文字列を一時ディレクトリの`machine.toml`に書き出す
+/// @param machine_toml 機械定義のTOML
+/// @param dir_name 一時ディレクトリ名 (テストごとに分ける)
+/// @return 書き出したファイルのパス
+std::filesystem::path WriteTempMachine(const std::string& machine_toml,
+                                       const std::string& dir_name) {
+    const std::filesystem::path dir =
+            std::filesystem::temp_directory_path() / dir_name;
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path path = dir / "machine.toml";
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    stream << machine_toml;
+    return path;
+}
 
 /// @brief 最小構成のプロジェクトからセットアップを作る
 mc::MachiningSetup MakeSetup(const std::string& toml = MinimalProject(),
@@ -588,21 +609,24 @@ TEST(SetupTest, ResolveAttach_ReservedAndNames) {
  * ---- メモリ上のプロジェクト定義 ----
  */
 
-TEST(SetupTest, MakeProjectDefinition_DefaultsAndMachineWarnings) {
-    mc::MachineDefinition machine = machines_test::ReadDefinition(MinimalXyzAc());
-    machine.warnings.push_back(mc::Diagnostic{
-            mc::Severity::kWarning, "[[component]]", "sample warning", 12});
-    machine.warnings.push_back(
-            mc::Diagnostic{mc::Severity::kInfo, "", "no context", 0});
+TEST(SetupTest, MakeProjectDefinition_FromMachineFileDefaultsAndWarnings) {
+    // minor版が新しい機械定義 (警告1件) を一時ディレクトリに置いて参照する
+    mc::FileReference reference;
+    reference.raw = "machine.toml";
+    reference.resolved = WriteTempMachine(
+            Replace(MinimalXyzAc(), "version = [2, 0]", "version = [2, 1]"),
+            "igesio_setup_make_project_file");
     const mc::ProjectDefinition project =
-            mc::MakeProjectDefinition(machine, "in-memory");
+            mc::MakeProjectDefinition(reference, "in-memory");
     EXPECT_EQ(project.format_version, mc::kProjectFormatVersion);
     EXPECT_EQ(project.name, "in-memory");
     EXPECT_EQ(project.source_name, "in-memory");
     EXPECT_EQ(project.machine.name, "minimal-xyz-ac");
     EXPECT_EQ(project.units.length_unit, mc::LengthUnit::kMillimeter);
     EXPECT_EQ(project.units.angle_unit, mc::AngleUnit::kDegree);
-    EXPECT_TRUE(project.machine_ref.raw.empty());
+    const auto& source = std::get<mc::FileReference>(project.machine_source);
+    EXPECT_EQ(source.raw, "machine.toml");
+    EXPECT_EQ(source.resolved, reference.resolved);
     EXPECT_TRUE(project.tools.empty());
     EXPECT_TRUE(project.work_offsets.empty());
     EXPECT_TRUE(project.models.empty());
@@ -610,13 +634,9 @@ TEST(SetupTest, MakeProjectDefinition_DefaultsAndMachineWarnings) {
     EXPECT_EQ(project.initial_tool, mc::kNoTool);
     EXPECT_FALSE(project.initial_work_offset.has_value());
     // 機械定義の警告は読込と同じく`context = "machine"`で転記する
-    ASSERT_EQ(project.warnings.size(), 2u);
+    ASSERT_EQ(project.warnings.size(), 1u);
     EXPECT_EQ(project.warnings[0].context, "machine");
-    EXPECT_EQ(project.warnings[0].message, "[[component]]: sample warning");
-    EXPECT_EQ(project.warnings[0].line, 12);
-    EXPECT_EQ(project.warnings[0].severity, mc::Severity::kWarning);
-    EXPECT_EQ(project.warnings[1].message, "no context");
-    EXPECT_EQ(project.warnings[1].severity, mc::Severity::kInfo);
+    EXPECT_NE(project.warnings[0].message.find("newer minor"), std::string::npos);
 
     // 工具もワークオフセットも無いままセットアップを作れる (暗黙のG54)
     const mc::MachiningSetup setup(project);
@@ -625,4 +645,38 @@ TEST(SetupTest, MakeProjectDefinition_DefaultsAndMachineWarnings) {
     ASSERT_EQ(setup.WorkFrames().size(), 1u);
     EXPECT_EQ(setup.WorkFrames()[0].id, mc::kImplicitWorkOffsetId);
     EXPECT_EQ(setup.InitialTool(), mc::kNoTool);
+}
+
+TEST(SetupTest, MakeProjectDefinition_FromVirtualMachine) {
+    mc::VirtualMachineSpec spec;
+    spec.kind = mc::VirtualMachineKind::kTableAc;
+    spec.options.name = "cam";
+    const mc::ProjectDefinition project = mc::MakeProjectDefinition(spec, "virtual");
+    EXPECT_EQ(project.format_version, mc::kProjectFormatVersion);
+    EXPECT_EQ(project.name, "virtual");
+    const auto& source = std::get<mc::VirtualMachineSpec>(project.machine_source);
+    EXPECT_EQ(source.kind, mc::VirtualMachineKind::kTableAc);
+    EXPECT_EQ(source.options.name, "cam");
+    EXPECT_EQ(project.machine.name, "cam");
+    EXPECT_EQ(project.machine.description,
+              mc::MakeVirtualMachineDefinition(spec).description);
+    EXPECT_TRUE(project.warnings.empty());
+
+    const mc::MachiningSetup setup(project);
+    EXPECT_TRUE(setup.Warnings().empty());
+    ASSERT_EQ(setup.WorkFrames().size(), 1u);
+}
+
+TEST(SetupTest, MakeProjectDefinition_ThrowsFileOpenErrorWhenMachineFileIsMissing) {
+    mc::FileReference reference;
+    reference.raw = "missing.toml";
+    reference.resolved = kProjectsDir / "missing.toml";
+    EXPECT_THROW(mc::MakeProjectDefinition(reference, "missing"),
+                 igesio::FileOpenError);
+}
+
+TEST(SetupTest, MakeProjectDefinition_ThrowsInvalidArgumentWhenVirtualOptionsAreInvalid) {
+    mc::VirtualMachineSpec spec;
+    spec.options.name.clear();
+    EXPECT_THROW(mc::MakeProjectDefinition(spec, "virtual"), std::invalid_argument);
 }

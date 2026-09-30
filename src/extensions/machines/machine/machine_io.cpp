@@ -76,7 +76,7 @@ struct Structure {
     std::string work_mount;
 };
 
-/// @brief コンポーネントの文脈文字列 `component[{name}]`
+/// @brief コンポーネント文字列 `component[{name}]`
 std::string ContextOf(const std::string& name) {
     return "component[" + name + "]";
 }

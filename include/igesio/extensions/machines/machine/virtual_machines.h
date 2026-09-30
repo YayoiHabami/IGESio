@@ -21,6 +21,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "igesio/extensions/machines/machine/machine_definition.h"
 
@@ -53,6 +54,26 @@ struct VirtualMachineOptions {
     std::optional<double> tilt_limit_rad;
 };
 
+/// @brief 仮想機械の指定 (種類と設定の組)
+/// @note プロジェクト定義の`[machine].virtual`等に対応する
+struct VirtualMachineSpec {
+    /// @brief 仮想機械の種類
+    VirtualMachineKind kind = VirtualMachineKind::kThreeAxis;
+    /// @brief 設定
+    VirtualMachineOptions options;
+};
+
+/// @brief 仮想機械の種類の文字列を`VirtualMachineKind`に変換する
+/// @param text `"three_axis"` / `"head_bc"` / `"table_ac"`
+///        (大文字小文字を区別する)
+/// @return 対応する種類. 未知の文字列なら`std::nullopt`
+std::optional<VirtualMachineKind> ParseVirtualMachineKind(std::string_view text);
+
+/// @brief 仮想機械の種類を名称 (TOMLで用いる文字列) に変換する
+/// @param kind 仮想機械の種類
+/// @return `"three_axis"` / `"head_bc"` / `"table_ac"`
+std::string_view VirtualMachineKindName(VirtualMachineKind kind);
+
 /// @brief 形状を持たない仮想機械の機械定義を作る
 /// @param kind 仮想機械の種類
 /// @param options 設定
@@ -62,6 +83,12 @@ struct VirtualMachineOptions {
 /// @throw std::invalid_argument `name`が空、または`tilt_limit_rad`が正でない場合
 MachineDefinition MakeVirtualMachineDefinition(
         VirtualMachineKind kind, const VirtualMachineOptions& options = {});
+
+/// @brief 仮想機械の指定から機械定義を作る
+/// @param spec 仮想機械の種類と設定
+/// @return `MakeVirtualMachineDefinition(spec.kind, spec.options)`と同じ
+/// @throw std::invalid_argument `name`が空、または`tilt_limit_rad`が正でない場合
+MachineDefinition MakeVirtualMachineDefinition(const VirtualMachineSpec& spec);
 
 }  // namespace igesio::extensions::machines
 

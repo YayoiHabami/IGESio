@@ -145,7 +145,7 @@ class MachiningSetup {
     /// @throw igesio::DataFormatError 取り付け先の不在・閉路、`values`のキーが
     ///        チェーン外、ワークオフセットの取り付け先が`work_mount`に至らない,
     ///        `[[collision.machine_pair]]`のペア規則違反
-    ///        (文脈と行番号は定義側の値を用いる)
+    ///        (理由と行番号等は定義側の値を用いる)
     /// @throw std::invalid_argument `MachineModel`の構築失敗 (機械定義の構造矛盾)
     explicit MachiningSetup(const ProjectDefinition& project,
                             const SetupOptions& options = {});

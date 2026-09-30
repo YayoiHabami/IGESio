@@ -5,8 +5,9 @@
  * @date 2026-09-12
  * @copyright 2026 Yayoi Habami
  * @note 読込: プロジェクト定義のTOMLファイルを読み込み、ファイル内の整合性と
- *       機械定義ファイルとの突き合わせ (軸名・可動範囲・コンポーネント名) を行い,
- *       `ProjectDefinition`を作成する (併せて参照先の機械定義も読み込む).
+ *       機械定義との整合性の検証 (軸名・可動範囲・コンポーネント名) を行い,
+ *       `ProjectDefinition`を作成する (併せて参照先の機械定義を読み込むか,
+ *       `[machine].virtual`で指定された仮想機械の機械定義を作る).
  *       運動学の計算を要する検証 (チェーン判定/取り付け先の到達/閉路/干渉ペアの規則)
  * 　　　と参照の解決　(工具形状・暗黙のG54・工具オフセットの実効値) はここではなく
  * 　　　`MachiningSetup`で行う. 警告は例外にせず`ProjectDefinition::warnings`
@@ -85,6 +86,7 @@ void WriteProject(const ProjectDefinition& project,
 ///        (`FileReference::raw`) をそのまま書く
 /// @return プロジェクトフォーマットのTOML本文
 /// @throw std::invalid_argument TOMLで表現できない値を含む場合
+///        (機械に無い軸名の`values`、パスが空のファイル参照等)
 /// @note 省略規則: 既定値と一致する任意キー (`enabled = true`,
 ///       `control_point = "tip"`, `from = "tool_mount"`,
 ///       `attach = "work_mount"`, `start_line = 1`, `type = "gcode"`,
@@ -92,6 +94,8 @@ void WriteProject(const ProjectDefinition& project,
 ///       値の無い`optional`は書かない.
 ///       `[[model]]`の`collision`は役割の既定と一致すれば,
 ///       `[[collision.tool_pair]]`の`enabled`は組の既定と一致すれば省略する.
+///       仮想機械の`[machine]`の`name`/`branch`は`VirtualMachineOptions`の
+///       既定と一致すれば省略する.
 ///       `[format]`/`[project]`/`[units]`/`[machine]`は常に書き,
 ///       `[controller]`/`[collision]`は値を持つとき、`[initial]`/`[run]`
 ///       は既定と異なるときのみ書く

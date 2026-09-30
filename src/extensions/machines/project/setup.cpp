@@ -62,7 +62,7 @@ void Warn(std::vector<Diagnostic>& warnings, const std::string& context,
     warnings.push_back(Diagnostic{Severity::kWarning, context, message, line});
 }
 
-/// @brief 他の個所で作られた警告を文脈と行番号を付け替えて転記する
+/// @brief 他の個所で作られた警告を発生個所と行番号を付け替えて転記する
 /// @param source 元の警告
 /// @param context 発生箇所 (`"[[tool]](#1)"`等)
 /// @param line 定義側のTOML行番号 (0なら省略)
@@ -76,17 +76,17 @@ void ForwardWarnings(const std::vector<Diagnostic>& source,
     }
 }
 
-/// @brief `[[tool]]`の文脈文字列
+/// @brief `[[tool]]`での発生箇所表示
 std::string ToolContext(const int number) {
     return "[[tool]](#" + std::to_string(number) + ")";
 }
 
-/// @brief `[[work_offset]]`の文脈文字列
+/// @brief `[[work_offset]]`での発生箇所表示
 std::string WorkOffsetContext(const std::string& id) {
     return "[[work_offset]](" + id + ")";
 }
 
-/// @brief `[[model]]`の文脈文字列
+/// @brief `[[model]]`での発生箇所表示
 std::string ModelContext(const std::string& name) {
     return "[[model]](" + name + ")";
 }
@@ -327,7 +327,7 @@ std::optional<AttachFrame> ResolveMachineName(const MachineModel& model,
 /// @brief 取り付け先の名前を解決する (メモ化および閉路検出も行う)
 /// @param resolver 名前解決の状態 (メモと解決中の名前列を更新する)
 /// @param name 取り付け先の名前 (予約語/コンポーネント名/モデル名/ワークオフセットID)
-/// @param context 参照元の文脈 (エラー文言用)
+/// @param context 参照元の場所 (エラー文言用)
 /// @param line 参照元の行番号
 /// @return 解決結果 (所属コンポーネント, 取り付け先座標系→ゼロポーズ機械座標の同次変換)
 /// @throw igesio::DataFormatError 名前が無い、または閉路の場合

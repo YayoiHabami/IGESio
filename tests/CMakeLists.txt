@@ -4,7 +4,7 @@ add_subdirectory(numerics)
 add_subdirectory(entities)
 add_subdirectory(models)
 
-# graphicsテストはOpenGL有効時のみ (モックでGL文脈なしに動作する)
+# graphicsテストはOpenGL有効時のみ (モックでGLなしに動作する)
 if(IGESIO_ENABLE_GRAPHICS)
     add_subdirectory(graphics)
 endif()

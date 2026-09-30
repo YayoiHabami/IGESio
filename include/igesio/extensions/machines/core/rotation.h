@@ -68,7 +68,7 @@ igesio::Matrix3d RotationFromEulerIjk(const igesio::Vector3d& ijk_rad);
 /// @return 各列を再正規化した回転行列
 /// @throw std::invalid_argument 各列が単位長でない (許容1e-3)、
 ///        正規直交でない (max|RᵀR - I| > 1e-3)、または行列式が負 (鏡映) の場合.
-/// @note エラーメッセージは理由のみとし、文脈は呼び出し側が与える
+/// @note エラーメッセージは理由のみとし、詳細は呼び出し側で追記する
 igesio::Matrix3d RotationFromColumns(const ColumnsSpec& columns);
 
 /// @brief 回転の記述を回転行列へ写す

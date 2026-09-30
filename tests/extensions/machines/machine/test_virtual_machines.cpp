@@ -263,8 +263,10 @@ TEST(VirtualMachinesTest, MakeVirtual_ImplicitG54IsIdentity) {
     for (const mc::VirtualMachineKind kind :
          {mc::VirtualMachineKind::kThreeAxis, mc::VirtualMachineKind::kHeadBc,
           mc::VirtualMachineKind::kTableAc}) {
-        const mc::ProjectDefinition project = mc::MakeProjectDefinition(
-                mc::MakeVirtualMachineDefinition(kind), "virtual-project");
+        mc::VirtualMachineSpec spec;
+        spec.kind = kind;
+        const mc::ProjectDefinition project =
+                mc::MakeProjectDefinition(spec, "virtual-project");
         EXPECT_EQ(project.format_version, mc::kProjectFormatVersion);
         EXPECT_EQ(project.name, "virtual-project");
         EXPECT_EQ(project.source_name, "virtual-project");
@@ -352,4 +354,26 @@ TEST(VirtualMachinesTest, MakeVirtual_ThrowsInvalidArgumentWhenTiltLimitIsNotPos
     options.tilt_limit_rad = 1e-9;
     EXPECT_NO_THROW(mc::MakeVirtualMachineDefinition(
             mc::VirtualMachineKind::kThreeAxis, options));
+}
+
+
+
+/**
+ * ---- 種類の名称 ----
+ */
+
+TEST(VirtualMachinesTest, KindName_RoundTrip) {
+    for (const mc::VirtualMachineKind kind :
+         {mc::VirtualMachineKind::kThreeAxis, mc::VirtualMachineKind::kHeadBc,
+          mc::VirtualMachineKind::kTableAc}) {
+        EXPECT_EQ(mc::ParseVirtualMachineKind(mc::VirtualMachineKindName(kind)), kind);
+    }
+    EXPECT_EQ(mc::VirtualMachineKindName(mc::VirtualMachineKind::kHeadBc), "head_bc");
+}
+
+TEST(VirtualMachinesTest, ParseKind_ReturnsNulloptWhenTextIsUnknown) {
+    EXPECT_FALSE(mc::ParseVirtualMachineKind("head_ac").has_value());
+    // 大文字小文字を区別する
+    EXPECT_FALSE(mc::ParseVirtualMachineKind("HEAD_BC").has_value());
+    EXPECT_FALSE(mc::ParseVirtualMachineKind("").has_value());
 }

@@ -1005,13 +1005,11 @@ void MachiningViewerGUI::LoadVirtualProject(const VirtualProjectInput& input) {
     try {
         const std::filesystem::path program_path =
                 std::filesystem::absolute(input.program_path);
-        m::VirtualMachineOptions machine_options;
-        machine_options.name = "virtual";
-        m::ProjectDefinition project = m::MakeProjectDefinition(
-                m::MakeVirtualMachineDefinition(
-                        static_cast<m::VirtualMachineKind>(input.machine_kind),
-                        machine_options),
-                "virtual");
+        m::VirtualMachineSpec machine;
+        machine.kind = static_cast<m::VirtualMachineKind>(input.machine_kind);
+        machine.options.name = "virtual";
+        m::ProjectDefinition project =
+                m::MakeProjectDefinition(machine, "virtual");
         project.source_dir = program_path.parent_path();
 
         // 工具は径と長さから作る簡易アセンブリ1本 (番号1)
