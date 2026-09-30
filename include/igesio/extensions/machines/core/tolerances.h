@@ -23,6 +23,12 @@ constexpr double kUnitVectorTolerance = 1e-3;
 /// @note ベクトルのノルムがこの値未満なら、方向を定められないとみなす
 constexpr double kDegenerateTolerance = 1e-9;
 
+/// @brief 工具輪郭の円弧の中心が始点と終点から等距離かの検証に用いる許容誤差
+/// @note プロジェクト定義フォーマットの規定値. ファイルの長さ単位で評価する
+///       (内部単位に換算する際は長さの換算係数を掛けること). 範囲内の中心は
+///       始点と終点の垂直二等分線上に補正して用いる
+constexpr double kArcCenterTolerance = 1e-3;
+
 /// @brief 特異値・ピボットの許容誤差
 /// @note 直進軸の実効方向が3次元を張るかの判定に用いる.
 ///       読込時のチェーン検証と位置IKの連立方程式の両方で用いる

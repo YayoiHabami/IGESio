@@ -5,7 +5,7 @@
 
 [format]
 name = "machining-project"
-version = [1, 0]
+version = [1, 1]
 
 [project]
 name = "sample op10"

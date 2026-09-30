@@ -307,6 +307,13 @@ igesio::Matrix3d ReadRotation(const TomlValue& table, const std::string& context
 /// @throw igesio::DataFormatError 形式が不正な場合
 std::optional<Color> ReadColor(const TomlValue& table, const std::string& context);
 
+/// @brief 任意の`opacity`キー (0.0〜1.0) を読む
+/// @param table `opacity`を持ち得るテーブル
+/// @param context 読込箇所
+/// @return 不透明度. 存在しない場合は1 (不透明)
+/// @throw igesio::DataFormatError 実数でない、または0.0〜1.0の外の場合
+float ReadOpacity(const TomlValue& table, const std::string& context);
+
 /// @brief 形状パスの規約を検査し、絶対パスを集計する
 /// @note 絶対パスは先頭`/`またはドライブ文字 (`X:`) で判定する (OS非依存).
 ///       親ディレクトリ越えは正規化後の先頭要素が`..`のときのみ数える

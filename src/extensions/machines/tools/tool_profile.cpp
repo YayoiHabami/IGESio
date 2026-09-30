@@ -259,6 +259,16 @@ ProfileSegment ProfileSegment::Arc(
     return segment;
 }
 
+std::optional<bool> ParseArcDirection(const std::string_view text) {
+    if (text == "ccw") return true;
+    if (text == "cw") return false;
+    return std::nullopt;
+}
+
+std::string_view ArcDirectionName(const bool counter_clockwise) {
+    return counter_clockwise ? "ccw" : "cw";
+}
+
 void ValidateToolProfile(const ToolProfile& profile) {
     if (profile.elements.empty()) Fail("no elements");
     const bool has_cutter = std::any_of(
@@ -324,6 +334,11 @@ double ToolProfile::MaxRadius() const {
     return extents.has_value() ? extents->max_r : 0.0;
 }
 
+double ToolProfile::MaxRadius(const ToolPart part) const {
+    const std::optional<Extents> extents = ProfileExtents(*this, part);
+    return extents.has_value() ? extents->max_r : 0.0;
+}
+
 std::optional<std::array<double, 2>> ToolProfile::PartExtent(
         const ToolPart part) const {
     const std::optional<Extents> extents = ProfileExtents(*this, part);
@@ -334,14 +349,17 @@ std::optional<std::array<double, 2>> ToolProfile::PartExtent(
 double ToolProfile::GaugeLength(std::vector<Diagnostic>* warnings) const {
     if (gauge_line_z.has_value()) return *gauge_line_z;
 
-    // ゲージライン未指定の場合、差し込み部分を持たない輪郭とみなしてホルダ上端で代用する
+    // ゲージライン未指定の場合、差し込み部分を持たない輪郭とみなして
+    // ホルダ上端を代わりに使う (簡易アセンブリと同じく警告しない)
     const std::optional<std::array<double, 2>> holder = PartExtent(ToolPart::kHolder);
-    const double fallback = holder.has_value() ? (*holder)[1] : Reach();
+    if (holder.has_value()) return (*holder)[1];
+
+    // ホルダ要素も無い場合は工具全長とし、警告する
+    const double fallback = Reach();
     if (warnings != nullptr) {
         warnings->push_back(Diagnostic{
                 Severity::kWarning, kContext,
-                std::string("gauge line not specified; gauge length defaults to the ")
-                + (holder.has_value() ? "holder top (" : "tool reach (")
+                "gauge line not specified; gauge length defaults to the tool reach ("
                 + FormatFixed(fallback, 3) + ")",
                 0});
     }

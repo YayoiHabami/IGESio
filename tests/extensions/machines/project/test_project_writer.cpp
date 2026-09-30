@@ -7,13 +7,14 @@
  * @note 対象: WriteProject / WriteProjectToString
  *       - 正常系 (往復): `sample.toml`を読込→書き出し→再読込して全フィールドと
  *         `retained`が一致し警告0件であること、C++で組み立てた定義 (ライブラリ参照
- *         工具・幾何形式ワークオフセット・入れ子モデル・`machine_pair`・inch/rad宣言)
- *         の往復
+ *         工具・輪郭形式工具・幾何形式ワークオフセット・入れ子モデル・`machine_pair`・
+ *         inch/rad宣言) の往復、輪郭形式工具 (TOML文字列) の往復
  *       - 正常系 (出力形式): 常に書くセクション、単位の差し替え出力、`file`/`library`の
- *         復元と相対化、軸値の宣言単位、既定値の省略、`retained`の末尾配置、
- *         日時リテラル
+ *         復元と相対化、軸値の宣言単位、既定値の省略 (輪郭形式の直線の`type`を含む)、
+ *         `retained`の末尾配置、日時リテラル
  *       - 異常系: 機械に無い軸名・`raw`空のライブラリ参照・ライブラリ参照の
- *         プログラムの`invalid_argument`、出力先がディレクトリの`FileOpenError`
+ *         プログラム・セグメントを持たない部位要素の`invalid_argument`、
+ *         出力先がディレクトリの`FileOpenError`
  *       TODO: 退化ケース (工具・モデル等が全て空の定義) は`Omission_Defaults`の
  *             最小構成で兼ねる
  */
@@ -29,6 +30,7 @@
 #include <variant>
 #include <vector>
 
+#include "igesio/common/color.h"
 #include "igesio/common/errors.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/rotation.h"
@@ -54,6 +56,7 @@ using projects_test::DefaultOptions;
 using projects_test::kMachinesDir;
 using projects_test::kProjectsDir;
 using projects_test::MinimalProject;
+using projects_test::ProfileToolSection;
 using projects_test::ReadProjectText;
 using projects_test::Replace;
 using projects_test::RoundTrip;
@@ -83,6 +86,39 @@ void ExpectSameReference(const mc::FileReference& expected,
     EXPECT_EQ(expected.resolved.lexically_normal(), actual.resolved.lexically_normal());
 }
 
+/// @brief 輪郭形式の工具の一致を検証する (部位要素・セグメント・色・指令点)
+void ExpectSameProfile(const mc::ToolProfile& expected, const mc::ToolProfile& actual) {
+    EXPECT_EQ(expected.name, actual.name);
+    EXPECT_NEAR(expected.command_point_z, actual.command_point_z, kTol);
+    ExpectSameOptional(expected.gauge_line_z, actual.gauge_line_z);
+    ASSERT_EQ(expected.elements.size(), actual.elements.size());
+    for (std::size_t i = 0; i < expected.elements.size(); ++i) {
+        const mc::ToolProfileElement& element = expected.elements[i];
+        const mc::ToolProfileElement& other = actual.elements[i];
+        EXPECT_EQ(element.part, other.part);
+        EXPECT_EQ(element.name, other.name);
+        ASSERT_EQ(element.color.has_value(), other.color.has_value());
+        if (element.color.has_value()) {
+            EXPECT_NEAR(element.color->r, other.color->r, kTol);
+            EXPECT_NEAR(element.color->g, other.color->g, kTol);
+            EXPECT_NEAR(element.color->b, other.color->b, kTol);
+        }
+        EXPECT_NEAR(element.opacity, other.opacity, kTol);
+        ASSERT_EQ(element.segments.size(), other.segments.size());
+        for (std::size_t j = 0; j < element.segments.size(); ++j) {
+            const mc::ProfileSegment& segment = element.segments[j];
+            const mc::ProfileSegment& other_segment = other.segments[j];
+            EXPECT_EQ(segment.kind, other_segment.kind);
+            EXPECT_NEAR((segment.start - other_segment.start).norm(), 0.0, kTol);
+            EXPECT_NEAR((segment.end - other_segment.end).norm(), 0.0, kTol);
+            if (segment.kind == mc::ProfileSegment::Kind::kArc) {
+                EXPECT_NEAR((segment.center - other_segment.center).norm(), 0.0, kTol);
+                EXPECT_EQ(segment.counter_clockwise, other_segment.counter_clockwise);
+            }
+        }
+    }
+}
+
 /// @brief 工具エントリの一致を検証する
 void ExpectSameTool(const mc::ToolEntry& expected, const mc::ToolEntry& actual) {
     EXPECT_EQ(expected.number, actual.number);
@@ -102,6 +138,9 @@ void ExpectSameTool(const mc::ToolEntry& expected, const mc::ToolEntry& actual) 
         EXPECT_NEAR(simple->overhang, other.overhang, kTol);
         EXPECT_NEAR(simple->holder_diameter, other.holder_diameter, kTol);
         EXPECT_NEAR(simple->holder_length, other.holder_length, kTol);
+    } else if (const auto* profile = std::get_if<mc::ToolProfile>(&expected.source);
+               profile != nullptr) {
+        ExpectSameProfile(*profile, std::get<mc::ToolProfile>(actual.source));
     } else {
         const auto& ref = std::get<mc::LibraryToolRef>(expected.source);
         const auto& other = std::get<mc::LibraryToolRef>(actual.source);
@@ -291,6 +330,35 @@ mc::FileReference MachineReference() {
     return reference;
 }
 
+/// @brief C++で組み立てた輪郭形式の工具 (内部単位mm. inch宣言の往復用)
+/// @note スクエアの切れ刃部 (円柱、1インチ径・2インチ長) と、色付きで半透明の
+///       ホルダ部 (2インチ径、z=2〜5インチ) の2要素. 母線は回転軸上で閉じておく.
+///       指令点は先端 (0. 出力時は省略される)
+mc::ToolProfile BuiltProfile() {
+    using igesio::Vector2d;
+    mc::ToolProfile profile;
+    profile.name = "Built profile";
+    mc::ToolProfileElement cutter;
+    cutter.part = mc::ToolPart::kCutter;
+    cutter.segments = {
+            mc::ProfileSegment::Line(Vector2d(0.0, 0.0), Vector2d(12.7, 0.0)),
+            mc::ProfileSegment::Line(Vector2d(12.7, 0.0), Vector2d(12.7, 50.8)),
+            mc::ProfileSegment::Line(Vector2d(12.7, 50.8), Vector2d(0.0, 50.8))};
+    mc::ToolProfileElement holder;
+    holder.part = mc::ToolPart::kHolder;
+    holder.name = "collet";
+    holder.color = igesio::Color::FromRGB255(0x10, 0x20, 0x30);
+    holder.opacity = 0.75f;
+    holder.segments = {
+            mc::ProfileSegment::Line(Vector2d(0.0, 50.8), Vector2d(25.4, 50.8)),
+            mc::ProfileSegment::Arc(Vector2d(25.4, 50.8), Vector2d(50.8, 76.2),
+                                    Vector2d(50.8, 50.8), false),
+            mc::ProfileSegment::Line(Vector2d(50.8, 76.2), Vector2d(50.8, 127.0)),
+            mc::ProfileSegment::Line(Vector2d(50.8, 127.0), Vector2d(0.0, 127.0))};
+    profile.elements = {cutter, holder};
+    return profile;
+}
+
 /// @brief C++で組み立てた定義 (ライブラリ参照工具2本・幾何形式ワークオフセット・
 ///        入れ子モデル・`machine_pair`・inch/deg宣言・保持断片)
 /// @note 単位換算の往復を検証するため、内部値はmm・radで与える
@@ -335,7 +403,11 @@ mc::ProjectDefinition BuiltInCpp() {
     simple.holder_diameter = 50.8;
     simple.holder_length = 76.2;
     simple_tool.source = simple;
-    project.tools = {library_tool, simple_tool};
+    mc::ToolEntry profile_tool;
+    profile_tool.number = 7;
+    profile_tool.name = "Built profile";
+    profile_tool.source = BuiltProfile();
+    project.tools = {library_tool, simple_tool, profile_tool};
 
     mc::ToolOffsetEntry offset;
     offset.number = 3;
@@ -470,6 +542,31 @@ TEST(ProjectWriterTest, RoundTrip_BuiltInCpp) {
               (kMachinesDir / "tools" / "dummy.json").lexically_normal());
 }
 
+TEST(ProjectWriterTest, RoundTrip_ProfileTool) {
+    const auto original = ReadProjectText(MinimalProject() + "\n" + ProfileToolSection());
+    const auto restored = RoundTrip(original, kProjectsDir);
+    EXPECT_TRUE(restored.warnings.empty());
+    ExpectSameProject(original, restored);
+
+    // 読込時に補った軸までの直線も含めて、閉じた母線をそのまま書く
+    const std::string text = mc::WriteProjectToString(original, kProjectsDir);
+    EXPECT_TRUE(Contains(text, "[tool.profile]\ncommand_point_z = 3.0")) << text;
+    EXPECT_TRUE(Contains(text, "[[tool.profile.element]]\npart = \"cutter\"\nstart = [0.0, 0.0]"))
+            << text;
+    EXPECT_TRUE(Contains(text, "part = \"shank\"\nname = \"neck\"\nstart = [0.0, 10.0]"))
+            << text;
+    EXPECT_TRUE(Contains(text, "{to = [0.0, 40.0]}")) << text;
+    EXPECT_TRUE(Contains(text, "{type = \"arc\", to = [3.0, 3.0], center = [0.0, 3.0], "
+                               "direction = \"ccw\"}"))
+            << text;
+    EXPECT_TRUE(Contains(text, "direction = \"cw\"")) << text;
+    EXPECT_TRUE(Contains(text, "color = \"#606060\"\nopacity = 0.5")) << text;
+    // 直線の`type`、切れ刃部の空の`name`、デフォルトの`opacity`は書かない
+    EXPECT_FALSE(Contains(text, "type = \"line\"")) << text;
+    EXPECT_FALSE(Contains(text, "name = \"\"")) << text;
+    EXPECT_EQ(text.find("opacity"), text.rfind("opacity")) << text;
+}
+
 
 
 /**
@@ -479,8 +576,8 @@ TEST(ProjectWriterTest, RoundTrip_BuiltInCpp) {
 TEST(ProjectWriterTest, Sections_AlwaysWritten) {
     auto project = ReadProjectText(MinimalProject());
     const std::string text = mc::WriteProjectToString(project, kProjectsDir);
-    EXPECT_TRUE(Contains(text, "# machining-project 1.0"));
-    EXPECT_TRUE(Contains(text, "[format]\nname = \"machining-project\"\nversion = [1, 0]"));
+    EXPECT_TRUE(Contains(text, "# machining-project 1.1"));
+    EXPECT_TRUE(Contains(text, "[format]\nname = \"machining-project\"\nversion = [1, 1]"));
     EXPECT_TRUE(Contains(text, "[project]\nname = \"minimal\""));
     EXPECT_TRUE(Contains(text, "[units]\nlength = \"mm\"\nangle = \"deg\""));
     EXPECT_TRUE(Contains(text, "[machine]\nlibrary = \"t-ZYX-b-AC-w.toml\""));
@@ -653,6 +750,12 @@ TEST(ProjectWriterTest, Throws_InvalidArgumentOnInexpressibleValues) {
     {
         auto project = BuiltInCpp();
         project.models[0].geometry.file_unit_scale = 2.0;   // mm・inchのどちらでもない
+        EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
+    }
+    {
+        auto project = BuiltInCpp();
+        // セグメントを持たない部位要素は`start`を決められない
+        std::get<mc::ToolProfile>(project.tools[2].source).elements[0].segments.clear();
         EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
     }
 }

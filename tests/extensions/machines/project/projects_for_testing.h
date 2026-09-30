@@ -47,7 +47,7 @@ inline igesio::extensions::machines::ReadProjectOptions DefaultOptions() {
 inline std::string MinimalProject() {
     return R"([format]
 name = "machining-project"
-version = [1, 0]
+version = [1, 1]
 
 [project]
 name = "minimal"
@@ -91,6 +91,53 @@ work_offset = "G54"
 
 [initial.axes]
 Z = 100.0
+)";
+}
+
+/// @brief 輪郭形式の工具#5 (`MinimalProject`に追記して用いる)
+/// @note テーパネック付きのR3ボール (mm). 切れ刃部は先端の凸円弧 (反時計回り)
+///       と`type`省略の直線で、軸上で明示的に閉じる. シャンク部は始点・終点とも
+///       軸上に無く (読込時に軸までの直線を補う)、凹のフィレット (時計回り) を含む.
+///       ホルダ部は色と不透明度を持ち、z=30〜80でシャンク部 (〜40) と重なる.
+///       指令点は先端の円弧中心 (z=3). `gauge_length`は省略 (ホルダ上端80が
+///       デフォルト)
+inline std::string ProfileToolSection() {
+    return R"([[tool]]
+number = 5
+name = "Taper ball"
+
+[tool.profile]
+command_point_z = 3.0
+
+[[tool.profile.element]]
+part = "cutter"
+start = [0.0, 0.0]
+segments = [
+    { type = "arc", to = [3.0, 3.0], center = [0.0, 3.0], direction = "ccw" },
+    { to = [3.0, 10.0] },
+    { to = [0.0, 10.0] },
+]
+
+[[tool.profile.element]]
+part = "shank"
+name = "neck"
+start = [3.0, 10.0]
+segments = [
+    { to = [3.0, 15.0] },
+    { type = "arc", to = [5.0, 17.0], center = [5.0, 15.0], direction = "cw" },
+    { to = [5.0, 40.0] },
+]
+
+[[tool.profile.element]]
+part = "holder"
+color = "#606060"
+opacity = 0.5
+start = [0.0, 30.0]
+segments = [
+    { to = [20.0, 30.0] },
+    { to = [20.0, 80.0] },
+    { to = [0.0, 80.0] },
+]
 )";
 }
 

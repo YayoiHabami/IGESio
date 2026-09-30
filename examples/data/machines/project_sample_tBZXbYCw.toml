@@ -10,7 +10,7 @@
 
 [format]
 name = "machining-project"
-version = [1, 0]
+version = [1, 1]
 
 [project]
 name = "multiple_obstacles"
@@ -24,23 +24,100 @@ angle = "deg"
 [machine]
 library = "machine_t-BZX-b-YC-w.toml"
 
-# R3ボールエンドミル (簡易アセンブリ)
-# ゲージラインはデフォルト値 (overhang + holder.length = 120)
+# R3ボールエンドミル (輪郭形式. ホルダHSK-E50-HDC6S-120に突き出し25mmで取り付け)
+# ホルダはホルダ下端面をz=25 (突き出し量) に置き、上端はz=175。
+# ゲージラインはホルダ上面から-30mm (フランジ上面) のため、gauge_length = 175 - 30 = 145
 [[tool]]
 number = 12
 name = "Ball R3"
+gauge_length = 145.0
 
-[tool.simple]
-cutter = "ball"
-diameter = 6.0
-cutting_length = 20.0
-tool_length = 80.0
-command_point = "center"
-overhang = 60.0
+[tool.profile]
+command_point_z = 3.0    # 先端の円弧中心
 
-[tool.simple.holder]
-diameter = 40.0
-length = 60.0
+[[tool.profile.element]]
+part = "cutter"
+start = [0.0, 0.0]
+segments = [
+    { type = "arc", to = [3.0, 3.0], center = [0.0, 3.0], direction = "ccw" },
+    { to = [3.0, 20.0] },
+    { to = [0.0, 20.0] },
+]
+
+[[tool.profile.element]]
+part = "shank"
+start = [3.0, 20.0]      # 両端が回転軸上に無いため、軸までの直線を補う
+segments = [{ to = [3.0, 80.0] }]
+
+# ホルダ: HSK-E50-HDC6S-120 (ホルダ自身の座標をz方向に+25移動したもの)
+[[tool.profile.element]]
+part = "holder"
+name = "HSK-E50-HDC6S-120"
+start = [0.0, 25.0]
+segments = [
+    { to = [7.0, 25.0] },
+    { to = [12.0, 72.0] },
+    { to = [20.0, 72.0] },
+    { to = [20.0, 118.0] },
+    { to = [23.0, 118.0] },
+    { to = [23.0, 120.5] },
+    { to = [20.5, 121.5] },
+    { to = [20.5, 124.5] },
+    { to = [23.0, 125.5] },
+    { to = [23.0, 145.0] },
+    { to = [21.0, 145.0] },
+    { to = [20.0, 175.0] },
+    { to = [0.0, 175.0] },
+]
+
+# R3ボールエンドミル (輪郭形式. テーパネック付きの工具と、主軸に差し込む部分を持つホルダ)
+# 切れ刃部は先端の凸円弧 (反時計回り)、シャンク部はネックのフィレット (時計回り) を含む。
+# ホルダはフランジ (z=100〜120) の上に主軸に差し込むテーパ部 (z=120〜150) を持つため、
+# ゲージラインはホルダ上端ではなくフランジ上面 (gauge_length = 120) で指定する
+[[tool]]
+number = 13
+name = "Ball R3 taper neck"
+gauge_length = 120.0
+
+[tool.profile]
+command_point_z = 3.0    # 先端の円弧中心
+
+[[tool.profile.element]]
+part = "cutter"
+start = [0.0, 0.0]
+segments = [
+    { type = "arc", to = [3.0, 3.0], center = [0.0, 3.0], direction = "ccw" },
+    { to = [3.0, 12.0] },
+    { to = [0.0, 12.0] },
+]
+
+# ネック部: 直径5mmに絞り、フィレットで直径8mmのシャンクにつなぐ
+# (始点と終点が回転軸上に無いため、軸までの直線は読込時に補われる)
+[[tool.profile.element]]
+part = "shank"
+name = "neck"
+start = [2.5, 12.0]
+segments = [
+    { to = [2.5, 30.0] },
+    { type = "arc", to = [4.0, 31.5], center = [4.0, 30.0], direction = "cw" },
+    { to = [4.0, 80.0] },
+]
+
+# ホルダ: コレットチャック (z=60〜100)、フランジ (z=100〜120)、テーパ部 (z=120〜150)
+[[tool.profile.element]]
+part = "holder"
+color = "#8090a0"
+start = [0.0, 60.0]
+segments = [
+    { to = [15.0, 60.0] },
+    { to = [20.0, 90.0] },
+    { to = [20.0, 100.0] },
+    { to = [30.0, 100.0] },
+    { to = [30.0, 120.0] },
+    { to = [22.0, 120.0] },
+    { to = [12.0, 150.0] },
+    { to = [0.0, 150.0] },
+]
 
 # 工具長補正 (NCのG43.5H12). 長さは工具12のゲージ長をデフォルト値とする
 [[tool_offset]]

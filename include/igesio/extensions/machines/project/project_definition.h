@@ -52,7 +52,7 @@ constexpr std::string_view kProjectFormatName = "machining-project";
 
 /// @brief 対応するプロジェクトフォーマットのバージョン `[major, minor]`
 /// @note 読込はmajorが一致するものを受理し、出力時は常にこの値を書く
-constexpr std::array<int, 2> kProjectFormatVersion = {1, 0};
+constexpr std::array<int, 2> kProjectFormatVersion = {1, 1};
 
 /// @brief 取り付け先名の予約語 (ワーク取り付け点)
 /// @note `type = "work_mount"`のコンポーネントを名前によらず指す
@@ -119,10 +119,15 @@ struct ToolEntry {
     /// @brief 工具番号 (正の整数、一意)
     int number = 0;
     /// @brief 表示名
-    /// @note 省略時は空 (表示名は`MachiningSetup`で補う)
+    /// @note 省略時は空 (表示名は`MachiningSetup`で補う). 輪郭形式では必須
     std::string name;
-    /// @brief 簡易アセンブリ形式 (`[tool.simple]`) またはライブラリ参照形式
-    std::variant<SimpleToolSpec, LibraryToolRef> source;
+    /// @brief 簡易アセンブリ形式 (`[tool.simple]`)、ライブラリ参照形式,
+    ///        または輪郭形式 (`[tool.profile]`)
+    /// @note 輪郭形式の`ToolProfile`は内部単位 [mm] で、各部位要素は回転軸上で
+    ///       閉じた状態 (`CloseElementOnAxis`適用済み) で保持する.
+    ///       `name`は`ToolEntry::name`と同じ値、`gauge_line_z`は未設定であり
+    ///       `MachiningSetup`で確定する
+    std::variant<SimpleToolSpec, LibraryToolRef, ToolProfile> source;
     /// @brief 工具先端からゲージラインまでの長さ [mm]
     /// @note 省略時は`std::nullopt` (輪郭側の値は`MachiningSetup`で適用)
     std::optional<double> gauge_length;

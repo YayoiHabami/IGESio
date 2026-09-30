@@ -35,7 +35,7 @@ namespace {
 
 /// @brief 出力の先頭に置く見出しコメント
 constexpr const char* kHeaderComment =
-        "# machining-project 1.0 "
+        "# machining-project 1.1 "
         "(written by the IGESio machines extension)\n\n";
 
 /// @brief 軸名→回転軸かの表
@@ -134,9 +134,86 @@ TomlValue MakeSimpleTool(const SimpleToolSpec& spec, const WriteContext& ctx) {
     return table;
 }
 
+/// @brief 輪郭形式の`[r, z]`座標を作る
+/// @param point 座標 (r, z) [mm]
+/// @param scale 長さの換算係数 (mm→ファイル値)
+TomlValue ProfilePoint(const igesio::Vector2d& point, const double scale) {
+    return Reals({point.x() / scale, point.y() / scale});
+}
+
+/// @brief `segments`の1要素 (インラインテーブル) を書く
+/// @param segment セグメント (内部単位)
+/// @param scale 長さの換算係数 (mm→ファイル値)
+/// @note 直線の`type`はデフォルト値なので省略する
+TomlValue MakeProfileSegment(const ProfileSegment& segment,
+                             const double scale) {
+    const bool is_arc = segment.kind == ProfileSegment::Kind::kArc;
+    TomlValue table = InlineTable();
+    if (is_arc) table["type"] = std::string("arc");
+    table["to"] = ProfilePoint(segment.end, scale);
+    if (is_arc) {
+        table["center"] = ProfilePoint(segment.center, scale);
+        table["direction"] =
+                std::string(ArcDirectionName(segment.counter_clockwise));
+    }
+    return table;
+}
+
+/// @brief `[[tool.profile.element]]`の1要素を書く
+/// @param element 部位要素 (内部単位. 回転軸上で閉じた母線)
+/// @param scale 長さの換算係数 (mm→ファイル値)
+/// @note 空の`name`とデフォルト値の`opacity`は省略する.
+///       `start`は先頭セグメントの始点
+/// @throw std::invalid_argument セグメントを持たない場合
+TomlValue MakeProfileElement(const ToolProfileElement& element,
+                             const double scale) {
+    if (element.segments.empty()) {
+        throw std::invalid_argument(
+                "[tool.profile]: element has no segments");
+    }
+    TomlValue table = Table();
+    table["part"] = std::string(ToolPartName(element.part));
+    if (!element.name.empty()) table["name"] = element.name;
+    table["start"] = ProfilePoint(element.segments.front().start, scale);
+    TomlValue segments = MultilineArray();
+    for (const ProfileSegment& segment : element.segments) {
+        segments.push_back(MakeProfileSegment(segment, scale));
+    }
+    table["segments"] = segments;
+    if (element.color.has_value()) {
+        table["color"] = FormatHexColor(*element.color);
+    }
+    if (element.opacity != 1.0f) {
+        table["opacity"] = RealFromFloat(element.opacity);
+    }
+    return table;
+}
+
+/// @brief `[tool.profile]`を書く
+/// @param profile 輪郭 (内部単位)
+/// @param ctx 出力の文脈
+/// @note `command_point_z`が0 (先端) なら省略する. ゲージラインは
+///       `[[tool]].gauge_length`として書くため、`gauge_line_z`は書かない
+/// @throw std::invalid_argument セグメントを持たない部位要素がある場合
+TomlValue MakeProfileTool(const ToolProfile& profile, const WriteContext& ctx) {
+    const double scale = ctx.length_scale;
+    TomlValue table = Table();
+    if (profile.command_point_z != 0.0) {
+        table["command_point_z"] = Real(profile.command_point_z / scale);
+    }
+    TomlValue elements = TableArrayValue();
+    for (const ToolProfileElement& element : profile.elements) {
+        elements.push_back(MakeProfileElement(element, scale));
+    }
+    table["element"] = elements;
+    return table;
+}
+
 /// @brief `[[tool]]`の1要素を書く
 /// @param entry 出力する工具 (内部単位)
 /// @param ctx 出力の文脈
+/// @note 形状のサブテーブル (`[tool.simple]`/`[tool.profile]`) はスカラーの
+///       キーの後に置く
 TomlValue MakeTool(const ToolEntry& entry, const WriteContext& ctx) {
     TomlValue table = Table();
     table["number"] = entry.number;
@@ -156,6 +233,9 @@ TomlValue MakeTool(const ToolEntry& entry, const WriteContext& ctx) {
     if (const auto* simple = std::get_if<SimpleToolSpec>(&entry.source);
         simple != nullptr) {
         table["simple"] = MakeSimpleTool(*simple, ctx);
+    } else if (const auto* profile = std::get_if<ToolProfile>(&entry.source);
+               profile != nullptr) {
+        table["profile"] = MakeProfileTool(*profile, ctx);
     }
     return table;
 }

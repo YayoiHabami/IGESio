@@ -7,7 +7,8 @@
  * @note 対象: MachiningSetup (BaseQ / Tools / WorkFrames / Models / Geometries /
  *       ToolOffsets / InitialWorkOffset / ResolveAttach)、MakeProjectDefinition
  *       - 正常系: 初期姿勢の重ね合わせ (σを含む)、簡易工具の解決とゲージ長、
- *         ライブラリ参照工具のコールバック解決、ワーク座標系の登録値形式
+ *         ライブラリ参照工具のコールバック解決、輪郭形式工具の解決 (ホルダ上端の
+ *         ゲージ長・`gauge_length`の優先・ホルダ無しの警告)、ワーク座標系の登録値形式
  *         (直進のみ・回転軸あり・`from = "machine"`) と幾何形式 (取り付け先・
  *         モデル経由)、暗黙のG54、モデルの同次変換と所属、形状の同次変換一覧 (機械部品→
  *         モデルの順・`local_frame`の合成・干渉専用形状の保持)、工具オフセットの
@@ -54,6 +55,7 @@ using machines_test::MinimalXyzAc;
 using projects_test::DefaultOptions;
 using projects_test::kProjectsDir;
 using projects_test::MinimalProject;
+using projects_test::ProfileToolSection;
 using projects_test::ReadProjectText;
 using projects_test::ReadProjectWithMachine;
 using projects_test::Replace;
@@ -189,20 +191,61 @@ TEST(SetupTest, Tools_LibraryRefResolvedByCallback) {
     options.tool_resolver = FakeResolver;
     const mc::MachiningSetup setup(project, options);
     ASSERT_EQ(setup.Tools().size(), 3u);
-    // #1: 名前はコールバック、ゲージ長は省略なので輪郭のホルダ上端で確定 (警告)
+    // #1: 名前はコールバック、ゲージ長は省略なので輪郭のホルダ上端で確定 (警告なし)
     const mc::ToolAssemblySpec& first = setup.Tools().at(1);
     EXPECT_EQ(first.name, "std#2");
     EXPECT_EQ(first.number, 1);
     EXPECT_NEAR(first.profile.gauge_line_z.value_or(0.0), 30.0 + 40.0, kTol);
-    ASSERT_EQ(setup.Warnings().size(), 1u);
-    EXPECT_EQ(setup.Warnings()[0].context, "[[tool]](#1)");
-    EXPECT_NE(setup.Warnings()[0].message.find("gauge line not specified"), std::string::npos);
+    EXPECT_TRUE(setup.Warnings().empty());
     // #2: エントリの名前・ゲージ長・制御点が優先される
     const mc::ToolAssemblySpec& second = setup.Tools().at(2);
     EXPECT_EQ(second.name, "Special 7");
     EXPECT_NEAR(second.profile.gauge_line_z.value_or(0.0), 150.0, kTol);
     EXPECT_EQ(second.control_point, mc::ControlPoint::kGauge);
     EXPECT_EQ(setup.Tools().at(3).name, "square");
+}
+
+TEST(SetupTest, Tools_ProfileResolvedWithHolderTopAsGaugeLine) {
+    const auto project = ReadProjectText(MinimalProject() + "\n" + ProfileToolSection());
+    const mc::MachiningSetup setup(project);
+    EXPECT_TRUE(setup.Warnings().empty());
+    ASSERT_EQ(setup.Tools().size(), 2u);
+    const mc::ToolAssemblySpec& tool = setup.Tools().at(5);
+    EXPECT_EQ(tool.number, 5);
+    EXPECT_EQ(tool.name, "Taper ball");
+    EXPECT_EQ(tool.control_point, mc::ControlPoint::kTip);
+    EXPECT_NEAR(tool.profile.command_point_z, 3.0, kTol);
+    ASSERT_EQ(tool.profile.elements.size(), 3u);
+    // ゲージ長は省略なのでホルダ部の上端 (80)
+    EXPECT_NEAR(tool.profile.gauge_line_z.value_or(0.0), 80.0, kTol);
+    EXPECT_NEAR(tool.profile.Reach(), 80.0, kTol);
+    EXPECT_NEAR(tool.profile.CuttingLength(), 10.0, kTol);
+    EXPECT_NEAR(tool.profile.MaxRadius(mc::ToolPart::kCutter), 3.0, kTol);
+    // 制御点 (先端) は`tool_mount`フレームでゲージ長だけ下 (指令点は先端から3)
+    const Vector3d control = mc::ControlLocal(tool);
+    EXPECT_NEAR(control.z(), 3.0 - 80.0, kTol);
+}
+
+TEST(SetupTest, Tools_ProfileGaugeLengthOverridesHolderTop) {
+    const auto project = ReadProjectText(
+            MinimalProject() + "\n"
+            + Replace(ProfileToolSection(), "name = \"Taper ball\"",
+                      "name = \"Taper ball\"\ngauge_length = 70.0"));
+    const mc::MachiningSetup setup(project);
+    EXPECT_TRUE(setup.Warnings().empty());
+    EXPECT_NEAR(setup.Tools().at(5).profile.gauge_line_z.value_or(0.0), 70.0, kTol);
+}
+
+TEST(SetupTest, Tools_ProfileWithoutHolderWarnsAndUsesReach) {
+    // ホルダ部を切れ刃部に変えると、ホルダ部が無いので工具全長 (80) で代用して警告
+    const auto project = ReadProjectText(
+            MinimalProject() + "\n"
+            + Replace(ProfileToolSection(), "part = \"holder\"", "part = \"cutter\""));
+    const mc::MachiningSetup setup(project);
+    EXPECT_NEAR(setup.Tools().at(5).profile.gauge_line_z.value_or(0.0), 80.0, kTol);
+    ASSERT_EQ(setup.Warnings().size(), 1u);
+    EXPECT_EQ(setup.Warnings()[0].context, "[[tool]](#5)");
+    EXPECT_NE(setup.Warnings()[0].message.find("gauge line not specified"), std::string::npos);
 }
 
 
@@ -463,7 +506,7 @@ TEST(SetupTest, ToolOffsets_DefaultsFromTool) {
     ASSERT_EQ(setup.ToolOffsets().size(), 3u);
     const mc::ResolvedToolOffset& first = setup.ToolOffsets().at(1);
     EXPECT_NEAR(first.length, 90.0, kTol);   // ゲージ長 = overhang + holder_length
-    EXPECT_NEAR(first.radius, 20.0, kTol);   // 最大半径 = ホルダ半径
+    EXPECT_NEAR(first.radius, 5.0, kTol);   // 切れ刃部の半径 (ホルダ半径20は含めない)
     EXPECT_NEAR(first.length_wear, -0.02, kTol);
     EXPECT_EQ(first.tool.value_or(0), 1);
     const mc::ResolvedToolOffset& second = setup.ToolOffsets().at(2);

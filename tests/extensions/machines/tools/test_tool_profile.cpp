@@ -12,7 +12,7 @@
  *         幾何が成立しない寸法の例外
  *       - 検証: 簡易輪郭の受理と、各検証項目の違反ごとの例外文言
  *       - 派生値: 円弧の張り出し (主要角の通過) を含むこと
- *       - ゲージライン→ホルダ上端→全長の順の採用と警告、
+ *       - ゲージライン→ホルダ上端→全長の順の採用 (警告は全長で代用するときのみ)、
  *         差し込み部分 (テーパ) を持つホルダでの値
  *       - 制御点: kTip/kGaugeとG43の扱い、取り付けオフセット
  */
@@ -510,6 +510,23 @@ TEST(ToolProfileTest, Derived_ArcExtremaAreIncluded) {
     EXPECT_NEAR(profile.MaxRadius(), 2.0 * r, kTol);
 }
 
+TEST(ToolProfileTest, MaxRadius_ByPartExcludesOtherParts) {
+    // 切れ刃・シャンク = φ10、ホルダ = φ40. 部位指定はその部位のみを見る
+    ToolProfile profile = mc::MakeSimpleToolProfile(BallSpec(), nullptr);
+    EXPECT_NEAR(profile.MaxRadius(ToolPart::kCutter), 5.0, kTol);
+    EXPECT_NEAR(profile.MaxRadius(ToolPart::kShank), 5.0, kTol);
+    EXPECT_NEAR(profile.MaxRadius(ToolPart::kHolder), 20.0, kTol);
+    EXPECT_NEAR(profile.MaxRadius(), 20.0, kTol);
+
+    // 切れ刃長 = 工具長ではシャンク要素が無く、その部位の最大半径は0
+    SimpleToolSpec no_shank = BallSpec();
+    no_shank.cutting_length = no_shank.tool_length;
+    profile = mc::MakeSimpleToolProfile(no_shank, nullptr);
+    EXPECT_EQ(FindElement(profile, ToolPart::kShank), nullptr);
+    EXPECT_NEAR(profile.MaxRadius(ToolPart::kShank), 0.0, kTol);
+    EXPECT_NEAR(profile.MaxRadius(ToolPart::kCutter), 5.0, kTol);
+}
+
 TEST(ToolProfileTest, GaugeLength_PrefersGaugeLineThenHolderTopThenReach) {
     std::vector<mc::Diagnostic> warnings;
     // ゲージライン指定あり (簡易輪郭はホルダ上端): 警告なし
@@ -517,24 +534,23 @@ TEST(ToolProfileTest, GaugeLength_PrefersGaugeLineThenHolderTopThenReach) {
     EXPECT_NEAR(simple.GaugeLength(&warnings), 120.0, kTol);
     EXPECT_TRUE(warnings.empty());
 
-    // ゲージライン未指定・ホルダあり: ホルダ上端で代用し警告
+    // ゲージライン未指定・ホルダあり: ホルダ上端で代用する (簡易アセンブリと同じ
+    // 規則なので警告しない)
     ToolProfile without_gauge = simple;
     without_gauge.gauge_line_z.reset();
     EXPECT_NEAR(without_gauge.GaugeLength(&warnings), 120.0, kTol);
-    ASSERT_EQ(warnings.size(), 1u);
-    EXPECT_NE(warnings[0].message.find("gauge line not specified"), std::string::npos)
-            << warnings[0].message;
-    EXPECT_NE(warnings[0].message.find("holder top"), std::string::npos)
-            << warnings[0].message;
+    EXPECT_TRUE(warnings.empty());
 
     // ゲージライン未指定・ホルダなし: 全長で代用し警告
     ToolProfile without_holder = without_gauge;
     without_holder.elements.pop_back();  // ホルダを除く
     EXPECT_NEAR(without_holder.GaugeLength(&warnings),
                 without_holder.Reach(), kTol);
-    ASSERT_EQ(warnings.size(), 2u);
-    EXPECT_NE(warnings[1].message.find("tool reach"), std::string::npos)
-            << warnings[1].message;
+    ASSERT_EQ(warnings.size(), 1u);
+    EXPECT_NE(warnings[0].message.find("gauge line not specified"), std::string::npos)
+            << warnings[0].message;
+    EXPECT_NE(warnings[0].message.find("tool reach"), std::string::npos)
+            << warnings[0].message;
     EXPECT_NEAR(without_holder.GaugeLength(nullptr), 80.0, kTol);
 }
 
@@ -575,6 +591,16 @@ TEST(ToolProfileTest, Names_RoundTrip) {
     EXPECT_EQ(mc::ToolPartName(ToolPart::kShank), "shank");
     EXPECT_EQ(mc::ToolPartName(ToolPart::kHolder), "holder");
     EXPECT_FALSE(mc::ParseToolPart("Cutter").has_value());
+
+    for (const bool counter_clockwise : {true, false}) {
+        const auto parsed = mc::ParseArcDirection(mc::ArcDirectionName(counter_clockwise));
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(*parsed, counter_clockwise);
+    }
+    EXPECT_EQ(mc::ArcDirectionName(true), "ccw");
+    EXPECT_EQ(mc::ArcDirectionName(false), "cw");
+    EXPECT_FALSE(mc::ParseArcDirection("CCW").has_value());
+    EXPECT_FALSE(mc::ParseArcDirection("clockwise").has_value());
 
     for (const auto cutter : {SimpleToolSpec::Cutter::kBall, SimpleToolSpec::Cutter::kSquare,
                               SimpleToolSpec::Cutter::kRadius}) {

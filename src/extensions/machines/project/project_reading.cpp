@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <optional>
@@ -26,6 +27,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "igesio/common/errors.h"
@@ -463,6 +465,235 @@ void ValidateSimpleTool(const SimpleToolSpec& spec, const std::string& context,
     }
 }
 
+/// @brief 輪郭形式の`[r, z]`座標を読み、内部単位に換算する
+/// @param value `[r, z]`の配列
+/// @param context 読込箇所
+/// @param length_scale 長さの換算係数 (ファイル値→mm)
+/// @throw igesio::DataFormatError 実数2成分の配列でない場合
+igesio::Vector2d ReadProfilePoint(const TomlValue& value,
+                                  const std::string& context,
+                                  const double length_scale) {
+    const std::vector<double> values = AsRealArray(value, 2, context);
+    return igesio::Vector2d(values[0], values[1]) * length_scale;
+}
+
+/// @brief 弦の垂直二等分線上で指定したr座標を持つ点を計算する
+/// @param midpoint 弦の中点 (r, z) [mm]
+/// @param direction 二等分線の方向 (単位ベクトル)
+/// @param r 求める点のr座標 [mm]
+/// @return 二等分線上の点. 二等分線が回転軸に平行 (弦がr方向) なら`std::nullopt`
+std::optional<igesio::Vector2d> BisectorPointAtRadius(
+        const igesio::Vector2d& midpoint, const igesio::Vector2d& direction,
+        const double r) {
+    if (std::abs(direction.x()) <= kDegenerateTolerance) return std::nullopt;
+    const double t = (r - midpoint.x()) / direction.x();
+    return igesio::Vector2d(midpoint + t * direction);
+}
+
+/// @brief 円弧の中心の補正候補を優先順に列挙する
+/// @param start 始点 (r, z) [mm]
+/// @param end 終点 (r, z) [mm] (始点と一致しないこと)
+/// @param center 記載された中心 (r, z) [mm]
+/// @return 始点と終点の垂直二等分線上の候補. 順に (1) 始点または終点が回転軸上
+///         (r = 0) にあれば二等分線と回転軸の交点、(2) 始点または終点が先端面
+///         (z = 0) 上にあればその端点の真上の点、(3) 記載された中心の射影
+/// @note (1)(2)を優先するのは、射影では中心が回転軸や先端面からわずかにずれ,
+///       円弧の凸部が原点より先端側 (z < 0) や負のrに膨らんで検証に不合格になる
+///       ため. (1)は円弧が回転軸に接する (ボール先端やドーム頂部)、(2)は円弧が
+///       先端面に接する (コーナR) 場合の意図した中心に一致する
+std::vector<igesio::Vector2d> ArcCenterCandidates(
+        const igesio::Vector2d& start, const igesio::Vector2d& end,
+        const igesio::Vector2d& center) {
+    const igesio::Vector2d chord = end - start;
+    const igesio::Vector2d midpoint = 0.5 * (start + end);
+    const igesio::Vector2d direction =
+            igesio::Vector2d(-chord.y(), chord.x()).normalized();
+    const std::array<igesio::Vector2d, 2> endpoints = {start, end};
+
+    std::vector<igesio::Vector2d> candidates;
+    const auto add = [&candidates](const std::optional<igesio::Vector2d>& point) {
+        if (point.has_value()) candidates.push_back(*point);
+    };
+    for (const igesio::Vector2d& endpoint : endpoints) {
+        if (std::abs(endpoint.x()) <= kDegenerateTolerance) {
+            add(BisectorPointAtRadius(midpoint, direction, 0.0));
+        }
+    }
+    for (const igesio::Vector2d& endpoint : endpoints) {
+        if (std::abs(endpoint.y()) <= kDegenerateTolerance) {
+            add(BisectorPointAtRadius(midpoint, direction, endpoint.x()));
+        }
+    }
+    candidates.push_back(
+            midpoint + (center - midpoint).dot(direction) * direction);
+    return candidates;
+}
+
+/// @brief 円弧の中心を始点と終点の垂直二等分線上に補正する
+/// @param start 始点 (r, z) [mm]
+/// @param end 終点 (r, z) [mm]
+/// @param center 記載された中心 (r, z) [mm]
+/// @param tolerance 補正量の許容誤差 [mm]
+/// @param context 読込箇所
+/// @param line 中心の行番号
+/// @return `ArcCenterCandidates`の候補のうち、記載された中心から許容誤差内にある
+///         最初のもの (始点と終点から厳密に等距離)
+/// @throw igesio::DataFormatError いずれの候補も許容誤差を超える場合
+/// @note 始点と終点が一致する場合は補正せずそのまま返す
+///       (退化した円弧として`ValidateToolProfile`で検出する)
+igesio::Vector2d CorrectArcCenter(
+        const igesio::Vector2d& start, const igesio::Vector2d& end,
+        const igesio::Vector2d& center, const double tolerance,
+        const std::string& context, const int line) {
+    if ((end - start).norm() <= kDegenerateTolerance) return center;
+    for (const igesio::Vector2d& candidate :
+         ArcCenterCandidates(start, end, center)) {
+        if ((candidate - center).norm() <= tolerance) return candidate;
+    }
+    Fail(context, "arc center is not equidistant from the endpoints", line);
+}
+
+/// @brief `segments`の1要素を読む
+/// @param table セグメントのインラインテーブル
+/// @param start 始点 (r, z) [mm] (前のセグメントの終点、または要素の`start`)
+/// @param context 読込箇所
+/// @param length_scale 長さの換算係数 (ファイル値→mm)
+/// @return 始点から`to`までのセグメント (内部単位)
+/// @throw igesio::DataFormatError テーブルでない、`to`が無い、未知の
+///        `type`/`direction`、直線に`center`/`direction`がある、円弧に
+///        `center`/`direction`が無い、または円弧の中心が始点と終点から
+///        等距離でない場合
+ProfileSegment ReadProfileSegment(
+        const TomlValue& table, const igesio::Vector2d& start,
+        const std::string& context, const double length_scale) {
+    EnsureTable(table, context + ": not a table");
+    const TomlValue* to = Find(table, "to");
+    if (to == nullptr) Fail(context, "to is missing", LineOf(table));
+    const igesio::Vector2d end =
+            ReadProfilePoint(*to, context + ".to", length_scale);
+
+    const std::string type =
+            OptionalString(table, "type", context).value_or("line");
+    const TomlValue* center = Find(table, "center");
+    const TomlValue* direction = Find(table, "direction");
+    if (type == "line") {
+        if (center != nullptr || direction != nullptr) {
+            Fail(context,
+                 "center and direction are valid only for type = \"arc\"",
+                 LineOf(center != nullptr ? *center : *direction));
+        }
+        return ProfileSegment::Line(start, end);
+    }
+    if (type != "arc") {
+        Fail(context, "unknown type: " + type, LineOf(*Find(table, "type")));
+    }
+    if (center == nullptr) Fail(context, "center is missing", LineOf(table));
+    if (direction == nullptr) {
+        Fail(context, "direction is missing", LineOf(table));
+    }
+    const std::string direction_text =
+            RequireString(table, "direction", context);
+    const auto counter_clockwise = ParseArcDirection(direction_text);
+    if (!counter_clockwise.has_value()) {
+        Fail(context, "unknown direction: " + direction_text,
+             LineOf(*direction));
+    }
+    const igesio::Vector2d corrected = CorrectArcCenter(
+            start, end,
+            ReadProfilePoint(*center, context + ".center", length_scale),
+            kArcCenterTolerance * length_scale, context + ".center",
+            LineOf(*center));
+    return ProfileSegment::Arc(start, end, corrected, *counter_clockwise);
+}
+
+/// @brief `[[tool.profile.element]]`の1要素を読み、回転軸上で閉じる
+/// @param table 要素のテーブル
+/// @param context 読込箇所
+/// @param length_scale 長さの換算係数 (ファイル値→mm)
+/// @return 部位要素 (内部単位). 母線の先頭と末尾が回転軸上に無ければ,
+///         同じzの軸上点までの直線を補う (`CloseElementOnAxis`)
+/// @throw igesio::DataFormatError `part`/`start`/`segments`が無い、未知の
+///        `part`、`segments`が空、色の形式不正、または不透明度が範囲外の場合
+///        (`ReadProfileSegment`からも伝播)
+ToolProfileElement ReadProfileElement(
+        const TomlValue& table, const std::string& context,
+        const double length_scale) {
+    ToolProfileElement element;
+    const std::string part = RequireString(table, "part", context);
+    const auto parsed_part = ParseToolPart(part);
+    if (!parsed_part.has_value()) {
+        Fail(context, "unknown part: " + part, LineOf(*Find(table, "part")));
+    }
+    element.part = *parsed_part;
+    element.name = OptionalString(table, "name", context).value_or("");
+
+    const TomlValue* start = Find(table, "start");
+    if (start == nullptr) Fail(context, "start is missing", LineOf(table));
+    igesio::Vector2d current =
+            ReadProfilePoint(*start, context + ".start", length_scale);
+    const TomlValue* segments_value = Find(table, "segments");
+    if (segments_value == nullptr) {
+        Fail(context, "segments is missing", LineOf(table));
+    }
+    const std::string segments_context = context + ".segments";
+    const std::vector<const TomlValue*> segments =
+            TableArray(table, "segments", segments_context);
+    if (segments.empty()) {
+        Fail(context, "segments is empty", LineOf(*segments_value));
+    }
+    for (std::size_t i = 0; i < segments.size(); ++i) {
+        element.segments.push_back(ReadProfileSegment(
+                *segments[i], current, Indexed(segments_context, i),
+                length_scale));
+        current = element.segments.back().end;
+    }
+
+    element.color = ReadColor(table, context);
+    element.opacity = ReadOpacity(table, context);
+    CloseElementOnAxis(&element);
+    return element;
+}
+
+/// @brief `[tool.profile]`を読んで検証する
+/// @param table `[tool.profile]`のテーブル
+/// @param name 工具名 (`[[tool]].name`)
+/// @param context 読込箇所
+/// @param ctx 読込の文脈
+/// @return 検証済みの輪郭 (内部単位). `gauge_line_z`は未設定
+/// @throw igesio::DataFormatError テーブルでない、`command_point_z`が負,
+///        `[[tool.profile.element]]`が無い、または`ValidateToolProfile`の検証
+///        (切れ刃部要素の有無、先端が原点にあること、退化、負の半径,
+///        指令点の範囲) に反する場合 (`ReadProfileElement`からも伝播)
+ToolProfile ReadProfileTool(const TomlValue& table, const std::string& name,
+                            const std::string& context,
+                            const ReadContext& ctx) {
+    EnsureTable(table, context + ": not a table");
+    const double length_scale = ctx.project->units.length;
+    ToolProfile profile;
+    profile.name = name;
+    if (const TomlValue* z = Find(table, "command_point_z"); z != nullptr) {
+        profile.command_point_z =
+                AsPositive(*z, context + ".command_point_z", true)
+                * length_scale;
+    }
+
+    const std::string element_context = context + ".element";
+    const std::vector<const TomlValue*> elements =
+            TableArray(table, "element", element_context);
+    if (elements.empty()) Fail(context, "element is missing", LineOf(table));
+    for (std::size_t i = 0; i < elements.size(); ++i) {
+        profile.elements.push_back(ReadProfileElement(
+                *elements[i], Indexed(element_context, i), length_scale));
+    }
+
+    try {
+        ValidateToolProfile(profile);
+    } catch (const std::invalid_argument& e) {
+        Fail(context, e.what(), LineOf(table));
+    }
+    return profile;
+}
+
 /// @brief `[[tool]]`の`source` (ライブラリ別名) を読んで検証する
 /// @param table `[[tool]]`の要素のテーブル
 /// @param context 読込箇所
@@ -493,14 +724,50 @@ std::string ReadToolSource(const TomlValue& table, const std::string& context,
     return source;
 }
 
+/// @brief `[[tool]]`の工具の形状 (3形式のいずれか) を読む
+/// @param table `[[tool]]`の要素のテーブル
+/// @param name 工具名 (`[[tool]].name`. 輪郭形式では必須)
+/// @param context 読込箇所
+/// @param ctx 読込の文脈
+/// @return 簡易アセンブリ形式、ライブラリ参照形式、または輪郭形式の定義
+/// @throw igesio::DataFormatError `assembly`/`[tool.simple]`/`[tool.profile]`
+///        の択一に反する、または輪郭形式で`name`が空の場合
+///        (`ReadSimpleTool`/`ValidateSimpleTool`/`ReadProfileTool`/
+///        `ReadToolSource`からも伝播)
+std::variant<SimpleToolSpec, LibraryToolRef, ToolProfile> ReadToolShape(
+        const TomlValue& table, const std::string& name,
+        const std::string& context, const ReadContext& ctx) {
+    if (PresentKeys(table, {"assembly", "simple", "profile"}).size() != 1) {
+        Fail(context,
+             "specify exactly one of assembly, [tool.simple], and "
+             "[tool.profile]",
+             LineOf(table));
+    }
+    if (const TomlValue* simple = Find(table, "simple"); simple != nullptr) {
+        const SimpleToolSpec spec =
+                ReadSimpleTool(*simple, context + ".simple", ctx);
+        ValidateSimpleTool(spec, context + ".simple", LineOf(*simple), ctx);
+        return spec;
+    }
+    if (const TomlValue* profile = Find(table, "profile"); profile != nullptr) {
+        if (name.empty()) {
+            Fail(context, "name is required for [tool.profile]", LineOf(table));
+        }
+        return ReadProfileTool(*profile, name, context + ".profile", ctx);
+    }
+    LibraryToolRef ref;
+    ref.source = ReadToolSource(table, context, ctx);
+    ref.assembly = AsInteger(*Find(table, "assembly"), context + ".assembly");
+    return ref;
+}
+
 /// @brief `[[tool]]`の1要素を読む
 /// @param table 要素のテーブル
 /// @param index `[[tool]]`内の添字 (`number`を読む前の読込箇所に用いる)
 /// @param ctx 読込の文脈
-/// @throw igesio::DataFormatError `number`が正でない、重複する、`assembly`と
-///        `[tool.simple]`の択一に反する、`gauge_length`が正でない,
-///        または未知の`control_point`の場合
-///        (`ReadSimpleTool`/`ValidateSimpleTool`/`ReadToolSource`からも伝播)
+/// @throw igesio::DataFormatError `number`が正でない、重複する,
+///        `gauge_length`が正でない、または未知の`control_point`の場合
+///        (`ReadToolShape`からも伝播)
 ToolEntry ReadTool(const TomlValue& table, const std::size_t index,
                    const ReadContext& ctx) {
     ToolEntry entry;
@@ -515,23 +782,7 @@ ToolEntry ReadTool(const TomlValue& table, const std::size_t index,
         Fail(context, "duplicate tool number", entry.line);
     }
     entry.name = OptionalString(table, "name", context).value_or("");
-    const TomlValue* assembly = Find(table, "assembly");
-    const TomlValue* simple = Find(table, "simple");
-    if ((assembly != nullptr) == (simple != nullptr)) {
-        Fail(context, "specify exactly one of assembly and [tool.simple]",
-             entry.line);
-    }
-    if (simple != nullptr) {
-        const SimpleToolSpec spec =
-                ReadSimpleTool(*simple, context + ".simple", ctx);
-        ValidateSimpleTool(spec, context + ".simple", LineOf(*simple), ctx);
-        entry.source = spec;
-    } else {
-        LibraryToolRef ref;
-        ref.source = ReadToolSource(table, context, ctx);
-        ref.assembly = AsInteger(*assembly, context + ".assembly");
-        entry.source = ref;
-    }
+    entry.source = ReadToolShape(table, entry.name, context, ctx);
     if (const TomlValue* gauge = Find(table, "gauge_length");
         gauge != nullptr) {
         entry.gauge_length =

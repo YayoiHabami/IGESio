@@ -130,6 +130,18 @@ ToolAssemblySpec ResolveSimpleTool(
     return spec;
 }
 
+/// @brief 輪郭形式の工具を解決する
+/// @param entry 工具表の項目
+/// @param profile 輪郭形式の工具仕様 (読込時に検証済み)
+/// @return 解決した工具 (名前は`entry.name`)
+ToolAssemblySpec ResolveProfileTool(const ToolEntry& entry,
+                                    const ToolProfile& profile) {
+    ToolAssemblySpec spec;
+    spec.profile = profile;
+    spec.name = entry.name;
+    return spec;
+}
+
 /// @brief ライブラリ参照形式の工具をコールバックで解決する
 /// @param project プロジェクト定義
 /// @param entry 工具表の項目
@@ -137,8 +149,6 @@ ToolAssemblySpec ResolveSimpleTool(
 /// @param options セットアップの構築設定
 /// @param warnings 警告の集計先
 /// @return 解決できなければ`std::nullopt` (警告を追加する)
-/// @note ゲージラインは`gauge_length`があればその値、無ければ輪郭から確定して
-///       `gauge_line_z`に書き込む (下流でフォールバック・警告を再現しない)
 std::optional<ToolAssemblySpec> ResolveLibraryTool(
         const ProjectDefinition& project, const ToolEntry& entry,
         const LibraryToolRef& ref, const SetupOptions& options,
@@ -157,12 +167,24 @@ std::optional<ToolAssemblySpec> ResolveLibraryTool(
         return std::nullopt;
     }
     if (!entry.name.empty()) resolved->name = entry.name;
-    if (!entry.gauge_length.has_value()) {
-        std::vector<Diagnostic> local;
-        resolved->profile.gauge_line_z = resolved->profile.GaugeLength(&local);
-        ForwardWarnings(local, context, entry.line, warnings);
-    }
     return resolved;
+}
+
+/// @brief 工具のゲージラインを決定する
+/// @param entry 工具表の項目
+/// @param[out] profile ゲージラインの書き込み先
+/// @param warnings 警告の集計先
+/// @note `gauge_length`があればその値、無ければ輪郭に基づいて決める
+///       簡易アセンブリの輪郭は生成時に上端をゲージラインとして持つため警告は出ない
+void ApplyGaugeLine(const ToolEntry& entry, ToolProfile& profile,
+                    std::vector<Diagnostic>& warnings) {
+    if (entry.gauge_length.has_value()) {
+        profile.gauge_line_z = *entry.gauge_length;
+        return;
+    }
+    std::vector<Diagnostic> local;
+    profile.gauge_line_z = profile.GaugeLength(&local);
+    ForwardWarnings(local, ToolContext(entry.number), entry.line, warnings);
 }
 
 /// @brief 工具表を作る (解決済みのみ)
@@ -180,6 +202,9 @@ std::map<int, ToolAssemblySpec> ResolveTools(
         if (const auto* simple = std::get_if<SimpleToolSpec>(&entry.source);
             simple != nullptr) {
             spec = ResolveSimpleTool(entry, *simple, warnings);
+        } else if (const auto* profile = std::get_if<ToolProfile>(&entry.source);
+                   profile != nullptr) {
+            spec = ResolveProfileTool(entry, *profile);
         } else {
             spec = ResolveLibraryTool(project, entry,
                                       std::get<LibraryToolRef>(entry.source),
@@ -188,9 +213,7 @@ std::map<int, ToolAssemblySpec> ResolveTools(
         if (!spec.has_value()) continue;
         spec->number = entry.number;
         spec->control_point = entry.control_point;
-        if (entry.gauge_length.has_value()) {
-            spec->profile.gauge_line_z = *entry.gauge_length;
-        }
+        ApplyGaugeLine(entry, spec->profile, warnings);
         tools.emplace(entry.number, std::move(*spec));
     }
     return tools;
@@ -422,7 +445,7 @@ void ValidateMachinePairs(const ProjectDefinition& project,
  * ---- 工具オフセット ----
  */
 
-/// @brief 工具オフセットの実効値を計算する (省略値は工具のゲージ長・最大半径)
+/// @brief 工具オフセットの実効値を計算する (省略値は工具のゲージ長・切れ刃部の半径)
 /// @param project プロジェクト定義
 /// @param tools 解決済みの工具表 (`ResolveTools`の結果)
 /// @param warnings 警告の集計先
@@ -454,9 +477,11 @@ std::map<int, ResolvedToolOffset> ResolveToolOffsets(
         resolved.length = entry.length.has_value()
                 ? *entry.length
                 : (tool == nullptr ? 0.0 : tool->profile.GaugeLength(nullptr));
+        // 工具径補正の既定値は切れ刃部の半径 (ホルダの径は含めない)
         resolved.radius = entry.radius.has_value()
                 ? *entry.radius
-                : (tool == nullptr ? 0.0 : tool->profile.MaxRadius());
+                : (tool == nullptr ? 0.0
+                                   : tool->profile.MaxRadius(ToolPart::kCutter));
         offsets.emplace(entry.number, resolved);
     }
     return offsets;

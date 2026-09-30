@@ -10,10 +10,12 @@
  *         参照・工具・ワークオフセット・モデル・プログラム・保持セクションが入ること
  *       - 正常系 (要素): `modified`の表記保持、`library`の検索 (プロジェクトの
  *         ディレクトリ優先)、機械定義の警告転記、
- *         簡易工具の単位換算、ライブラリ参照の保持、省略値の`nullopt`保持、
+ *         簡易工具の単位換算、ライブラリ参照の保持、輪郭形式の読込 (単位換算・
+ *         軸上での閉包・円弧中心の補正)、省略値の`nullopt`保持、
  *         ワークオフセットの2形式と単位換算、役割別の`collision`既定、形状の再利用、
  *         `[initial]`・`[[program]]`・`[collision]`・`[run]`の各項目、`retained`
- *       - 正常系 (境界値): `[initial.axes]`の`limits`端と許容誤差、`block_skip`の1と9
+ *       - 正常系 (境界値): `[initial.axes]`の`limits`端と許容誤差、`block_skip`の1と9、
+ *         古いminor版の受理、円弧中心の許容誤差、指令点の上限、不透明度の0と1
  *       - 異常系: 仕様§5.1の各項目を代表1件ずつ、例外型と識別語で検証
  *       - 警告: minor版、`overhang < cutting_length`、designの`collision`、
  *         可搬でないパス、`cut_stock`の拡張子
@@ -54,6 +56,7 @@ using projects_test::DefaultOptions;
 using projects_test::kMachinesDir;
 using projects_test::kProjectsDir;
 using projects_test::MinimalProject;
+using projects_test::ProfileToolSection;
 using projects_test::ReadProjectText;
 using projects_test::ReadProjectWithMachine;
 using projects_test::Replace;
@@ -115,6 +118,11 @@ std::string WithInchUnits(const std::string& toml) {
                    "Z = 100.0", "Z = 10.0");
 }
 
+/// @brief 輪郭形式の工具#5の一部を置換して最小構成に追記する (異常系・派生構成用)
+std::string WithProfile(const std::string& from, const std::string& to) {
+    return WithSection(Replace(ProfileToolSection(), from, to));
+}
+
 
 
 /**
@@ -124,15 +132,22 @@ std::string WithInchUnits(const std::string& toml) {
 TEST(ProjectIoTest, Format_ThrowsDataFormatErrorWhenNameOrMajorMismatch) {
     ExpectDataFormatError(Replace(MinimalProject(), "machining-project", "cspace-project"),
                           "machining-project");
-    ExpectDataFormatError(Replace(MinimalProject(), "version = [1, 0]", "version = [2, 0]"),
+    ExpectDataFormatError(Replace(MinimalProject(), "version = [1, 1]", "version = [2, 0]"),
                           "unsupported format version");
 }
 
 TEST(ProjectIoTest, Format_WarnsWhenMinorIsNewer) {
     const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [1, 0]", "version = [1, 1]"));
+            ReadProjectText(Replace(MinimalProject(), "version = [1, 1]", "version = [1, 2]"));
     ExpectSingleWarning(project, "newer minor");
-    EXPECT_EQ(project.format_version[1], 1);
+    EXPECT_EQ(project.format_version[1], 2);
+}
+
+TEST(ProjectIoTest, Format_AcceptsOlderMinorWithoutWarning) {
+    const auto project =
+            ReadProjectText(Replace(MinimalProject(), "version = [1, 1]", "version = [1, 0]"));
+    EXPECT_TRUE(project.warnings.empty());
+    EXPECT_EQ(project.format_version[1], 0);
 }
 
 TEST(ProjectIoTest, Project_ModifiedIsKept) {
@@ -313,7 +328,7 @@ TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenNumberIsInvalid) {
     ExpectDataFormatError(WithSection("[[tool]]\nnumber = 1\nassembly = 3\n"),
                           "duplicate tool number");
     ExpectDataFormatError(Replace(MinimalProject(), "number = 1", "number = 1\nassembly = 3"),
-                          "exactly one of assembly and [tool.simple]");
+                          "exactly one of assembly, [tool.simple], and [tool.profile]");
 }
 
 TEST(ProjectIoTest, Tools_LibraryRefIsKept) {
@@ -357,6 +372,214 @@ TEST(ProjectIoTest, Tools_LibraryAliasRules) {
             "[[tool]]\nnumber = 2\nassembly = 1\n"));
     EXPECT_TRUE(single.tool_libraries[0].alias.empty());
     EXPECT_TRUE(std::get<mc::LibraryToolRef>(single.tools[1].source).source.empty());
+}
+
+TEST(ProjectIoTest, Tools_ProfileIsReadAndClosedOnAxis) {
+    const auto project = ReadProjectText(WithSection(ProfileToolSection()));
+    EXPECT_TRUE(project.warnings.empty());
+    ASSERT_EQ(project.tools.size(), 2u);
+    const mc::ToolEntry& tool = project.tools[1];
+    EXPECT_EQ(tool.number, 5);
+    EXPECT_EQ(tool.name, "Taper ball");
+    EXPECT_FALSE(tool.gauge_length.has_value());
+    ASSERT_TRUE(std::holds_alternative<mc::ToolProfile>(tool.source));
+    const auto& profile = std::get<mc::ToolProfile>(tool.source);
+    EXPECT_EQ(profile.name, "Taper ball");
+    EXPECT_NEAR(profile.command_point_z, 3.0, kTol);
+    EXPECT_FALSE(profile.gauge_line_z.has_value());
+    ASSERT_EQ(profile.elements.size(), 3u);
+
+    // 切れ刃部: 明示的に閉じているので補わない. 円弧の中心と向き、`type`省略の直線
+    const mc::ToolProfileElement& cutter = profile.elements[0];
+    EXPECT_EQ(cutter.part, mc::ToolPart::kCutter);
+    EXPECT_TRUE(cutter.name.empty());
+    ASSERT_EQ(cutter.segments.size(), 3u);
+    EXPECT_EQ(cutter.segments[0].kind, mc::ProfileSegment::Kind::kArc);
+    EXPECT_TRUE(cutter.segments[0].counter_clockwise);
+    EXPECT_NEAR(cutter.segments[0].start.x(), 0.0, kTol);
+    EXPECT_NEAR(cutter.segments[0].end.x(), 3.0, kTol);
+    EXPECT_NEAR(cutter.segments[0].center.y(), 3.0, kTol);
+    EXPECT_EQ(cutter.segments[1].kind, mc::ProfileSegment::Kind::kLine);
+    EXPECT_NEAR(cutter.segments[1].start.y(), 3.0, kTol);   // 前の終点が始点
+    EXPECT_NEAR(cutter.segments[2].end.x(), 0.0, kTol);
+    EXPECT_FALSE(cutter.color.has_value());
+    EXPECT_NEAR(cutter.opacity, 1.0f, kTol);
+
+    // シャンク部: 始点・終点とも軸上に無いので、同じzの軸上点までの直線を補う
+    const mc::ToolProfileElement& shank = profile.elements[1];
+    EXPECT_EQ(shank.part, mc::ToolPart::kShank);
+    EXPECT_EQ(shank.name, "neck");
+    ASSERT_EQ(shank.segments.size(), 5u);
+    EXPECT_NEAR(shank.segments.front().start.x(), 0.0, kTol);
+    EXPECT_NEAR(shank.segments.front().start.y(), 10.0, kTol);
+    EXPECT_NEAR(shank.segments.front().end.x(), 3.0, kTol);
+    EXPECT_EQ(shank.segments[2].kind, mc::ProfileSegment::Kind::kArc);
+    EXPECT_FALSE(shank.segments[2].counter_clockwise);
+    EXPECT_NEAR(shank.segments.back().start.x(), 5.0, kTol);
+    EXPECT_NEAR(shank.segments.back().end.x(), 0.0, kTol);
+    EXPECT_NEAR(shank.segments.back().end.y(), 40.0, kTol);
+
+    // ホルダ部: 色と不透明度
+    const mc::ToolProfileElement& holder = profile.elements[2];
+    EXPECT_EQ(holder.part, mc::ToolPart::kHolder);
+    ASSERT_EQ(holder.segments.size(), 3u);
+    ASSERT_TRUE(holder.color.has_value());
+    EXPECT_NEAR(holder.color->r, 0x60 / 255.0, 1e-9);
+    EXPECT_NEAR(holder.opacity, 0.5f, kTol);
+
+    // inch宣言なら座標と指令点はmmへ換算される
+    const auto inch = ReadProjectText(WithInchUnits(WithSection(ProfileToolSection())));
+    const auto& inch_profile = std::get<mc::ToolProfile>(inch.tools[1].source);
+    EXPECT_NEAR(inch_profile.command_point_z, 3.0 * 25.4, kTol);
+    EXPECT_NEAR(inch_profile.elements[0].segments[0].end.x(), 3.0 * 25.4, kTol);
+    EXPECT_NEAR(inch_profile.elements[0].segments[0].center.y(), 3.0 * 25.4, kTol);
+}
+
+TEST(ProjectIoTest, Tools_ProfileArcCenterSnapsToAxisWhenEndpointIsOnAxis) {
+    // 先端の円弧 (始点が回転軸上): 中心 (0.0005, 3) は二等分線と回転軸の交点 (0, 3)
+    // から距離5e-4 < 1e-3 なので、そこに補正する (射影 (0.00025, 2.99975) ではない.
+    // 射影では円弧の最下点が z = -1e-8 になり、先端が原点にあることの検証に不合格)
+    const auto project = ReadProjectText(
+            WithProfile("center = [0.0, 3.0]", "center = [0.0005, 3.0]"));
+    const mc::ProfileSegment& arc =
+            std::get<mc::ToolProfile>(project.tools[1].source).elements[0].segments[0];
+    EXPECT_NEAR(arc.center.x(), 0.0, kTol);
+    EXPECT_NEAR(arc.center.y(), 3.0, kTol);
+
+    // 境界: 交点からの距離0.0009は許容し、0.0015は射影 (距離1.06e-3) も外れるのでエラー
+    EXPECT_NO_THROW(ReadProjectText(WithProfile("center = [0.0, 3.0]",
+                                                "center = [0.0009, 3.0]")));
+    ExpectDataFormatError(WithProfile("center = [0.0, 3.0]", "center = [0.0015, 3.0]"),
+                          "not equidistant");
+
+    // 交点が許容誤差外なら射影に戻る: 中心 (-1, 4) は始点・終点から等距離 (√17) で
+    // 回転軸に接しない円弧 (オジブ形の先端). そのまま受理する
+    const auto ogive = ReadProjectText(
+            WithProfile("to = [3.0, 3.0], center = [0.0, 3.0]",
+                        "to = [3.0, 3.0], center = [-1.0, 4.0]"));
+    const mc::ProfileSegment& ogive_arc =
+            std::get<mc::ToolProfile>(ogive.tools[1].source).elements[0].segments[0];
+    EXPECT_NEAR(ogive_arc.center.x(), -1.0, kTol);
+    EXPECT_NEAR(ogive_arc.center.y(), 4.0, kTol);
+}
+
+TEST(ProjectIoTest, Tools_ProfileArcCenterSnapsAboveEndpointOnTipPlane) {
+    // コーナRの円弧 (始点 (2, 0) が先端面上): 中心 (2, 0.9995) は始点の真上の
+    // 二等分線上の点 (2, 1) から距離5e-4 なので、そこに補正する
+    // (射影 (2.00025, 0.99975) では円弧が270°を通過し z < 0 に膨らむ)
+    const auto project = ReadProjectText(WithProfile(
+            "{ type = \"arc\", to = [3.0, 3.0], center = [0.0, 3.0], direction = \"ccw\" },",
+            "{ to = [2.0, 0.0] },\n"
+            "    { type = \"arc\", to = [3.0, 1.0], center = [2.0, 0.9995], direction = \"ccw\" },"));
+    const mc::ToolProfileElement& cutter =
+            std::get<mc::ToolProfile>(project.tools[1].source).elements[0];
+    ASSERT_EQ(cutter.segments.size(), 4u);
+    EXPECT_EQ(cutter.segments[1].kind, mc::ProfileSegment::Kind::kArc);
+    EXPECT_NEAR(cutter.segments[1].center.x(), 2.0, kTol);
+    EXPECT_NEAR(cutter.segments[1].center.y(), 1.0, kTol);
+    EXPECT_NEAR(cutter.segments[1].start.y(), 0.0, kTol);
+}
+
+TEST(ProjectIoTest, Tools_ProfileArcCenterIsProjectedOntoBisector) {
+    // ネックのフィレット (端点は回転軸にも先端面にも無い): 中心 (5.0004, 15.0003) を
+    // 二等分線上に射影した (5.00005, 14.99995) に補正する (距離4.95e-4 < 1e-3)
+    const auto project = ReadProjectText(
+            WithProfile("center = [5.0, 15.0]", "center = [5.0004, 15.0003]"));
+    const mc::ProfileSegment& arc =
+            std::get<mc::ToolProfile>(project.tools[1].source).elements[1].segments[2];
+    EXPECT_EQ(arc.kind, mc::ProfileSegment::Kind::kArc);
+    EXPECT_NEAR(arc.center.x(), 5.00005, kTol);
+    EXPECT_NEAR(arc.center.y(), 14.99995, kTol);
+    EXPECT_NEAR((arc.start - arc.center).norm(), (arc.end - arc.center).norm(), kTol);
+
+    // 境界: 弦方向のずれ (0.0007, 0.0007) (距離9.9e-4) は許容し,
+    // (0.00075, 0.00075) (距離1.06e-3) はエラー
+    EXPECT_NO_THROW(ReadProjectText(WithProfile("center = [5.0, 15.0]",
+                                                "center = [5.0007, 15.0007]")));
+    ExpectDataFormatError(WithProfile("center = [5.0, 15.0]", "center = [5.00075, 15.00075]"),
+                          "not equidistant");
+
+    // 許容誤差はファイルの長さ単位で評価する (inchなら (0.0007, 0.0007) inchのずれも許容)
+    EXPECT_NO_THROW(ReadProjectText(WithInchUnits(
+            WithProfile("center = [5.0, 15.0]", "center = [5.0007, 15.0007]"))));
+}
+
+TEST(ProjectIoTest, Tools_ProfileThrowsDataFormatErrorWhenKeysAreInvalid) {
+    ExpectDataFormatError(WithProfile("name = \"Taper ball\"",
+                                      "name = \"Taper ball\"\nassembly = 3"),
+                          "exactly one of assembly, [tool.simple], and [tool.profile]");
+    ExpectDataFormatError(WithProfile("name = \"Taper ball\"\n", ""),
+                          "name is required for [tool.profile]");
+    ExpectDataFormatError(WithSection("[[tool]]\nnumber = 6\nname = \"empty\"\n\n"
+                                      "[tool.profile]\n"),
+                          "element is missing");
+    ExpectDataFormatError(WithProfile("command_point_z = 3.0", "command_point_z = -1.0"),
+                          "not >= 0");
+    ExpectDataFormatError(WithProfile("part = \"cutter\"\n", ""), "part is missing");
+    ExpectDataFormatError(WithProfile("part = \"cutter\"", "part = \"blade\""),
+                          "unknown part");
+    ExpectDataFormatError(WithProfile("start = [0.0, 0.0]\n", ""), "start is missing");
+    ExpectDataFormatError(WithProfile("start = [0.0, 0.0]", "start = [0.0]"),
+                          "not an array of 2 real numbers");
+
+    // `segments`の有無と要素の型
+    const std::string bare = "[[tool]]\nnumber = 6\nname = \"bare\"\n\n[tool.profile]\n\n"
+                             "[[tool.profile.element]]\npart = \"cutter\"\nstart = [0.0, 0.0]\n";
+    ExpectDataFormatError(WithSection(bare), "segments is missing");
+    ExpectDataFormatError(WithSection(bare + "segments = []\n"), "segments is empty");
+    ExpectDataFormatError(WithSection(bare + "segments = [1]\n"), "not an array of tables");
+
+    // セグメントのキー
+    ExpectDataFormatError(WithProfile("{ to = [3.0, 10.0] }", "{ }"), "to is missing");
+    ExpectDataFormatError(WithProfile("type = \"arc\"", "type = \"spline\""),
+                          "unknown type");
+    ExpectDataFormatError(WithProfile("{ to = [3.0, 10.0] }",
+                                      "{ to = [3.0, 10.0], center = [0.0, 0.0] }"),
+                          "valid only for type = \"arc\"");
+    ExpectDataFormatError(WithProfile(", center = [0.0, 3.0]", ""), "center is missing");
+    ExpectDataFormatError(WithProfile(", direction = \"ccw\"", ""),
+                          "direction is missing");
+    ExpectDataFormatError(WithProfile("direction = \"ccw\"", "direction = \"left\""),
+                          "unknown direction");
+
+    // 色と不透明度 (境界: 1.0と0.0は許容)
+    ExpectDataFormatError(WithProfile("color = \"#606060\"", "color = \"gray\""),
+                          "#RRGGBB");
+    ExpectDataFormatError(WithProfile("opacity = 0.5", "opacity = 1.5"),
+                          "opacity is not in 0..1");
+    EXPECT_NO_THROW(ReadProjectText(WithProfile("opacity = 0.5", "opacity = 1.0")));
+    EXPECT_NO_THROW(ReadProjectText(WithProfile("opacity = 0.5", "opacity = 0.0")));
+}
+
+TEST(ProjectIoTest, Tools_ProfileThrowsDataFormatErrorWhenGeometryIsInvalid) {
+    // 切れ刃部の要素が無い
+    ExpectDataFormatError(WithProfile("part = \"cutter\"", "part = \"shank\""),
+                          "no cutter element");
+    // 退化: 長さゼロの直線、始点と終点が一致する円弧 (全円)
+    ExpectDataFormatError(WithProfile("{ to = [0.0, 10.0] }", "{ to = [3.0, 10.0] }"),
+                          "zero-length line");
+    ExpectDataFormatError(WithProfile("to = [3.0, 3.0], center = [0.0, 3.0]",
+                                      "to = [0.0, 0.0], center = [0.0, 3.0]"),
+                          "degenerate arc");
+    // 負の半径
+    ExpectDataFormatError(WithProfile("{ to = [3.0, 10.0] }", "{ to = [-3.0, 10.0] }"),
+                          "negative radius");
+    // 先端が原点に無い (ホルダ部がz<0に出る)
+    ExpectDataFormatError(WithProfile("start = [0.0, 30.0]", "start = [0.0, -1.0]"),
+                          "tip is not at the origin");
+    // 指令点が工具全長 (80) を超える. 境界の80は許容
+    ExpectDataFormatError(WithProfile("command_point_z = 3.0", "command_point_z = 80.001"),
+                          "command point is outside the tool");
+    EXPECT_NO_THROW(ReadProjectText(WithProfile("command_point_z = 3.0",
+                                                "command_point_z = 80.0")));
+    // 検証エラーの読込箇所は`[tool.profile]`
+    try {
+        ReadProjectText(WithProfile("part = \"cutter\"", "part = \"shank\""));
+        FAIL() << "DataFormatError was not thrown";
+    } catch (const igesio::DataFormatError& e) {
+        EXPECT_NE(std::string(e.what()).find("[[tool]](#5).profile"), std::string::npos)
+                << e.what();
+    }
 }
 
 TEST(ProjectIoTest, ToolOffsets_RawValuesKept) {

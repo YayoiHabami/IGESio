@@ -815,16 +815,13 @@ void MachiningViewerGUI::RenderToolsTab() {
     }
     ImGui::EndDisabled();
 
-    const ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
-            | ImGuiTableFlags_SizingFixedFit;
-    if (ImGui::BeginTable("##tools", 7, flags)) {
-        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 20.0f);
-        ImGui::TableSetupColumn("no");
-        ImGui::TableSetupColumn("name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("ctrl");
-        ImGui::TableSetupColumn("gauge");
-        ImGui::TableSetupColumn("R / cut");
-        ImGui::TableSetupColumn("reach");
+    // 左パネルは狭いため、工具の寸法は名前の下の行にまとめる
+    if (ImGui::BeginTable("##tools", 3, kTableFlags)) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFrameHeight());
+        ImGui::TableSetupColumn("no", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::CalcTextSize("000").x);
+        ImGui::TableSetupColumn("tool", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
         for (const auto& [number, spec] : tools) {
             ImGui::PushID(number);
@@ -838,17 +835,25 @@ void MachiningViewerGUI::RenderToolsTab() {
             ImGui::TableNextColumn();
             ImGui::Text("%d", number);
             ImGui::TableNextColumn();
-            ImGui::TextWrapped("%s", spec.name.c_str());
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(
-                    std::string(m::ControlPointName(spec.control_point)).c_str());
-            ImGui::TableNextColumn();
-            ImGui::Text("%.2f", spec.profile.GaugeLength(nullptr));
-            ImGui::TableNextColumn();
-            ImGui::Text("%.2f / %.2f", spec.profile.MaxRadius(),
-                        spec.profile.CuttingLength());
-            ImGui::TableNextColumn();
-            ImGui::Text("%.2f", spec.profile.Reach());
+            const std::string control(m::ControlPointName(spec.control_point));
+            const double gauge = spec.profile.GaugeLength(nullptr);
+            const double radius = spec.profile.MaxRadius();
+            const double cutting = spec.profile.CuttingLength();
+            const double reach = spec.profile.Reach();
+            ImGui::BeginGroup();
+            ImGui::TextUnformatted(spec.name.c_str());
+            ImGui::TextDisabled("ctrl %s%sgauge %.2f", control.c_str(),
+                                kFieldSeparator, gauge);
+            ImGui::TextDisabled("R %.2f%scut %.2f%sreach %.2f", radius,
+                                kFieldSeparator, cutting, kFieldSeparator, reach);
+            ImGui::EndGroup();
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                        "%s\ncontrol point: %s\ngauge length: %.2f\n"
+                        "max radius: %.2f\ncutting length: %.2f\nreach: %.2f",
+                        spec.name.c_str(), control.c_str(), gauge, radius,
+                        cutting, reach);
+            }
             ImGui::PopID();
         }
         ImGui::EndTable();

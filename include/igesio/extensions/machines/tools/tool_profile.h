@@ -106,6 +106,16 @@ struct ProfileSegment {
         const igesio::Vector2d& center, bool counter_clockwise = true);
 };
 
+/// @brief 円弧の向きの名称を`ProfileSegment::counter_clockwise`に変換する
+/// @param text `"ccw"` / `"cw"` (大文字小文字を区別する)
+/// @return `"ccw"`なら`true`、`"cw"`なら`false`. 未知の文字列なら`std::nullopt`
+std::optional<bool> ParseArcDirection(std::string_view text);
+
+/// @brief 円弧の向きの名称 (TOMLで用いる文字列) を取得する
+/// @param counter_clockwise 2次元工具座標で見て反時計回りならtrue
+/// @return `"ccw"` / `"cw"`
+std::string_view ArcDirectionName(bool counter_clockwise);
+
 /// @brief 工具・ホルダの部位要素 (回転体を作る1つの閉じた母線)
 /// @note 母線は回転軸上 (r = 0) に始点と終点を持つ. 端面は実体化時に補完しないため,
 ///       生成側で明示的に持たせること (`CloseElementOnAxis`).
@@ -137,8 +147,8 @@ struct ToolProfile {
     /// @brief 回転軸上におけるゲージライン (主軸への取り付け基準面) の位置
     ///        (工具先端からの距離) [mm]
     /// @note これより主軸側 (+z側) の部分は主軸内に差し込まれる. 差し込み深さは
-    ///       `Reach() - *gauge_line_z`. 未指定なら`GaugeLength`が
-    ///       ホルダ上端で代用して警告する (差し込み部分を持たない輪郭向け)
+    ///       `Reach() - *gauge_line_z`. 未指定なら`GaugeLength`では
+    ///       ホルダ上端を代わりに使う (差込部を持たない輪郭用)
     std::optional<double> gauge_line_z;
 
     /// @brief 切れ刃長 (切れ刃要素の最大z) を返す
@@ -156,16 +166,24 @@ struct ToolProfile {
     /// @note 工具軸に垂直な方向についての最大径. 円弧セグメントのr方向の凸性も考慮する.
     double MaxRadius() const;
 
+    /// @brief 指定部位の最大半径 (その部位の要素の最大r) を返す
+    /// @param part 部位
+    /// @return 指定された部位の要素が無ければ0
+    /// @note 工具径補正の既定値 (切れ刃部の半径) 等、ホルダを含めない半径に用いる
+    double MaxRadius(ToolPart part) const;
+
     /// @brief 指定部位のz範囲`{min, max}`を返す
     /// @return 指定された部位の要素が無ければ`std::nullopt`
     std::optional<std::array<double, 2>> PartExtent(ToolPart part) const;
 
-    /// @brief 工具先端からゲージラインまでの距離を返す
+    /// @brief 工具先端からゲージラインまでの距離を取得する
     /// @param warnings 警告の追加先 (nullptrなら追加しない)
-    /// @return `gauge_line_z`があればその値. 無ければホルダ要素の上端 (最大z),
-    ///         それも無ければ`Reach()`を返し、いずれも
+    /// @return `gauge_line_z`があればその値. 無ければホルダ要素の上端 (最大z).
+    ///         ホルダ要素も無ければ`Reach()`を返し,
     ///         `"gauge line not specified; ..."`の警告を追加する
-    /// @note 取り付けオフセットと制御点 (`tool_assembly.h`) はこの値を用いる
+    /// @note ホルダ要素の上端をゲージラインとする場合、簡易アセンブリと同じく
+    ///       警告しない. 取り付けオフセットと制御点 (`tool_assembly.h`)
+    ///       はこの値を用いる
     double GaugeLength(std::vector<Diagnostic>* warnings) const;
 };
 

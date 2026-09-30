@@ -584,6 +584,17 @@ std::optional<Color> ReadColor(const TomlValue& table, const std::string& contex
     return rgb;
 }
 
+float ReadOpacity(const TomlValue& table, const std::string& context) {
+    const TomlValue* opacity = Find(table, "opacity");
+    if (opacity == nullptr) return 1.0f;
+    const double value = AsReal(*opacity, context + ".opacity");
+    if (value < 0.0 || value > 1.0) {
+        Fail(context, "opacity is not in 0..1: " + FormatValue(*opacity),
+             LineOf(*opacity));
+    }
+    return static_cast<float>(value);
+}
+
 bool IsAbsolutePathString(const std::string& raw) {
     if (raw.empty()) return false;
     if (raw[0] == '/') return true;
@@ -621,14 +632,7 @@ std::optional<GeometryEntry> ReadGeometry(
     GeometryEntry entry;
     GeometrySpec& spec = entry.geometry;
     spec.line = LineOf(geometry);
-    if (const TomlValue* opacity = Find(geometry, "opacity"); opacity != nullptr) {
-        const double value = AsReal(*opacity, context + ".opacity");
-        if (value < 0.0 || value > 1.0) {
-            Fail(context, "opacity is not in 0..1: " + FormatValue(*opacity),
-                 LineOf(*opacity));
-        }
-        spec.opacity = static_cast<float>(value);
-    }
+    spec.opacity = ReadOpacity(geometry, context);
     entry.placement.origin =
             ReadVec3Or(geometry, "origin", igesio::Vector3d::Zero(), context)
             * ctx.scales.length;
