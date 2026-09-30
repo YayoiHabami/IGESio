@@ -88,8 +88,11 @@ jobs:
             # MSVC is default on Windows
             ;;
           macos-latest-gcc)
-            echo "CC=gcc-13" >> $GITHUB_ENV
-            echo "CXX=g++-13" >> $GITHUB_ENV
+            # Use the Homebrew GCC installed above; the runner's preinstalled
+            # GCC may predate the SDK and fail on its system headers.
+            GCC_VER=$(brew list --versions gcc | awk '{print $NF}' | cut -d. -f1)
+            echo "CC=gcc-${GCC_VER}" >> $GITHUB_ENV
+            echo "CXX=g++-${GCC_VER}" >> $GITHUB_ENV
             ;;
           macos-latest-clang)
             echo "CC=clang" >> $GITHUB_ENV
