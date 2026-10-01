@@ -26,6 +26,8 @@
 #include "igesio/models/iges_data.h"
 #include "igesio/reader.h"
 #include "igesio/writer.h"
+#include "igesio/utils/path_encoding.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -285,4 +287,28 @@ TEST(WriteIgesTest, CompositeCurve_WithClockwiseChildKeepsReference) {
     EXPECT_NEAR(std::stod(arc_pd[4]), 2.0, kTol);
     EXPECT_NEAR(std::stod(arc_pd[5]), 0.0, kTol);
     EXPECT_NEAR(std::stod(arc_pd[6]), 1.0, kTol);
+}
+
+
+
+
+/*******************************************************************************
+ * 全角パス
+ ******************************************************************************/
+
+// 全角名のディレクトリ (未作成の親ディレクトリを含む) に書き出し、読み戻せる
+TEST(WriteIgesTest, UnicodePath_RoundTrip) {
+    using iio::tests::kUnicodeName;
+    const iio::tests::UnicodeTempDir dir("writer");
+    iio::models::IgesData data;
+    data.Root().AddEntity(
+            i_ent::MakeLine(Vector3d::Zero(), Vector3d(1.0, 2.0, 3.0)));
+
+    const std::string path =
+            dir.JoinUtf8(kUnicodeName + "/" + kUnicodeName + ".iges");
+    ASSERT_TRUE(iio::WriteIges(data, path));
+    ASSERT_TRUE(fs::is_regular_file(iio::utils::PathFromUtf8(path)));
+
+    const auto read = iio::ReadIges(path);
+    EXPECT_EQ(read.Root().GetEntities().size(), 1u);
 }

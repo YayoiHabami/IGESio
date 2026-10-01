@@ -20,6 +20,7 @@
 
 #include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/tolerances.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace igesio::extensions::machines::detail {
 
@@ -222,7 +223,7 @@ std::string PathText(const std::string& raw,
     if (ctx.same_as_source && !raw.empty()) return raw;
     const std::filesystem::path source = resolved.lexically_normal();
     const std::filesystem::path relative = source.lexically_relative(ctx.base_dir);
-    return (relative.empty() ? source : relative).generic_string();
+    return utils::PathToGenericUtf8(relative.empty() ? source : relative);
 }
 
 void PutFileSource(TomlValue& table,
@@ -231,7 +232,8 @@ void PutFileSource(TomlValue& table,
     const std::string text = PathText(
             geometry.raw_path, std::get<std::filesystem::path>(geometry.source), ctx);
     table["file"] = text;
-    const GeometryFileFormat format = ClassifyGeometryFile(std::filesystem::path(text));
+    const GeometryFileFormat format =
+            ClassifyGeometryFile(utils::PathFromUtf8(text));
     if (format != GeometryFileFormat::kStl && format != GeometryFileFormat::kObj) return;
     const std::optional<LengthUnit> unit = UnitFromScale(geometry.file_unit_scale);
     if (!unit.has_value()) {

@@ -27,6 +27,8 @@ target_link_libraries(test_igesio PRIVATE
     gtest_main
     igesio
 )
+# 全角パスのテスト用ヘルパー（unicode_test_path.h）を参照する
+target_include_directories(test_igesio PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Register the test with CTest
 add_test(NAME test_igesio COMMAND test_igesio)

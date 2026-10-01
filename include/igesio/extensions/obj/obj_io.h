@@ -38,7 +38,7 @@ struct WriteObjParams {
 };
 
 /// @brief OBJファイルを読み込む
-/// @param path OBJファイルのパス
+/// @param path OBJファイルのパス（UTF-8）
 /// @return 読み込んだ三角形メッシュ (OBJはASCII十進数のため倍精度).
 ///         多角形フェイスはファン分割し、v/vt/vnの多重インデックスは
 ///         コーナー重複排除で単一インデックス空間へ正規化する
@@ -51,7 +51,7 @@ struct WriteObjParams {
 numerics::TriangleMeshd ReadObj(const std::string& path);
 
 /// @brief OBJファイルを読み込み、メッシュエンティティとして返す
-/// @param path OBJファイルのパス
+/// @param path OBJファイルのパス（UTF-8）
 /// @return 読み込んだメッシュを保持するMeshEntity.
 ///         Assemblyへ追加すればそのまま描画パイプラインに乗る
 /// @throw igesio::FileOpenError ファイルが開けなかった場合
@@ -60,7 +60,7 @@ std::shared_ptr<entities::MeshEntity> ReadObjAsEntity(const std::string& path);
 
 /// @brief メッシュをOBJファイルへ書き出す
 /// @param mesh 書き出す三角形メッシュ
-/// @param path 出力するOBJファイルのパス (同名ファイルは上書きする)
+/// @param path 出力するOBJファイルのパス（UTF-8、同名ファイルは上書きする）
 /// @param params 書き出しの制御パラメータ
 /// @return 書き込みに成功したか
 /// @throw std::invalid_argument meshの構造が不正な場合

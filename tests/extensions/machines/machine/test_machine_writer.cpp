@@ -35,10 +35,12 @@
 #include "igesio/common/errors.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/extensions/machines/core/text_file.h"
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
 #include "igesio/extensions/machines/machine/machine_io.h"
 #include "./machines_for_testing.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -668,4 +670,46 @@ TEST(MachineWriterTest, WriteFile_ThrowsFileOpenErrorWhenPathIsDirectory) {
     EXPECT_THROW(mc::WriteMachineDefinition(MakeMinimalDefinition(), dir),
                  igesio::FileOpenError);
     fs::remove_all(dir);
+}
+
+
+
+// ---- 全角パス ----
+
+TEST(MachineWriterTest, UnicodePath_WritesUtf8RelativePathAndReadsBack) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("machine_writer");
+    const std::string raw = kUnicodeName + "/" + kUnicodeName + ".stl";
+
+    // raw_pathを空にして、解決済みパスから出力先基準の記載を作らせる
+    mc::MachineDefinition original = MakeMinimalDefinition();
+    mc::GeometryEntry entry;
+    entry.geometry.source = dir.Join(raw).lexically_normal();
+    entry.geometry.file_unit_scale = 1.0;
+    FindComponentMutable(original, "X").geometries.push_back(entry);
+
+    const fs::path path = dir.Join(kUnicodeName + ".toml");
+    mc::WriteMachineDefinition(original, path);
+    ASSERT_TRUE(fs::is_regular_file(path));
+    // TOMLにはUTF-8のバイト列がそのまま書かれる
+    EXPECT_TRUE(Contains(mc::ReadTextFile(path), "file = \"" + raw + "\""));
+
+    const auto restored = mc::ReadMachineDefinition(path);
+    EXPECT_EQ(restored.source_name, kUnicodeName + ".toml");
+    const auto& geometry = FindComponent(restored, "X").geometries.at(0).geometry;
+    EXPECT_EQ(geometry.raw_path, raw);
+    EXPECT_EQ(std::get<fs::path>(geometry.source), dir.Join(raw).lexically_normal());
+}
+
+TEST(MachineWriterTest, UnicodePath_ThrowsFileOpenErrorWithUtf8PathWhenDirectoryMissing) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("machine_writer_missing");
+    const fs::path path = dir.Join(kUnicodeName + "/" + kUnicodeName + ".toml");
+    try {
+        mc::WriteMachineDefinition(MakeMinimalDefinition(), path);
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const igesio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(dir.JoinUtf8(kUnicodeName)),
+                  std::string::npos);
+    }
 }

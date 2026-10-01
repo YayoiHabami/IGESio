@@ -258,7 +258,7 @@ struct GeometrySpec {
     std::string name;
     /// @brief 形状のソース (解決済みパス、またはプリミティブ形状)
     std::variant<std::filesystem::path, PrimitiveSpec> source;
-    /// @brief TOMLに記載されたパス文字列 (sourceがパスの場合のみ)
+    /// @brief TOMLに記載されたパス文字列（UTF-8、sourceがパスの場合のみ）
     /// @note デバッグや警告表示用
     std::string raw_path;
     /// @brief ファイルの長さ単位からmmへの換算係数

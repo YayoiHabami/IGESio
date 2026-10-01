@@ -37,6 +37,7 @@
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/machine_io.h"
 #include "igesio/extensions/machines/tools/tool_profile.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace igesio::extensions::machines::detail {
 
@@ -123,13 +124,16 @@ std::filesystem::path ResolveLibraryPath(
         const ReadContext& ctx) {
     // 絶対パスの場合は検索しない
     if (IsAbsolutePathString(raw)) {
-        return std::filesystem::path(raw).lexically_normal();
+        return utils::PathFromUtf8(raw).lexically_normal();
     }
 
-    const std::filesystem::path local = (ctx.base_dir / raw).lexically_normal();
+    const std::filesystem::path raw_path = utils::PathFromUtf8(raw);
+    const std::filesystem::path local =
+            (ctx.base_dir / raw_path).lexically_normal();
     if (std::filesystem::exists(local)) return local;
     for (const std::filesystem::path& dir : ctx.library_dirs) {
-        const std::filesystem::path candidate = (dir / raw).lexically_normal();
+        const std::filesystem::path candidate =
+                (dir / raw_path).lexically_normal();
         if (std::filesystem::exists(candidate)) return candidate;
     }
     Fail(context,
@@ -173,9 +177,11 @@ FileReference ReadFileReference(
                                                 LineOf(value), ctx);
     } else if (IsAbsolutePathString(reference.raw)) {
         reference.resolved =
-                std::filesystem::path(reference.raw).lexically_normal();
+                utils::PathFromUtf8(reference.raw).lexically_normal();
     } else {
-        reference.resolved = (ctx.base_dir / reference.raw).lexically_normal();
+        reference.resolved =
+                (ctx.base_dir / utils::PathFromUtf8(reference.raw))
+                        .lexically_normal();
     }
     if (check_exists && !std::filesystem::exists(reference.resolved)) {
         Fail(context, "file does not exist: " + reference.raw, LineOf(value));
@@ -1454,8 +1460,9 @@ RunOutput ReadRunOutput(const TomlValue& run, const ReadContext& ctx) {
         reference.raw = *dir;
         CheckReferencePath(reference.raw, context, LineOf(value), ctx);
         reference.resolved = IsAbsolutePathString(reference.raw)
-                ? std::filesystem::path(reference.raw).lexically_normal()
-                : (ctx.base_dir / reference.raw).lexically_normal();
+                ? utils::PathFromUtf8(reference.raw).lexically_normal()
+                : (ctx.base_dir / utils::PathFromUtf8(reference.raw))
+                        .lexically_normal();
         output.dir = reference;
     }
     output.log = OptionalString(*table, "log", context);
@@ -1463,7 +1470,7 @@ RunOutput ReadRunOutput(const TomlValue& run, const ReadContext& ctx) {
     output.cut_stock = OptionalString(*table, "cut_stock", context);
     if (output.cut_stock.has_value()) {
         const GeometryFileFormat format =
-                ClassifyGeometryFile(std::filesystem::path(*output.cut_stock));
+                ClassifyGeometryFile(utils::PathFromUtf8(*output.cut_stock));
         if (format != GeometryFileFormat::kStl &&
             format != GeometryFileFormat::kObj) {
             WarnAt(ctx, context,

@@ -20,6 +20,7 @@
 #include "igesio/extensions/machines/project/project_definition.h"
 #include "igesio/extensions/machines/project/project_io.h"
 #include "../machine/machines_for_testing.h"
+#include "unicode_test_path.h"
 
 namespace projects_test {
 
@@ -185,6 +186,38 @@ inline igesio::extensions::machines::ProjectDefinition ReadProjectWithMachine(
     return igesio::extensions::machines::ReadProjectFromString(
             "[machine]\nfile = \"machine.toml\"\n" + project_toml, dir,
             igesio::extensions::machines::ReadProjectOptions{}, "<test>");
+}
+
+/// @brief 全角名のファイルで構成したプロジェクト一式を書き出す
+/// @param dir 書き出し先 (全角名の一時ディレクトリ)
+/// @return プロジェクトファイル`<dir>/<全角名>.toml`のパス
+/// @note 次の3ファイルを作る. 全角名は`igesio::tests::kUnicodeName`.
+///       (1) 機械定義`<dir>/<全角名>/<全角名>.toml` (中身は`MinimalXyzAc`)
+///       (2) NCプログラム`<dir>/<全角名>.nc`
+///       (3) プロジェクト (`MinimalProject`の機械を(1)の`file`参照に替え,
+///           `[[program]]`で(2)を参照する)
+inline std::filesystem::path WriteUnicodeProject(
+        const igesio::tests::UnicodeTempDir& dir) {
+    const std::string& name = igesio::tests::kUnicodeName;
+    std::filesystem::create_directories(dir.Join(name));
+    {
+        std::ofstream stream(dir.Join(name + "/" + name + ".toml"),
+                             std::ios::binary | std::ios::trunc);
+        stream << machines_test::MinimalXyzAc();
+    }
+    {
+        std::ofstream stream(dir.Join(name + ".nc"),
+                             std::ios::binary | std::ios::trunc);
+        stream << "G90\nM30\n";
+    }
+    const std::filesystem::path path = dir.Join(name + ".toml");
+    {
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        stream << Replace(MinimalProject(), "library = \"t-ZYX-b-AC-w.toml\"",
+                          "file = \"" + name + "/" + name + ".toml\"")
+               << "\n[[program]]\nfile = \"" << name << ".nc\"\n";
+    }
+    return path;
 }
 
 }  // namespace projects_test

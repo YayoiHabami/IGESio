@@ -80,7 +80,7 @@ bool IsReservedAttachName(std::string_view name);
 /// @brief ファイル参照 (通常パス`file` / グローバル相対パス`library`)
 /// @note 出力時は`raw`と`from_library`から`file =`/`library =`を復元する
 struct FileReference {
-    /// @brief TOMLから読み込んだパス文字列
+    /// @brief TOMLから読み込んだパス文字列（UTF-8）
     /// @note `from_library`なら必須. `file`形式では空文字列にすることもできるが,
     ///       その場合は`resolved`を基準ディレクトリから相対化して出力する
     std::string raw;

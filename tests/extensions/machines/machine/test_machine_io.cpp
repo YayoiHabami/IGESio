@@ -20,6 +20,8 @@
  *       - 異常系: 仕様§5.1の各項目 (付録A) を代表1件ずつ、例外型と識別語で検証
  *       - 警告: minor版、可搬でないパス、右手系検査省略、両チェーン共通、exclude
  *       - 入力: 構文誤りにsource_nameが含まれること、ファイル不在
+ *       - 全角パス: 全角名のファイルの読込、相対/絶対パスの形状参照の解決,
+ *         ファイル不在と構文誤りの例外の型と文言 (UTF-8のパス/ファイル名)
  *       TODO: 退化ケース (形状0個・コンポーネント最小構成) は`ThreeAxis`で兼ねる
  */
 #include <gtest/gtest.h>
@@ -35,10 +37,13 @@
 #include "igesio/common/errors.h"
 #include "igesio/numerics/core/matrix.h"
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/extensions/machines/core/text_file.h"
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
 #include "igesio/extensions/machines/machine/machine_io.h"
+#include "igesio/utils/path_encoding.h"
 #include "./machines_for_testing.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -960,4 +965,71 @@ TEST(MachineDefinitionTest, ClassifyGeometryFile_IgnoresExtensionCase) {
     EXPECT_EQ(mc::ClassifyGeometryFile("b.ply"), mc::GeometryFileFormat::kUnknown);
     EXPECT_EQ(mc::ClassifyGeometryFile("noext"), mc::GeometryFileFormat::kUnknown);
     EXPECT_EQ(mc::ClassifyGeometryFile("dir.stl/model"), mc::GeometryFileFormat::kUnknown);
+}
+
+
+
+
+// ---- 全角パス ----
+
+TEST(MachineReaderTest, UnicodePath_ReadsFileAndResolvesRelativeGeometry) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("machine_io");
+    const std::string raw = kUnicodeName + "/" + kUnicodeName + ".stl";
+    const fs::path path = dir.Join(kUnicodeName + ".toml");
+    mc::WriteTextFile(path, Replace(MinimalXyzAc(),
+                                    "name = \"x-box\"\nprimitive = \"box\"\n"
+                                    "size = [10, 20, 30]\n",
+                                    "file = \"" + raw + "\"\n"));
+
+    const auto def = mc::ReadMachineDefinition(path);
+    EXPECT_EQ(def.source_name, kUnicodeName + ".toml");
+    EXPECT_EQ(def.source_dir, dir.Path());
+    const auto& geometry = FindComponent(def, "X").geometries.at(0).geometry;
+    EXPECT_EQ(geometry.raw_path, raw);
+    EXPECT_EQ(std::get<fs::path>(geometry.source),
+              dir.Join(raw).lexically_normal());
+    EXPECT_EQ(geometry.DisplayName(), kUnicodeName + ".stl");
+    EXPECT_EQ(mc::ClassifyGeometryFile(std::get<fs::path>(geometry.source)),
+              mc::GeometryFileFormat::kStl);
+}
+
+TEST(MachineReaderTest, UnicodePath_ResolvesAbsoluteGeometryPath) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("machine_io_abs");
+    const fs::path model = dir.Join(kUnicodeName + ".obj");
+    const std::string raw = igesio::utils::PathToGenericUtf8(model);
+    const auto def = ReadString(Replace(MinimalXyzAc(),
+                                        "primitive = \"box\"\nsize = [10, 20, 30]\n",
+                                        "file = \"" + raw + "\"\n"));
+    const auto& geometry = FindComponent(def, "X").geometries.at(0).geometry;
+    EXPECT_EQ(geometry.raw_path, raw);
+    EXPECT_EQ(std::get<fs::path>(geometry.source), model.lexically_normal());
+}
+
+TEST(MachineReaderTest, UnicodePath_ThrowsFileOpenErrorWithUtf8PathWhenMissing) {
+    const igesio::tests::UnicodeTempDir dir("machine_io_missing");
+    const fs::path path = dir.Join(igesio::tests::kUnicodeName + ".toml");
+    try {
+        mc::ReadMachineDefinition(path);
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const igesio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(igesio::utils::PathToUtf8(path)),
+                  std::string::npos);
+    }
+}
+
+TEST(MachineReaderTest, UnicodePath_ThrowsDataFormatErrorWithUtf8NameWhenSyntaxIsInvalid) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("machine_io_syntax");
+    const fs::path path = dir.Join(kUnicodeName + ".toml");
+    mc::WriteTextFile(path, "[format\nname = 1");
+    try {
+        mc::ReadMachineDefinition(path);
+        FAIL() << "DataFormatError was not thrown";
+    } catch (const igesio::DataFormatError& e) {
+        const std::string message = e.what();
+        EXPECT_NE(message.find(kUnicodeName + ".toml"), std::string::npos) << message;
+        EXPECT_NE(message.find("TOML parse error"), std::string::npos) << message;
+    }
 }

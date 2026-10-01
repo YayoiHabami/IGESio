@@ -10,6 +10,8 @@
  *       - 正常系 (境界値・退化): 空文字列、末尾に改行の無い内容
  *       - 異常系: 存在しないファイルの読込 (`FileOpenError`)、存在しない
  *         ディレクトリへの書込 (`FileOpenError`)
+ *       - 全角パス: 全角名のファイルの読み書き、存在しない全角名のファイルの
+ *         読込で`FileOpenError`の文言がUTF-8のパスを含むこと
  *       TODO: 読込途中の失敗 (`stream.bad()`) は再現手段が無いため未検証
  */
 #include <gtest/gtest.h>
@@ -19,6 +21,8 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/extensions/machines/core/text_file.h"
+#include "igesio/utils/path_encoding.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -90,4 +94,28 @@ TEST_F(TextFileTest, Read_ThrowsFileOpenErrorWhenFileIsMissing) {
 TEST_F(TextFileTest, Write_ThrowsFileOpenErrorWhenDirectoryIsMissing) {
     EXPECT_THROW(mc::WriteTextFile(Path("no_such_dir") / "x.nc", "x"),
                  igesio::FileOpenError);
+}
+
+
+
+// ---- 全角パス ----
+
+TEST(TextFileUnicodePathTest, ReadWrite_RoundTripKeepsContent) {
+    const igesio::tests::UnicodeTempDir dir("text_file");
+    const fs::path path = dir.Join(igesio::tests::kUnicodeName + ".nc");
+    const std::string text = "G00 X1.\nG01 Y2.\n";
+    mc::WriteTextFile(path, text);
+    EXPECT_EQ(mc::ReadTextFile(path), text);
+}
+
+TEST(TextFileUnicodePathTest, Read_ThrowsFileOpenErrorWithUtf8PathWhenFileIsMissing) {
+    const igesio::tests::UnicodeTempDir dir("text_file_missing");
+    const fs::path path = dir.Join(igesio::tests::kUnicodeName + ".nc");
+    try {
+        mc::ReadTextFile(path);
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const igesio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(igesio::utils::PathToUtf8(path)),
+                  std::string::npos);
+    }
 }

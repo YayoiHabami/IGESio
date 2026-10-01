@@ -23,6 +23,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/numerics/meshes/algorithms.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace {
 
@@ -342,7 +343,7 @@ void WriteFace(std::ofstream& file, const i_num::TriangleMeshd& mesh,
 
 
 i_num::TriangleMeshd i_ext::ReadObj(const std::string& path) {
-    std::ifstream file(path);
+    std::ifstream file(igesio::utils::PathFromUtf8(path));
     if (!file.is_open()) {
         throw igesio::FileOpenError("Failed to open OBJ file: " + path);
     }
@@ -411,17 +412,18 @@ bool i_ext::WriteObj(const numerics::TriangleMeshd& mesh,
     }
 
     // 親ディレクトリが存在しない場合は作成する (WriteIges/WriteStlと同じ挙動)
-    const auto parent = fs::path(path).parent_path();
+    const auto parent = igesio::utils::PathFromUtf8(path).parent_path();
     if (!parent.empty() && !fs::exists(parent)) {
         std::error_code ec;
         fs::create_directories(parent, ec);
         if (ec) {
             throw igesio::FileOpenError(
-                    "Failed to create directory: " + parent.string());
+                    "Failed to create directory: " +
+                    igesio::utils::PathToUtf8(parent));
         }
     }
 
-    std::ofstream file(path, std::ios::trunc);
+    std::ofstream file(igesio::utils::PathFromUtf8(path), std::ios::trunc);
     if (!file.is_open()) {
         throw igesio::FileOpenError("Failed to open OBJ file: " + path);
     }

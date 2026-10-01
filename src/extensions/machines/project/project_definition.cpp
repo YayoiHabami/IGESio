@@ -15,6 +15,7 @@
 #include <variant>
 
 #include "igesio/extensions/machines/machine/machine_io.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace igesio::extensions::machines {
 
@@ -121,7 +122,7 @@ double UnitScale(const ProgramSpec& program, const UnitScales& units) {
 
 std::string DisplayName(const ProgramSpec& program) {
     if (!program.name.empty()) return program.name;
-    return program.file.resolved.filename().string();
+    return utils::PathToUtf8(program.file.resolved.filename());
 }
 
 

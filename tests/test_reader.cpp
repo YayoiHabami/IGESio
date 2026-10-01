@@ -12,6 +12,8 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/reader.h"
+#include "igesio/utils/path_encoding.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -91,5 +93,37 @@ TEST(ReadIgesIntermediateTest, InvalidDEParameter) {
             != std::string::npos)
             << "Expected error message to contain the invalid DE parameter line."
             << " Actual message: " << message;
+    }
+}
+
+
+
+
+/*******************************************************************************
+ * 全角パス
+ *****************************************************************************/
+
+// 全角名のファイルをUTF-8のパスで読み込める
+TEST(ReadIgesTest, UnicodePath_Reads) {
+    const iio::tests::UnicodeTempDir dir("reader");
+    const std::string path = dir.JoinUtf8(iio::tests::kUnicodeName + ".iges");
+    fs::copy_file(fs::path(kSingleRoundCubePath),
+                  iio::utils::PathFromUtf8(path));
+
+    const auto data = iio::ReadIgesIntermediate(path);
+    EXPECT_EQ(data.directory_entry_section.size(), 102u);
+    EXPECT_NO_THROW(iio::ReadIges(path));
+}
+
+// 存在しない全角名のファイルはFileOpenErrorで、文言にUTF-8のパスを含む
+TEST(ReadIgesTest, UnicodePath_ThrowsFileOpenErrorWhenFileMissing) {
+    const iio::tests::UnicodeTempDir dir("reader_missing");
+    const std::string path = dir.JoinUtf8(iio::tests::kUnicodeName + ".iges");
+    try {
+        iio::ReadIges(path);
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const iio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(iio::tests::kUnicodeName),
+                  std::string::npos) << e.what();
     }
 }

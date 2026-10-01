@@ -23,6 +23,7 @@
 
 #include "igesio/common/errors.h"
 #include "igesio/numerics/meshes/algorithms.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace {
 
@@ -49,7 +50,8 @@ struct StlSoup {
 /// @return ファイルの内容
 /// @throw igesio::FileOpenError ファイルが開けなかった場合
 std::vector<char> ReadAllBytes(const std::string& path) {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    std::ifstream file(igesio::utils::PathFromUtf8(path),
+                       std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         throw igesio::FileOpenError("Failed to open STL file: " + path);
     }
@@ -373,18 +375,20 @@ bool i_ext::WriteStl(const numerics::TriangleMeshf& mesh,
     }
 
     // 親ディレクトリが存在しない場合は作成する (WriteIgesと同じ挙動)
-    const auto parent = fs::path(path).parent_path();
+    const auto parent = igesio::utils::PathFromUtf8(path).parent_path();
     if (!parent.empty() && !fs::exists(parent)) {
         std::error_code ec;
         fs::create_directories(parent, ec);
         if (ec) {
             throw igesio::FileOpenError(
-                    "Failed to create directory: " + parent.string());
+                    "Failed to create directory: " +
+                    igesio::utils::PathToUtf8(parent));
         }
     }
 
-    std::ofstream file(path, binary ? (std::ios::binary | std::ios::trunc)
-                                    : std::ios::trunc);
+    std::ofstream file(igesio::utils::PathFromUtf8(path),
+                       binary ? (std::ios::binary | std::ios::trunc)
+                              : std::ios::trunc);
     if (!file.is_open()) {
         throw igesio::FileOpenError("Failed to open STL file: " + path);
     }

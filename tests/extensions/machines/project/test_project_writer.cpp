@@ -5,6 +5,8 @@
  * @date 2026-09-12
  * @copyright 2026 Yayoi Habami
  * @note 対象: WriteProject / WriteProjectToString
+ *       - 全角パス: 全角名の参照を別ディレクトリに書き出したときの相対化と
+ *         UTF-8での記載、読み戻しでの解決
  *       - 正常系 (往復): `sample.toml`を読込→書き出し→再読込して全フィールドと
  *         `retained`が一致し警告0件であること、C++で組み立てた定義 (ライブラリ参照
  *         工具・輪郭形式工具・幾何形式ワークオフセット・入れ子モデル・`machine_pair`・
@@ -26,6 +28,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -45,7 +48,9 @@
 #include "igesio/extensions/machines/tools/tool_assembly.h"
 #include "igesio/extensions/machines/tools/tool_profile.h"
 #include "../machine/machines_for_testing.h"
+#include "igesio/utils/path_encoding.h"
 #include "./projects_for_testing.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -846,4 +851,49 @@ TEST(ProjectWriterTest, WriteProject_WritesFileAndThrowsFileOpenErrorOnDirectory
               std::get<fs::path>(original.models[0].geometry.source).lexically_normal());
     EXPECT_THROW(mc::WriteProject(original, dir), igesio::FileOpenError);
     fs::remove_all(dir);
+}
+
+
+
+/**
+ * ---- 全角パス ----
+ */
+
+TEST(ProjectWriterTest, UnicodePath_WritesRelativizedUtf8ReferencesAndReadsBack) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("project_writer");
+    const auto original =
+            mc::ReadProject(projects_test::WriteUnicodeProject(dir), mc::ReadProjectOptions{});
+
+    // 別のディレクトリに書き出し、参照を出力先基準に相対化させる
+    const fs::path out_dir = dir.Join("out_" + kUnicodeName);
+    fs::create_directories(out_dir);
+    const fs::path path = out_dir / igesio::utils::PathFromUtf8(kUnicodeName + ".toml");
+    mc::WriteProject(original, path);
+    std::string text;
+    {
+        std::ifstream stream(path, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+    }
+    EXPECT_TRUE(Contains(text, "file = \"../" + kUnicodeName + "/" + kUnicodeName + ".toml\""))
+            << text;
+    EXPECT_TRUE(Contains(text, "file = \"../" + kUnicodeName + ".nc\"")) << text;
+
+    const auto restored = mc::ReadProject(path, mc::ReadProjectOptions{});
+    EXPECT_EQ(std::get<mc::FileReference>(restored.machine_source).resolved,
+              std::get<mc::FileReference>(original.machine_source).resolved);
+    EXPECT_EQ(restored.programs.at(0).file.resolved, original.programs.at(0).file.resolved);
+}
+
+TEST(ProjectWriterTest, UnicodePath_ThrowsFileOpenErrorWithUtf8PathWhenDirectoryMissing) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("project_writer_missing");
+    const auto original = ReadProjectText(MinimalProject());
+    const fs::path path = dir.Join(kUnicodeName + "/" + kUnicodeName + ".toml");
+    try {
+        mc::WriteProject(original, path);
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const igesio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(dir.JoinUtf8(kUnicodeName)), std::string::npos);
+    }
 }

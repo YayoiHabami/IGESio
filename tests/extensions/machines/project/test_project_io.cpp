@@ -21,6 +21,8 @@
  *       - 異常系: 仕様§5.1の各項目を代表1件ずつ、例外型と識別語で検証
  *       - 警告: minor版、`overhang < cutting_length`、designの`collision`、
  *         可搬でないパス、`cut_stock`の拡張子
+ *       - 全角パス: 全角名のプロジェクトの読込と`file`/`library`参照の解決,
+ *         プログラムの表示名、ファイル不在の例外の型と文言
  *       TODO: 退化ケース (セクションが全て省略された最小構成) は
  *             `WorkOffsets_NoImplicitEntry`の空定義で兼ねる
  */
@@ -47,6 +49,7 @@
 #include "igesio/extensions/machines/tools/tool_profile.h"
 #include "../machine/machines_for_testing.h"
 #include "./projects_for_testing.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -1243,3 +1246,60 @@ TEST(ProjectIoTest, Input_ThrowsFileOpenErrorAndParseErrorWithSourceName) {
 }
 
 }  // namespace
+
+
+
+/**
+ * ---- 全角パス ----
+ */
+
+TEST(ProjectIoTest, UnicodePath_ReadsProjectAndResolvesFileReferences) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("project_io");
+    const fs::path path = projects_test::WriteUnicodeProject(dir);
+
+    const auto project = mc::ReadProject(path, mc::ReadProjectOptions{});
+    EXPECT_EQ(project.source_name, kUnicodeName + ".toml");
+    EXPECT_EQ(project.source_dir, dir.Path());
+    const std::string machine_raw = kUnicodeName + "/" + kUnicodeName + ".toml";
+    EXPECT_EQ(MachineFile(project).raw, machine_raw);
+    EXPECT_EQ(MachineFile(project).resolved, dir.Join(machine_raw).lexically_normal());
+    EXPECT_EQ(project.machine.name, "minimal-xyz-ac");
+
+    ASSERT_EQ(project.programs.size(), 1u);
+    EXPECT_EQ(project.programs[0].file.resolved,
+              dir.Join(kUnicodeName + ".nc").lexically_normal());
+    EXPECT_EQ(mc::DisplayName(project.programs[0]), kUnicodeName + ".nc");
+}
+
+TEST(ProjectIoTest, UnicodePath_LibraryIsSearchedInUnicodeLibraryDir) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("project_io_library");
+    {
+        std::ofstream stream(dir.Join(kUnicodeName + ".toml"),
+                             std::ios::binary | std::ios::trunc);
+        stream << MinimalXyzAc();
+    }
+    mc::ReadProjectOptions options;
+    options.library_dirs = {dir.Path()};
+    const auto project = mc::ReadProjectFromString(
+            Replace(MinimalProject(), "library = \"t-ZYX-b-AC-w.toml\"",
+                    "library = \"" + kUnicodeName + ".toml\""),
+            kProjectsDir, options, "<test>");
+    EXPECT_TRUE(MachineFile(project).from_library);
+    EXPECT_EQ(MachineFile(project).resolved,
+              dir.Join(kUnicodeName + ".toml").lexically_normal());
+    EXPECT_EQ(project.machine.name, "minimal-xyz-ac");
+}
+
+TEST(ProjectIoTest, UnicodePath_ThrowsFileOpenErrorWithUtf8PathWhenMissing) {
+    const igesio::tests::UnicodeTempDir dir("project_io_missing");
+    const fs::path path = dir.Join(igesio::tests::kUnicodeName + ".toml");
+    try {
+        mc::ReadProject(path, mc::ReadProjectOptions{});
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const igesio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(dir.JoinUtf8(igesio::tests::kUnicodeName)),
+                  std::string::npos);
+    }
+}

@@ -33,6 +33,7 @@
 #include "igesio/extensions/machines/core/rotation.h"
 #include "igesio/extensions/machines/core/tolerances.h"
 #include "igesio/extensions/machines/core/units.h"
+#include "igesio/utils/path_encoding.h"
 #include "extensions/machines/machine/machine_writing.h"
 #include "extensions/machines/machine/toml_reading.h"
 
@@ -915,9 +916,9 @@ MachineDefinition ParseDocument(const TomlValue& root,
 
 MachineDefinition ReadMachineDefinition(const std::filesystem::path& path) {
     if (!std::filesystem::is_regular_file(path)) {
-        throw igesio::FileOpenError(path.string());
+        throw igesio::FileOpenError(utils::PathToUtf8(path));
     }
-    const std::string source_name = path.filename().string();
+    const std::string source_name = utils::PathToUtf8(path.filename());
     const TomlValue root = detail::ParseTomlFile(path, source_name);
     return ParseDocument(root, path.parent_path(), source_name);
 }
@@ -937,12 +938,12 @@ void WriteMachineDefinition(const MachineDefinition& definition,
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     if (!stream) {
         throw igesio::FileOpenError("Failed to open machine definition file: "
-                                    + path.string());
+                                    + utils::PathToUtf8(path));
     }
     stream << text;
     if (!stream) {
         throw igesio::FileOpenError("Failed to write machine definition file: "
-                                    + path.string());
+                                    + utils::PathToUtf8(path));
     }
 }
 

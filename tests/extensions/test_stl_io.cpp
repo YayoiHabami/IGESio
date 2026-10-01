@@ -10,6 +10,7 @@
  *       - 溶接 (weld_vertices / weld_tolerance / weld_relative_tolerance) の挙動
  *       - `ReadStlAsEntity`
  *       - 異常系 (ファイルなし・不正ファイル・不正メッシュ)
+ *       - 全角文字を含むパスでの往復と例外 (親ディレクトリの自動作成を含む)
  * @note TODO: ビッグエンディアン環境は対象外 (実装がリトルエンディアン前提).
  *       他ツールが出力したSTLファイルとの相互運用は手動確認とする.
  */
@@ -24,6 +25,8 @@
 #include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/numerics/meshes/algorithms.h"
 #include "igesio/extensions/stl/stl_io.h"
+#include "igesio/utils/path_encoding.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -249,4 +252,50 @@ TEST(StlIOTest, WriteThrowsInvalidArgumentWhenMeshInvalid) {
     EXPECT_THROW(
         i_ext::WriteStl(mesh, OutputPath("stl_invalid.stl")),
         std::invalid_argument);
+}
+
+
+
+/**
+ * 全角パス
+ */
+
+// 全角名のディレクトリ (未作成の親ディレクトリを含む) で、
+// バイナリ形式の書き出し→読み戻しができる
+TEST(StlIOTest, UnicodePath_BinaryRoundTrip) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("stl_io_binary");
+    const std::string path =
+            dir.JoinUtf8(kUnicodeName + "/" + kUnicodeName + ".stl");
+    ASSERT_TRUE(i_ext::WriteStl(MakeUnitQuad(), path, /*binary=*/true));
+    EXPECT_TRUE(fs::is_regular_file(igesio::utils::PathFromUtf8(path)));
+
+    ExpectUnitQuad(i_ext::ReadStl(path));
+    EXPECT_NE(i_ext::ReadStlAsEntity(path), nullptr);
+}
+
+// 全角名のディレクトリ (未作成の親ディレクトリを含む) で、
+// ASCII形式の書き出し→読み戻しができる
+TEST(StlIOTest, UnicodePath_AsciiRoundTrip) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("stl_io_ascii");
+    const std::string path =
+            dir.JoinUtf8(kUnicodeName + "/" + kUnicodeName + ".stl");
+    ASSERT_TRUE(i_ext::WriteStl(MakeUnitQuad(), path, /*binary=*/false));
+    EXPECT_TRUE(fs::is_regular_file(igesio::utils::PathFromUtf8(path)));
+
+    ExpectUnitQuad(i_ext::ReadStl(path));
+}
+
+// 存在しない全角パスはFileOpenErrorで、文言にUTF-8のパスを含む
+TEST(StlIOTest, UnicodePath_ReadThrowsFileOpenErrorWhenFileMissing) {
+    const igesio::tests::UnicodeTempDir dir("stl_io_missing");
+    const std::string path =
+            dir.JoinUtf8(igesio::tests::kUnicodeName + ".stl");
+    try {
+        i_ext::ReadStl(path);
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const igesio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(path), std::string::npos);
+    }
 }

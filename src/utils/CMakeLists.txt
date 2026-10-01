@@ -2,6 +2,7 @@
 add_library(igesio_utils STATIC
     iges_string_utils.cpp
     iges_binary_reader.cpp
+    path_encoding.cpp
 )
 
 # Set the source and include directories

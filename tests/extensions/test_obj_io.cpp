@@ -12,6 +12,7 @@
  *       - 未対応キーワード (mtllib / s / コメント) の読み飛ばし
  *       - `ReadObjAsEntity`
  *       - 異常系 (ファイルなし・範囲外/不足インデックス・不正メッシュ)
+ *       - 全角文字を含むパスでの往復と例外 (親ディレクトリの自動作成を含む)
  * @note TODO: マテリアルライブラリ (.mtl) は対象外 (usemtlの参照名のみ保持).
  *       マテリアルが設定された後に未設定へ戻すグループ境界は、標準OBJでは
  *       表現できないため往復対象外 (usemtlは次の指定まで持続する).
@@ -27,6 +28,8 @@
 #include "igesio/numerics/meshes/triangle_mesh.h"
 #include "igesio/numerics/meshes/algorithms.h"
 #include "igesio/extensions/obj/obj_io.h"
+#include "igesio/utils/path_encoding.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -308,4 +311,36 @@ TEST(ObjIOTest, Write_ThrowsInvalidArgumentWhenMeshInvalid) {
     EXPECT_THROW(
         i_ext::WriteObj(mesh, OutputPath("obj_invalid.obj")),
         std::invalid_argument);
+}
+
+
+
+/**
+ * 全角パス
+ */
+
+// 全角名のディレクトリ (未作成の親ディレクトリを含む) で書き出し→読み戻しができる
+TEST(ObjIOTest, UnicodePath_RoundTrip) {
+    using igesio::tests::kUnicodeName;
+    const igesio::tests::UnicodeTempDir dir("obj_io");
+    const std::string path =
+            dir.JoinUtf8(kUnicodeName + "/" + kUnicodeName + ".obj");
+    ASSERT_TRUE(i_ext::WriteObj(MakeUnitQuadWithChannels(), path));
+    EXPECT_TRUE(fs::is_regular_file(igesio::utils::PathFromUtf8(path)));
+
+    ExpectSameGeometry(MakeUnitQuadWithChannels(), i_ext::ReadObj(path));
+    EXPECT_NE(i_ext::ReadObjAsEntity(path), nullptr);
+}
+
+// 存在しない全角パスはFileOpenErrorで、文言にUTF-8のパスを含む
+TEST(ObjIOTest, UnicodePath_Read_ThrowsFileOpenErrorWhenFileMissing) {
+    const igesio::tests::UnicodeTempDir dir("obj_io_missing");
+    const std::string path =
+            dir.JoinUtf8(igesio::tests::kUnicodeName + ".obj");
+    try {
+        i_ext::ReadObj(path);
+        FAIL() << "FileOpenError was not thrown";
+    } catch (const igesio::FileOpenError& e) {
+        EXPECT_NE(std::string(e.what()).find(path), std::string::npos);
+    }
 }

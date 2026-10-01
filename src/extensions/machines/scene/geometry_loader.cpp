@@ -21,6 +21,7 @@
 #include "igesio/numerics/meshes/algorithms/conversion.h"
 #include "igesio/numerics/meshes/algorithms/normals.h"
 #include "igesio/reader.h"
+#include "igesio/utils/path_encoding.h"
 #include "igesio/extensions/obj/obj_io.h"
 #include "igesio/extensions/machines/machine/primitives.h"
 
@@ -68,7 +69,7 @@ std::shared_ptr<models::Assembly> LoadIges(const std::filesystem::path& path,
                                            const GeometrySpec& spec,
                                            const std::string_view context,
                                            std::vector<Diagnostic>* warnings) {
-    const models::IgesData data = igesio::ReadIges(path.string());
+    const models::IgesData data = igesio::ReadIges(utils::PathToUtf8(path));
     if (data.global_section.units_flag != models::UnitFlag::kMillimeter) {
         Report(warnings, Severity::kWarning, context,
                "IGES units are not millimeters; skipped: " + spec.raw_path, spec);
@@ -92,13 +93,13 @@ std::optional<numerics::TriangleMeshd> LoadGeometryMesh(
     const std::filesystem::path& path = std::get<std::filesystem::path>(spec.source);
     switch (ClassifyGeometryFile(path)) {
         case GeometryFileFormat::kStl: {
-            numerics::TriangleMeshd mesh =
-                    numerics::CastScalar<double>(ReadStl(path.string(), options.stl));
+            numerics::TriangleMeshd mesh = numerics::CastScalar<double>(
+                    ReadStl(utils::PathToUtf8(path), options.stl));
             FinishMesh(mesh, spec.file_unit_scale, options);
             return mesh;
         }
         case GeometryFileFormat::kObj: {
-            numerics::TriangleMeshd mesh = ReadObj(path.string());
+            numerics::TriangleMeshd mesh = ReadObj(utils::PathToUtf8(path));
             FinishMesh(mesh, spec.file_unit_scale, options);
             return mesh;
         }

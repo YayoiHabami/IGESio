@@ -70,6 +70,7 @@ struct GeometryContext {
 /// @brief TOMLファイルを読み込む
 /// @param path TOMLファイルのパス
 /// @param source_name 診断・例外の文言に用いる入力の表示名
+/// @throw igesio::FileOpenError ファイルを開けない場合
 /// @throw igesio::DataFormatError 構文誤り (toml11の文言を全文含む)
 TomlValue ParseTomlFile(const std::filesystem::path& path,
                         const std::string& source_name);

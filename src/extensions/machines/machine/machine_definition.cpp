@@ -16,6 +16,7 @@
 #include <variant>
 
 #include "igesio/extensions/machines/core/rotation.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace igesio::extensions::machines {
 
@@ -94,11 +95,11 @@ std::string GeometrySpec::DisplayName() const {
         primitive != nullptr) {
         return std::string(PrimitiveKindName(primitive->kind));
     }
-    return std::filesystem::path(raw_path).filename().generic_string();
+    return utils::PathToGenericUtf8(utils::PathFromUtf8(raw_path).filename());
 }
 
 GeometryFileFormat ClassifyGeometryFile(const std::filesystem::path& path) {
-    std::string ext = path.extension().string();
+    std::string ext = utils::PathToUtf8(path.extension());
     std::transform(ext.begin(), ext.end(), ext.begin(),
                    [](const unsigned char c) {
                        return static_cast<char>(std::tolower(c));

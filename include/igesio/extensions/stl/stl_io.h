@@ -47,7 +47,7 @@ struct StlReadParams {
 };
 
 /// @brief STLファイルを読み込む
-/// @param path STLファイルのパス
+/// @param path STLファイルのパス（UTF-8）
 /// @param params 読み込みの制御パラメータ
 /// @return 読み込んだ三角形メッシュ (STLはfloat32のため単精度)
 /// @throw igesio::FileOpenError ファイルが開けなかった場合
@@ -58,7 +58,7 @@ numerics::TriangleMeshf ReadStl(const std::string& path,
                                 const StlReadParams& params = {});
 
 /// @brief STLファイルを読み込み、メッシュエンティティとして返す
-/// @param path STLファイルのパス
+/// @param path STLファイルのパス（UTF-8）
 /// @param params 読み込みの制御パラメータ
 /// @return 読み込んだメッシュを保持するMeshEntity (倍精度へ変換して保持).
 ///         Assemblyへ追加すればそのまま描画パイプラインに乗る
@@ -69,7 +69,7 @@ ReadStlAsEntity(const std::string& path, const StlReadParams& params = {});
 
 /// @brief メッシュをSTLファイルへ書き出す
 /// @param mesh 書き出す三角形メッシュ
-/// @param path 出力するSTLファイルのパス (同名ファイルは上書きする)
+/// @param path 出力するSTLファイルのパス（UTF-8、同名ファイルは上書き）
 /// @param binary バイナリ形式で出力するか (false: ASCII形式)
 /// @return 書き込みに成功したか
 /// @throw std::invalid_argument meshの構造が不正な場合

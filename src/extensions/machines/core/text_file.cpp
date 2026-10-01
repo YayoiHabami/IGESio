@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "igesio/common/errors.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace igesio::extensions::machines {
 
@@ -22,13 +23,13 @@ std::string ReadTextFile(const std::filesystem::path& path) {
     std::ifstream stream(path, std::ios::binary);
     if (!stream) {
         throw igesio::FileOpenError("Failed to open text file: " +
-                                    path.string());
+                                    utils::PathToUtf8(path));
     }
     std::string text((std::istreambuf_iterator<char>(stream)),
                      std::istreambuf_iterator<char>());
     if (stream.bad()) {
         throw igesio::FileOpenError("Failed to read text file: " +
-                                    path.string());
+                                    utils::PathToUtf8(path));
     }
     return text;
 }
@@ -38,12 +39,12 @@ void WriteTextFile(const std::filesystem::path& path,
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     if (!stream) {
         throw igesio::FileOpenError("Failed to open text file: " +
-                                    path.string());
+                                    utils::PathToUtf8(path));
     }
     stream.write(text.data(), static_cast<std::streamsize>(text.size()));
     if (!stream) {
         throw igesio::FileOpenError("Failed to write text file: " +
-                                    path.string());
+                                    utils::PathToUtf8(path));
     }
 }
 

@@ -11,6 +11,8 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
+#include <fstream>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -22,6 +24,7 @@
 #include "igesio/extensions/machines/core/formatting.h"
 #include "igesio/extensions/machines/core/rotation.h"
 #include "igesio/extensions/machines/core/tolerances.h"
+#include "igesio/utils/path_encoding.h"
 
 namespace igesio::extensions::machines::detail {
 
@@ -99,7 +102,7 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
     spec.raw_path = file.as_string();
     CheckFilePath(spec.raw_path, context, issues);
 
-    std::filesystem::path path(spec.raw_path);
+    std::filesystem::path path = utils::PathFromUtf8(spec.raw_path);
     if (!IsAbsolutePathString(spec.raw_path)) {
         path = ctx.base_dir / path;
     }
@@ -149,8 +152,15 @@ bool ReadFileSource(const TomlValue& geometry, const std::string& context,
 
 TomlValue ParseTomlFile(const std::filesystem::path& path,
                         const std::string& source_name) {
+    // toml11のパス版parseは失敗時にpath.string()を呼び、全角パスで別の例外に
+    // 変わるため、ストリームをこちら側で開いてUTF-8のファイル名とともに渡す
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) {
+        throw igesio::FileOpenError(utils::PathToUtf8(path));
+    }
     try {
-        return toml::parse<toml::ordered_type_config>(path.string());
+        return toml::parse<toml::ordered_type_config>(
+                stream, utils::PathToUtf8(path));
     } catch (const toml::exception& e) {
         throw igesio::DataFormatError(
                 source_name + ": TOML parse error: " + e.what());
@@ -612,7 +622,7 @@ void CheckFilePath(const std::string& raw, const std::string& context,
         return;
     }
     const std::filesystem::path normalized =
-            std::filesystem::path(raw).lexically_normal();
+            utils::PathFromUtf8(raw).lexically_normal();
     if (normalized.begin() != normalized.end() && *normalized.begin() == "..") {
         ++issues.escape;
     }

@@ -13,6 +13,8 @@
  *         呼び出し側が与えたもの
  *       - 異常系: 存在しないSTLの`FileOpenError`、寸法が正でないプリミティブの
  *         `invalid_argument`
+ *       - 全角パス: 全角名のSTL/OBJ/IGESの読込と表示名、存在しない全角名の
+ *         STLの`FileOpenError`
  *       TODO: OBJの法線付きファイル (法線をそのまま使う経路) はテストデータに無い
  */
 #include <gtest/gtest.h>
@@ -40,7 +42,9 @@
 #include "igesio/extensions/machines/core/diagnostics.h"
 #include "igesio/extensions/machines/machine/machine_definition.h"
 #include "igesio/extensions/machines/scene/geometry_loader.h"
+#include "igesio/utils/path_encoding.h"
 #include "../machine/machines_for_testing.h"
+#include "unicode_test_path.h"
 
 namespace {
 
@@ -65,7 +69,7 @@ const fs::path kModelsDir = machines_test::kFixturePath.parent_path() / "project
 mc::GeometrySpec FileSpec(const fs::path& path, const double unit_scale = 1.0) {
     mc::GeometrySpec spec;
     spec.source = path;
-    spec.raw_path = path.filename().generic_string();
+    spec.raw_path = igesio::utils::PathToGenericUtf8(path.filename());
     spec.file_unit_scale = unit_scale;
     return spec;
 }
@@ -99,7 +103,19 @@ fs::path MakeInchIges() {
     igesio::models::IgesData data;
     data.global_section.units_flag = igesio::models::UnitFlag::kInch;
     data.Root().AddEntity(i_ent::MakeLine(Vector3d::Zero(), Vector3d(1.0, 0.0, 0.0)));
-    igesio::WriteIges(data, path.string());
+    igesio::WriteIges(data, igesio::utils::PathToUtf8(path));
+    return path;
+}
+
+/// @brief テストデータを全角名のファイルとして一時ディレクトリに複製する
+/// @param dir 複製先 (全角名の一時ディレクトリ)
+/// @param source 複製元のファイル
+/// @return 複製したファイル`<dir>/<全角名><元の拡張子>`のパス
+fs::path CopyAsUnicodeFile(const igesio::tests::UnicodeTempDir& dir,
+                           const fs::path& source) {
+    const fs::path path = dir.Join(igesio::tests::kUnicodeName +
+                                   igesio::utils::PathToUtf8(source.extension()));
+    fs::copy_file(source, path, fs::copy_options::overwrite_existing);
     return path;
 }
 
@@ -191,7 +207,7 @@ TEST(GeometryLoaderTest, Iges_RootIsChild) {
 
     // 変換は単位行列なので、ワールドBBは直接読んだものと一致する
     EXPECT_TRUE(assembly->GetGlobalTransform().isIdentity(kTol));
-    const auto direct = igesio::ReadIges(path.string());
+    const auto direct = igesio::ReadIges(igesio::utils::PathToUtf8(path));
     const auto original = direct.Root().GetWorldBoundingBox();
     const auto loaded = assembly->GetWorldBoundingBox();
     ASSERT_TRUE(original.has_value());
@@ -271,4 +287,52 @@ TEST(GeometryLoaderTest, Throws_FileOpenErrorAndInvalidArgument) {
     std::get<mc::PrimitiveSpec>(spec.source).size = Vector3d(10.0, 0.0, 30.0);
     EXPECT_THROW(mc::LoadGeometry(spec, mc::GeometryLoadOptions{}, kContext, nullptr),
                  std::invalid_argument);
+}
+
+
+
+// ---- 全角パス ----
+
+TEST(GeometryLoaderTest, UnicodePath_StlReads) {
+    const igesio::tests::UnicodeTempDir dir("geometry_loader_stl");
+    const mc::GeometrySpec spec = FileSpec(CopyAsUnicodeFile(dir, kModelsDir / "cube.stl"));
+    EXPECT_EQ(spec.DisplayName(), igesio::tests::kUnicodeName + ".stl");
+
+    const auto mesh = mc::LoadGeometryMesh(spec, mc::GeometryLoadOptions{}, kContext, nullptr);
+    ASSERT_TRUE(mesh.has_value());
+    EXPECT_EQ(mesh->TriangleCount(), 12u);
+    EXPECT_NE(mc::LoadGeometry(spec, mc::GeometryLoadOptions{}, kContext, nullptr), nullptr);
+}
+
+TEST(GeometryLoaderTest, UnicodePath_ObjReads) {
+    const igesio::tests::UnicodeTempDir dir("geometry_loader_obj");
+    const mc::GeometrySpec spec = FileSpec(CopyAsUnicodeFile(dir, kModelsDir / "cube.obj"));
+    EXPECT_EQ(spec.DisplayName(), igesio::tests::kUnicodeName + ".obj");
+
+    const auto mesh = mc::LoadGeometryMesh(spec, mc::GeometryLoadOptions{}, kContext, nullptr);
+    ASSERT_TRUE(mesh.has_value());
+    EXPECT_EQ(mesh->TriangleCount(), 12u);
+    EXPECT_NE(mc::LoadGeometry(spec, mc::GeometryLoadOptions{}, kContext, nullptr), nullptr);
+}
+
+TEST(GeometryLoaderTest, UnicodePath_IgesReads) {
+    const igesio::tests::UnicodeTempDir dir("geometry_loader_iges");
+    const mc::GeometrySpec spec =
+            FileSpec(CopyAsUnicodeFile(dir, kTestDataDir / "single_rounded_cube.iges"));
+    EXPECT_EQ(spec.DisplayName(), igesio::tests::kUnicodeName + ".iges");
+
+    std::vector<mc::Diagnostic> warnings;
+    const auto assembly = mc::LoadGeometry(spec, mc::GeometryLoadOptions{}, kContext,
+                                           &warnings);
+    ASSERT_NE(assembly, nullptr);
+    EXPECT_TRUE(warnings.empty());
+    ASSERT_EQ(assembly->GetChildAssemblies().size(), 1u);
+    EXPECT_GT(assembly->GetChildAssemblies()[0]->GetEntityCount(), 0u);
+}
+
+TEST(GeometryLoaderTest, UnicodePath_ThrowsFileOpenErrorWhenStlMissing) {
+    const igesio::tests::UnicodeTempDir dir("geometry_loader_missing");
+    EXPECT_THROW(mc::LoadGeometryMesh(FileSpec(dir.Join(igesio::tests::kUnicodeName + ".stl")),
+                                      mc::GeometryLoadOptions{}, kContext, nullptr),
+                 igesio::FileOpenError);
 }
