@@ -342,11 +342,11 @@ struct TracePoints {
     std::vector<Vector3d> work;
 };
 
-/// @brief 工具の指令点のゼロポーズ機械座標cを計算する
+/// @brief 工具の指令点の基準機械座標cを計算する
 /// @param scene 構築済みのシーン
 /// @param tool_number 工具番号
-/// @return H_tm·(0, 0, command_point_z - ゲージ長). 工具表に無い番号と工具なしでは
-///         取り付けフレームの原点 (H_tmの並進部)
+/// @return H_tm·(0, 0, command_point_z - ゲージ長). 未登録の工具番号または
+///         工具なしの場合は取り付け部座標系の原点（H_tmの並進部）
 Vector3d CommandPointHome(const MachineScene& scene, const int tool_number) {
     const igesio::Matrix4d h_tm = scene.Model().MountPlacement(MountKind::kToolMount);
     const auto it = scene.Tools().find(tool_number);
@@ -396,7 +396,8 @@ struct SampleSpan {
 };
 
 /// @brief サンプル列を早送りか否かと工具番号の変化で分ける
-/// @note 先頭の初期姿勢サンプルは最初の通過点の種類を持つため、最初の範囲に含まれる
+/// @note 先頭の初期コンフィギュレーションのサンプルは最初の通過点の種類を持つため,
+///       最初の範囲に含まれる
 std::vector<SampleSpan> SplitTraceSpans(const MotionTrack& track) {
     std::vector<SampleSpan> spans;
     for (std::size_t i = 0; i < track.samples.size(); ++i) {

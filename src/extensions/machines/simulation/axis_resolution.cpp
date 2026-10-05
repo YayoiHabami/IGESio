@@ -35,11 +35,11 @@ void WarnTarget(std::vector<Diagnostic>* warnings, const std::string& message) {
     warnings->push_back(Diagnostic{Severity::kWarning, "", message, 0});
 }
 
-/// @brief `ClTarget`の制御点の`tool_mount`フレーム座標を計算する
+/// @brief `ClTarget`の制御点の工具取り付け部座標を計算する
 /// @param setup 加工セットアップ
-/// @param target 制御点と工具軸方向 (工具番号と工具長補正を用いる)
-/// @param[out] warnings 工具表に無い番号の警告の追加先
-/// @return 工具表にある工具なら`ControlLocal`、それ以外はゲージライン
+/// @param target 制御点と工具軸方向（工具番号と工具長補正を用いる）
+/// @param[out] warnings 未登録の工具番号の警告の追加先
+/// @return 登録済みの工具なら`ControlLocal`、それ以外はゲージライン
 igesio::Vector3d TargetControlLocal(const MachiningSetup& setup,
                                     const ClTarget& target,
                                     std::vector<Diagnostic>* warnings) {

@@ -9,11 +9,11 @@
  *         形状の非表示、読込失敗の警告化、置き場のIDの安定、再構築、Clear,
  *         呼び出し側から供給した形状のアセンブリ (`geometry_provider`)、選択不可の
  *         設定 (`lock_selection`)
- *       - 姿勢と工具: ApplyPose/ResetToZeroPoseの大域変換、工具の選択とホルダ,
+ *       - コンフィギュレーションと工具: ApplyPose/ResetToZeroPoseの大域変換、工具の選択とホルダ,
  *         工具軸線と制御点マーカー、3軸
  *       - 経路線: ワークオフセットと種別による分割、円弧の折れ線化、機械座標の移動
  *         による分割、未定義のワークオフセット、作り直し
- *       - 可視性: 機械部品と役割別のモデル、経路線、3軸
+ *       - 表示/非表示: 機械部品と役割別のモデル、経路線、3軸
  *       - ワークビュー: 隠すIDと`work_mount`のワールド変換
  *       - 異常系: `nullptr`のルート (`invalid_argument`)、未構築での操作
  *         (`logic_error`)
@@ -384,7 +384,7 @@ TEST(MachineSceneTest, Clear_RemovesMachine) {
     EXPECT_EQ(built.scene.ToolAssembly(1), nullptr);
     EXPECT_EQ(built.scene.ComponentAssembly("X"), nullptr);
     EXPECT_TRUE(built.scene.WorkViewHiddenIds().empty());
-    // 可視性の切り替えは未構築でも何もしない
+    // 表示/非表示の切り替えは未構築でも何もしない
     EXPECT_NO_THROW(built.scene.SetPathsVisible(false));
 
     built.scene.Build(MakeSetupWithoutDynamics(), built.root);
@@ -411,7 +411,7 @@ TEST(MachineSceneTest, Operations_ThrowLogicErrorWhenNotBuilt) {
 
 
 /**
- * ---- 姿勢と工具 ----
+ * ---- コンフィギュレーションと工具 ----
  */
 
 TEST(MachineSceneTest, ApplyPose_WorldPlacement) {
@@ -460,7 +460,7 @@ TEST(MachineSceneTest, Tools_ActiveAndHolder) {
     EXPECT_FALSE(tool->Display().visible);
     scene.SetActiveTool(1);
     EXPECT_TRUE(tool->Display().visible);
-    // 工具表に無い番号は全工具を非表示にする
+    // 未登録の工具番号は全工具を非表示にする
     scene.SetActiveTool(99);
     EXPECT_EQ(scene.ActiveTool(), mc::kNoTool);
     EXPECT_FALSE(tool->Display().visible);
@@ -700,7 +700,7 @@ TEST(MachineSceneTest, Rebuild_ReplacesPaths) {
 
 
 /**
- * ---- 可視性とワークビュー ----
+ * ---- 表示/非表示とワークビュー ----
  */
 
 TEST(MachineSceneTest, Visibility_MachinePartsAndRoles) {
@@ -801,7 +801,7 @@ TEST(MachineSceneTest, WorkView_HiddenIdsAndTransform) {
     ASSERT_EQ(machine_hidden.size(), 1u);
     EXPECT_EQ(machine_hidden[0], scene.TrajectoryAssembly()->GetID());
 
-    // `work_mount`のワールド変換は現在の姿勢のF_wm(q)
+    // `work_mount`のワールド変換は現在のコンフィギュレーションのF_wm(q)
     const mc::MachineModel& model = scene.Model();
     const mc::JointVector q = mc::JointsFromNc(
             model, mc::NcValues{{"A", ToRadians(20.0)}, {"C", ToRadians(45.0)}},

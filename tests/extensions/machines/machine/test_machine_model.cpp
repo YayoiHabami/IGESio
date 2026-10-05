@@ -4,14 +4,14 @@
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
- * @note 対象: MachineModel (構築・親先行順・チェーン・σ・軸一覧・
+ * @note 対象: MachineModel (構築・親先行順・連鎖・σ・軸一覧・
  *       ChainRegisters・MountPlacement・姿勢に寄与する回転軸・ToolAxisHome・
  *       WorkPivotReference)、IsWithinLimits
- *       - 正常系 (実例): `t-ZYX-b-AC-w.toml`の親先行順、チェーンとσ、軸の機械座標、
+ *       - 正常系 (実例): `t-ZYX-b-AC-w.toml`の親先行順、連鎖とσ、軸の機械座標、
  *         マウント・姿勢に寄与する回転軸・回転中心
  *       - 正常系 (派生構成): 傾斜B軸上のC軸の従動、ヘッド型で工具の向きを決める
- *         回転軸、3軸機、`local_frame`の軸への適用、チェーン外の軸、
- *         両チェーン共通の軸
+ *         回転軸、3軸機、`local_frame`の軸への適用、連鎖外の軸、
+ *         両連鎖共通の軸
  *       - 異常系: C++で組み立てた定義の構造の矛盾 (`std::invalid_argument`)、
  *         範囲外のインデックス (`std::out_of_range`)
  *       - コピー: ムーブ渡しで構築後のコピーが自己完結すること
@@ -84,7 +84,7 @@ const mc::AxisInfo& Axis(const mc::MachineModel& model, const std::string& name)
     return model.Axes()[*index];
 }
 
-/// @brief 工具の向きを決める回転軸のうちi番目 (0が外側) の軸を引く
+/// @brief 工具の向きを決める回転軸のうちi番目 (0が工作物側回転軸) の軸を引く
 /// @throw std::out_of_range 本数が足りない場合
 const mc::AxisInfo& OrientationAxis(const mc::MachineModel& model, const std::size_t i) {
     return model.Axes()[model.OrientationAxes().at(i)];
@@ -164,7 +164,7 @@ void ExpectInvalid(const mc::MachineDefinition& definition, const std::string& k
     }
 }
 
-/// @brief チェーン外の直進軸`Door` (base直下・レジスタW) を加えた最小構成
+/// @brief 連鎖外の直進軸`Door` (base直下・レジスタW) を加えた最小構成
 std::string WithDoor() {
     return MinimalXyzAc() + R"(
 [[component]]
@@ -179,7 +179,7 @@ limits = [0, 100]
 )";
 }
 
-/// @brief 両チェーンに共通する直進軸`W` (base直下でA系とX系の親) を持つ構成
+/// @brief 両連鎖に共通する直進軸`W` (base直下でA系とX系の親) を持つ構成
 std::string WithCommonAxis() {
     std::string toml = MinimalXyzAc();
     toml = Replace(toml, "name = \"A\"\ntype = \"rotary\"\nparent = \"base\"",

@@ -1,6 +1,6 @@
 /**
  * @file extensions/machines/machine/machine_writing.h
- * @brief 機械定義のTOML書き出し (内部ヘッダ)
+ * @brief 機械定義のTOML書き出し（内部ヘッダ）
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
@@ -8,7 +8,7 @@
  *       toml11に依存するため公開ヘッダには含めない. `toml_reading.h`と対になる.
  * @note 読込時に正規化された構造体からの再生成であり、元ファイルの復元ではない.
  *       単位は`MachineDefinition::units`の宣言単位へ戻し、`local_frame`込みで
- *       保持している`frame_placement` (取り付け先座標系→ゼロポーズ機械座標) は
+ *       保持している`frame_placement`（取り付け先座標系→基準機械座標）は
  *       コンポーネント座標相対へ戻して書く. 内容の検証は行わない.
  */
 #ifndef SRC_EXTENSIONS_MACHINES_MACHINE_MACHINE_WRITING_H_

@@ -1218,7 +1218,7 @@ void MachiningViewerGUI::GenerateMotion() {
             ShowError("The program has no motion records");
             return;
         }
-        // クリップはゼロポーズと初期工具を基準状態として作る
+        // クリップは基準コンフィギュレーションと初期工具を基準状態として作る
         s.scene.ResetToZeroPose();
         s.scene.SetActiveTool(s.setup->InitialTool());
         std::vector<m::Diagnostic> warnings;
@@ -1260,7 +1260,7 @@ void MachiningViewerGUI::GenerateMotion() {
 
 void MachiningViewerGUI::ReleaseMotion() {
     if (!session_.player.IsBound()) return;
-    // Unbindは基準状態 (ゼロポーズと初期工具) に復元する
+    // Unbindは基準状態（基準コンフィギュレーションと初期工具）に復元する
     session_.player.Unbind();
     last_record_.reset();
     jog_q_ = m::JointVector(session_.scene.Model().Axes().size(), 0.0);
@@ -1450,7 +1450,7 @@ void MachiningViewerGUI::SetCurrentRecordVisible(const bool visible) {
         const auto current = m::FindChildAssembly(*parent, m::kCurrentRecordName);
         if (current != nullptr && !visible) current->SetVisible(false);
     }
-    // 表示に戻すときは現在レコードで折れ線と可視性を設定し直す
+    // 表示に戻すときは現在レコードで折れ線と表示/非表示を設定し直す
     if (visible && s.player.IsBound() && s.track && s.program && last_record_
         && *last_record_ >= 0
         && static_cast<std::size_t>(*last_record_) < s.program->records.size()) {

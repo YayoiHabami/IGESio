@@ -408,7 +408,7 @@ TomlValue MakeProjectMeta(const ProjectDefinition& project) {
 /// @param ctx TOML出力全体で共有する内容
 /// @throw std::invalid_argument ファイル参照のパスが空の場合
 ///        (`PutFileReference`から伝播)
-/// @note 仮想機械の`name`/`branch`/`tilt_limit`は、`VirtualMachineOptions`の
+/// @note 仮想機械の`name`/`branch`/`tool_side_limit`は、`VirtualMachineOptions`の
 ///       既定値と一致すれば省略する
 TomlValue MakeMachine(
         const std::variant<FileReference, VirtualMachineSpec>& source,
@@ -427,9 +427,9 @@ TomlValue MakeMachine(
     if (spec.options.branch != defaults.branch) {
         table["branch"] = std::string(BranchPolicyName(spec.options.branch));
     }
-    if (spec.options.tilt_limit_rad.has_value()) {
-        table["tilt_limit"] =
-                Real(*spec.options.tilt_limit_rad / ctx.angle_scale);
+    if (spec.options.tool_side_limit_rad.has_value()) {
+        table["tool_side_limit"] =
+                Real(*spec.options.tool_side_limit_rad / ctx.angle_scale);
     }
     return table;
 }

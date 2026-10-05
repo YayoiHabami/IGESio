@@ -32,7 +32,7 @@ inline const std::filesystem::path kFixturePath =
 /// @brief 文字列入力の相対パス基準ディレクトリ
 inline const std::filesystem::path kBaseDir = std::filesystem::path("C:/machines");
 
-/// @brief 最小構成の機械定義 (工具側XYZ・ワーク側AC、プリミティブのみ、暗黙base)
+/// @brief 最小構成の機械定義 (工具側XYZ・工作物側AC、プリミティブのみ、暗黙base)
 /// @note 実例機と同じ幾何 (A軸は(0,0,60)を通るx軸、Toolは(0,-180,250.5)).
 ///       Aは`limits = [-90, 90]`、Cは無制限・`wrap_start = 0`
 inline std::string MinimalXyzAc() {
@@ -183,7 +183,7 @@ origin = [0, 0, 100]
 )";
 }
 
-/// @brief 傾斜B軸上にC軸を持つテーブル・テーブル型 (工具側XZ・ワーク側Y-B-C)
+/// @brief 傾斜B軸上にC軸を持つテーブル・テーブル型 (工具側XZ・工作物側Y-B-C)
 /// @note B軸の方向は(cos45°, 0, sin45°)で原点を通り`limits = [0, 180]`、
 ///       C軸はz軸で原点を通り無制限 (`wrap_start = 0`). Toolは(0,0,200).
 ///       Bを回すとCの実効軸方向がR_B·d_Cになる
@@ -271,10 +271,11 @@ origin = [0, 0, 0]
 )";
 }
 
-/// @brief ヘッド・ヘッド型 (工具側X-Y-Z-C-B、ワーク側はTableのみ)
+/// @brief ヘッド・ヘッド型 (工具側X-Y-Z-C-B、工作物側はTableのみ)
 /// @note C軸はz軸で(0,0,300)を通り無制限 (`wrap_start = 0`)、B軸はy軸で
 ///       (0,0,300)を通り`limits = [-120, 120]`. Toolは(0,0,200)で工具軸は+z.
-///       工具の向きを決める回転軸は根元側のCが外側、Bが内側 (いずれもσ=+1)
+///       工具の向きを決める回転軸はベース側のCが工作物側回転軸、Bが工具側回転軸
+///       (いずれも工具側連鎖上でσ=+1)
 inline std::string HeadBc() {
     return R"([format]
 name = "machine-definition"

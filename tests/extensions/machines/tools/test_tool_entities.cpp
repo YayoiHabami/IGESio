@@ -499,7 +499,7 @@ TEST(ToolEntitiesTest, Parts_VisibilityAndLookup) {
     EXPECT_TRUE(tool->Display().visible);
     EXPECT_TRUE(mc::FindToolPart(*tool, ToolPart::kCutter)->Display().visible);
     EXPECT_TRUE(mc::FindToolPart(*tool, ToolPart::kShank)->Display().visible);
-    // 要素ノード自身の可視性は変えない (容器の可視性で切り替える)
+    // 要素ノード自身の表示/非表示は変えない (コンテナ側の表示/非表示で切り替える)
     EXPECT_TRUE(holder->GetChildAssemblies().front()->Display().visible);
     mc::SetToolPartVisible(*tool, ToolPart::kHolder, true);
     EXPECT_TRUE(holder->Display().visible);

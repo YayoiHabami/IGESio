@@ -10,10 +10,11 @@
  *         逆運動学が同じ指令値に戻ること (格子状の角度・位置)
  *       - 正常系 (枝): 正負2枝の対称性、`kContinuous`の直前値との近さ
  *         (無制限軸の畳み込みを含む)、可動範囲による枝の強制
- *       - 正常系 (回転軸数): 0本 (3軸機)・1本 (旋回角のみ) の解
+ *       - 正常系 (回転軸数): 0本 (3軸機)・1本 (その回転軸の回転角のみ) の解
  *       - 正常系 (境界値): `WrapAngleIntoLimits`の範囲端と±2πシフト、ストローク端
- *       - 正常系 (退化): 特異姿勢 (工具軸が主軸方向. `kPositive`では旋回角0と情報,
- *         `kContinuous`では直前の指令値を保ち診断なし)、傾斜角が寄与しない構成
+ *       - 正常系 (退化): 特異コンフィギュレーション (工具軸が主軸方向.
+ *         `kPositive`では工作物側回転軸の回転角0と情報, `kContinuous`では
+ *         直前の指令値を保ち診断なし)、工具側回転軸の回転角が寄与しない構成
  *       - 異常系: 到達不能 (`KinematicsError`)、可動範囲外の警告、ストローク外の警告、
  *         回転軸3本・直進軸2本 (`NotImplementedError`)、方程式の退化、零ベクトル入力、
  *         直進軸への`WrapAngleIntoLimits` (`std::invalid_argument`)
@@ -56,17 +57,17 @@ using machines_test::TiltedBc;
 /// @brief 角度・位置の比較の許容誤差
 constexpr double kTol = 1e-9;
 
-/// @brief 制御点の`tool_mount`フレームでの座標 (工具長100の先端)
+/// @brief 制御点の工具取り付け部座標系での座標 (工具長100の先端)
 const Vector3d kControl(0.0, 0.0, -100.0);
 
 /// @brief 往復テストの回転軸の角度 [deg]
-constexpr std::array<double, 4> kSwivels = {0.0, 45.0, 170.0, 350.0};
+constexpr std::array<double, 4> kWorkSideAngles = {0.0, 45.0, 170.0, 350.0};
 
 /// @brief 往復テストの直進軸の位置
 const std::array<Vector3d, 2> kPositions = {Vector3d(10.0, 50.0, -20.0),
                                             Vector3d(-100.0, 200.0, 100.0)};
 
-/// @brief 指令値から作る目標姿勢 (ゼロポーズ機械座標)
+/// @brief 指令値から作る目標姿勢 (基準機械座標)
 struct Pose {
     /// @brief ワークに固定された工具軸方向
     Vector3d tool_axis = Vector3d::UnitZ();
@@ -116,10 +117,11 @@ void ExpectRecovered(const mc::MachineModel& model, const mc::NcValues& nc,
 }
 
 /// @brief 回転軸2本と直進軸3本の指令値
-mc::NcValues Command(const char* tilt_name, const double tilt_deg,
-                     const char* swivel_name, const double swivel_deg,
+mc::NcValues Command(const char* tool_side_name, const double tool_side_deg,
+                     const char* work_side_name, const double work_side_deg,
                      const Vector3d& xyz) {
-    return {{tilt_name, ToRadians(tilt_deg)}, {swivel_name, ToRadians(swivel_deg)},
+    return {{tool_side_name, ToRadians(tool_side_deg)},
+            {work_side_name, ToRadians(work_side_deg)},
             {"X", xyz.x()}, {"Y", xyz.y()}, {"Z", xyz.z()}};
 }
 
@@ -173,7 +175,7 @@ mc::AxisInfo WrappedAxis() {
 TEST(InverseKinematicsTest, RoundTrip_TableAc_Positive) {
     const mc::MachineModel model = ReadModel(MinimalXyzAc());
     for (const double a : {5.0, 30.0, 60.0, 85.0}) {
-        for (const double c : kSwivels) {
+        for (const double c : kWorkSideAngles) {
             for (const Vector3d& xyz : kPositions) {
                 ExpectRecovered(model, Command("A", a, "C", c, xyz),
                                 mc::BranchPolicy::kPositive);
@@ -185,7 +187,7 @@ TEST(InverseKinematicsTest, RoundTrip_TableAc_Positive) {
 TEST(InverseKinematicsTest, RoundTrip_TableAc_Negative) {
     const mc::MachineModel model = ReadModel(MinimalXyzAc());
     for (const double a : {-5.0, -30.0, -60.0, -85.0}) {
-        for (const double c : kSwivels) {
+        for (const double c : kWorkSideAngles) {
             ExpectRecovered(model, Command("A", a, "C", c, kPositions[0]),
                             mc::BranchPolicy::kNegative);
         }
@@ -195,7 +197,7 @@ TEST(InverseKinematicsTest, RoundTrip_TableAc_Negative) {
 TEST(InverseKinematicsTest, RoundTrip_TiltedBc) {
     const mc::MachineModel model = ReadModel(TiltedBc());
     for (const double b : {10.0, 60.0, 120.0, 170.0}) {
-        for (const double c : kSwivels) {
+        for (const double c : kWorkSideAngles) {
             ExpectRecovered(model, Command("B", b, "C", c, kPositions[1]),
                             mc::BranchPolicy::kPositive);
         }
@@ -205,7 +207,7 @@ TEST(InverseKinematicsTest, RoundTrip_TiltedBc) {
 TEST(InverseKinematicsTest, RoundTrip_HeadBc) {
     const mc::MachineModel model = ReadModel(HeadBc());
     for (const double b : {10.0, 60.0, 110.0}) {
-        for (const double c : kSwivels) {
+        for (const double c : kWorkSideAngles) {
             ExpectRecovered(model, Command("B", b, "C", c, kPositions[0]),
                             mc::BranchPolicy::kPositive);
             ExpectRecovered(model, Command("B", -b, "C", c, kPositions[0]),
@@ -294,7 +296,7 @@ TEST(InverseKinematicsTest, Limits_NoValidBranchWarnsAndReturnsPositive) {
 
 // ---- 正常系: 回転軸数 ----
 
-TEST(InverseKinematicsTest, SingleRotary_SolvesSwivelOnly) {
+TEST(InverseKinematicsTest, SingleRotary_SolvesSingleAngleOnly) {
     const mc::MachineModel model = ReadModel(OnlyA());
     ASSERT_EQ(model.OrientationAxes().size(), 1u);
     const Pose pose = PoseFromNc(model, {{"A", ToRadians(30.0)}});
@@ -420,9 +422,10 @@ TEST(InverseKinematicsTest, WrapAngleIntoLimits_ThrowsForLinearAxis) {
 
 // ---- 正常系: 退化 ----
 
-TEST(InverseKinematicsTest, Singular_ToolAxisAlongSpindleGivesZeroSwivel) {
+TEST(InverseKinematicsTest, Singular_ToolAxisAlongSpindleGivesZeroWorkSideAngle) {
     const mc::MachineModel model = ReadModel(MinimalXyzAc());
-    // `kPositive`では直前の指令値によらず旋回角を0にし、情報を1件追加する
+    // `kPositive`では直前の指令値によらず工作物側回転軸の回転角を0にし,
+    // 情報を1件追加する
     const mc::IkSolution solution = mc::Solve(model, Vector3d::UnitZ(),
                                               Vector3d(10.0, 20.0, -100.0), kControl,
                                               mc::InitialJoints(model),
@@ -441,9 +444,9 @@ TEST(InverseKinematicsTest, Singular_ToolAxisAlongSpindleGivesZeroSwivel) {
     EXPECT_LT(solution.error->position, kTol);
 }
 
-TEST(InverseKinematicsTest, Singular_ContinuousKeepsPreviousSwivel) {
+TEST(InverseKinematicsTest, Singular_ContinuousKeepsPreviousWorkSideAngle) {
     const mc::MachineModel model = ReadModel(MinimalXyzAc());
-    // `kContinuous`では旋回軸を直前の指令値に保ち、診断を追加しない.
+    // `kContinuous`では工作物側回転軸を直前の指令値に保ち、診断を追加しない.
     // 制御点はCの回転に追従するので、直進軸の解も変わる
     const mc::IkSolution kept = mc::Solve(model, Vector3d::UnitZ(),
                                           Vector3d(10.0, 20.0, -100.0), kControl,
@@ -467,8 +470,9 @@ TEST(InverseKinematicsTest, Singular_ContinuousKeepsPreviousSwivel) {
     EXPECT_NEAR(zero.nc.At("C"), 0.0, kTol);
 }
 
-TEST(InverseKinematicsTest, Degenerate_ParallelAxesMakeTiltIndeterminate) {
-    // A軸もz軸まわりにすると内側軸が工具軸に平行で傾斜角が寄与しない (ρ=0)
+TEST(InverseKinematicsTest, Degenerate_ParallelAxesMakeToolSideAngleIndeterminate) {
+    // A軸もz軸まわりにすると工具側回転軸が工具軸に平行で、工具側回転軸の回転角が
+    // 寄与しない (ρ=0)
     const mc::MachineModel model =
             ReadModel(Replace(MinimalXyzAc(), "direction = [1, 0, 0]\npoint = [0, 0, 60]",
                               "direction = [0, 0, 1]\npoint = [0, 0, 60]"));

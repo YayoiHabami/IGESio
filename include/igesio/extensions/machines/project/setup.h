@@ -4,27 +4,28 @@
  * @author Yayoi Habami
  * @date 2026-09-12
  * @copyright 2026 Yayoi Habami
- * @note `ProjectDefinition`は定義ファイルで記述された値をそのまま格納する
- *       構造体であり、以下は構築時に本クラスが計算する.
- *       (i) 運動学モデル、初期姿勢,
- *       (i) ワーク座標, モデル座標, 機械部品座標等からゼロポーズ機械座標への同次変換,
+ * @note `ProjectDefinition`は定義ファイルで記述された値をそのまま格納する構造体であり,
+ *       以下は`MachiningSetup`構築時に本クラスが計算する.
+ *       (i) 運動学モデル、初期コンフィギュレーション,
+ *       (i) ワーク座標、モデル座標、機械部品座標等から基準機械座標への同次変換,
  *       (i) 工具の解決、工具オフセットの実効値.
- *       運動学の計算を要する検証 (取り付け先の到達/閉路、`values`のチェーン所属,
- *       干渉ペアの規則) もここで行う.
- * @note 取り付け先の名前と対応する座標系は以下の4種類に分類される。命名の際は、
- *       4種類すべてを通して一意であること.
- *       (1) 予約語: `"work_mount"`/`"tool_mount"` (同typeのコンポーネント名も同じ),
- *       (2) コンポーネント名 (コンポーネント座標系C_c),
- *       (3) モデル名: `[[model]]`の`name` (モデル座標系),
- *       (4) ワークオフセットid: `[[work_offset]]`の`id` (ワーク座標系).
- *       いずれも取り付け先座標系→ゼロポーズ機械座標の同次変換Aとして評価し,
- *       所属コンポーネント (取り付け先を辿って最終的に属するコンポーネント) の
- *       運動F_a(q) (ゼロポーズ機械座標→軸変位量qでの機械座標) に追従する.
- * @note ワーク座標→ゼロポーズ機械座標の同次変換W_0は、登録値形式では
- *       `W_0 = F_wm(q*)⁻¹ · T(p_from)` (F_wmは`work_mount`コンポーネントの運動,
- *       q*は`values`の軸変位量、p_fromはq*における基準点の機械座標),
+ *       運動学の計算を要する検証（取り付け先に到達可能か/閉路がないか,
+ *       `values`の各軸がどちらの連鎖に属すか、干渉ペアの検証）もここで行う.
+ * @note 取り付け先の名前（`WorkOffsetSpec::attach`で指定できる名前）と,
+ *       それに対応する座標系は以下の4種類。(2)/(3)/(4)を命名する際は,
+ *       4種類すべてを通して一意な名前を付けること.
+ *       (1) 予約語: `"work_mount"`/`"tool_mount"`（同typeのコンポーネント名も同じ）,
+ *       (2) コンポーネント名（コンポーネント座標系C_c）,
+ *       (3) モデル名: `[[model]]`の`name`（モデル座標系）,
+ *       (4) ワークオフセットid: `[[work_offset]]`の`id`（ワーク座標系）.
+ *       いずれも取り付け先座標系→基準機械座標の同次変換Aとして評価し,
+ *       所属コンポーネント（取り付け先を辿って最終的に属するコンポーネント）の
+ *       運動F_a(q)（基準機械座標系→軸変位量qでの機械座標系）に追従する.
+ * @note ワーク座標系→基準機械座標系の同次変換W_0は、登録値形式では
+ *       `W_0 = F_wm(q*)⁻¹ · T(p_from)`（F_wmは`work_mount`コンポーネントの運動,
+ *       q*は`values`の軸変位量、p_fromはq*における基準点の機械座標）,
  *       幾何形式では`W_0 = A · T(o) · R`.
- *       軸変位量qでのワーク座標→機械座標の同次変換は`W(q) = F_a(q) · W_0`.
+ *       軸変位量qでのワーク座標系→機械座標系の同次変換は`W(q) = F_a(q) · W_0`.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_PROJECT_SETUP_H_
 #define IGESIO_EXTENSIONS_MACHINES_PROJECT_SETUP_H_
@@ -65,7 +66,7 @@ struct WorkFrame {
     std::string id;
     /// @brief 所属コンポーネント (`MachineModel::Component()`のインデックス)
     std::size_t carrier = 0;
-    /// @brief ゼロポーズでの同次変換W_0 (ワーク座標→ゼロポーズ機械座標)
+    /// @brief 基準コンフィギュレーションでの同次変換W_0（ワーク座標系→基準機械座標系）
     igesio::Matrix4d w0 = igesio::Matrix4d::Identity();
     /// @brief 登録値 (`[[work_offset]].values`)
     /// @note 単位はmm/rad. 省略した軸は含めない. 登録値形式のみ持ち、幾何形式では
@@ -74,18 +75,18 @@ struct WorkFrame {
     std::optional<NcValues> registered;
 };
 
-/// @brief ゼロポーズ機械座標系で定義されたモデル
+/// @brief 基準機械座標系で定義されたモデル
 struct PlacedModel {
-    /// @brief モデルの定義 (`Project().models`の要素の複製)
+    /// @brief モデルの定義（`Project().models`の要素のコピー）
     ModelSpec spec;
-    /// @brief 所属コンポーネント (`MachineModel::Component()`のインデックス)
+    /// @brief 所属コンポーネント（`MachineModel::Component()`のインデックス）
     std::size_t carrier = 0;
-    /// @brief モデル座標→ゼロポーズ機械座標の同次変換 (A·T(origin)·R)
+    /// @brief モデル座標系→基準機械座標系の同次変換（A·T(origin)·R）
     igesio::Matrix4d placement = igesio::Matrix4d::Identity();
 };
 
-/// @brief ゼロポーズ機械座標で定義された形状1つ (機械部品・モデルの両方)
-/// @note 何を、どこに、どの目的で置くか. 機械定義の`[[component.geometry]]`と
+/// @brief 基準機械座標系で定義された形状（機械部品orモデル1つぶん）
+/// @note 何を、どこに、何の目的で配置するかを、機械定義の`[[component.geometry]]`と
 ///       プロジェクトの`[[model]]`を統一的に扱うための構造体.
 ///       シーン構築と利用側の干渉判定はこの並びだけを見ればよく、形状の読込は
 ///       `geometry`を`LoadGeometry`/`LoadGeometryMesh`に渡して行う
@@ -108,7 +109,7 @@ struct GeometryInstance {
     std::optional<ModelRole> role;
     /// @brief 形状
     GeometrySpec geometry;
-    /// @brief 機械部品座標またはモデル座標→ゼロポーズ機械座標の同次変換
+    /// @brief 機械部品座標またはモデル座標系→基準機械座標系の同次変換
     /// @note 機械部品は`C_c · T(origin) · R`、モデルは`A · T(origin) · R`
     igesio::Matrix4d placement = igesio::Matrix4d::Identity();
     /// @brief 干渉計算の対象か
@@ -140,10 +141,11 @@ struct ResolvedToolOffset {
 class MachiningSetup {
  public:
     /// @brief プロジェクト定義から構築する
-    /// @param project プロジェクト定義 (読込済、機械定義を含む)
-    /// @param options 構築の設定 (工具解決)
-    /// @throw igesio::DataFormatError 取り付け先の不在・閉路、`values`のキーが
-    ///        チェーン外、ワークオフセットの取り付け先が`work_mount`に至らない,
+    /// @param project プロジェクト定義（読込済、機械定義を含む）
+    /// @param options 構築の設定（工具解決用）
+    /// @throw igesio::DataFormatError 取り付け先が存在しないor閉路がある,
+    ///        `values`のキーが形状創成連鎖内にない,
+    ///        ワークオフセットの取り付け先が`work_mount`に到達しない,
     ///        `[[collision.machine_pair]]`のペア規則違反
     ///        (理由と行番号等は定義側の値を用いる)
     /// @throw std::invalid_argument `MachineModel`の構築失敗 (機械定義の構造矛盾)
@@ -154,22 +156,22 @@ class MachiningSetup {
     const MachineModel& Model() const { return model_; }
     /// @brief 構築元のプロジェクト定義 (コピー)
     const ProjectDefinition& Project() const { return project_; }
-    /// @brief 初期姿勢の軸変位量
+    /// @brief 初期コンフィギュレーションでの軸変位量
     /// @note 機械定義の`initial`をもとに、`[initial.axes]`で指定された値を
     ///       上書きしたもの.
     /// @note 表示用のNC指令値は`NcFromJoints(Model(), BaseQ())`で得る
     const JointVector& BaseQ() const { return base_q_; }
-    /// @brief 解決済みの工具表 (工具番号→定義)
+    /// @brief 解決済みの登録工具（工具番号→定義）
     /// @note 未解決のライブラリ参照工具は含まない
     const std::map<int, ToolAssemblySpec>& Tools() const { return tools_; }
-    /// @brief ワーク座標系 (定義順. 定義が無ければ暗黙の`G54`のみ)
+    /// @brief ワーク座標系（定義順. 定義が無ければ暗黙の`G54`のみ）
     const std::vector<WorkFrame>& WorkFrames() const { return work_frames_; }
     /// @brief idでワーク座標系を引く
     /// @return 見つからなければ`nullptr`
     const WorkFrame* FindWorkFrame(std::string_view id) const;
-    /// @brief ゼロポーズ機械座標で定義されたモデル (定義順)
+    /// @brief 基準機械座標で定義されたモデル（定義順）
     const std::vector<PlacedModel>& Models() const { return models_; }
-    /// @brief ゼロポーズに置かれた全形状
+    /// @brief 基準コンフィギュレーションに置かれた全形状
     /// @note 機械コンポーネントの形状 (`Model().Component()`の順,
     ///       各コンポーネント内は定義順)、続いてモデル (`Models()`の順) の並び
     const std::vector<GeometryInstance>& Geometries() const { return geometries_; }
@@ -190,8 +192,8 @@ class MachiningSetup {
 
     /// @brief 取り付け先の名前を解決する
     /// @param name 予約語/コンポーネント名/モデル名/ワークオフセットid
-    /// @return (所属コンポーネントのインデックス,
-    ///          取り付け先座標系→ゼロポーズ機械座標の同次変換A) のペア
+    /// @return （所属コンポーネントのインデックス,
+    ///          取り付け先座標系→基準機械座標の同次変換A）のペア
     /// @throw std::invalid_argument 指定された名前が取り付け先として存在しない場合
     std::pair<std::size_t, igesio::Matrix4d>
     ResolveAttach(std::string_view name) const;
@@ -201,22 +203,22 @@ class MachiningSetup {
     ProjectDefinition project_;
     /// @brief 運動学モデル
     MachineModel model_;
-    /// @brief 初期姿勢の軸変位量
+    /// @brief 初期コンフィギュレーションの軸変位量
     JointVector base_q_;
-    /// @brief 解決済みの工具表
+    /// @brief 解決済みの登録工具
     std::map<int, ToolAssemblySpec> tools_;
-    /// @brief ワーク座標系 (定義順)
+    /// @brief ワーク座標系（定義順）
     std::vector<WorkFrame> work_frames_;
-    /// @brief ゼロポーズ機械座標で定義されたモデル (定義順)
+    /// @brief 基準機械座標で定義されたモデル（定義順）
     std::vector<PlacedModel> models_;
-    /// @brief ゼロポーズに置かれた全形状 (機械部品→モデル)
+    /// @brief 基準コンフィギュレーションに置かれた全形状（機械部品→モデル）
     std::vector<GeometryInstance> geometries_;
     /// @brief 工具オフセットの実効値
     std::map<int, ResolvedToolOffset> tool_offsets_;
     /// @brief 初期ワークオフセットid
     std::string initial_work_offset_;
     /// @brief 取り付け先の名前→(所属コンポーネント,
-    ///        取り付け先座標系→ゼロポーズ機械座標の同次変換A)
+    ///        取り付け先座標系→基準機械座標の同次変換A)
     std::map<std::string, std::pair<std::size_t, igesio::Matrix4d>> attach_frames_;
     /// @brief 構築時の警告
     std::vector<Diagnostic> warnings_;

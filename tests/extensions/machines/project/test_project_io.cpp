@@ -10,14 +10,14 @@
  *         参照・工具・ワークオフセット・モデル・プログラム・保持セクションが入ること
  *       - 正常系 (要素): `modified`の表記保持、`library`の検索 (プロジェクトの
  *         ディレクトリ優先)、機械定義の警告転記、仮想機械の指定 (種類3つ、
- *         設定と`tilt_limit`の単位換算、`three_axis`での`tilt_limit`の保持)、
+ *         設定と`tool_side_limit`の単位換算、`three_axis`での`tool_side_limit`の保持)、
  *         簡易工具の単位換算、ライブラリ参照の保持、輪郭形式の読込 (単位換算・
  *         軸上での閉包・円弧中心の補正)、省略値の`nullopt`保持、
  *         ワークオフセットの2形式と単位換算、役割別の`collision`既定、形状の再利用、
  *         `[initial]`・`[[program]]`・`[collision]`・`[run]`の各項目、`retained`
  *       - 正常系 (境界値): `[initial.axes]`の`limits`端と許容誤差、`block_skip`の1と9、
  *         古いminor版と現行minor版の受理、円弧中心の許容誤差、指令点の上限,
- *         不透明度の0と1、微小な正の`tilt_limit`
+ *         不透明度の0と1、微小な正の`tool_side_limit`
  *       - 異常系: 仕様§5.1の各項目を代表1件ずつ、例外型と識別語で検証
  *       - 警告: minor版、`overhang < cutting_length`、designの`collision`、
  *         可搬でないパス、`cut_stock`の拡張子
@@ -95,9 +95,9 @@ std::string WithSection(const std::string& section) {
     return MinimalProject() + "\n" + section;
 }
 
-/// @brief チェーン外の直進軸 (扉. レジスタ`U`) を持つ機械定義
-/// @note `MinimalXyzAc`に`base`直下の`Door`を加えたもの. `U`はどちらのチェーンにも
-///       属さないので、`values`・`[initial.axes]`のチェーン所属の検査に用いる
+/// @brief 連鎖外の直進軸 (扉. レジスタ`U`) を持つ機械定義
+/// @note `MinimalXyzAc`に`base`直下の`Door`を加えたもの. `U`はいずれの連鎖にも
+///       属さないので、`values`・`[initial.axes]`の連鎖所属の検査に用いる
 std::string MachineWithDoor() {
     return MinimalXyzAc() + R"(
 [[component]]
@@ -288,7 +288,7 @@ TEST_P(ProjectIoVirtualKindTest, Machine_VirtualKindIsBuiltWithDefaultOptions) {
     EXPECT_EQ(spec.kind, param.kind);
     EXPECT_EQ(spec.options.name, defaults.name);
     EXPECT_EQ(spec.options.branch, defaults.branch);
-    EXPECT_FALSE(spec.options.tilt_limit_rad.has_value());
+    EXPECT_FALSE(spec.options.tool_side_limit_rad.has_value());
 
     // 機械定義は同じ指定の`MakeVirtualMachineDefinition`と一致する
     const mc::MachineDefinition expected = mc::MakeVirtualMachineDefinition(param.kind);
@@ -311,31 +311,31 @@ INSTANTIATE_TEST_SUITE_P(
 TEST(ProjectIoTest, Machine_VirtualOptionsAreReadInDeclaredUnits) {
     const auto project = ReadProjectText(WithVirtualMachine(
             "virtual = \"head_bc\"\nname = \"cam\"\nbranch = \"negative\"\n"
-            "tilt_limit = 110.0"));
+            "tool_side_limit = 110.0"));
     const auto& spec = std::get<mc::VirtualMachineSpec>(project.machine_source);
     EXPECT_EQ(spec.options.name, "cam");
     EXPECT_EQ(spec.options.branch, mc::BranchPolicy::kNegative);
-    ASSERT_TRUE(spec.options.tilt_limit_rad.has_value());
-    EXPECT_NEAR(*spec.options.tilt_limit_rad, ToRadians(110.0), kTol);
+    ASSERT_TRUE(spec.options.tool_side_limit_rad.has_value());
+    EXPECT_NEAR(*spec.options.tool_side_limit_rad, ToRadians(110.0), kTol);
     EXPECT_EQ(project.machine.name, "cam");
     EXPECT_EQ(project.machine.branch, mc::BranchPolicy::kNegative);
 
     // `[units].angle = "rad"`では換算しない
     const auto rad = ReadProjectText(Replace(
-            WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = 1.5"),
+            WithVirtualMachine("virtual = \"head_bc\"\ntool_side_limit = 1.5"),
             "[machine]", "[units]\nangle = \"rad\"\n\n[machine]"));
     EXPECT_NEAR(*std::get<mc::VirtualMachineSpec>(rad.machine_source)
-                         .options.tilt_limit_rad,
+                         .options.tool_side_limit_rad,
                 1.5, kTol);
 }
 
-TEST(ProjectIoTest, Machine_VirtualTiltLimitIsKeptForThreeAxis) {
+TEST(ProjectIoTest, Machine_VirtualToolSideLimitIsKeptForThreeAxis) {
     // 回転軸の無い`three_axis`でも受理して保持する (機械定義には効かない)
     const auto project = ReadProjectText(
-            WithVirtualMachine("virtual = \"three_axis\"\ntilt_limit = 30.0"));
+            WithVirtualMachine("virtual = \"three_axis\"\ntool_side_limit = 30.0"));
     const auto& spec = std::get<mc::VirtualMachineSpec>(project.machine_source);
-    ASSERT_TRUE(spec.options.tilt_limit_rad.has_value());
-    EXPECT_NEAR(*spec.options.tilt_limit_rad, ToRadians(30.0), kTol);
+    ASSERT_TRUE(spec.options.tool_side_limit_rad.has_value());
+    EXPECT_NEAR(*spec.options.tool_side_limit_rad, ToRadians(30.0), kTol);
     EXPECT_TRUE(project.warnings.empty());
 }
 
@@ -358,7 +358,7 @@ TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualKindIsUnknown) {
 
 TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualOnlyKeyHasNoVirtual) {
     for (const std::string key : {"name = \"cam\"", "branch = \"positive\"",
-                                  "tilt_limit = 90.0"}) {
+                                  "tool_side_limit = 90.0"}) {
         ExpectDataFormatError(
                 Replace(MinimalProject(), "library = \"t-ZYX-b-AC-w.toml\"",
                         "library = \"t-ZYX-b-AC-w.toml\"\n" + key),
@@ -374,14 +374,16 @@ TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualOptionIsInvalid) {
             "unknown branch: nearest");
 }
 
-TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualTiltLimitIsNotPositive) {
-    ExpectDataFormatError(WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = 0.0"),
-                          "tilt_limit");
-    ExpectDataFormatError(WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = -1.0"),
-                          "tilt_limit");
+TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWhenVirtualToolSideLimitIsNotPositive) {
+    ExpectDataFormatError(
+            WithVirtualMachine("virtual = \"head_bc\"\ntool_side_limit = 0.0"),
+            "tool_side_limit");
+    ExpectDataFormatError(
+            WithVirtualMachine("virtual = \"head_bc\"\ntool_side_limit = -1.0"),
+            "tool_side_limit");
     // 正の値であれば微小でも受理する
     EXPECT_NO_THROW(ReadProjectText(
-            WithVirtualMachine("virtual = \"head_bc\"\ntilt_limit = 1e-9")));
+            WithVirtualMachine("virtual = \"head_bc\"\ntool_side_limit = 1e-9")));
 }
 
 TEST(ProjectIoTest, Machine_ThrowsDataFormatErrorWithPrefixWhenDefinitionIsInvalid) {
@@ -790,7 +792,7 @@ TEST(ProjectIoTest, WorkOffsets_VariantAndKeys) {
 }
 
 TEST(ProjectIoTest, WorkOffsets_OffChainAxisIsAcceptedOnRead) {
-    // チェーン外の軸 (扉のU) は機械の軸なので読込では受理する (拒否はセットアップ)
+    // 連鎖外の軸 (扉のU) は機械の軸なので読込では受理する (拒否はセットアップ)
     const auto project = ReadProjectWithMachine(
             MachineWithDoor(),
             Replace(MinimalWithoutMachine(), "values = { X = 0.0, Y = 180.0, Z = -250.5 }",

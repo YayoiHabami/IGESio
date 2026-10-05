@@ -1,7 +1,7 @@
 /**
  * @file extensions/machines/scene/machine_scene.h
- * @brief 加工セットアップからのシーン構築 (機械、工具、モデル、ワーク座標系、
- *        工具経路（の線描画）のアセンブリ木)
+ * @brief 加工セットアップからのシーン構築
+ *        （機械、工具、モデル、ワーク座標系、工具経路のアセンブリ木）
  * @author Yayoi Habami
  * @date 2026-09-16
  * @copyright 2026 Yayoi Habami
@@ -14,15 +14,15 @@
  *          ├─ trace:machine               (I. 動作軌跡の配置先. 中身は
  *          │                               simulation/motion_sceneで作る)
  *          ├─ <component>                 (F_c(q). 全コンポーネントを同じ階層に並べる)
- *          │   └─ geometry:<name>         (機械部品座標→ゼロポーズ機械座標の同次変換)
+ *          │   └─ geometry:<name>         (機械部品座標系→基準機械座標系の同次変換)
  *          ├─ <tool_mount component>
- *          │   ├─ triad:tool_mount        (H_tm. 取り付けフレームの3軸)
- *          │   └─ tool:<n>                (H_tm·T(0,0,-ゲージ長). 工具表の全工具を
- *          │       │                       置き、選択中の工具のみ表示)
+ *          │   ├─ triad:tool_mount        (H_tm. 取り付け部座標系の3軸)
+ *          │   └─ tool:<n>                (H_tm·T(0,0,-ゲージ長). 登録済の工具を
+ *          │       │                       すべて配置し、選択中の工具のみ表示)
  *          │       ├─ axis                (I. 工具軸線)
  *          │       └─ control_point       (I. 制御点マーカー)
  *          ├─ <carrier component>
- *          │   ├─ model:<name>            (モデル座標→ゼロポーズ機械座標の同次変換)
+ *          │   ├─ model:<name>            (モデル座標→基準機械座標の同次変換)
  *          │   ├─ workframe:<id>          (W_0. ワーク座標系の3軸)
  *          │   ├─ paths:<id>              (W_0. 子rapid/cutに経路線)
  *          │   └─ attach:<id>             (W_0. 呼び出し側の追加物の取り付け先)
@@ -30,18 +30,18 @@
  *              ├─ trajectory:             (I. 工具軌跡の配置先)
  *              └─ trace:work              (I. 動作軌跡 (work_mount座標) の配置先)
  *       ```
- *       コンポーネントの形状はゼロポーズ機械座標で定義されているため、姿勢の適用は
- *       順運動学の結果F_c(q)をそのまま各コンポーネントの大域変換に設定する.
- *       取り付けられるもの (工具、モデル、ワーク座標系、経路線) は所属コンポーネント
- *       の子として固定の相対変換を持ち、累積変換で自動的に追従する.
+ *       コンポーネントの形状は基準機械座標系で定義されているため、コンフィギュレーションに
+ *       基づく順運動学の結果F_c(q)はそのまま各コンポーネントの大域変換に設定できる.
+ *       取り付けられるもの（工具、モデル、ワーク座標系、経路線）は所属コンポーネント
+ *       の子として固定の相対変換を持つため、累積的に追従する.
  * @note `trajectory:`/`trace:machine`/`trace:work`/`attach:<id>`は`Build`で
  *       空のアセンブリとして作り、`Clear`以外では作り直さない. 表示用の同じIDを
- *       (レンダラの表示フィルタ等に) 保持したまま中身だけを変更できる.
- * @note 座標系の記法は`project/setup.h`と同じ (F_c(q)はゼロポーズ機械座標→
- *       軸変位量qでの機械座標の同次変換、H_tmは取り付けフレーム→ゼロポーズ機械
- *       座標の同次変換、W_0はワーク座標→ゼロポーズ機械座標の同次変換).
+ *       （レンダラの表示フィルタ等に）保持したまま中身だけを変更できる.
+ * @note 座標系の記法は`project/setup.h`と同じ（F_c(q)は基準機械座標→
+ *       軸変位量qでの機械座標の同次変換、H_tmは取り付け部座標系→基準機械
+ *       座標の同次変換、W_0はワーク座標→基準機械座標の同次変換）.
  * @note 本ヘッダはmodels層までに依存し、GLには依存しない. ワークビュー
- *       (ワーク座標系に固定した表示) に関してはIDと同次変換を返すだけであるため,
+ *       （ワーク座標系に固定した表示）に関してはIDと同次変換を返すだけであるため,
  *       レンダラの操作は呼び出し側が行うこと.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_SCENE_MACHINE_SCENE_H_
@@ -86,7 +86,7 @@ constexpr std::string_view kPathsAssemblyPrefix = "paths:";
 constexpr std::string_view kAttachAssemblyPrefix = "attach:";
 /// @brief 機械座標系の3軸のアセンブリの名前
 constexpr std::string_view kMachineTriadName = "triad:machine";
-/// @brief 取り付けフレームの3軸のアセンブリの名前
+/// @brief 取り付け部座標系の3軸のアセンブリの名前
 constexpr std::string_view kToolMountTriadName = "triad:tool_mount";
 /// @brief 工具軌跡の配置先のアセンブリの名前 (`work_mount`の子)
 constexpr std::string_view kTrajectoryAssemblyName = "trajectory:";
@@ -136,7 +136,7 @@ struct SceneBuildOptions {
     bool build_work_frames = true;
     /// @brief 工具 (`tool:<n>`) を作るか
     bool build_tools = true;
-    /// @brief 機械座標系と取り付けフレームの3軸 (`triad:*`) を作るか
+    /// @brief 機械座標系と取り付け部座標系の3軸（`triad:*`）を作るか
     bool build_triads = true;
     /// @brief 工具軸線を輪郭の最上端から延ばす長さ [mm]
     /// @note 0以下なら工具軸線と制御点マーカーを作らない
@@ -147,11 +147,11 @@ struct SceneBuildOptions {
     ///       ファイルは読まない. `nullptr`を返した場合、または未設定の場合は
     ///       `LoadGeometry`で読む. 呼び出し側で読み込み済みのアセンブリ
     ///       (CAM側が所有するワーク等) を二重に読まずに木に組み込む用途
-    /// @note 供給されたアセンブリの名前 (`Metadata().name`)、大域変換、可視性は
-    ///       `Build`で上書きする. 既に他の親を持つ場合はその親から取り除いて
-    ///       (`RemovalPolicy::kOrphan`) 所属コンポーネントの子にする.
-    ///       `Clear`で`machine:<name>`ごと木から取り除かれるため、供給側は
-    ///       `shared_ptr`を保持し続けること
+    /// @note 供給されたアセンブリの名前（`Metadata().name`）、大域変換,
+    ///       表示/非表示は`Build`で上書きする. 既に他の親を持つ場合は
+    ///       その親から取り除き（`RemovalPolicy::kOrphan`）、所属コンポーネントの
+    ///       子要素にする. `Clear`で`machine:<name>`ごと木から取り除かれるため,
+    ///       供給側は`shared_ptr`を保持し続けること
     std::function<std::shared_ptr<models::Assembly>(const GeometryInstance&)>
             geometry_provider;
     /// @brief 機械部品と表示専用の要素を選択不可 (`lock.selectable = false`) にするか
@@ -185,26 +185,29 @@ std::shared_ptr<models::Assembly> MakeChildAssembly(
 std::shared_ptr<models::Assembly> FindChildAssembly(
         const models::Assembly& parent, std::string_view name);
 
-/// @brief 加工セットアップから作るシーン (アセンブリ木とその操作)
-/// @note `Build`で木を作り、`ApplyPose`/`SetActiveTool`/各`Set*Visible`で共有状態
-///       (大域変換と可視性) を更新する. 可視性は全ビューで共有され、ビューごとの
-///       表示範囲はレンダラの表示フィルタで設定する (`WorkViewHiddenIds`等).
-/// @note `Build`後は`MachiningSetup`を参照しない (運動学モデル、工具表、ワーク座標系
-///       のコピーを持つ). 姿勢、工具、経路線の操作は`Build`前には`std::logic_error`
-///       を送出し、可視性の切り替えは`Build`前には何もしない.
+/// @brief 加工セットアップから作るシーン（アセンブリ木とその操作）
+/// @note `Build`でセットアップを行い、`ApplyPose`/`SetActiveTool`/各`Set*Visible`で
+///       共有状態（大域変換と表示状態）を更新する. 表示状態は全ビューで共有され,
+///       そのうえで個別のビューごとに表示/非表示を切り替える場合は
+///       レンダラの表示フィルタで設定する（`WorkViewHiddenIds`等）.
+/// @note 運動学モデル、工具、ワークモデルのコピーをメンバとして持つため、`Build`後は
+///       `MachiningSetup`を参照しない. `Build`前にコンフィギュレーション、工具、経路線を
+///       操作した場合は`std::logic_error`を投げ、表示/非表示を変更した場合は何もしない.
 class MachineScene {
  public:
     /// @brief セットアップからアセンブリ木を作る
     /// @param setup 加工セットアップ
-    /// @param root 木を追加するルートアセンブリ (`machine:<name>`をその子にする)
+    /// @param root 木を追加するルートアセンブリ
     /// @param options 構築の設定
     /// @throw std::invalid_argument `root`が`nullptr`、工具輪郭が不正,
-    ///        またはプリミティブの寸法が正しくない場合 (`MakeToolAssembly`/
-    ///        `LoadGeometry`から伝播)
+    ///        またはプリミティブの寸法が正しくない場合
+    /// @note `machine:<name>`を`root`の子要素として設定する.
     /// @note 既に構築済みなら先に`Clear`する. 形状の読込に失敗した形状
-    ///       (ファイルの不在、不正なファイル、対応外の形式等) は警告を`Warnings`に
-    ///       追加し、その形状のアセンブリは作らない. 構築後の姿勢は全コンポーネントが
-    ///       単位行列 (ゼロポーズ)、表示中の工具は`setup.InitialTool()`
+    ///       （指定ファイルが存在しない、不正なファイル、対応外の形式等）は警告を
+    ///       `Warnings`に追加し、その形状のアセンブリは作らない.
+    ///       構築後のコンフィギュレーションは全コンポーネントの変換が単位行列となり
+    ///       （基準コンフィギュレーション)、表示中の工具は`setup.InitialTool()`
+    ///       となる.
     void Build(const MachiningSetup& setup,
                const std::shared_ptr<models::Assembly>& root,
                const SceneBuildOptions& options = {});
@@ -220,15 +223,15 @@ class MachineScene {
      * 構築元の情報
      */
 
-    /// @brief 運動学モデル (セットアップからのコピー)
+    /// @brief 運動学モデル（セットアップからのコピー）
     /// @throw std::logic_error 未構築の場合
     const MachineModel& Model() const;
 
-    /// @brief 工具表 (工具番号→定義)
+    /// @brief 登録工具（工具番号→定義）
     /// @note セットアップからのコピー
     const std::map<int, ToolAssemblySpec>& Tools() const { return tools_; }
 
-    /// @brief ワーク座標系 (定義順)
+    /// @brief ワーク座標系（定義順）
     /// @note セットアップからのコピー
     const std::vector<WorkFrame>& WorkFrames() const { return work_frames_; }
 
@@ -240,23 +243,23 @@ class MachineScene {
     const std::vector<Diagnostic>& Warnings() const { return warnings_; }
 
     /**
-     * 姿勢と工具
+     * コンフィギュレーションと工具
      */
 
-    /// @brief 軸変位量の姿勢を全コンポーネントに適用する
+    /// @brief 軸変位量に基づくコンフィギュレーションを全コンポーネントに適用する
     /// @param q 全軸の軸変位量
     /// @throw std::logic_error 未構築の場合
     /// @throw std::invalid_argument `q`の長さが軸数と異なる場合
     void ApplyPose(const JointVector& q);
 
-    /// @brief 全コンポーネントをゼロポーズ (単位行列) に戻す
+    /// @brief 全コンポーネントを基準コンフィギュレーション（単位行列）に戻す
     /// @throw std::logic_error 未構築の場合
     void ResetToZeroPose();
 
     /// @brief 表示する工具を選択する
-    /// @param number 工具番号 (`kNoTool`なら全工具を非表示)
+    /// @param number 工具番号（`kNoTool`なら全工具を非表示）
     /// @throw std::logic_error 未構築の場合
-    /// @note 該当する`tool:<n>`のみ表示し、工具表に無い番号は全工具を非表示にする
+    /// @note 該当する`tool:<n>`のみ表示し、未登録の工具番号は全工具を非表示にする
     void SetActiveTool(int number);
 
     /// @brief 表示中の工具番号
@@ -264,28 +267,28 @@ class MachineScene {
     int ActiveTool() const { return active_tool_; }
 
     /**
-     * 可視性の切り替え (共有状態. 未構築なら何もしない)
+     * 表示/非表示の切り替え (共有状態. 未構築なら何もしない)
      */
 
-    /// @brief 全工具のホルダ部の可視性を設定する
+    /// @brief 全工具のホルダ部の表示/非表示を切り替える
     void SetHolderVisible(bool visible);
-    /// @brief 全ワークオフセットの経路線 (`paths:<id>`) の可視性を設定する
+    /// @brief 全ワークオフセットの経路線（`paths:<id>`）の表示/非表示を切り替える
     void SetPathsVisible(bool visible);
-    /// @brief 経路線のうち早送り (`paths:<id>/rapid`) の可視性を設定する
+    /// @brief 経路線のうち早送り（`paths:<id>/rapid`）の表示/非表示を切り替える
     void SetRapidPathsVisible(bool visible);
-    /// @brief ワーク座標系の3軸 (`workframe:<id>`) の可視性を設定する
+    /// @brief ワーク座標系の3軸（`workframe:<id>`）の表示/非表示を切り替える
     void SetWorkFramesVisible(bool visible);
-    /// @brief 機械座標系と取り付けフレームの3軸 (`triad:*`) の可視性を設定する
+    /// @brief 機械座標系と取り付け部座標系の3軸（`triad:*`）の表示/非表示を切り替える
     void SetTriadsVisible(bool visible);
-    /// @brief 全工具の工具軸線と制御点マーカーの可視性を設定する
+    /// @brief 全工具の工具軸線と制御点マーカーの表示/非表示を切り替える
     void SetToolAxisVisible(bool visible);
-    /// @brief 機械部品の形状 (`geometry:<name>`) の可視性を設定する
-    /// @note 干渉専用 (`GeometryInstance::visible == false`) の形状は変更しない
+    /// @brief 機械部品の形状（`geometry:<name>`）の表示/非表示を切り替える
+    /// @note 干渉判定専用（`GeometryInstance::visible == false`）の形状は変更しない
     void SetMachinePartsVisible(bool visible);
-    /// @brief 同じ役割のモデル (`model:<name>`) の可視性を設定する
+    /// @brief 同じ役割のモデル（`model:<name>`）の表示/非表示を切り替える
     /// @param role モデルの役割
-    /// @param visible 設定する可視性
-    /// @note 干渉専用 (`GeometryInstance::visible == false`) のモデルは変更しない
+    /// @param visible 表示するか
+    /// @note 干渉判定専用（`GeometryInstance::visible == false`）のモデルは変更しない
     void SetModelRoleVisible(ModelRole role, bool visible);
 
     /**
@@ -364,8 +367,8 @@ class MachineScene {
     /// @return ルートまでの大域変換の積. ルートが単位行列なら`work_mount`
     ///         コンポーネントの運動F_wm(q) (F_c(q)の`work_mount`に対するもの)
     /// @throw std::logic_error 未構築の場合
-    /// @note レンダラの表示座標系 (`EntityRenderer::SetViewFrame`) に設定すると,
-    ///       ワークに固定したビューになる. 再生中も現在の姿勢を反映する
+    /// @note レンダラの表示座標系（`EntityRenderer::SetViewFrame`）に設定した場合は
+    ///       ワークに固定したビューとなる. 再生中も現在のコンフィギュレーションを反映する
     igesio::Matrix4d WorkMountWorldTransform() const;
 
     /// @brief ワークビューのレンダラで隠すアセンブリのIDを集める
@@ -380,7 +383,7 @@ class MachineScene {
     std::vector<ObjectID> MachineViewHiddenIds() const;
 
  private:
-    /// @brief 形状1つ分のアセンブリと、可視性の切り替えに必要な属性
+    /// @brief 形状1つ分のアセンブリと、表示/非表示の切り替えに必要な属性
     struct GeometryNode {
         /// @brief 形状のアセンブリ (読めなかった形状は`nullptr`)
         std::shared_ptr<models::Assembly> assembly;
@@ -392,7 +395,8 @@ class MachineScene {
         std::size_t carrier = 0;
         /// @brief モデルの役割 (モデルのときのみ)
         std::optional<ModelRole> role;
-        /// @brief 描画対象か (`false`は干渉専用形状で、可視性の切り替えの対象外)
+        /// @brief 表示するか
+        /// @note falseの場合は干渉判定専用の形状で、表示/非表示の切り替えの対象外
         bool visible = true;
     };
 
@@ -406,14 +410,14 @@ class MachineScene {
     std::shared_ptr<models::Assembly> FindNode(std::string_view name) const;
     /// @brief コンポーネントのアセンブリを全て作る
     void BuildComponents();
-    /// @brief 機械座標系と取り付けフレームの3軸を作る
+    /// @brief 機械座標系と取り付け部座標系の3軸を作る
     void BuildTriads();
     /// @brief 形状を読み込み、所属コンポーネントの子に置く
     /// @param setup 加工セットアップ
     /// @param options 構築の設定
     void BuildGeometries(const MachiningSetup& setup,
                          const SceneBuildOptions& options);
-    /// @brief 工具表の全工具を`tool_mount`コンポーネントの子に置く
+    /// @brief 登録工具をすべて`tool_mount`コンポーネントの子に置く
     /// @param options 構築の設定
     void BuildTools(const SceneBuildOptions& options);
     /// @brief ワーク座標系ごとに3軸、経路線の配置先、取り付け先を作る
@@ -425,7 +429,7 @@ class MachineScene {
 
     /// @brief 運動学モデル (未構築なら`std::nullopt`)
     std::optional<MachineModel> model_;
-    /// @brief 工具表
+    /// @brief 登録工具
     std::map<int, ToolAssemblySpec> tools_;
     /// @brief ワーク座標系 (定義順)
     std::vector<WorkFrame> work_frames_;

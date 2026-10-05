@@ -1,6 +1,6 @@
 /**
  * @file extensions/machines/machine/machine_writing.cpp
- * @brief 機械定義のTOML書き出し (内部ヘッダ)
+ * @brief 機械定義のTOML書き出し（内部ヘッダ）
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
@@ -53,11 +53,11 @@ void PutLocalFrame(TomlValue& component, const igesio::Matrix4d& local_frame,
     component["local_frame"] = frame;
 }
 
-/// @brief マウントの`frame` (`[[component]].frame`) を
+/// @brief マウントの`frame`（`[[component]].frame`）を
 ///        `origin`+`z_axis`(+`x_axis`) で書く
-/// @note 保持しているH (取り付け先座標系→ゼロポーズ機械座標) は`local_frame`込み
+/// @note 保持しているH（取り付け先座標系→基準機械座標）は`local_frame`込み
 ///       なので、`C_c⁻¹·H`でコンポーネント座標相対に戻す.
-///       回転が単位行列なら`z_axis`のみ (`x_axis`は既定のコンポーネント座標x軸)
+///       回転が単位行列なら`z_axis`のみ（`x_axis`は既定のコンポーネント座標x軸）
 TomlValue MakeFrame(const igesio::Matrix4d& local_frame,
                     const igesio::Matrix4d& placement, const double length_scale) {
     const igesio::Matrix4d relative = RigidInverse(local_frame) * placement;

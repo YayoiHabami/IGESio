@@ -38,7 +38,8 @@ namespace igesio::extensions::machines::detail {
 
 /// @brief 可動範囲外の警告の`context` (`inverse_kinematics.cpp`と同じ)
 constexpr const char* kLimitsContext = "limits";
-/// @brief 特異姿勢の警告の`context` (`inverse_kinematics.cpp`と同じ)
+/// @brief 特異コンフィギュレーションの警告の`context`
+///        （`inverse_kinematics.cpp`と同じ）
 constexpr const char* kSingularContext = "singular";
 
 /// @brief 通過点の種別
@@ -59,17 +60,17 @@ enum class TargetForm {
 struct Target {
     /// @brief 通過点の種別
     TargetForm form = TargetForm::kAxisWords;
-    /// @brief 制御点 (ゼロポーズ機械座標. `kToolAxis`/`kRotaryWords`)
+    /// @brief 制御点（基準機械座標系. `kToolAxis`/`kRotaryWords`）
     std::optional<igesio::Vector3d> point_home;
-    /// @brief 工具軸方向 (ゼロポーズ機械座標. `kToolAxis`)
+    /// @brief 工具軸方向（基準機械座標系. `kToolAxis`）
     std::optional<igesio::Vector3d> tool_axis_home;
     /// @brief 直接指令する軸のNC指令値
     /// @note `kRotaryWords`では回転軸、`kAxisWords`では直進軸と回転軸
     ///       (登録値と工具長補正を加えた値). 未指定の軸は直前の指令値を保つ
     NcValues nc_words;
-    /// @brief 制御点のゼロポーズ機械座標 (`tool_mount`コンポーネントに固定)
-    /// @note `tool_mount`フレーム座標cに、`tool_mount`フレーム座標→ゼロポーズ
-    ///       機械座標の同次変換H_tm (`MountPlacement(kToolMount)`) を掛けたもの.
+    /// @brief 制御点の基準機械座標（`tool_mount`コンポーネントに固定）
+    /// @note 工具取り付け部座標cに、工具取り付け部座標系→基準機械座標系の同次変換
+    ///       H_tm（`MountPlacement(kToolMount)`）を掛けたもの.
     ///       位置IKの`control_local`にそのまま渡す
     igesio::Vector3d control_home = igesio::Vector3d::Zero();
     /// @brief 動作の種類
@@ -125,37 +126,39 @@ struct PlannerState {
     std::vector<Diagnostic>* warnings = nullptr;
 };
 
-/// @brief 工具軸方向から求めた回転軸の指令値 (`SolveToolAxis`の戻り値)
+/// @brief 工具軸方向から求めた回転軸の指令値（`SolveToolAxis`の戻り値）
 struct OrientationResult {
-    /// @brief 回転軸の指令値 (到達不能なら直前の指令値の回転軸)
+    /// @brief 回転軸の指令値（到達不能なら直前の指令値の回転軸）
     NcValues rotary;
-    /// @brief 特異姿勢 (旋回角が不定) か (`IkSolution::singular`)
+    /// @brief 特異コンフィギュレーション（工作物側回転軸の回転角が不定）か
+    ///        （`IkSolution::singular`）
     bool singular = false;
-    /// @brief 逆運動学の警告 (`context`は種別)
-    /// @note 特異姿勢 (`"singular"`) の診断は含めない. 工具軸方向が+Zの
-    ///       通常の姿勢で毎回発生するため、動作生成と、工具軸方向から回転軸指令値
-    ///       を計算する処理ではいずれも無視する
+    /// @brief 逆運動学の警告（`context`は種別）
+    /// @note 特異コンフィギュレーション（`"singular"`）の診断は含めない.
+    ///       工具軸方向が+Zの通常のコンフィギュレーションで毎回発生するため,
+    ///       動作生成と工具軸方向から回転軸指令値を計算する処理ではいずれも無視する
     std::vector<Diagnostic> warnings;
-    /// @brief 到達不能の理由 (到達可能なら`std::nullopt`)
+    /// @brief 到達不能の理由（到達可能なら`std::nullopt`）
     std::optional<std::string> unreachable;
 };
 
-/// @brief 目標の軸変位量と全軸の指令値 (`SolveTarget`の戻り値)
+/// @brief 目標の軸変位量と全軸の指令値（`SolveTarget`の戻り値）
 struct PoseResult {
     /// @brief 全軸の軸変位量
     JointVector q;
     /// @brief 全軸のNC指令値
     NcValues nc;
-    /// @brief 警告 (逆運動学の警告は`context`が種別、到達不能は空)
+    /// @brief 警告（逆運動学の警告は`context`が種別、到達不能は空）
     std::vector<Diagnostic> warnings;
-    /// @brief 到達不能で直前の姿勢を保持したか
+    /// @brief 到達不能で直前のコンフィギュレーションを保持したか
     bool unreachable = false;
 };
 
 /// @brief 作業状態を初期化する
 /// @param setup 加工セットアップ
-/// @param[out] warnings 警告の格納先 (`nullptr`なら報告しない)
-/// @return 初期工具/初期ワークオフセット/初期姿勢 (`BaseQ`) に基づく初期状態
+/// @param[out] warnings 警告の格納先（`nullptr`なら報告しない）
+/// @return 初期工具/初期ワークオフセット/初期コンフィギュレーション（`BaseQ`）
+///         に基づく初期状態
 PlannerState MakePlannerState(const MachiningSetup& setup,
                               std::vector<Diagnostic>* warnings);
 
@@ -184,30 +187,30 @@ const WorkFrame& CurrentWorkFrame(const MachiningSetup& setup,
                                   PlannerState& state,
                                   std::size_t index, int line);
 
-/// @brief 工具が無いときの制御点 (ゲージライン) の`tool_mount`フレーム座標を計算する
-/// @param g43_length 有効な工具長補正 [mm] (無ければ`std::nullopt`)
+/// @brief 工具が無いときの制御点（ゲージライン）の工具取り付け部座標を計算する
+/// @param g43_length 有効な工具長補正 [mm]（無ければ`std::nullopt`）
 /// @return (0, 0, -g43_length). 工具長補正が無ければ原点
 igesio::Vector3d GaugeControlLocal(std::optional<double> g43_length);
 
-/// @brief 工具表の工具から制御点の`tool_mount`フレーム座標を計算する
+/// @brief 登録工具から制御点の工具取り付け部座標を計算する
 /// @param setup 加工セットアップ
 /// @param tool 工具番号
-/// @param g43_length 有効な工具長補正 [mm] (無ければ`std::nullopt`)
-/// @return `ControlLocal(spec, g43_length)`. 工具表に無い番号 (`kNoTool`を含む)
+/// @param g43_length 有効な工具長補正 [mm]（無ければ`std::nullopt`）
+/// @return `ControlLocal(spec, g43_length)`. 未登録の工具番号（`kNoTool`を含む）
 ///         なら`std::nullopt`
-std::optional<igesio::Vector3d> ToolControlLocal(const MachiningSetup& setup,
-                                                 int tool,
-                                                 std::optional<double> g43_length);
+std::optional<igesio::Vector3d>
+ToolControlLocal(const MachiningSetup& setup, int tool,
+                  std::optional<double> g43_length);
 
-/// @brief 現在の工具と工具長補正から制御点の`tool_mount`フレーム座標を計算する
+/// @brief 現在の工具と工具長補正から制御点の工具取り付け部座標を計算する
 /// @param setup 加工セットアップ
 /// @param state 作業状態
 /// @param index レコードのインデックス (警告用)
 /// @param line 行番号 (警告用)
-/// @return `ControlLocal(spec, g43)` (`tool_mount`フレーム座標).
+/// @return `ControlLocal(spec, g43)`（工具取り付け部座標）.
 ///         工具なし/未解決工具なら`kGauge`相当、未定義の補正番号なら補正なし
-/// @note ゼロポーズ機械座標にするには`MountPlacement(kToolMount)`を掛けること
-///       (`ControlHomeFor`). 工具なし/未解決工具は工具番号ごとに1件、未定義の
+/// @note 基準機械座標にするには`MountPlacement(kToolMount)`を掛けること
+///       （`ControlHomeFor`）. 工具なし/未解決工具は工具番号ごとに1件、未定義の
 ///       補正番号は番号ごとに1件警告する
 igesio::Vector3d ControlLocalFor(const MachiningSetup& setup,
                                  PlannerState& state,
@@ -252,11 +255,11 @@ std::optional<igesio::Vector3d> ToolAxisOrFallback(
 /// @brief 工具軸方向から回転軸の指令を計算する (姿勢IK)
 /// @param model 運動学モデル
 /// @param prev_nc 直前の指令値
-/// @param axis_home 工具軸方向 (ゼロポーズ機械座標)
+/// @param axis_home 工具軸方向（基準機械座標）
 /// @param policy 回転角の解の選択方針
-/// @return 回転軸の指令 (無制限軸は直前の指令値に近い回転方向に正規化)、特異姿勢か,
-///         および警告. 到達不能なら`unreachable`に理由を設定し、`prev_nc`の
-///         回転軸の値を返す
+/// @return 回転軸の指令（無制限軸は直前の指令値に近い回転方向に正規化）,
+///         特異コンフィギュレーションか、とその警告. 到達不能なら`unreachable`に
+///         理由を設定し、`prev_nc`の回転軸の値を返す
 /// @throw igesio::NotImplementedError 対応しない軸構成の場合
 OrientationResult SolveToolAxis(const MachineModel& model, const NcValues& prev_nc,
                                 const igesio::Vector3d& axis_home,
@@ -288,10 +291,11 @@ std::vector<Target> NormalizeRecord(const MachiningSetup& setup, PlannerState& s
 
 /// @brief 通過点での軸変位量を計算する
 /// @param setup 加工セットアップ
-/// @param state 作業状態 (直前の指令値と軸変位量は参照のみで更新しない)
+/// @param state 作業状態（直前の指令値と軸変位量は参照のみで更新しない）
 /// @param target 通過点
 /// @param policy 回転角の解の選択方針
-/// @return 解. 到達不能なら直前の姿勢をそのまま返し`unreachable`を`true`にする.
+/// @return 解. 到達不能なら直前のコンフィギュレーションをそのまま返し
+///         `unreachable`を`true`にする.
 ///         直接指令した軸の可動範囲外は`context = "limits"`の警告にする
 /// @throw igesio::NotImplementedError 対応しない軸構成の場合
 PoseResult SolveTarget(const MachiningSetup& setup, PlannerState& state,

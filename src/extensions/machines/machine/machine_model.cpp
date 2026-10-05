@@ -1,6 +1,6 @@
 /**
  * @file extensions/machines/machine/machine_model.cpp
- * @brief 機械定義から構築する運動学モデル (木構造・チェーン・軸一覧・派生量)
+ * @brief 機械定義から構築する運動学モデル（木構造・連鎖・軸一覧・派生量）
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
@@ -250,13 +250,12 @@ std::optional<std::array<double, 2>> NcRangeOf(const AxisSpec& axis) {
     return std::nullopt;
 }
 
-/// @brief 軸一覧を作り、各コンポーネントの軸インデックスと
-///        どちらのチェーンに属しているか、およびσを設定する
+/// @brief 各コンポーネントの軸インデックスとどちらの連鎖に属すか等を設定した軸リストを作る
 /// @param definition 機械定義
-/// @param[out] components 親先行順のコンポーネント (軸のインデックスを書き込む)
-/// @param tool_chain 工具側チェーンのコンポーネントインデックス
-/// @param work_chain ワーク側チェーンのコンポーネントインデックス
-/// @return ゼロポーズ機械座標での軸一覧 (出現順)
+/// @param[out] components 親先行順のコンポーネント（軸のインデックスを書き込む）
+/// @param tool_chain 工具側連鎖のコンポーネントインデックス
+/// @param work_chain 工作物側連鎖のコンポーネントインデックス
+/// @return 基準機械座標での軸一覧（出現順）
 /// @throw std::invalid_argument registerが重複する場合
 std::vector<AxisInfo> BuildAxes(
         const MachineDefinition& definition,
@@ -300,10 +299,10 @@ std::vector<AxisInfo> BuildAxes(
     return axes;
 }
 
-/// @brief チェーン上のIK対象の回転軸のインデックスを、チェーンの並び順で集める
+/// @brief 連鎖上のIK対象の回転軸のインデックスを、連鎖の並び順で集める
 /// @param components 親先行順のコンポーネント
 /// @param axes 軸一覧
-/// @param chain 対象のチェーンのコンポーネントインデックス
+/// @param chain 対象の連鎖のコンポーネントインデックス
 /// @return `axes`におけるインデックス列
 std::vector<std::size_t> IkRotaries(
         const std::vector<ComponentInfo>& components,
@@ -322,10 +321,11 @@ std::vector<std::size_t> IkRotaries(
 /// @brief 工具の向きを決める回転軸をまとめる
 /// @param components 親先行順のコンポーネント
 /// @param axes 軸一覧
-/// @param tool_chain 工具側チェーンのコンポーネントインデックス
-/// @param work_chain ワーク側チェーンのコンポーネントインデックス
+/// @param tool_chain 工具側連鎖のコンポーネントインデックス
+/// @param work_chain 工作物側連鎖のコンポーネントインデックス
 /// @return `axes`におけるインデックス列
-///         (先頭が外側. ワーク側を末端から並べ、続けて工具側を根元から並べる)
+///         （先頭が工作物側回転軸. 工作物側連鎖を末端から並べ、続けて工具側連鎖を
+///         ベース側から並べる）
 std::vector<std::size_t> BuildOrientationAxes(
         const std::vector<ComponentInfo>& components, const std::vector<AxisInfo>& axes,
         const std::vector<std::size_t>& tool_chain,
@@ -337,13 +337,13 @@ std::vector<std::size_t> BuildOrientationAxes(
     return indices;
 }
 
-/// @brief チェーン上の可動軸の軸名を並べる
+/// @brief 連鎖上の可動軸の軸名を並べる
 /// @param components 親先行順のコンポーネント
 /// @param axes 軸一覧
-/// @param tool_chain 工具側チェーンのコンポーネントインデックス
-/// @param work_chain ワーク側チェーンのコンポーネントインデックス
-/// @return 軸名の列 (工具側を根元から並べ、続いてワーク側を末端から並べる)
-/// @note 両チェーンに共通する軸が重複しないよう、既出の名前は飛ばす
+/// @param tool_chain 工具側連鎖のコンポーネントインデックス
+/// @param work_chain 工作物側連鎖のコンポーネントインデックス
+/// @return 軸名の列（工具側連鎖をベース側から並べ、続いて工作物側連鎖を末端から並べる）
+/// @note 両連鎖に共通する軸が重複しないよう、既出の名前は飛ばす
 std::vector<std::string> BuildChainRegisters(
         const std::vector<ComponentInfo>& components,
         const std::vector<AxisInfo>& axes,
@@ -363,7 +363,7 @@ std::vector<std::string> BuildChainRegisters(
     return registers;
 }
 
-/// @brief ゼロポーズでの工具軸方向 (`tool_mount`フレームのz軸. 機械座標)
+/// @brief 基準コンフィギュレーションでの工具軸方向（工具取り付け部座標系のz軸. 機械座標）
 /// @param components 親先行順のコンポーネント
 /// @param tool_mount `tool_mount`コンポーネントのインデックス
 /// @return 単位ベクトル
@@ -372,12 +372,12 @@ igesio::Vector3d ToolAxisOf(const std::vector<ComponentInfo>& components,
     return RotationPart(*components[tool_mount].mount_placement).col(2);
 }
 
-/// @brief ワーク側回転軸の回転中心の参照点を計算する (ゼロポーズ機械座標)
+/// @brief 工作物側連鎖の回転軸の回転中心の参照点を計算する（基準機械座標）
 /// @param components 親先行順のコンポーネント
 /// @param axes 軸一覧
-/// @param work_chain ワーク側チェーンのコンポーネントインデックス
+/// @param work_chain 工作物側連鎖のコンポーネントインデックス
 /// @return 回転軸が1本ならその軸上の点. 2本以上なら末端側の軸上でもう一方の
-///         軸線に最も近い点 (両軸が交わる理想機では交点).
+///         軸線に最も近い点（両軸が交わる理想機では交点）.
 ///         IK対象の回転軸が無ければ`std::nullopt`
 std::optional<igesio::Vector3d> WorkPivotOf(
         const std::vector<ComponentInfo>& components,

@@ -41,7 +41,7 @@ inline igesio::extensions::machines::ReadProjectOptions DefaultOptions() {
 
 /// @brief 最小構成のプロジェクト (実例機・簡易ボール工具#1・G54登録値・G55幾何形式・
 ///        boxストック・初期状態)
-/// @note 機械は`t-ZYX-b-AC-w.toml` (工具側XYZ・ワーク側AC. Toolは(0,-180,250.5)).
+/// @note 機械は`t-ZYX-b-AC-w.toml` (工具側XYZ・工作物側AC. Toolは(0,-180,250.5)).
 ///       G54は`values = {X=0, Y=180, Z=-250.5}` (ゲージ点をテーブル中心に置く
 ///       機械位置)、G55はストック上面中心 (`attach = "stock"`, `origin = [0,0,20]`).
 ///       ストックは40×30×40のboxで`origin = [0,0,20]` (下面がテーブル上面)

@@ -25,7 +25,7 @@ namespace {
 ///        直進軸では並進[mm]、回転軸では軸まわりの回転[rad]
 /// @return 軸1つ分の剛体変換 (4x4同次行列)
 igesio::Matrix4d JointTransform(const AxisInfo& axis, const double displacement) {
-    // ゼロポーズの場合は無変換
+    // 基準コンフィギュレーションの場合は無変換
     if (displacement == 0.0) return igesio::Matrix4d::Identity();
 
     if (axis.kind == AxisKind::kLinear) {
@@ -34,9 +34,9 @@ igesio::Matrix4d JointTransform(const AxisInfo& axis, const double displacement)
     return RotationAboutLine(axis.direction_world, axis.point_world, displacement);
 }
 
-/// @brief 軸の変位量数が稼働軸の数と一致することを確認する
+/// @brief 軸の変位量数が可動軸の数と一致することを確認する
 /// @param what 文言の前置に使う関数名
-/// @param expected 稼働軸の数
+/// @param expected 可動軸の数
 /// @param actual 与えられた軸の変位量の数
 /// @throw std::invalid_argument 一致しない場合
 void RequireJointCount(const char* what, const std::size_t expected,

@@ -53,7 +53,7 @@ struct ToolTrajectoryGroup {
     /// @note 現在の列と同じなら何もしない (形状リビジョンを更新しない)
     void SetPlacements(std::vector<igesio::Matrix4d> placements);
 
-    /// @brief ホルダ部の可視性を設定する
+    /// @brief ホルダ部の表示/非表示を切り替える
     /// @param visible 表示するなら`true`
     /// @note ホルダの無いグループでは何もしない
     void SetHolderVisible(bool visible);

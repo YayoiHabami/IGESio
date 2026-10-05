@@ -6,7 +6,7 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: MachiningSetup (BaseQ / Tools / WorkFrames / Models / Geometries /
  *       ToolOffsets / InitialWorkOffset / ResolveAttach)、MakeProjectDefinition
- *       - 正常系: 初期姿勢の重ね合わせ (σを含む)、簡易工具の解決とゲージ長、
+ *       - 正常系: 初期コンフィギュレーションの重ね合わせ (σを含む)、簡易工具の解決とゲージ長、
  *         ライブラリ参照工具のコールバック解決、輪郭形式工具の解決 (ホルダ上端の
  *         ゲージ長・`gauge_length`の優先・ホルダ無しの警告)、ワーク座標系の登録値形式
  *         (直進のみ・回転軸あり・`from = "machine"`) と幾何形式 (取り付け先・
@@ -16,7 +16,7 @@
  *       - 正常系 (退化): ワークオフセット・モデルが無い定義、メモリ上で組み立てた
  *         定義 (`MakeProjectDefinition`の機械定義ファイル版と仮想機械版.
  *         デフォルト値と機械定義の警告の転記)
- *       - 異常系: ワーク座標系の取り付け先が`work_mount`に至らない、チェーン外の
+ *       - 異常系: ワーク座標系の取り付け先が`work_mount`に至らない、連鎖外の
  *         `values`、取り付け先の不在・閉路、ペア規則の各違反,
  *         `MakeProjectDefinition`の機械定義ファイルの不在と仮想機械の不正な設定
  *       TODO: `MachineModel`構築失敗の`invalid_argument`は読込済みの定義では
@@ -69,7 +69,7 @@ using projects_test::Replace;
 /// @brief 数値比較の許容誤差
 constexpr double kTol = 1e-9;
 
-/// @brief 実例機の工具取り付け点の原点 (ゼロポーズ機械座標)
+/// @brief 実例機の工具取り付け点の原点 (基準機械座標)
 const Vector3d kToolOrigin(0.0, -180.0, 250.5);
 
 /// @brief 機械定義のTOML文字列を一時ディレクトリの`machine.toml`に書き出す
@@ -148,14 +148,14 @@ Matrix4d ExpectedRegisteredFrame(const mc::MachiningSetup& setup, const mc::NcVa
 
 
 /**
- * ---- 初期姿勢・工具 ----
+ * ---- 初期コンフィギュレーション・工具 ----
  */
 
 TEST(SetupTest, BaseQ_OverlaysInitialAxes) {
     const auto setup = MakeSetup(Replace(MinimalProject(), "Z = 100.0", "Z = 100.0\nA = 30.0"));
     const mc::MachineModel& model = setup.Model();
     ASSERT_EQ(setup.BaseQ().Size(), model.Axes().size());
-    // 工具側のZはσ=+1、ワーク側のAはσ=-1で軸変位量になる
+    // 工具側のZはσ=+1、工作物側のAはσ=-1で軸変位量になる
     EXPECT_NEAR(setup.BaseQ()[*model.FindAxis("Z")], 100.0, kTol);
     EXPECT_NEAR(setup.BaseQ()[*model.FindAxis("A")], -ToRadians(30.0), kTol);
     EXPECT_NEAR(setup.BaseQ()[*model.FindAxis("X")], 0.0, kTol);
@@ -242,7 +242,7 @@ TEST(SetupTest, Tools_ProfileResolvedWithHolderTopAsGaugeLine) {
     EXPECT_NEAR(tool.profile.Reach(), 80.0, kTol);
     EXPECT_NEAR(tool.profile.CuttingLength(), 10.0, kTol);
     EXPECT_NEAR(tool.profile.MaxRadius(mc::ToolPart::kCutter), 3.0, kTol);
-    // 制御点 (先端) は`tool_mount`フレームでゲージ長だけ下 (指令点は先端から3)
+    // 制御点 (先端) は工具取り付け部座標系でゲージ長だけ下 (指令点は先端から3)
     const Vector3d control = mc::ControlLocal(tool);
     EXPECT_NEAR(control.z(), 3.0 - 80.0, kTol);
 }
@@ -302,7 +302,7 @@ TEST(SetupTest, WorkFrame_RegisteredWithRotary) {
     const Matrix4d& w0 = setup.WorkFrames()[0].w0;
     const mc::NcValues values{{"C", ToRadians(90.0)}};
     EXPECT_TRUE(w0.isApprox(ExpectedRegisteredFrame(setup, values, true), kTol)) << w0;
-    // ワーク側σ=-1: C=90°の軸変位量は-90°なので、F_wm⁻¹の回転は+90°
+    // 工作物側σ=-1: C=90°の軸変位量は-90°なので、F_wm⁻¹の回転は+90°
     EXPECT_TRUE(mc::RotationPart(w0).isApprox(
             mc::RotationAboutAxis(Vector3d::UnitZ(), ToRadians(90.0)), kTol)) << w0;
     EXPECT_TRUE(mc::TranslationPart(w0).isApprox(
@@ -354,7 +354,7 @@ TEST(SetupTest, WorkFrame_ImplicitG54) {
     ASSERT_TRUE(setup.WorkFrames()[0].registered.has_value());
     EXPECT_TRUE(setup.WorkFrames()[0].registered->Empty());
     EXPECT_EQ(setup.InitialWorkOffset(), "G54");
-    // 全軸0 (初期姿勢のZ=100は工具側なのでp_fromに効く) のゲージ点がワーク原点
+    // 全軸0 (初期コンフィギュレーションのZ=100は工具側なのでp_fromに効く) のゲージ点がワーク原点
     const Matrix4d expected = ExpectedRegisteredFrame(setup, mc::NcValues{}, true);
     EXPECT_TRUE(setup.WorkFrames()[0].w0.isApprox(expected, kTol));
     EXPECT_TRUE(mc::TranslationPart(setup.WorkFrames()[0].w0).isApprox(kToolOrigin, kTol));

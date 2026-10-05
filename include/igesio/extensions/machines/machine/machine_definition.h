@@ -4,7 +4,7 @@
  * @author Yayoi Habami
  * @date 2026-09-08
  * @copyright 2026 Yayoi Habami
- * @note 機械定義フォーマットの記述内容を、ゼロポーズ機械座標系のまま格納する.
+ * @note 機械定義フォーマットの記述内容を、基準機械座標のまま格納する.
  *       読込時に単位換算を行うため、本構造体の値は全て内部単位 (mm, rad, s).
  *       回転数のみ例外とし、[min⁻¹] のまま保持する.
  *       順運動学・軸一覧等の派生情報は`MachineModel`が本構造体から構築する.
@@ -71,11 +71,12 @@ enum class ComponentType {
 
 /// @brief 逆運動学における回転角の解の選択方針
 /// @note 回転2軸を持つ機械では、与えられた工具軸方向を実現する回転軸の角度は一般に
-///       2つ存在する。コンポーネントの構造から定まる傾斜軸 (多くはAorB) の角度θは,
-///       軸構成から定まる基準角δを用いて`θI = δ ± Δ`の2通りの解がある.
-///       傾斜角が決まれば旋回角は一意に定まるため、解は`(θI, θR)`の2通りとなる.
-///       本方針はこの符号の選び方であり、`kPositive`は`+Δ`を、`kNegative`は`-Δ`を,
-///       `kContinuous`は前回の角度に近い方の符号を選ぶ.
+///       2つ存在する。コンポーネントの構造から定まる工具側回転軸の回転角θ_tは,
+///       軸構成から定まる基準角δを用いて`θ_t = δ ± Δ`の2通りの解がある.
+///       工具側回転軸の回転角が決まれば工作物側回転軸の回転角θ_wは一意に
+///       定まるため、解は`(θ_t, θ_w)`の2通りとなる. 本方針はこの符号の選び方であり、
+///       `kPositive`は`+Δ`を、`kNegative`は`-Δ`を、`kContinuous`は前回の角度に
+///       近い方の符号を選ぶ.
 /// @note TOMLの`[kinematics]`の`branch`キーに対応
 enum class BranchPolicy {
     /// @brief 常に+Δの側 (デフォルト)
@@ -105,7 +106,7 @@ std::optional<ComponentType> ParseComponentType(std::string_view text);
 /// @brief ComponentTypeを文字列 (TOMLで用いるもの) に変換する
 std::string_view ComponentTypeName(ComponentType type);
 
-/// @brief 逆運動学における傾斜角の解の選択方針の文字列をBranchPolicyに変換する
+/// @brief 逆運動学における工具側回転軸の回転角の解の選択方針をBranchPolicyに変換する
 /// @return 対応する方針. 未知の文字列なら`std::nullopt`
 std::optional<BranchPolicy> ParseBranchPolicy(std::string_view text);
 
@@ -139,14 +140,14 @@ struct AxisDynamics {
 /// @brief 直進軸/回転軸の定義
 /// @note `ComponentSpec::type`が`kLinear`または`kRotary`のコンポーネントで指定
 /// @note `direction`・`point`はコンポーネント座標系による表現であり,
-///       ゼロポーズ機械座標への写像 (`local_frame`の適用) は`MachineModel`が行う.
+///       基準機械座標への変換 (`local_frame`の適用) は`MachineModel`で行う.
 /// @note `limits`・`initial`・`wrap_start`は機械座標系における物理的な変位の
-///       範囲を規定するものではなく、NC指令値の上限/下限を規定するもの.
+///       範囲ではなく、NC指令値の上限/下限の定義.
 struct AxisSpec {
     /// @brief 軸名 (機械内で一意)
     /// @note NCでの指令において使用するもの、"X"や"A"等
     std::string register_name;
-    /// @brief ゼロポーズにおける軸方向 (コンポーネント座標・正規化済)
+    /// @brief 基準コンフィギュレーションにおける軸方向（コンポーネント座標・正規化済）
     /// @note 直進軸の場合は軸の正方向を、回転軸の場合は回転軸 (右ねじ) を表す
     igesio::Vector3d direction = igesio::Vector3d::UnitZ();
     /// @brief 回転軸を規定する、directionが通る1点 (kRotaryのみ. コンポーネント座標)
@@ -282,7 +283,7 @@ struct GeometrySpec {
 /// @brief コンポーネントの部分形状
 /// @note 1つのコンポーネントは複数の形状を持つことが可能であり、本構造体では
 ///       その部分形状に関する情報をまとめる.
-/// @note 機械部品座標系→ゼロポーズ機械座標系の同次変換は`C_c · T(origin) · R`であり,
+/// @note 機械部品座標系→基準機械座標の同次変換は`C_c · T(origin) · R`であり,
 ///       `MachiningSetup`で合成する (C_cは`ComponentSpec::local_frame`)
 /// @note TOMLの`[[component.geometry]]`に対応
 struct GeometryEntry {
@@ -297,7 +298,7 @@ struct GeometryEntry {
     bool visible = true;
 };
 
-/// @brief 運動学ツリーの1節点
+/// @brief 機械構造ツリーの1ノード
 /// @note TOMLの`[[component]]`に対応
 struct ComponentSpec {
     /// @brief 機械内で一意な識別名 (コンポーネントの名称)
@@ -308,18 +309,18 @@ struct ComponentSpec {
     /// @brief 種別
     ComponentType type = ComponentType::kFixed;
 
-    /// @brief コンポーネント座標系→ゼロポーズ機械座標系の同次変換C_c
+    /// @brief コンポーネント座標系→基準機械座標系の同次変換C_c
     /// @note このコンポーネント内の座標値の基準である、コンポーネント座標系の定義.
-    ///       単位行列の場合は、コンポーネント座標系とゼロポーズ機械座標系が一致する.
+    ///       単位行列の場合は、コンポーネント座標系と基準機械座標系が一致する.
     ///       axisやgeometryの座標値はこのコンポーネント座標系で表現される.
-    /// @note コンポーネント座標系の点pcとゼロポーズ機械座標系の点pm (同次座標) は
+    /// @note コンポーネント座標系の点pcと基準機械座標系の点pm（同次座標）は
     ///       `pm = C_c · pc`, `pc = C_c⁻¹ · pm`を満たす.
     igesio::Matrix4d local_frame = igesio::Matrix4d::Identity();
     /// @brief 可動軸 (typeがkLinear/kRotaryの場合のみ)
     std::optional<AxisSpec> axis;
-    /// @brief 取り付け先座標系→ゼロポーズ機械座標への剛体変換H (typeがkMountの場合のみ)
-    /// @note C_c (`::local_frame`) 適用済みの剛体変換行列であり,工具やワークの
-    ///       取り付け座標系上の点は、この行列のみを掛けてゼロポーズ機械座標に変換できる.
+    /// @brief 取り付け先座標系→基準機械座標系への剛体変換H（typeがkMountの場合のみ）
+    /// @note C_c（`::local_frame`）を合成した剛体変換行列であり、工具やワークの
+    ///       取り付け座標系上の点は、この行列のみを掛けて基準機械座標に変換できる.
     std::optional<igesio::Matrix4d> frame_placement;
     /// @brief 主軸の属性
     std::optional<SpindleSpec> spindle;

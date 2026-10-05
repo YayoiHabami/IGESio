@@ -167,7 +167,7 @@ struct ToolOffsetEntry {
 /// @brief ワークオフセット登録値形式の基準点
 /// @note TOMLの`[[work_offset]].from`に対応
 enum class WorkOffsetFrom {
-    /// @brief `tool_mount`フレーム原点 (工具軸とゲージラインの交点)
+    /// @brief 工具取り付け部座標系の原点（工具軸とゲージラインの交点）
     kToolMount,
     /// @brief 機械座標系原点
     kMachine,
@@ -182,7 +182,7 @@ std::optional<WorkOffsetFrom> ParseWorkOffsetFrom(std::string_view text);
 std::string_view WorkOffsetFromName(WorkOffsetFrom from);
 
 /// @brief ワークオフセットとそれが定めるワーク座標系
-/// @note TOMLの`[[work_offset]]`に対応. ワーク座標→ゼロポーズ機械座標の同次変換
+/// @note TOMLの`[[work_offset]]`に対応. ワーク座標→基準機械座標の同次変換
 ///       W_0の導出は`MachiningSetup`が行う
 struct WorkOffsetSpec {
     /// @brief 識別子
@@ -230,17 +230,17 @@ std::string_view ModelRoleName(ModelRole role);
 bool DefaultCollisionFor(ModelRole role);
 
 /// @brief ストック・治具・設計形状・表示用のモデル
-/// @note `GeometryEntry`と同様に、形状 (`GeometrySpec`) と、モデル座標系→取り付け先
-///       座標系の剛体変換、および役割を持つ. モデル座標は`geometry`自身の座標系を指し
-///       モデル名による取り付け先の指定 (attach) ではモデル名がこの座標系を指す.
-///       モデル座標→ゼロポーズ機械座標の同次変換 `A · T(origin) · R`は
-///       `MachiningSetup`が合成する (Aは取り付け先座標系→ゼロポーズ機械座標の同次変換)
+/// @note `GeometryEntry`と同様に、形状（`GeometrySpec`）と、モデル座標系→取り付け先
+///       座標系の剛体変換などを持つ. モデル座標は`geometry`自身の座標系を指し
+///       モデル名による取り付け先の指定（`attach`）ではモデル名がこの座標系を指す.
+///       モデル座標→基準機械座標の同次変換`A · T(origin) · R`は`MachiningSetup`側で
+///       合成する（Aは取り付け先座標系→基準機械座標の同次変換）
 /// @note TOMLの`[[model]]`に対応
 struct ModelSpec {
-    /// @brief 識別名 (取り付け先の名前として一意であること)
+    /// @brief 識別名（取り付け先の名前として一意であること）
     /// @note 同じテーブルの`name`キーを読むため`geometry.name`も同じ値
     std::string name;
-    /// @brief 役割
+    /// @brief モデルの役割（被削材か、治具か、等）
     ModelRole role = ModelRole::kStock;
     /// @brief 取り付け先
     /// @note 予約語・コンポーネント名・他のモデル名・ワークオフセットid
@@ -250,7 +250,7 @@ struct ModelSpec {
     /// @brief モデル座標→取り付け先座標系の剛体変換 (`T(origin) · R`)
     GeometricPlacement placement;
     /// @brief 干渉計算の対象か
-    /// @note 役割の既定 (`DefaultCollisionFor`) を適用した実効値
+    /// @note `role`の既定（`DefaultCollisionFor`）を適用した実効値
     bool collision = true;
     /// @brief 描画対象か
     /// @note `false`は干渉専用形状 (読み込んで機械座標には置くが、描画しない)

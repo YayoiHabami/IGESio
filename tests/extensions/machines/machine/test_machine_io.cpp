@@ -7,7 +7,7 @@
  * @note 対象: ReadMachineDefinition / ReadMachineDefinitionFromString
  *       (書き出し WriteMachineDefinition / WriteMachineDefinitionToString は
  *       `test_machine_writer.cpp`)
- *       - 正常系 (実例): `t-ZYX-b-AC-w.toml`のコンポーネント順・フレーム・軸・
+ *       - 正常系 (実例): `t-ZYX-b-AC-w.toml`のコンポーネント順・座標系・軸・
  *         干渉設定・形状・メタ情報、警告0件
  *       - 正常系 (単位): 既定単位で角度がradへ換算されること、inch・radで長さのみ
  *         換算されること、送り速度が毎分から毎秒へ換算されること、
@@ -18,7 +18,7 @@
  *         相対パスの解決
  *       - 正常系 (境界値): 単位ベクトルの許容誤差 (1e-3) の内側、initialがlimits端
  *       - 異常系: 仕様§5.1の各項目 (付録A) を代表1件ずつ、例外型と識別語で検証
- *       - 警告: minor版、可搬でないパス、右手系検査省略、両チェーン共通、exclude
+ *       - 警告: minor版、可搬でないパス、右手系検査省略、両連鎖共通、exclude
  *       - 入力: 構文誤りにsource_nameが含まれること、ファイル不在
  *       - 全角パス: 全角名のファイルの読込、相対/絶対パスの形状参照の解決,
  *         ファイル不在と構文誤りの例外の型と文言 (UTF-8のパス/ファイル名)
@@ -593,7 +593,7 @@ TEST(MachineReaderTest, Component_ThrowsDataFormatErrorWhenSpindleMisplaced) {
     const std::string two = MinimalXyzAc()
             + "\n[[component]]\nname = \"S2\"\ntype = \"spindle\"\nparent = \"Z\"\n";
     ExpectDataFormatError(two, "at most one spindle");
-    // ワーク側にspindle: Spindleをbase直下へ移すとToolも外れるので、A配下の別spindleを作る
+    // 工作物側連鎖にspindle: Spindleをbase直下へ移すとToolも外れるので、A配下の別spindleを作る
     const std::string work_side = Replace(
             Replace(MinimalXyzAc(), "name = \"Spindle\"\ntype = \"spindle\"\nparent = \"Z\"\n",
                     "name = \"Spindle\"\ntype = \"spindle\"\nparent = \"A\"\n"),
@@ -777,7 +777,7 @@ TEST(MachineReaderTest, Geometry_WarnsOnceForNonPortablePaths) {
               fs::path("D:/abs/b.stl").lexically_normal());
 }
 
-// ---- 異常系・警告: チェーン ----
+// ---- 異常系・警告: 連鎖 ----
 
 TEST(MachineReaderTest, Chain_ThrowsDataFormatErrorWhenLinearAxesDoNotSpan) {
     ExpectDataFormatError(Replace(MinimalXyzAc(), "direction = [0, 0, 1]\nlimits = [-90, 300]",
@@ -807,7 +807,7 @@ TEST(MachineReaderTest, Chain_ThrowsDataFormatErrorWhenThreeRotaryAxes) {
 }
 
 TEST(MachineReaderTest, Chain_AcceptsRotaryAxisCommonToBothChains) {
-    // 両チェーンの根元に回転軸Rを挟む. チェーン上の回転軸は計3本になるが、共通の
+    // 両連鎖のベース側に回転軸Rを挟む. 連鎖上の回転軸は計3本になるが、共通の
     // Rは相対運動で相殺されIK対象にならないため、上限 (2本) には数えない
     std::string toml = Replace(MinimalXyzAc(),
                                "name = \"A\"\ntype = \"rotary\"\nparent = \"base\"",
@@ -831,7 +831,7 @@ limits = [-90, 90]
 }
 
 TEST(MachineReaderTest, Chain_WarnsWhenComponentIsSharedByBothChains) {
-    // Aの親をXにすると、Xが両チェーンに共通になる
+    // Aの親をXにすると、Xが両連鎖に共通になる
     const auto def = ReadString(Replace(MinimalXyzAc(), "parent = \"base\"", "parent = \"X\""));
     ExpectSingleWarning(def, "common to both chains");
     EXPECT_NE(def.warnings[0].message.find("[X]"), std::string::npos);

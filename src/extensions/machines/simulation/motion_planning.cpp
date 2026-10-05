@@ -80,7 +80,7 @@ FindToolAxisParallelLinear(const MachineModel& model) {
 /// @param index レコードのインデックス
 /// @param line 行番号
 /// @return 直進軸に登録値を加え、工具軸に平行な直進軸には工具長補正
-///         (制御点の`tool_mount`フレーム座標のz成分の符号反転) も加えた指令
+///         (制御点の工具取り付け部座標のz成分の符号反転) も加えた指令
 /// @throw KinematicsError ワークオフセットが登録値形式でない場合
 NcValues RegisteredToMachine(const MachiningSetup& setup, PlannerState& state,
                              const NcValues& words, const std::size_t index,
@@ -159,10 +159,10 @@ NcValues PrepareDirectWords(const MachineModel& model, PlannerState& state,
     return prepared;
 }
 
-/// @brief 到達不能の通過点に直前の姿勢を設定する
-/// @param state 作業状態 (直前の姿勢)
+/// @brief 到達不能の通過点に直前のコンフィギュレーションを設定する
+/// @param state 作業状態 (直前のコンフィギュレーション)
 /// @param reason 到達不能の理由
-/// @param[in,out] result 解 (直前の姿勢、到達不能、警告を設定する)
+/// @param[in,out] result 解 (直前のコンフィギュレーション、到達不能、警告を設定する)
 void KeepPreviousPose(const PlannerState& state, const std::string& reason,
                       PoseResult& result) {
     result.q = state.prev_q;
@@ -173,7 +173,7 @@ void KeepPreviousPose(const PlannerState& state, const std::string& reason,
             "unreachable; the previous pose is kept: " + reason, 0});
 }
 
-/// @brief 位置IKを行い、到達不能なら直前の姿勢を返す
+/// @brief 位置IKを行い、到達不能なら直前のコンフィギュレーションを返す
 /// @param model 運動学モデル
 /// @param state 作業状態
 /// @param target 通過点 (制御点を持つ形式)
@@ -194,7 +194,7 @@ void SolvePositionOrKeep(const MachineModel& model, const PlannerState& state,
     }
 }
 
-/// @brief 現在の工具と工具長補正から制御点のゼロポーズ機械座標を計算する
+/// @brief 現在の工具と工具長補正から制御点の基準機械座標を計算する
 /// @param setup 加工セットアップ
 /// @param state 作業状態
 /// @param index レコードのインデックス (警告用)

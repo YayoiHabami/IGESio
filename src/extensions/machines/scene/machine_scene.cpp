@@ -70,7 +70,7 @@ void AddTriadLines(i_mod::Assembly& node, const double length) {
 /// @brief 制御点の工具座標を計算する
 /// @param spec 工具の定義
 /// @return 工具座標 (先端原点、+zが工具軸) での制御点
-/// @note `ControlLocal`は`tool_mount`フレーム座標を返すため、工具に固定した
+/// @note `ControlLocal`は工具取り付け部座標を返すため、工具に固定した
 ///       マーカーには工具座標に変換したものを用いる. G43は反映しない
 Vector3d ControlPointInToolFrame(const ToolAssemblySpec& spec) {
     const double z = spec.control_point == ControlPoint::kGauge
@@ -493,7 +493,7 @@ std::shared_ptr<i_mod::Assembly> MachineScene::FindNode(
 
 
 /**
- * ---- 姿勢と工具 ----
+ * ---- コンフィギュレーションと工具 ----
  */
 
 void MachineScene::ApplyPose(const JointVector& q) {
@@ -522,7 +522,7 @@ void MachineScene::SetActiveTool(const int number) {
 
 
 /**
- * ---- 可視性の切り替え ----
+ * ---- 表示/非表示の切り替え ----
  */
 
 void MachineScene::SetHolderVisible(const bool visible) {

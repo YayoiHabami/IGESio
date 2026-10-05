@@ -6,7 +6,7 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: MakeMachineClip
  *       - 正常系: 変換キーの間引き (動かないコンポーネントにトラックが無い、動く区間
- *         だけにキー)、工具ごとの可視性キー、イベント (`"tool"`/`"record"`/
+ *         だけにキー)、工具ごとの表示/非表示キー、イベント (`"tool"`/`"record"`/
  *         `"program"`)、`AnimationPlayer`への結び付けと再生の一致、後方への移動と
  *         停止での復元、総時間
  *       - 正常系 (境界値・退化): 同時刻のサンプル (所要時間0) の合流、末尾の
@@ -76,7 +76,7 @@ mc::ClGoto RapidTo(const double x, const double y) {
     return Goto(Vector3d(x, y, 200.0), std::nullopt, mc::MotionKind::kRapid);
 }
 
-/// @brief 工具1 → 2 → 工具なし → 工具表に無い3の順に動くプログラム
+/// @brief 工具1 → 2 → 工具なし → 未登録の工具番号3の順に動くプログラム
 /// @note 動作レコードのインデックスは1, 3, 5, 7. レコード4以降は`program_index = 1`
 mc::ClProgram ToolChangeProgram() {
     mc::ClProgram program = Program({
@@ -104,7 +104,7 @@ const anim::AnimationTrack* FindTrack(const anim::AnimationClip& clip,
     return nullptr;
 }
 
-/// @brief 対象のIDの可視性トラックのキーを (時刻, 可視性) の列にする
+/// @brief 対象のIDの表示/非表示トラックのキーを (時刻, 表示/非表示) の列にする
 std::vector<std::pair<double, bool>> VisibilityKeys(const anim::AnimationClip& clip,
                                                     const ObjectID& target) {
     std::vector<std::pair<double, bool>> keys;
@@ -134,7 +134,7 @@ ObjectID ComponentId(const mc::MachineScene& scene, const std::string& name) {
     return scene.ComponentAssembly(name)->GetID();
 }
 
-/// @brief クリップの生成前と結び付けの前に基準状態 (ゼロポーズ・初期工具) にする
+/// @brief クリップの生成前と結び付けの前に基準状態 (基準コンフィギュレーション・初期工具) にする
 void ResetToBase(mc::MachineScene& scene, const int initial_tool) {
     scene.ResetToZeroPose();
     scene.SetActiveTool(initial_tool);
@@ -215,7 +215,7 @@ TEST(AnimationBridgeTest, Visibility_PerTool) {
     EXPECT_NEAR(tool2[2].first, t5, kTol);
     EXPECT_FALSE(tool2[2].second);
 
-    // 工具表に無い番号は1回だけ警告する
+    // 未登録の工具番号は1回だけ警告する
     EXPECT_EQ(CountWarnings(warnings, "T3"), 1u);
 }
 
@@ -268,7 +268,7 @@ TEST(AnimationBridgeTest, Events_ToolRecordProgram) {
 TEST(AnimationBridgeTest, Duration_MatchesStats) {
     const mc::MachiningSetup setup = MakeSetup();
     BuiltScene built = MakeScene(setup);
-    // 末尾のドウェルは姿勢を変えないため変換キーは増えないが、総時間は延びる
+    // 末尾のドウェルはコンフィギュレーションを変えないため変換キーは増えないが、総時間は延びる
     const mc::ClProgram program = Program({
             mc::ClLoadTool{1}, RapidTo(0.0, 0.0), RapidTo(50.0, 0.0),
             mc::ClDwell{1.0}});
@@ -376,7 +376,7 @@ TEST(AnimationBridgeTest, Seek_BackwardRestoresTool) {
     EXPECT_TRUE(scene.ToolAssembly(1)->Display().visible);
     EXPECT_FALSE(scene.ToolAssembly(2)->Display().visible);
 
-    // 停止で基準状態 (初期工具・ゼロポーズ) に戻る
+    // 停止で基準状態 (初期工具・基準コンフィギュレーション) に戻る
     player.Seek(track.stats.duration_sec);
     player.Stop();
     EXPECT_TRUE(scene.ToolAssembly(1)->Display().visible);

@@ -51,7 +51,7 @@ struct PlannedTarget {
     double duration = 0.0;
     /// @brief 警告のインデックス (`MotionTrack::warnings`)
     std::optional<std::size_t> warning;
-    /// @brief 到達不能で直前の姿勢を保持したか
+    /// @brief 到達不能で直前のコンフィギュレーションを保持したか
     bool unreachable = false;
 };
 
@@ -80,10 +80,10 @@ void ValidateOptions(const MotionOptions& options) {
     }
 }
 
-/// @brief 制御点のゼロポーズ機械座標 (`work_mount`基準) を順運動学で計算する
+/// @brief 制御点の基準機械座標（`work_mount`基準）を順運動学で計算する
 /// @param model 運動学モデル
 /// @param q 全軸の軸変位量
-/// @param control_home 制御点のゼロポーズ機械座標 (`tool_mount`に固定)
+/// @param control_home 制御点の基準機械座標（`tool_mount`に固定）
 /// @return `F_wm(q)⁻¹ F_tm(q) c`. 位置IKの目標点と同じ座標系
 igesio::Vector3d ControlPointHome(const MachineModel& model, const JointVector& q,
                                   const igesio::Vector3d& control_home) {
@@ -128,7 +128,7 @@ std::optional<std::size_t> RecordTargetWarnings(
 
 /// @brief 区間の制御点の移動距離を計算する
 /// @param model 運動学モデル
-/// @param state 作業状態 (直前の姿勢)
+/// @param state 作業状態（直前のコンフィギュレーション）
 /// @param target 通過点
 /// @param nc_end 終点の全軸のNC指令値
 /// @return 制御点を持つ形式では制御点の移動距離、直接指令では直進軸の指令値の
@@ -151,7 +151,8 @@ double SegmentLength(const MachineModel& model, const detail::PlannerState& stat
 
 /// @brief 区間時間を計算する
 /// @param model 運動学モデル
-/// @param state 作業状態 (直前の姿勢. `fallback_feed`の情報を1件報告する)
+/// @param state 作業状態
+///        （直前のコンフィギュレーション。`fallback_feed`のinfoを1件報告する）
 /// @param target 通過点
 /// @param q_end 終点の軸変位量
 /// @param length 制御点の移動距離 [mm]
@@ -237,9 +238,9 @@ NcValues RotaryEndOf(const MachineModel& model, const detail::Target& target,
     return rotary;
 }
 
-/// @brief 1つの通過点の逆運動学と区間時間を計画する (第1段階の1ステップ)
+/// @brief 1つの通過点の逆運動学と区間時間を計画する（第1段階の1ステップ）
 /// @param setup 加工セットアップ
-/// @param state 作業状態 (直前の姿勢を更新する)
+/// @param state 作業状態（直前のコンフィギュレーションを更新する）
 /// @param target 通過点
 /// @param policy 回転角の解の選択方針
 /// @param overtravel 可動範囲外の扱い
@@ -281,7 +282,7 @@ std::size_t DivisionCount(const PlannedTarget& planned,
 /// @brief 総サンプリング点数を見積もる
 /// @param planned 計画した通過点の列
 /// @param fps サンプリングレート (補間しないなら`std::nullopt`)
-/// @return 初期姿勢のサンプリング点を含む総数
+/// @return 初期コンフィギュレーションのサンプリング点を含む総数
 std::size_t TotalSamples(const std::vector<PlannedTarget>& planned,
                          const std::optional<double> fps) {
     std::size_t total = 1;

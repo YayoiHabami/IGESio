@@ -333,9 +333,9 @@ bool IsAbsolutePathString(const std::string& raw);
 /// @param issues 絶対パスの集計先
 /// @param keep_unsupported 未対応形式 (STEP) も警告のうえ形状として返すか
 ///        (プロジェクト定義の`[[model]]`は書き戻しのため保持する)
-/// @return 形状と、その座標系→親フレームの剛体変換 (`origin`・回転キーは書かれたまま).
+/// @return 形状と、その座標系→親座標系の剛体変換（`origin`・回転キーは維持）.
 ///         未対応形式 (STEP) は警告して`std::nullopt`
-///         (`keep_unsupported`なら警告して形状を返す)
+///         （`keep_unsupported`なら警告して形状を返す）
 /// @throw igesio::DataFormatError 仕様違反
 std::optional<GeometryEntry>
 ReadGeometry(const TomlValue& geometry,

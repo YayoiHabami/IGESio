@@ -5,11 +5,13 @@
  * @date 2026-09-10
  * @copyright 2026 Yayoi Habami
  * @note 仕様の順運動学の式`F_c(q) = J_1(σ_1 q_1) ... J_n(σ_n q_n)`を評価する.
- *       ゼロポーズ (全軸の変位量が0) で全コンポーネントの位置姿勢は単位行列になる.
+ *       基準コンフィギュレーション（全軸の変位量がゼロ）のとき、全コンポーネントの
+ *       同次変換F_c(q)は単位行列になる.
  * @note 機械の軸の値の表現 (`JointVector`/`NcValues`) およびσの設定については
  *       `axis_values.h`を参照のこと.
  *       両者の相互変換は本ヘッダの`JointsFromNc`/`NcFromJoints`のみが行う.
- * @note いずれも`MachineModel`を読むだけの非メンバ関数で、姿勢は引数で渡す.
+ * @note いずれも`MachineModel`を読むだけの非メンバ関数で、コンフィギュレーションは
+ *       引数で渡す.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_MACHINE_FORWARD_KINEMATICS_H_
 #define IGESIO_EXTENSIONS_MACHINES_MACHINE_FORWARD_KINEMATICS_H_
@@ -21,7 +23,8 @@
 
 namespace igesio::extensions::machines {
 
-/// @brief 既定姿勢の軸変位量 (各軸の`initial`にσを掛けたもの)
+/// @brief デフォルトコンフィギュレーションの軸変位量
+///        （各軸の`initial`にσを掛けたもの）
 /// @param model 運動学モデル
 /// @return 全軸の変位量 (軸のインデックス順)
 JointVector InitialJoints(const MachineModel& model);
@@ -43,19 +46,19 @@ JointVector JointsFromNc(const MachineModel& model, const NcValues& nc,
 /// @throw std::invalid_argument `q`の長さが軸数と異なる場合
 NcValues NcFromJoints(const MachineModel& model, const JointVector& q);
 
-/// @brief 全コンポーネントの同次変換行列F_c(q)を計算する (順運動学)
+/// @brief 全コンポーネントの同次変換行列F_c(q)を計算する（順運動学）
 /// @param model 運動学モデル
 /// @param q 全軸の変位量
-/// @return 全コンポーネントの同次変換行列 (`MachineModel::Component()`の順)
-///         (ゼロポーズ機械座標系から、軸変位量qにおける機械座標系への剛体変換)
+/// @return 全コンポーネントの同次変換行列（`MachineModel::Component()`の順）
+///         （基準機械座標系から、軸変位量qにおける機械座標系への剛体変換）
 /// @throw std::invalid_argument `q`の長さが軸数と異なる場合
 std::vector<igesio::Matrix4d> Forward(const MachineModel& model, const JointVector& q);
 
-/// @brief 全コンポーネントの同次変換行列F_c(q)を計算する (順運動学)
+/// @brief 全コンポーネントの同次変換行列F_c(q)を計算する（順運動学）
 /// @param model 運動学モデル
 /// @param q 全軸の変位量
-/// @param[out] out 同次変換行列 (`model.ComponentCount()`にリサイズされる)
-///             (ゼロポーズ機械座標系から、軸変位量qにおける機械座標系への剛体変換)
+/// @param[out] out 同次変換行列（`model.ComponentCount()`にリサイズされる）
+///             （基準機械座標系から、軸変位量qにおける機械座標系への剛体変換）
 /// @throw std::invalid_argument `q`の長さが軸数と異なる,
 ///        または`out`が`nullptr`の場合
 /// @note 出力引数版. 毎フレーム呼ぶ際に再確保を避けるために使用する

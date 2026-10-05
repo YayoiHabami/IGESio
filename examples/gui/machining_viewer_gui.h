@@ -78,9 +78,9 @@ enum class LeftTab {
 
 /// @brief 右パネルのタブ
 enum class RightTab {
-    /// @brief 運動学ツリーとジョグ
+    /// @brief 機械構造ツリーとジョグ
     kMachine,
-    /// @brief 工具表
+    /// @brief 登録工具
     kTools,
     /// @brief 表示の切り替え
     kDisplay,
@@ -212,7 +212,7 @@ struct ClTargetUi {
     std::string result;
 };
 
-/// @brief Displayタブの可視性 (両ビューに効く`MachineScene`の可視性)
+/// @brief Displayタブの表示/非表示 (両ビューに効く`MachineScene`の表示/非表示)
 struct DisplayFlags {
     /// @brief 経路線
     bool paths = false;
@@ -220,13 +220,13 @@ struct DisplayFlags {
     bool rapid_paths = false;
     /// @brief 動作軌跡 (機械座標)
     bool trace_machine = false;
-    /// @brief 動作軌跡 (`work_mount`座標)
+    /// @brief 動作軌跡（ワーク取り付け部座標）
     bool trace_work = false;
     /// @brief 現在レコードの強調
     bool current_record = true;
     /// @brief ワーク座標系の3軸
     bool work_frames = true;
-    /// @brief 機械座標系と取り付けフレームの3軸
+    /// @brief 機械座標系と取り付け部座標系の3軸
     bool triads = false;
     /// @brief 工具軸線と制御点マーカー
     bool tool_axis = false;
@@ -366,23 +366,23 @@ class MachiningViewerGUI {
      * ジョグ、工具、表示 (段10-c)
      */
 
-    /// @brief ジョグの姿勢を設定してシーンに適用する
+    /// @brief ジョグのコンフィギュレーションを設定してシーンに適用する
     /// @param q 全軸の軸変位量
     void SetJogPose(const extensions::machines::JointVector& q);
-    /// @brief 表示する姿勢を取得する (バインド中は現在時刻のサンプル、それ以外は
-    ///        ジョグの姿勢)
+    /// @brief 表示するコンフィギュレーションを取得する（バインド中は現在時刻の
+    ///        サンプル、それ以外はジョグのコンフィギュレーション）
     extensions::machines::JointVector DisplayedPose() const;
-    /// @brief 運動学ツリーのコンポーネントを選択し、その形状を両ビューで強調する
+    /// @brief 機械構造ツリーのコンポーネントを選択し、その形状を両ビューで強調する
     /// @param index コンポーネントのインデックス
     void SelectComponent(std::size_t index);
-    /// @brief Targetの入力から姿勢を求めて適用する
+    /// @brief Targetの入力からコンフィギュレーションを求めて適用する
     void SolveTarget();
-    /// @brief 可視性をシーンに適用し直す (読込と動作生成の後)
+    /// @brief 表示/非表示をシーンに適用し直す (読込と動作生成の後)
     void ApplyDisplayFlags();
-    /// @brief 現在レコードの強調の可視性を設定する
+    /// @brief 現在レコードの強調の表示/非表示を設定する
     /// @param visible 表示するなら`true` (バインド中は現在レコードで更新し直す)
     void SetCurrentRecordVisible(bool visible);
-    /// @brief 工具軌跡の区間単位の可視性をUI値から適用する
+    /// @brief 工具軌跡の区間単位の表示/非表示をUI値から適用する
     void ApplyTrajectoryVisibility();
     /// @brief 工具軌跡を生成の設定で作り直す
     void RebuildTrajectory();
@@ -485,14 +485,14 @@ class MachiningViewerGUI {
     void RenderSourceLines(const SourceFile& file, int current_line);
     /// @brief Machineタブを描画する
     void RenderMachineTab();
-    /// @brief 運動学ツリーを描画する
+    /// @brief 機械構造ツリーを描画する
     void RenderKinematicTree();
-    /// @brief 運動学ツリーの1コンポーネント (と子) を描画する
+    /// @brief 機械構造ツリーの1コンポーネント（と子要素）を描画する
     /// @param index コンポーネントのインデックス
     void RenderKinematicNode(std::size_t index);
-    /// @brief ジョグ (軸ごとのスライダと姿勢のボタン) を描画する
+    /// @brief ジョグ（軸ごとのスライダとコンフィギュレーションのボタン）を描画する
     void RenderJog();
-    /// @brief Target節 (制御点と工具軸方向からの姿勢) を描画する
+    /// @brief Target節（制御点と工具軸方向からのコンフィギュレーション）を描画する
     void RenderTarget();
     /// @brief Toolsタブを描画する
     void RenderToolsTab();
@@ -501,7 +501,7 @@ class MachiningViewerGUI {
     void RenderToolDetails(const extensions::machines::ToolAssemblySpec& spec);
     /// @brief Displayタブを描画する
     void RenderDisplayTab();
-    /// @brief Displayタブの可視性を描画する
+    /// @brief Displayタブの表示状態を描画する
     void RenderSharedDisplayFlags();
     /// @brief Displayタブのビューごとの設定を描画する
     void RenderViewSettings();
@@ -596,7 +596,7 @@ class MachiningViewerGUI {
     extensions::machines::MotionTraceOptions trace_options_;
     /// @brief 工具軌跡の生成の設定
     extensions::machines::ToolTrajectoryOptions trajectory_options_;
-    /// @brief 工具軌跡の区間単位の可視性 (`always_visible_run`は現在の区間)
+    /// @brief 工具軌跡の区間単位の表示/非表示 (`always_visible_run`は現在の区間)
     extensions::machines::TrajectoryVisibility trajectory_visibility_;
     /// @brief 前フレームの`"record"`イベントの値
     std::optional<std::int64_t> last_record_;
@@ -616,13 +616,14 @@ class MachiningViewerGUI {
     bool loop_ui_ = false;
     /// @brief Sourceタブで現在行に追従するか
     bool follow_source_ = true;
-    /// @brief ジョグの姿勢 (全軸の軸変位量. 読込済みで未バインドのとき有効)
+    /// @brief ジョグのコンフィギュレーション
+    /// @note 全軸の軸変位量. 読込済みかつ未バインドのとき有効
     extensions::machines::JointVector jog_q_;
-    /// @brief 運動学ツリーで選択したコンポーネント
+    /// @brief 機械構造ツリーで選択したコンポーネント
     std::optional<std::size_t> selected_component_;
     /// @brief Target節のUI値
     ClTargetUi target_ui_;
-    /// @brief 可視性
+    /// @brief 表示/非表示
     DisplayFlags display_flags_;
     /// @brief 工具軌跡の区間の限定 (0: 全区間、1〜: 区間番号+1)
     int trajectory_only_run_ui_ = 0;

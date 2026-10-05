@@ -13,7 +13,7 @@
  *         inch/rad宣言) の往復、輪郭形式工具 (TOML文字列) の往復、仮想機械の指定
  *         (TOML文字列、`MakeProjectDefinition`で作った定義) の往復
  *       - 正常系 (出力形式): 常に書くセクション、単位の差し替え出力、`file`/`library`の
- *         復元と相対化、仮想機械のキー (既定値の省略、`tilt_limit`の宣言単位),
+ *         復元と相対化、仮想機械のキー (既定値の省略、`tool_side_limit`の宣言単位),
  *         軸値の宣言単位、既定値の省略 (輪郭形式の直線の`type`を含む)、
  *         `retained`の末尾配置、日時リテラル
  *       - 異常系: 機械に無い軸名・`raw`空のライブラリ参照・ライブラリ参照の
@@ -108,7 +108,8 @@ void ExpectSameMachineSource(
     EXPECT_EQ(spec.kind, other.kind);
     EXPECT_EQ(spec.options.name, other.options.name);
     EXPECT_EQ(spec.options.branch, other.options.branch);
-    ExpectSameOptional(spec.options.tilt_limit_rad, other.options.tilt_limit_rad);
+    ExpectSameOptional(spec.options.tool_side_limit_rad,
+                       other.options.tool_side_limit_rad);
 }
 
 /// @brief 輪郭形式の工具の一致を検証する (部位要素・セグメント・色・指令点)
@@ -597,7 +598,7 @@ TEST(ProjectWriterTest, RoundTrip_VirtualMachine) {
     const auto original = ReadProjectText(Replace(
             MinimalProject(), "library = \"t-ZYX-b-AC-w.toml\"",
             "virtual = \"table_ac\"\nname = \"cam\"\nbranch = \"positive\"\n"
-            "tilt_limit = 120.0"));
+            "tool_side_limit = 120.0"));
     const auto restored = RoundTrip(original, kProjectsDir);
     EXPECT_TRUE(restored.warnings.empty());
     ExpectSameProject(original, restored);
@@ -609,7 +610,7 @@ TEST(ProjectWriterTest, RoundTrip_VirtualMachineFromCpp) {
     // `MakeProjectDefinition`で仮想機械から作った定義を書き出せる
     mc::VirtualMachineSpec spec;
     spec.kind = mc::VirtualMachineKind::kHeadBc;
-    spec.options.tilt_limit_rad = ToRadians(100.0);
+    spec.options.tool_side_limit_rad = ToRadians(100.0);
     mc::ProjectDefinition original = mc::MakeProjectDefinition(spec, "virtual-project");
     original.source_dir = kProjectsDir;
     const auto restored = RoundTrip(original, kProjectsDir);
@@ -667,25 +668,25 @@ TEST(ProjectWriterTest, Machine_VirtualKeysAndDefaultsOmitted) {
     auto project = ReadProjectText(Replace(MinimalProject(),
                                            "library = \"t-ZYX-b-AC-w.toml\"",
                                            "virtual = \"head_bc\""));
-    // 既定と一致する`name`/`branch`と、値の無い`tilt_limit`は書かない
+    // 既定と一致する`name`/`branch`と、値の無い`tool_side_limit`は書かない
     const std::string text = mc::WriteProjectToString(project, kProjectsDir);
     EXPECT_TRUE(Contains(text, "[machine]\nvirtual = \"head_bc\"\n")) << text;
     EXPECT_FALSE(Contains(text, "name = \"virtual\"")) << text;
-    EXPECT_FALSE(Contains(text, "tilt_limit")) << text;
+    EXPECT_FALSE(Contains(text, "tool_side_limit")) << text;
     EXPECT_FALSE(Contains(text, "branch")) << text;
 
-    // `tilt_limit`は宣言単位で書く (rad宣言では換算しない)
+    // `tool_side_limit`は宣言単位で書く (rad宣言では換算しない)
     auto& spec = std::get<mc::VirtualMachineSpec>(project.machine_source);
-    spec.options.tilt_limit_rad = ToRadians(90.0);
+    spec.options.tool_side_limit_rad = ToRadians(90.0);
     spec.options.branch = mc::BranchPolicy::kPositive;
     const std::string deg = mc::WriteProjectToString(project, kProjectsDir);
     EXPECT_TRUE(Contains(deg, "virtual = \"head_bc\"\nbranch = \"positive\"\n"
-                              "tilt_limit = 90.0")) << deg;
+                              "tool_side_limit = 90.0")) << deg;
     project.units = mc::MakeUnitScales(mc::LengthUnit::kMillimeter,
                                        mc::AngleUnit::kRadian);
-    spec.options.tilt_limit_rad = 1.5;
+    spec.options.tool_side_limit_rad = 1.5;
     const std::string rad = mc::WriteProjectToString(project, kProjectsDir);
-    EXPECT_TRUE(Contains(rad, "tilt_limit = 1.5")) << rad;
+    EXPECT_TRUE(Contains(rad, "tool_side_limit = 1.5")) << rad;
 }
 
 TEST(ProjectWriterTest, AxisTables_DeclaredUnits) {

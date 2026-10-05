@@ -173,8 +173,8 @@ void PutPrimitive(TomlValue& table,
                   const PrimitiveSpec& primitive, double length_scale);
 
 /// @brief `[[component.geometry]]`相当のテーブルを書き出す
-/// @param entry 形状と、その座標系→親フレームの剛体変換
-///        (`origin`・`rotation`は保持している値をそのまま書く)
+/// @param entry 形状と、その座標系→親座標系の剛体変換
+///        （`origin`・`rotation`は保持している値をそのまま書く）
 /// @param context 例外の文言に用いる読込箇所
 /// @param ctx TOML出力に関する設定
 /// @param default_collision `collision`の既定値 (一致した場合は省略)

@@ -1,27 +1,30 @@
 /**
  * @file extensions/machines/machine/inverse_kinematics.h
- * @brief 逆運動学 (姿勢IK・位置IK・回転角候補からの選択・自己検証)
+ * @brief 逆運動学（姿勢IK・位置IK・回転角候補からの選択・自己検証）
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
- * @note 工具軸方向から回転軸のNC指令値を解く姿勢IKと、回転軸の計算結果を用いて直進軸のNC指令値を
- *       解く位置IKを提供する. `MachineModel`のIK対象軸 (`AxisInfo::IsIkTarget()`)
- *       のみで、以下を満たさない構成では`igesio::NotImplementedError`を投げる.
- *       (i) 回転軸は0〜2本
+ * @note 工具軸方向から回転軸のNC指令値を解く姿勢IKと、回転軸の計算結果を用いて
+ *       直進軸のNC指令値を求める位置IKの関数を定義する. `MachineModel`のIK対象軸
+ *       （`AxisInfo::IsIkTarget()`）のみで、以下を満たさない構成では
+ *       `igesio::NotImplementedError`を投げる.
+ *       (i) 回転軸は0〜2本,
  *       (ii) 直進軸はちょうど3本
- * @note 入力の座標系はすべてゼロポーズ機械座標である. ワーク座標系で与えられた
- *       工具軸ベクトル・目標点は、呼び出し側がワーク座標系→ゼロポーズ機械座標系の
- *       同次変換W_0で写してから渡す. 制御点`control_local`も`tool_mount`
- *       コンポーネントに固定したゼロポーズ機械座標 (現在姿勢では`F_tm(q)`で移る)
- *       であり、`tool_mount`フレーム座標cは取り付けフレームの剛体変換H_tm
- *       (`MountPlacement(kToolMount)`) を掛けてから渡すこと.
- * @note 警告 (`Diagnostic`) の`context`は種別を表す. 可動範囲外・ストローク外は
- *       `"limits"`、特異姿勢・傾斜角不定は`"singular"`. 動作生成はこれで
- *       可動範囲外の警告を識別し、レコード番号等の発生箇所は呼び出し側が付け直すこと.
- * @note 特異姿勢 (工具軸方向が旋回軸と平行で旋回角が不定) では、旋回角を
- *       `BranchPolicy::kContinuous`なら直前の指令値 (無ければ0) にして診断を
- *       追加せず、`kPositive`/`kNegative`なら0にして`Severity::kInfo`の情報を
- *       追加する. 傾斜角不定 (`"singular"`) は構成の問題であるため警告のまま.
+ * @note 入力の座標系はすべて基準機械座標である. ワーク座標系で与えられた
+ *       工具軸ベクトル・目標点は、呼び出し側がワーク座標系→基準機械座標の
+ *       同次変換W_0で変換してから渡す. 制御点`control_local`も`tool_mount`
+ *       コンポーネントに固定した基準機械座標（現在のコンフィギュレーションでは
+ *       `F_tm(q)`で変換可能）であり、工具取り付け部の座標cは取り付け部座標系の
+ *       剛体変換H_tm（`MountPlacement(kToolMount)`）を掛けてから渡すこと.
+ * @note 警告（`Diagnostic`）の`context`はその区分. 可動範囲外・ストローク外は
+ *       `"limits"`、特異コンフィギュレーション・工具側回転軸の回転角が不定の場合は
+ *       `"singular"`. 動作生成時は`context`で可動範囲外の警告かを識別し,
+ *       レコード番号等の発生箇所は呼び出し側が付け直すこと.
+ * @note 特異コンフィギュレーション（工具軸方向が工作物側回転軸と平行で工作物側回転軸の
+ *       回転角が不定）では、工作物側回転軸の回転角を`BranchPolicy::kContinuous`なら
+ *       直前の指令値（無ければ0）にして診断内容を追加せず、`kPositive`/`kNegative`
+ *       なら0にして`Severity::kInfo`の情報を追加する. 工具側回転軸の回転角が不定
+ *       （`"singular"`）の場合は構成の問題であるため警告のまま.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_MACHINE_INVERSE_KINEMATICS_H_
 #define IGESIO_EXTENSIONS_MACHINES_MACHINE_INVERSE_KINEMATICS_H_
@@ -54,61 +57,63 @@ struct IkSolution {
     /// @note `base_q`を取らない`SolveOrientation`では`std::nullopt`.
     ///       指令値から再度求める場合は`JointsFromNc`を用いる
     std::optional<JointVector> q;
-    /// @brief 特異姿勢 (旋回角が不定) か
-    /// @note 旋回角は`BranchPolicy::kContinuous`なら直前の指令値、それ以外は0.
-    ///       回転軸を解かない`SolvePosition`では常に`false`
+    /// @brief 特異コンフィギュレーション（工作物側回転軸の回転角が不定）か
+    /// @note 工作物側回転軸の回転角は`BranchPolicy::kContinuous`なら直前の指令値,
+    ///       それ以外は0. 回転軸を計算しない`SolvePosition`では常に`false`
     bool singular = false;
     /// @brief 順運動学による解の自己検証の誤差
     /// @note 検証を行わない`SolveOrientation`/`SolvePosition`では`std::nullopt`
     std::optional<SolutionError> error;
-    /// @brief 警告 (可動範囲外、特異姿勢、傾斜角不定、ストローク外)
+    /// @brief 警告
+    /// @note 可動範囲外、特異コンフィギュレーション、工具側回転軸の回転角が不定,
+    ///       ストローク外
     /// @note `Solve`では姿勢IK→位置IKの順に並ぶ
     std::vector<Diagnostic> warnings;
 };
 
-/// @brief 工具軸方向を実現する回転軸の指令値を計算する (姿勢IK)
+/// @brief 工具軸方向を実現する回転軸の指令値を計算する（姿勢IK）
 /// @param model 運動学モデル
-/// @param tool_axis_home 目標の工具軸方向 (ゼロポーズ機械座標. 内部で正規化する)
-/// @param prev_nc 直前の指令値 (`BranchPolicy::kContinuous`での符号決定と特異姿勢の
-///        旋回角に用いる. 符号決定では該当軸が無ければ0として比較し、両軸とも無ければ
-///        `kPositive`と同じとする)
-/// @param policy 回転角の解の選択方針 (通常は`model.Definition().branch`)
-/// @return 解 (回転軸の指令値`nc`と警告. `q`・`error`は設定しない).
+/// @param tool_axis_home 目標の工具軸方向（基準機械座標. 内部で正規化する）
+/// @param prev_nc 直前の指令値
+/// @param policy 回転角の解の選択方針（通常は`model.Definition().branch`）
+/// @return 解（回転軸の指令値`nc`と警告. `q`・`error`は設定しない）.
 ///         回転軸が無ければ`policy`・`prev_nc`は使わない
 /// @throw std::invalid_argument `tool_axis_home`がゼロベクトルの場合
 /// @throw igesio::NotImplementedError IK対象の回転軸が3本以上の場合
 /// @throw KinematicsError 到達不能な工具姿勢の場合
+/// @note `prev_nc`は`BranchPolicy::kContinuous`での符号決定と,
+///       特異コンフィギュレーションの工作物側回転軸の回転角の計算に用いる.
+///       符号決定の際は該当の軸が無ければ0として比較し、両軸とも無ければ
+///       `kPositive`と同じとする
 IkSolution SolveOrientation(const MachineModel& model,
                             const igesio::Vector3d& tool_axis_home,
                             const NcValues& prev_nc, BranchPolicy policy);
 
-/// @brief 回転軸の計算結果を用いて、制御点を目標点に一致させる直進軸の指令値を計算する (位置IK)
+/// @brief 制御点を目標点に一致させる直進軸の指令値を計算する（位置IK）
 /// @param model 運動学モデル
-/// @param target_home 目標点 (ゼロポーズ機械座標)
-/// @param control_local 制御点のゼロポーズ機械座標 (`tool_mount`に固定. H_tm適用済)
+/// @param target_home 目標点（基準機械座標）
+/// @param control_local 制御点の基準機械座標（`tool_mount`に固定. H_tm適用済）
 /// @param rotary_nc 回転軸の指令値
 ///        (`SolveOrientation`の`nc`、またはNCでの回転軸指令値)
-/// @param base_q 全軸の変位量の基準 (チェーン外の軸・未指定の軸の値に用いる)
-/// @return 解 (直進3軸の指令値`nc`、`base_q`に回転軸と直進軸の変位量を重ねた`q`、警告.
-///         `error`は設定しない)
+/// @param base_q 全軸の変位量の基準（連鎖外の軸・未指定の軸の値に用いる）
+/// @return 解. 直進3軸の指令値`nc`と`base_q`に回転軸と直進軸の変位量を重ねた`q`,
+///         警告のみ. `error`は設定しない
 /// @throw std::invalid_argument `base_q`の長さが軸数と異なる,
 ///        または`rotary_nc`に未知の軸名が含まれる場合
 /// @throw igesio::NotImplementedError IK対象の直進軸が計3本でない場合
-/// @throw KinematicsError 方程式が退化している (rank < 3) 場合
+/// @throw KinematicsError 方程式が退化している（rank < 3）場合
 IkSolution SolvePosition(const MachineModel& model,
                          const igesio::Vector3d& target_home,
                          const igesio::Vector3d& control_local,
                          const NcValues& rotary_nc, const JointVector& base_q);
 
-/// @brief 工具軸方向と制御点を同時に満たす軸の指令値を計算する (姿勢IK→位置IK)
+/// @brief 工具軸方向と制御点をもとに軸の指令値を計算する（姿勢IK→位置IK）
 /// @param model 運動学モデル
-/// @param tool_axis_home 目標の工具軸方向 (ゼロポーズ機械座標)
-/// @param target_home 目標点 (ゼロポーズ機械座標)
-/// @param control_local 制御点のゼロポーズ機械座標 (`tool_mount`に固定. H_tm適用済)
+/// @param tool_axis_home 目標の工具軸方向（基準機械座標）
+/// @param target_home 目標点（基準機械座標）
+/// @param control_local 制御点の基準機械座標（`tool_mount`に固定. H_tm適用済）
 /// @param base_q 全軸の変位量の基準
-/// @param prev_nc 直前の指令値 (`BranchPolicy::kContinuous`での符号決定と特異姿勢の
-///        旋回角に用いる. 符号決定では該当軸が無ければ0として比較し、両軸とも無ければ
-///        `kPositive`と同じとする)
+/// @param prev_nc 直前の指令値
 /// @param policy 回転角の解の選択方針 (通常は`model.Definition().branch`)
 /// @return 解 (全フィールドを設定する). `q`は`base_q`のコピーに回転軸・直進軸の
 ///         変位量を書き込んだもの、`error`は`CheckSolution`の結果
@@ -117,7 +122,11 @@ IkSolution SolvePosition(const MachineModel& model,
 /// @throw igesio::NotImplementedError IK対象の回転軸が3本以上,
 ///        または直進軸の数が3つではない場合
 /// @throw KinematicsError 到達不能な工具姿勢の場合,
-///        または方程式が退化している (rank < 3) 場合
+///        または方程式が退化している（rank < 3）場合
+/// @note `prev_nc`は`BranchPolicy::kContinuous`での符号決定と
+///        特異コンフィギュレーションの工作物側回転軸の回転角に用いる.
+///        符号決定では該当の軸が無ければ0として比較し、両軸とも無ければ
+///        `kPositive`と同じとする
 IkSolution Solve(const MachineModel& model, const igesio::Vector3d& tool_axis_home,
                  const igesio::Vector3d& target_home,
                  const igesio::Vector3d& control_local, const JointVector& base_q,
@@ -126,14 +135,14 @@ IkSolution Solve(const MachineModel& model, const igesio::Vector3d& tool_axis_ho
 /// @brief 順運動学で解を検証する
 /// @param model 運動学モデル
 /// @param q 全軸の変位量
-/// @param tool_axis_home 目標の工具軸方向 (ゼロポーズ機械座標)
-/// @param target_home 目標点 (ゼロポーズ機械座標)
-/// @param control_local 制御点のゼロポーズ機械座標 (`tool_mount`に固定. H_tm適用済)
-/// @return 現在姿勢で以下の誤差を返す：
+/// @param tool_axis_home 目標の工具軸方向（基準機械座標）
+/// @param target_home 目標点（基準機械座標）
+/// @param control_local 制御点の基準機械座標（`tool_mount`に固定. H_tm適用済）
+/// @return 現在のコンフィギュレーションで以下の誤差を返す：
 ///         工具軸 F[tm].R·z_tool とワークに固定された目標方向F[wm].R·t のなす角,
 ///         および制御点 F[tm]·x_control と目標点 F[wm]·x_target の距離.
-///         (F[tm]はゼロポーズ機械座標系からtool_mountのへの剛体変換行列,
-///         F[wm]はゼロポーズ機械座標系からwork_mountのへの剛体変換行列)
+///         （F[tm]は基準機械座標からtool_mountへの剛体変換行列,
+///         F[wm]は基準機械座標からwork_mountへの剛体変換行列）
 /// @throw std::invalid_argument `q`の長さが軸数と異なる,
 ///        または`tool_axis_home`がゼロベクトルの場合
 SolutionError CheckSolution(const MachineModel& model, const JointVector& q,

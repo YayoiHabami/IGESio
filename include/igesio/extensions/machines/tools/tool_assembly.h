@@ -4,11 +4,10 @@
  * @author Yayoi Habami
  * @date 2026-09-11
  * @copyright 2026 Yayoi Habami
- * @note 工具座標系 (原点=先端、軸=+z) と工具取り付け点 (`tool_mount`) の
- *       フレームの関係は、先端からゲージラインまでの距離 (`ToolProfile::GaugeLength`)
- *       で定める. 取り付けフレームの原点はゲージラインと工具軸の交点であり,
- *       工具座標の点は`ToolMountOffset` = T(0, 0, -GaugeLength) で
- *       取り付けフレームに移す.
+ * @note 工具座標系（原点=先端、軸=+z）と工具取り付け部座標系（`tool_mount`）の関係は,
+ *       先端からゲージラインまでの距離（`ToolProfile::GaugeLength`）で定める.
+ *       取り付け部座標系の原点はゲージラインと工具軸の交点であり、工具座標の点は
+ *       `ToolMountOffset` = T(0, 0, -GaugeLength) で取り付け部座標系に移す.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_TOOLS_TOOL_ASSEMBLY_H_
 #define IGESIO_EXTENSIONS_MACHINES_TOOLS_TOOL_ASSEMBLY_H_
@@ -30,10 +29,10 @@ constexpr int kNoTool = 0;
 
 /// @brief 位置IKで目標点に一致させる制御点
 enum class ControlPoint {
-    /// @brief 工具の指令点 (`ToolProfile::command_point_z`)
+    /// @brief 工具の指令点（`ToolProfile::command_point_z`）
     /// @note G43は無視する.
     kTip,
-    /// @brief ゲージラインの位置 (取り付けフレームの原点)
+    /// @brief ゲージラインの位置（取り付け部座標系の原点）
     /// @note G43有効時は工具長補正を加える.
     kGauge,
 };
@@ -62,18 +61,18 @@ struct ToolAssemblySpec {
     ControlPoint control_point = ControlPoint::kTip;
 };
 
-/// @brief 制御点の`tool_mount`フレーム座標 (位置IKの`control_local`) を計算する
+/// @brief 制御点の工具取り付け部座標（位置IKの`control_local`）を計算する
 /// @param spec 工具アセンブリ定義
 /// @param g43_length G43で有効な工具長補正量 [mm] (無効なら`std::nullopt`)
 /// @return `kGauge`: (0, 0, 0)、G43有効時は (0, 0, -g43_length).
 ///         `kTip`: (0, 0, command_point_z - GaugeLength) (G43は無視する)
-/// @note 座標系は先端を原点とする工具座標ではなく、取り付け点 (`tool_mount`) の
-///       座標系. `SolvePosition`の`control_local` (ゼロポーズ機械座標) にするには
-///       取り付けフレームの剛体変換 (`MountPlacement(kToolMount)`) を掛けること.
+/// @note 座標系は先端を原点とする工具座標ではなく、取り付け点（`tool_mount`）の
+///       座標系. `SolvePosition`の`control_local`（基準機械座標）にするには
+///       取り付け部座標系の剛体変換（`MountPlacement(kToolMount)`）を掛けること.
 igesio::Vector3d ControlLocal(const ToolAssemblySpec& spec,
                               std::optional<double> g43_length = std::nullopt);
 
-/// @brief 工具先端を原点とする工具座標系から、`tool_mount`フレームへの変換を返す
+/// @brief 工具先端を原点とする工具座標系から、工具取り付け部座標系への変換を返す
 /// @return T(0, 0, -GaugeLength).
 ///         シーン構築時に工具・ホルダアセンブリの最上位に設定すること.
 igesio::Matrix4d ToolMountOffset(const ToolAssemblySpec& spec);

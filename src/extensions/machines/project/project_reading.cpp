@@ -310,7 +310,7 @@ void ReadProjectMeta(const TomlValue& root, ProjectDefinition& project) {
 /// @param ctx 読込全体で共有する内容
 /// @return 仮想機械の種類と設定. 省略したキーは`VirtualMachineOptions`の既定値
 /// @throw igesio::DataFormatError `file`/`library`と同時に指定された、未知の種類,
-///        `name`が空、未知の`branch`、または`tilt_limit`が正でない場合
+///        `name`が空、未知の`branch`、または`tool_side_limit`が正でない場合
 VirtualMachineSpec ReadVirtualMachineSpec(const TomlValue& table,
                                           const ReadContext& ctx) {
     const std::string context = "[machine]";
@@ -341,9 +341,10 @@ VirtualMachineSpec ReadVirtualMachineSpec(const TomlValue& table,
         }
         spec.options.branch = *policy;
     }
-    if (const TomlValue* tilt = Find(table, "tilt_limit"); tilt != nullptr) {
-        spec.options.tilt_limit_rad =
-                AsPositive(*tilt, context + ".tilt_limit")
+    if (const TomlValue* limit = Find(table, "tool_side_limit");
+        limit != nullptr) {
+        spec.options.tool_side_limit_rad =
+                AsPositive(*limit, context + ".tool_side_limit")
                 * ctx.project->units.angle;
     }
     return spec;
@@ -353,7 +354,7 @@ VirtualMachineSpec ReadVirtualMachineSpec(const TomlValue& table,
 /// @param table `[machine]`のテーブル (`virtual`キーを持たない)
 /// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError `file`/`library`がどちらも無い、仮想機械専用の
-///        キー (`name`/`tilt_limit`/`branch`) がある、参照先が存在しない,
+///        キー (`name`/`tool_side_limit`/`branch`) がある、参照先が存在しない,
 ///        または機械定義の読込に失敗した場合
 /// @note 機械定義の読込エラーの文言には先頭に`"[machine]: "`を付ける.
 ///       機械定義の警告は読込箇所を`"machine"`として`project.warnings`に
@@ -364,7 +365,7 @@ void ReadMachineFile(const TomlValue& table, const ReadContext& ctx) {
         Fail(context, "specify exactly one of file, library and virtual",
              LineOf(table));
     }
-    const auto virtual_only = PresentKeys(table, {"name", "tilt_limit", "branch"});
+    const auto virtual_only = PresentKeys(table, {"name", "tool_side_limit", "branch"});
     if (!virtual_only.empty()) {
         Fail(context, virtual_only.front() + " requires virtual",
              LineOf(*Find(table, virtual_only.front())));

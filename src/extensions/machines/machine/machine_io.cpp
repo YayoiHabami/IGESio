@@ -355,7 +355,7 @@ Structure ValidateStructure(const ComponentTables& tables) {
  * ---- コンポーネントの要素 ----
  */
 
-/// @brief `component.local_frame`からコンポーネント座標系→ゼロポーズ機械座標系への
+/// @brief `component.local_frame`からコンポーネント座標系→基準機械座標への
 ///        同次変換C_cを作る
 igesio::Matrix4d ReadLocalFrame(const TomlValue& table, const std::string& name,
                                 const UnitScales& scales) {
@@ -369,8 +369,8 @@ igesio::Matrix4d ReadLocalFrame(const TomlValue& table, const std::string& name,
     return MakeRigid(detail::ReadRotation(*frame, context, scales.angle), origin);
 }
 
-/// @brief マウントの`frame` (`component.frame`) から
-///        取り付け先座標系→ゼロポーズ機械座標系の同次変換Hを作る
+/// @brief マウントの`frame`（`component.frame`）から
+///        取り付け先座標系→基準機械座標の同次変換Hを作る
 igesio::Matrix4d ReadFrame(const TomlValue& frame, const igesio::Matrix4d& local_frame,
                            const UnitScales& scales, const std::string& context) {
     detail::EnsureTable(frame, context + ": not a table");
@@ -592,7 +592,7 @@ ComponentSpec ReadComponent(
 
 
 /**
- * ---- チェーン検証 ----
+ * ---- 連鎖の検証 ----
  */
 
 /// @brief 直進軸の実効方向が3次元を張るか (特異値がrank許容誤差を超える数が3)
@@ -607,7 +607,7 @@ bool SpansThreeDimensions(const std::map<std::string, igesio::Vector3d>& linears
     return (svd.singularValues().array() > kRankTolerance).count() >= 3;
 }
 
-/// @brief チェーン上の軸構成を検証する
+/// @brief 連鎖上の軸構成を検証する
 void ValidateChains(const std::map<std::string, ComponentSpec>& specs,
                     const ComponentTables& tables, const Structure& structure,
                     std::vector<Diagnostic>& warnings) {
@@ -636,7 +636,7 @@ void ValidateChains(const std::map<std::string, ComponentSpec>& specs,
             linears[spec.axis->register_name] =
                     RotationPart(spec.local_frame) * spec.axis->direction;
         } else if (common_set.count(name) == 0) {
-            // 両チェーンに共通する回転軸は相対運動で相殺され、姿勢IKの対象
+            // 両連鎖に共通する回転軸は相対運動で相殺され、姿勢IKの対象
             // (`AxisInfo::IsIkTarget()`) にもならないため、本数に数えない
             ++rotary_count;
         }

@@ -1,17 +1,18 @@
 /**
  * @file extensions/machines/machine/machine_model.h
- * @brief 機械定義から構築する運動学モデル (木構造・チェーン・軸一覧・派生量)
+ * @brief 機械定義から構築する運動学モデル（木構造・連鎖・軸一覧・派生量）
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
- * @note `MachineDefinition`をもとに、順/逆運動学の計算に必要な事前計算や
- *       データ構造の整理などを済ませた構造体である`MachineModel`を提供する.
+ * @note `MachineDefinition`をもとに、順/逆運動学の計算に必要な事前計算やデータ構造の
+ *       整理などの結果を格納する`MachineModel`構造体を定義する.
  *       `MachineDefinition`では機械の仕様をファイルでの定義通りに保持するため,
- *       baseを先頭とする親が先に並ぶコンポーネント列、ゼロポーズ機械座標での軸一覧,
- *       工具側・ワーク側チェーン、および運動学が使う派生量を構築時に計算する.
- * @note 機械の軸の値の表現 (`JointVector`/`NcValues`) およびσの設定については
+ *       ルートコンポーネント（base）を先頭とする親が先に並ぶコンポーネント列,
+ *       基準機械座標での軸、工具側連鎖・工作物側連鎖、および運動学が使う派生量を
+ *       構築時に計算する.
+ * @note 機械の軸の値の表現（`JointVector`/`NcValues`）およびσの設定については
  *       `axis_values.h`を参照のこと.
- * @note コンポーネント (MachineModel::Component(i)) は、baseを先頭として
+ * @note コンポーネント（`MachineModel::Component(i)`）は、baseを先頭として
  *       深さ優先で親コンポーネントが子よりも前に来るように並べる.
  * @note 本クラスは`MachineDefinition`のコピーを所有し、構築後は変更しない.
  */
@@ -40,16 +41,16 @@ enum class AxisKind {
     kRotary,
 };
 
-/// @brief 取り付けフレームの種別
+/// @brief 取り付け部座標系の種別
 enum class MountKind {
-    /// @brief 工具取り付け点 (`tool_mount`)
+    /// @brief 工具取り付け部（`tool_mount`）
     kToolMount,
-    /// @brief ワーク取り付け点 (`work_mount`)
+    /// @brief ワーク取り付け部（`work_mount`）
     kWorkMount,
 };
 
-/// @brief 可動軸1本の情報 (ゼロポーズ機械座標)
-/// @note `AxisSpec`について、順運動学/逆運動学の計算に必要な事前計算を行った結果.
+/// @brief 可動軸1つ分の情報（基準機械座標）
+/// @note `AxisSpec`に関する、順運動学/逆運動学のための事前計算の結果.
 /// @note `limits`/`initial`/`wrap_start`/`dynamics`は`AxisSpec`の値の複製.
 ///       逆運動学側で`MachineDefinition`を参照せずに済むようにする
 struct AxisInfo {
@@ -82,22 +83,22 @@ struct AxisInfo {
     ///       どちらも無ければ`std::nullopt`
     std::optional<std::array<double, 2>> nc_range;
 
-    /// @brief チェーン側符号 (ワーク側チェーン上の場合は-1、それ以外なら+1)
+    /// @brief 連鎖側の符号（工作物側連鎖の場合は-1、それ以外なら+1）
     /// @note 軸変位量 = sigma × NC指令値
     double sigma = 1.0;
-    /// @brief 工具側チェーン上にあるか
+    /// @brief 工具側連鎖上にあるか
     bool on_tool_chain = false;
-    /// @brief ワーク側チェーン上にあるか
+    /// @brief 工作物側連鎖上にあるか
     bool on_work_chain = false;
 
     /// @brief 軸の動特性
     AxisDynamics dynamics;
 
     /// @brief 逆運動学の対象か
-    /// @return 一方のチェーンにのみ属する軸なら`true`
-    /// @note 工具側・ワーク側のどちらか一方のチェーン上にある軸のみ.
-    ///       両チェーンに共通する軸は相対運動で相殺されるため対象外、
-    ///       チェーン外の軸も対象外
+    /// @return 一方の連鎖にのみ属する軸なら`true`
+    /// @note 工具側連鎖と工作物側連鎖のどちらか一方にのみある軸.
+    ///       両連鎖に共通する軸は相対運動で相殺されるため対象外、
+    ///       連鎖外の軸も対象外
     bool IsIkTarget() const { return on_tool_chain != on_work_chain; }
 };
 
@@ -121,8 +122,8 @@ bool IsWithinLimits(const AxisInfo& axis, double nc);
 /// @note 直進軸の可動範囲には2πの周期がないため、`IsWithinLimits`を用いること
 std::optional<double> WrapAngleIntoLimits(double nc_rad, const AxisInfo& axis);
 
-/// @brief 運動学ツリーの1節点
-/// @note `ComponentSpec`について、順運動学/逆運動学の計算に必要な事前計算を行った結果.
+/// @brief 機械構造ツリーのノード
+/// @note `ComponentSpec`に関する、順運動学/逆運動学のための事前計算の結果.
 struct ComponentInfo {
     /// @brief 名前
     std::string name;
@@ -141,16 +142,16 @@ struct ComponentInfo {
     /// @note `MachineModel::Axes()`におけるインデックス.　軸を持たない場合はnullopt
     std::optional<std::size_t> axis;
 
-    /// @brief コンポーネント座標系→ゼロポーズ機械座標系の同次変換C_c
+    /// @brief コンポーネント座標系→基準機械座標系の同次変換C_c
     /// @note このコンポーネント内の座標値の基準である、コンポーネント座標系の定義.
-    ///       単位行列の場合は、コンポーネント座標系とゼロポーズ機械座標系が一致する.
+    ///       単位行列の場合は、コンポーネント座標系と基準機械座標系が一致する.
     ///       axisやgeometryの座標値はこのコンポーネント座標系で表現される.
-    /// @note コンポーネント座標系の点pcとゼロポーズ機械座標系の点pm (同次座標) は
+    /// @note コンポーネント座標系の点pcと基準機械座標系の点pm（同次座標）は
     ///       `pm = C_c · pc`, `pc = C_c⁻¹ · pm`を満たす.
     igesio::Matrix4d local_frame = igesio::Matrix4d::Identity();
-    /// @brief 取り付け先座標系→ゼロポーズ機械座標への剛体変換H (typeがkMountの場合のみ)
+    /// @brief 取り付け先座標系→基準機械座標への剛体変換H（typeがkMountの場合のみ）
     /// @note 工具やワークの取り付け座標系上の点は、この行列のみを掛けて
-    ///       ゼロポーズ機械座標系に変換できる.
+    ///       基準機械座標系の点に変換できる.
     std::optional<igesio::Matrix4d> mount_placement;
 };
 
@@ -207,45 +208,49 @@ class MachineModel {
     /// @brief `work_mount`コンポーネントのインデックス
     /// @return `Component()`におけるインデックス
     std::size_t WorkMountIndex() const { return work_mount_; }
-    /// @brief 工具側チェーンのコンポーネントインデックス
+    /// @brief 工具側連鎖のコンポーネントインデックス
     /// @return `Component()`におけるインデックス列
     /// @note baseから`tool_mount`まで. 両端を含む
     const std::vector<std::size_t>& ToolChain() const { return tool_chain_; }
-    /// @brief ワーク側チェーンのコンポーネントインデックス
+    /// @brief 工作物側連鎖のコンポーネントインデックス
     /// @return `Component()`におけるインデックス列
     /// @note baseから`work_mount`まで. 両端を含む
     const std::vector<std::size_t>& WorkChain() const { return work_chain_; }
-    /// @brief チェーン上の可動軸の軸名 ("X", "A"等. 構築時に確定)
-    /// @return チェーン上の軸名の列
-    /// @note 工具側を根元から並べ、続けて連続してワーク側を並べる. 重複なし
+    /// @brief 連鎖上の可動軸の軸名（"X", "A"等. 構築時に確定）
+    /// @return 連鎖上の軸名の列
+    /// @note 工具側連鎖をベッド側から並べ、続けて工作物側連鎖を並べる. 重複なし
     const std::vector<std::string>& ChainRegisters() const {
         return chain_registers_;
     }
 
-    /// @brief 取り付け先座標系→ゼロポーズ機械座標への剛体変換H
-    /// @param kind 取り付けフレームの種別 (工具側/ワーク側)
+    /// @brief 取り付け先座標系→基準機械座標系への剛体変換H
+    /// @param kind 取り付け部座標系の種別（工具取り付け部/ワーク取り付け部）
     /// @return 指定した取り付け点の剛体変換H
     /// @note 工具やワークの取り付け座標系上の点は、この行列のみを掛けて
-    ///       ゼロポーズ機械座標系に変換できる.
+    ///       基準機械座標系の点に変換できる.
     igesio::Matrix4d MountPlacement(MountKind kind) const;
-    /// @brief 工具の向きを決める回転軸のインデックス列 (先頭が外側)
-    /// @return 姿勢に寄与する回転軸のインデックス列 (0〜2本)
+    /// @brief 工具の向きを決める回転軸のインデックス列 (先頭が工作物側回転軸)
+    /// @return 工具姿勢の決定に寄与する回転軸のインデックス列 (0〜2本)
     /// @note 各要素は`MachineModel::Axes()`におけるインデックス
-    /// @note 姿勢IKは工具軸方向を T = R(v, θ_R) R(u, θ_I) z_s の形で解く.
-    ///       一般の5軸機械であれば、先頭が外側の軸v (旋回)、2番目が内側の軸u (傾斜)
-    ///       に対応する. ワーク側チェーン上の回転軸を末端側から (σ=-1) 並べ,
-    ///       続いて工具側チェーン上の回転軸を根元側から (σ=+1) 並べる.
-    /// @note 工具側とワーク側のチェーンで共通する回転軸 (相対運動で相殺される) や,
-    ///       どちらのチェーンにも含まれない回転軸は、工具姿勢の決定に寄与しないため
+    /// @note 基準コンフィギュレーションでの工具軸方向をz_sとすると、姿勢IKは工具軸方向を
+    ///       `T = R(v_t, θ_w) R(u_t, θ_t) z_s`の形で解く. 一般の5軸機械であれば,
+    ///       先頭が工作物側回転軸v_t、2番目が工具側回転軸u_tに対応する.
+    ///       工作物側連鎖上の回転軸を末端側から（σ=-1）並べ、次に工具側連鎖上の回転軸を
+    ///       ベース側から (σ=+1) 並べる.
+    /// @note 工具側連鎖と工作物側連鎖で共通する回転軸 (相対運動で相殺される) や,
+    ///       いずれの連鎖にも含まれない回転軸は、工具姿勢の決定に寄与しないため
     ///       含めない.
-    const std::vector<std::size_t>& OrientationAxes() const { return orientation_axes_; }
-    /// @brief ゼロポーズでの工具軸方向 (`tool_mount`フレームのz軸. 機械座標)
+    const std::vector<std::size_t>& OrientationAxes() const {
+        return orientation_axes_;
+    }
+    /// @brief 基準コンフィギュレーションでの工具軸方向
+    ///        （工具取り付け部座標系のz軸. 機械座標）
     /// @note 構築時に確定する
     const igesio::Vector3d& ToolAxisHome() const { return tool_axis_home_; }
-    /// @brief ワーク側回転軸の回転中心の参照点 (ゼロポーズ機械座標. 構築時に確定)
+    /// @brief 工作物側連鎖の回転軸の回転中心の参照点（基準機械座標. 構築時に確定）
     /// @return 回転軸が1本ならその軸上の点. 2本以上なら末端側の軸上で
-    ///         もう一方の軸線に最も近い点 (両軸が交わる理想機では交点).
-    ///         ワーク側チェーンにIK対象の回転軸が無ければ`std::nullopt`
+    ///         もう一方の軸線に最も近い点（両軸が交わる理想機では交点）.
+    ///         工作物側連鎖にIK対象の回転軸が無ければ`std::nullopt`
     const std::optional<igesio::Vector3d>& WorkPivotReference() const {
         return work_pivot_reference_;
     }
@@ -258,21 +263,21 @@ class MachineModel {
     std::vector<ComponentInfo> components_;
     /// @brief 可動軸 (components_の先頭から現れた順)
     std::vector<AxisInfo> axes_;
-    /// @brief 工具側チェーンのコンポーネントインデックス (baseから)
+    /// @brief 工具側連鎖のコンポーネントインデックス（baseから）
     std::vector<std::size_t> tool_chain_;
-    /// @brief ワーク側チェーンのコンポーネントインデックス (baseから)
+    /// @brief 工作物側連鎖のコンポーネントインデックス（baseから）
     std::vector<std::size_t> work_chain_;
-    /// @brief 工具の向きを決める回転軸 (axes_におけるインデックス. 先頭が外側)
-    /// @note 工具側とワーク側のチェーンで共通する回転軸 (相対運動で相殺される) や,
-    ///       どちらのチェーンにも含まれない回転軸は、工具姿勢の決定に寄与しないため
-    ///       含めない.
+    /// @brief 工具の向きを決める回転軸
+    ///        （axes_におけるインデックス. 先頭が工作物側回転軸）
+    /// @note 工具側連鎖と工作物側連鎖で共通する回転軸（相対運動で相殺される）や,
+    ///       いずれの連鎖にも含まれない回転軸は、工具姿勢の決定に寄与しないため含めない.
     std::vector<std::size_t> orientation_axes_;
-    /// @brief チェーン上の可動軸の軸名 ("X", "A"等)
-    /// @note 工具側を根元から並べ、続いてワーク側を根元から並べる.
+    /// @brief 連鎖上の可動軸の軸名（"X", "A"等）
+    /// @note 工具側連鎖をベース側から並べ、続いて工作物側連鎖をベース側から並べる.
     std::vector<std::string> chain_registers_;
-    /// @brief ゼロポーズでの工具軸方向 (`tool_mount`フレームのz軸)
+    /// @brief 基準コンフィギュレーションでの工具軸方向（工具取り付け部座標系のz軸）
     igesio::Vector3d tool_axis_home_ = igesio::Vector3d::UnitZ();
-    /// @brief ワーク側回転軸の回転中心の参照点 (回転軸が無ければ`std::nullopt`)
+    /// @brief 工作物側連鎖の回転軸の回転中心の参照点（回転軸が無ければ`std::nullopt`）
     std::optional<igesio::Vector3d> work_pivot_reference_;
     /// @brief `tool_mount`コンポーネントのインデックス
     std::size_t tool_mount_ = 0;
@@ -280,7 +285,7 @@ class MachineModel {
     std::size_t work_mount_ = 0;
     /// @brief 名前 → コンポーネントのインデックス
     std::unordered_map<std::string, std::size_t> by_name_;
-    /// @brief 軸名 ("X", "A"等) → 軸のインデックス
+    /// @brief 軸名（"X", "A"等）→ 軸のインデックス
     std::unordered_map<std::string, std::size_t> by_register_;
 };
 

@@ -4,9 +4,10 @@
  * @author Yayoi Habami
  * @date 2026-09-09
  * @copyright 2026 Yayoi Habami
- * @note 姿勢IKは統一形 T = R(v, θ_R) R(u, θ_I) z_s (v: 外側軸, u: 内側軸,
- *       z_s: ゼロポーズの工具軸) を閉形式で解く. 傾斜角θ_I = δ ± Δ の符号を
- *       可動範囲と回転角の選択方針で選び、旋回角θ_Rを求める. 特異姿勢 (θ_Rが不定)
+ * @note 姿勢IKは統一形 T = R(v_t, θ_w) R(u_t, θ_t) z_s（v_t: 工作物側回転軸,
+ *       u_t: 工具側回転軸, z_s: 基準コンフィギュレーションの工具軸）を閉形式で解く.
+ *       工具側回転軸の回転角θ_t = δ ± Δの符号を可動範囲と回転角の選択方針で選び,
+ *       工作物側回転軸の回転角θ_wを求める. 特異コンフィギュレーション（θ_wが不定）
  *       では`kContinuous`で直前の指令値を保ち、他の方針では0にする.
  */
 #include "igesio/extensions/machines/machine/inverse_kinematics.h"
@@ -36,13 +37,13 @@ constexpr int kMessageDigits = 3;
 /// @brief 文言中の無次元量 (内積の差等) の小数桁数
 constexpr int kRatioDigits = 6;
 
-/// @brief 姿勢IKの候補 (+Δ/-Δ)
+/// @brief 姿勢IKの候補（+Δ/-Δ）
 struct Branch {
-    /// @brief 傾斜角θ_I (内側軸のNC指令値) [rad]
-    double tilt = 0.0;
-    /// @brief 旋回角θ_R (外側軸のNC指令値) [rad]
-    double swivel = 0.0;
-    /// @brief 旋回角が不定 (0とした) か
+    /// @brief 工具側回転軸の回転角θ_t [rad]（工具側回転軸のNC指令値）
+    double tool_side_angle = 0.0;
+    /// @brief 工作物側回転軸の回転角θ_w [rad]（工作物側回転軸のNC指令値）
+    double work_side_angle = 0.0;
+    /// @brief 工作物側回転軸の回転角が不定（0とした）か
     bool singular = false;
 };
 
@@ -58,7 +59,7 @@ struct LinearSystem {
 
 /// @brief 可動範囲外・ストローク外の警告の`context`
 constexpr const char* kLimitsContext = "limits";
-/// @brief 特異姿勢・傾斜角不定の警告の`context`
+/// @brief 特異コンフィギュレーション・工具側回転軸の回転角の不定の警告の`context`
 constexpr const char* kSingularContext = "singular";
 
 /// @brief 警告を追加する
@@ -103,96 +104,101 @@ double FoldedDifference(const double a, const double b) {
     return folded == -kHalfTurn ? kHalfTurn : folded;
 }
 
-/// @brief 旋回角θ_Rを求める（R(v, θ_R) z_1 = t を満たす角）
-/// @param v 外側軸の方向
-/// @param z_1 傾斜後の工具軸
+/// @brief 工作物側回転軸の回転角θ_wを求める（R(v_t, θ_w) z_1 = t を満たす角）
+/// @param v_t 工作物側回転軸の方向（回転軸が1つの場合はその軸の方向）
+/// @param z_1 工具側回転軸で回転した後の工具軸
 /// @param t 目標の工具軸
-/// @param[out] singular 特異 (z_1 ∥ v で旋回角が不定) なら`true`
-/// @return θ_R [rad]. 特異なら0
-double SwivelAngle(const igesio::Vector3d& v, const igesio::Vector3d& z_1,
-                   const igesio::Vector3d& t, bool* singular) {
-    const double p = v.dot(z_1.cross(t));
-    const double q = z_1.dot(t) - v.dot(z_1) * v.dot(t);
+/// @param[out] singular 特異（z_1 ∥ v_t で工作物側回転軸の回転角が不定）ならtrue
+/// @return θ_w [rad]. 特異なら0
+double WorkSideAngle(const igesio::Vector3d& v_t, const igesio::Vector3d& z_1,
+                     const igesio::Vector3d& t, bool* singular) {
+    const double p = v_t.dot(z_1.cross(t));
+    const double q = z_1.dot(t) - v_t.dot(z_1) * v_t.dot(t);
     *singular = std::hypot(p, q) < kSingularTolerance;
     return *singular ? 0.0 : std::atan2(p, q);
 }
 
-/// @brief 特異姿勢 (旋回角が不定) での旋回角を回転角の解の選択方針に従って決める
-/// @param outer 旋回軸 (外側軸)
+/// @brief 特異コンフィギュレーション（工作物側回転軸の回転角が不定）での
+///        工作物側回転軸の回転角を、回転角の解の選択方針に従って決める
+/// @param work_side_axis 工作物側回転軸（回転軸が1つの場合はその軸）
 /// @param prev_nc 直前の指令値
 /// @param policy 回転角の解の選択方針
 /// @param[out] warnings `kContinuous`以外で追加する情報の追記先
-/// @return `kContinuous`なら直前の指令値の旋回軸の値 (無ければ0).
+/// @return `kContinuous`なら直前の指令値の工作物側回転軸の値（無ければ0）.
 ///         それ以外は0で、`Severity::kInfo`の情報を追加する
 /// @note 制御装置は不定の軸を動かさないため、`kContinuous`では直前の指令値を保つ.
-///       工具軸方向が旋回軸と平行な経路 (3軸経路等) では通過点ごとに
-///       特異姿勢になるため、警告ではなく情報にする
-double SingularSwivel(const AxisInfo& outer, const NcValues& prev_nc,
-                      const BranchPolicy policy,
-                      std::vector<Diagnostic>& warnings) {
+///       工具軸方向が工作物側回転軸と平行な経路（3軸経路等）では通過点ごとに
+///       特異コンフィギュレーションになるため、警告ではなく情報にする
+double SingularWorkSideAngle(
+        const AxisInfo& work_side_axis, const NcValues& prev_nc,
+        const BranchPolicy policy, std::vector<Diagnostic>& warnings) {
     if (policy == BranchPolicy::kContinuous) {
-        return prev_nc.GetOr(outer.register_name, 0.0);
+        return prev_nc.GetOr(work_side_axis.register_name, 0.0);
     }
     Warn(warnings, kSingularContext,
-         "singular orientation (swivel angle is indeterminate); set to 0",
+         "singular orientation (work-side rotary angle is indeterminate); set to 0",
          Severity::kInfo);
     return 0.0;
 }
 
-/// @brief 候補の傾斜角と旋回角を求める (回転軸2つ)
-/// @param v 外側軸の方向
-/// @param u 内側軸の方向
-/// @param z_s ゼロポーズの工具軸
-/// @param t 目標の工具軸 (単位ベクトル)
-/// @param[out] warnings 傾斜角が不定のときの警告の追記先
-/// @return 回転角候補 (通常2つ. 傾斜角が不定なら1つ)
+/// @brief 候補の工具側回転軸の回転角と工作物側回転軸の回転角を求める（回転軸2つ）
+/// @param v_t 工作物側回転軸の方向
+/// @param u_t 工具側回転軸の方向
+/// @param z_s 基準コンフィギュレーションの工具軸
+/// @param t 目標の工具軸（単位ベクトル）
+/// @param[out] warnings 工具側回転軸の回転角が不定のときの警告の追記先
+/// @return 回転角候補（通常2つ. 工具側回転軸の回転角が不定なら1つ）
 /// @throw KinematicsError 到達不能な場合
-std::vector<Branch> TiltCandidates(
-        const igesio::Vector3d& v, const igesio::Vector3d& u,
+std::vector<Branch> BranchCandidates(
+        const igesio::Vector3d& v_t, const igesio::Vector3d& u_t,
         const igesio::Vector3d& z_s, const igesio::Vector3d& t,
         std::vector<Diagnostic>& warnings) {
-    const double c = v.dot(u) * u.dot(z_s);
-    const double a = v.dot(z_s) - c;
-    const double b = v.dot(u.cross(z_s));
-    const double d = v.dot(t);
+    const double c = v_t.dot(u_t) * u_t.dot(z_s);
+    const double a = v_t.dot(z_s) - c;
+    const double b = v_t.dot(u_t.cross(z_s));
+    const double d = v_t.dot(t);
     const double rho = std::hypot(a, b);
     if (std::abs(d - c) > rho + kReachTolerance) {
         throw KinematicsError("unreachable tool orientation: |d-c|="
                               + FormatFixed(std::abs(d - c), kRatioDigits)
                               + " > rho=" + FormatFixed(rho, kRatioDigits));
     }
-    std::vector<double> tilts;
+    std::vector<double> tool_side_angles;
     if (rho < kZeroTolerance) {
-        // 内側軸が工具軸に平行 (または両軸が平行) の場合は傾斜角が寄与しない
-        Warn(warnings, kSingularContext, "tilt angle is indeterminate; set to 0");
-        tilts.push_back(0.0);
+        // 工具側回転軸が工具軸に平行（または両軸が平行）の場合は
+        // 工具側回転軸の回転角が寄与しない
+        Warn(warnings, kSingularContext,
+             "tool-side rotary angle is indeterminate; set to 0");
+        tool_side_angles.push_back(0.0);
     } else {
         const double delta = std::atan2(b, a);
         const double half = std::acos(std::clamp((d - c) / rho, -1.0, 1.0));
-        tilts = {delta + half, delta - half};
+        tool_side_angles = {delta + half, delta - half};
     }
     std::vector<Branch> branches;
-    for (const double tilt : tilts) {
+    for (const double tool_side_angle : tool_side_angles) {
         Branch branch;
-        branch.tilt = tilt;
-        const igesio::Vector3d z_1 = RotationAboutAxis(u, tilt) * z_s;
-        branch.swivel = SwivelAngle(v, z_1, t, &branch.singular);
+        branch.tool_side_angle = tool_side_angle;
+        const igesio::Vector3d z_1 = RotationAboutAxis(u_t, tool_side_angle) * z_s;
+        branch.work_side_angle = WorkSideAngle(v_t, z_1, t, &branch.singular);
         branches.push_back(branch);
     }
     return branches;
 }
 
-/// @brief 直前の指令値との二乗距離 (無制限回転軸は差を(-π, π]に正規化)
+/// @brief 直前の指令値との二乗距離（無制限の回転軸は差を(-π, π]に正規化）
 /// @param branch 評価対象の回転角候補
 /// @param prev_nc 直前の指令値
-/// @param inner 内側軸
-/// @param outer 外側軸
-/// @return 傾斜角・旋回角それぞれの差の二乗和
+/// @param tool_side_axis 工具側回転軸
+/// @param work_side_axis 工作物側回転軸
+/// @return 工具側回転軸の回転角・工作物側回転軸の回転角それぞれの差の二乗和
 double ContinuityDistance(const Branch& branch, const NcValues& prev_nc,
-                          const AxisInfo& inner, const AxisInfo& outer) {
+                          const AxisInfo& tool_side_axis,
+                          const AxisInfo& work_side_axis) {
     double distance = 0.0;
-    for (const auto& [axis, value] : {std::pair(&inner, branch.tilt),
-                                      std::pair(&outer, branch.swivel)}) {
+    for (const auto& [axis, value] :
+         {std::pair(&tool_side_axis, branch.tool_side_angle),
+          std::pair(&work_side_axis, branch.work_side_angle)}) {
         const double previous = prev_nc.GetOr(axis->register_name, 0.0);
         const double difference = axis->unlimited ? FoldedDifference(value, previous)
                                                   : value - previous;
@@ -202,55 +208,58 @@ double ContinuityDistance(const Branch& branch, const NcValues& prev_nc,
 }
 
 /// @brief 可動範囲と回転角の選択方針に基づいて符号を決める
-/// @param candidates 回転角の候補 (先頭がs=+1)
-/// @param inner 内側軸
-/// @param outer 外側軸
+/// @param candidates 回転角の候補（先頭がs=+1）
+/// @param tool_side_axis 工具側回転軸
+/// @param work_side_axis 工作物側回転軸
 /// @param prev_nc 直前の指令値
 /// @param policy 選択方針
 /// @param[out] warnings どの候補も範囲に入らないときの警告の追記先
 /// @return 選ばれた回転角
 Branch SelectBranch(
-        const std::vector<Branch>& candidates, const AxisInfo& inner,
-        const AxisInfo& outer, const NcValues& prev_nc,
+        const std::vector<Branch>& candidates, const AxisInfo& tool_side_axis,
+        const AxisInfo& work_side_axis, const NcValues& prev_nc,
         const BranchPolicy policy, std::vector<Diagnostic>& warnings) {
     std::vector<Branch> valid;
     for (const Branch& candidate : candidates) {
-        const std::optional<double> tilt =
-                WrapAngleIntoLimits(candidate.tilt, inner);
-        const std::optional<double> swivel =
-                WrapAngleIntoLimits(candidate.swivel, outer);
-        if (tilt.has_value() && swivel.has_value()) {
-            valid.push_back(Branch{*tilt, *swivel, candidate.singular});
+        const std::optional<double> tool_side_angle =
+                WrapAngleIntoLimits(candidate.tool_side_angle, tool_side_axis);
+        const std::optional<double> work_side_angle =
+                WrapAngleIntoLimits(candidate.work_side_angle, work_side_axis);
+        if (tool_side_angle.has_value() && work_side_angle.has_value()) {
+            valid.push_back(Branch{*tool_side_angle, *work_side_angle,
+                                   candidate.singular});
         }
     }
     if (valid.empty()) {
         Branch fallback = candidates.front();
-        fallback.swivel = NormalizeToTurn(fallback.swivel, 0.0);
+        fallback.work_side_angle = NormalizeToTurn(fallback.work_side_angle, 0.0);
         Warn(warnings, kLimitsContext,
-            "rotary axes out of range: " + inner.register_name + "="
-                       + FormatDegrees(fallback.tilt, kMessageDigits) + ", "
-                       + outer.register_name + "="
-                       + FormatDegrees(fallback.swivel, kMessageDigits));
+            "rotary axes out of range: " + tool_side_axis.register_name + "="
+                       + FormatDegrees(fallback.tool_side_angle, kMessageDigits)
+                       + ", " + work_side_axis.register_name + "="
+                       + FormatDegrees(fallback.work_side_angle, kMessageDigits));
         return fallback;
     }
     if (valid.size() == 1) return valid.front();
-    const bool has_previous = prev_nc.Contains(inner.register_name)
-                              || prev_nc.Contains(outer.register_name);
+    const bool has_previous = prev_nc.Contains(tool_side_axis.register_name)
+                              || prev_nc.Contains(work_side_axis.register_name);
     if (policy == BranchPolicy::kNegative) return valid.back();
     if (policy == BranchPolicy::kContinuous && has_previous) {
-        return ContinuityDistance(valid.front(), prev_nc, inner, outer)
-                       <= ContinuityDistance(valid.back(), prev_nc, inner, outer)
+        return ContinuityDistance(valid.front(), prev_nc, tool_side_axis,
+                                  work_side_axis)
+                       <= ContinuityDistance(valid.back(), prev_nc, tool_side_axis,
+                                             work_side_axis)
                ? valid.front() : valid.back();
     }
     return valid.front();
 }
 
-/// @brief 1つの回転軸の姿勢IK (旋回角のみ)
+/// @brief 1つの回転軸の姿勢IK（その回転軸の回転角のみ）
 /// @param model 運動学モデル
-/// @param t 目標の工具軸 (単位ベクトル)
-/// @param prev_nc 直前の指令値 (特異姿勢の旋回角に用いる)
-/// @param policy 回転角の解の選択方針 (特異姿勢の旋回角に用いる)
-/// @return 解 (回転軸1つの指令値と警告)
+/// @param t 目標の工具軸（単位ベクトル）
+/// @param prev_nc 直前の指令値（特異コンフィギュレーションの回転角に用いる）
+/// @param policy 回転角の解の選択方針（特異コンフィギュレーションの回転角に用いる）
+/// @return 解（回転軸1つの指令値と警告）
 /// @throw KinematicsError 到達不能な工具姿勢の場合
 IkSolution SolveSingleRotary(const MachineModel& model,
                              const igesio::Vector3d& t,
@@ -264,9 +273,9 @@ IkSolution SolveSingleRotary(const MachineModel& model,
                               + FormatFixed(cone_error, kRatioDigits));
     }
     IkSolution solution;
-    double angle = SwivelAngle(v, z_s, t, &solution.singular);
+    double angle = WorkSideAngle(v, z_s, t, &solution.singular);
     if (solution.singular) {
-        angle = SingularSwivel(axis, prev_nc, policy, solution.warnings);
+        angle = SingularWorkSideAngle(axis, prev_nc, policy, solution.warnings);
     }
     const std::optional<double> wrapped = WrapAngleIntoLimits(angle, axis);
     if (wrapped.has_value()) {
@@ -292,32 +301,33 @@ IkSolution SolveTwoRotaries(
         const MachineModel& model, const igesio::Vector3d& t,
         const NcValues& prev_nc, const BranchPolicy policy) {
     const std::vector<std::size_t>& orientation = model.OrientationAxes();
-    const AxisInfo& outer = model.Axes()[orientation[0]];
-    const AxisInfo& inner = model.Axes()[orientation[1]];
+    const AxisInfo& work_side_axis = model.Axes()[orientation[0]];
+    const AxisInfo& tool_side_axis = model.Axes()[orientation[1]];
     IkSolution solution;
-    std::vector<Branch> candidates = TiltCandidates(
-            outer.direction_world, inner.direction_world, model.ToolAxisHome(), t,
-            solution.warnings);
-    // 特異姿勢は目標の工具軸が旋回軸と平行な場合であり、全候補で同時に起きる.
-    // 旋回角を可動範囲の検査と候補の選択の前に決め、情報は1件だけ追加する
-    std::optional<double> singular_swivel;
+    std::vector<Branch> candidates = BranchCandidates(
+            work_side_axis.direction_world, tool_side_axis.direction_world,
+            model.ToolAxisHome(), t, solution.warnings);
+    // 特異コンフィギュレーションは目標の工具軸が工作物側回転軸と平行な場合であり,
+    // 全候補で同時に起きる. 工作物側回転軸の回転角を可動範囲の検査と候補の選択の
+    // 前に決め、情報は1件だけ追加する
+    std::optional<double> singular_work_side_angle;
     for (Branch& candidate : candidates) {
         if (!candidate.singular) continue;
-        if (!singular_swivel.has_value()) {
-            singular_swivel =
-                    SingularSwivel(outer, prev_nc, policy, solution.warnings);
+        if (!singular_work_side_angle.has_value()) {
+            singular_work_side_angle = SingularWorkSideAngle(
+                    work_side_axis, prev_nc, policy, solution.warnings);
         }
-        candidate.swivel = *singular_swivel;
+        candidate.work_side_angle = *singular_work_side_angle;
     }
-    const Branch chosen = SelectBranch(candidates, inner, outer, prev_nc, policy,
-                                       solution.warnings);
+    const Branch chosen = SelectBranch(candidates, tool_side_axis, work_side_axis,
+                                       prev_nc, policy, solution.warnings);
     solution.singular = chosen.singular;
-    solution.nc.Set(inner.register_name, chosen.tilt);
-    solution.nc.Set(outer.register_name, chosen.swivel);
+    solution.nc.Set(tool_side_axis.register_name, chosen.tool_side_angle);
+    solution.nc.Set(work_side_axis.register_name, chosen.work_side_angle);
     return solution;
 }
 
-/// @brief IK対象の直進軸を工具側 (根元→末端)、ワーク側 (根元→末端) の順に集める
+/// @brief IK対象の直進軸を工具側連鎖、工作物側連鎖の順に集める
 /// @param model 運動学モデル
 /// @return `MachineModel::Axes()`におけるインデックス列
 std::vector<std::size_t> IkLinearAxes(const MachineModel& model) {
@@ -337,8 +347,8 @@ std::vector<std::size_t> IkLinearAxes(const MachineModel& model) {
 /// @param model 運動学モデル
 /// @param q0 回転軸を入れてIK対象の直進軸を0にした軸変位量
 /// @param axes IK対象の直進軸 (3つ)
-/// @param target_home 目標点 (ゼロポーズ機械座標)
-/// @param control_local 制御点の`tool_mount`フレームでの座標
+/// @param target_home 目標点 (基準機械座標)
+/// @param control_local 制御点の工具取り付け部座標系での座標
 /// @return 係数行列・右辺・列に対応する軸のインデックス
 LinearSystem BuildLinearSystem(
         const MachineModel& model, const JointVector& q0,
@@ -465,7 +475,7 @@ SolutionError CheckSolution(
     const std::vector<igesio::Matrix4d> f = Forward(model, q);
     const igesio::Matrix4d& tool = f[model.ToolMountIndex()];
     const igesio::Matrix4d& work = f[model.WorkMountIndex()];
-    // 工具側の量はF[tm]、ワークに固定された量はF[wm]で現在姿勢へ移して比べる
+    // 工具側の量はF[tm]、ワークに固定された量はF[wm]で現在のコンフィギュレーションへ移して比べる
     const igesio::Vector3d tool_axis = ApplyDirection(tool, model.ToolAxisHome());
     const igesio::Vector3d target_axis = ApplyDirection(work, t);
     SolutionError error;

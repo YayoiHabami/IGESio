@@ -81,8 +81,8 @@ struct ClTarget {
 /// @brief ワーク座標の制御点と工具軸方向から全軸の軸変位量を計算する
 /// @param setup 加工セットアップ
 /// @param target 制御点と工具軸方向
-/// @param prev_q 直前の姿勢 (全軸の軸変位量. 回転角の解の選択、無制限回転軸の
-///        回転方向、解かない軸の値に用いる)
+/// @param prev_q 直前のコンフィギュレーション（全軸の軸変位量. 回転角の解の選択,
+///        無制限回転軸の回転方向、解かない軸の値に用いる）
 /// @param branch 回転角の解の選択方針 (省略時は機械定義の`branch`)
 /// @param[out] warnings 警告の追加先 (`nullptr`なら追加しない). 逆運動学の
 ///        警告は`context`が種別 (`"limits"`)、工具の未解決と到達不能は空
@@ -91,9 +91,9 @@ struct ClTarget {
 /// @throw std::invalid_argument `work_offset`がワーク座標系に無い,
 ///        `tool_axis`がゼロベクトル、または`prev_q`の長さが軸数と異なる場合
 /// @throw igesio::NotImplementedError 逆運動学が対応しない軸構成の場合
-/// @note 制御点は動作生成と同じ規則で決める. 工具表にある工具なら
-///       `ControlLocal(spec, g43_length)`、工具なし (`kNoTool`) ならゲージライン,
-///       工具表に無い番号なら警告してゲージライン. 無制限の回転軸は`prev_q`に
+/// @note 制御点は動作生成と同じ規則で決める. 登録済みの工具なら
+///       `ControlLocal(spec, g43_length)`、工具なし（`kNoTool`）ならゲージライン,
+///       未登録の工具番号なら警告してゲージラインとする. 無制限の回転軸は`prev_q`に
 ///       近い回転方向にする. 可動範囲外は警告のみで解を返す
 std::optional<IkSolution> SolveClTarget(
         const MachiningSetup& setup, const ClTarget& target,

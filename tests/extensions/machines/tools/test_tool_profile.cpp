@@ -652,7 +652,7 @@ TEST(ToolProfileTest, ControlLocal_TipAndGauge) {
     const igesio::Matrix4d offset = mc::ToolMountOffset(spec);
     EXPECT_TRUE(mc::RotationPart(offset).isIdentity(kTol));
     EXPECT_TRUE(mc::TranslationPart(offset).isApprox(Vector3d(0.0, 0.0, -120.0), kTol));
-    // 先端 (工具座標の原点) は取り付けフレームで (0, 0, -120) に写る
+    // 先端 (工具座標の原点) は取り付け部座標系で (0, 0, -120) に写る
     EXPECT_TRUE(mc::ApplyPoint(offset, Vector3d::Zero())
                         .isApprox(Vector3d(0.0, 0.0, -120.0), kTol));
 }

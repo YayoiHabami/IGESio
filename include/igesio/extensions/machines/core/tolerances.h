@@ -31,7 +31,7 @@ constexpr double kArcCenterTolerance = 1e-3;
 
 /// @brief 特異値・ピボットの許容誤差
 /// @note 直進軸の実効方向が3次元を張るかの判定に用いる.
-///       読込時のチェーン検証と位置IKの連立方程式の両方で用いる
+///       読込時の機械構造の連鎖の検証と位置IKの連立方程式の両方で用いる
 constexpr double kRankTolerance = 1e-6;
 
 /// @brief NC指令値の可動範囲 (`limits`) 検査の許容誤差 [mm] または [rad]
@@ -39,10 +39,10 @@ constexpr double kRankTolerance = 1e-6;
 ///       範囲検査はこの許容誤差つきで行う. radに対しては約5.7e-8°に相当する
 constexpr double kLimitTolerance = 1e-9;
 
-/// @brief 姿勢IKの到達可能判定の許容誤差 (無次元. 単位ベクトルの内積の差)
+/// @brief 姿勢IKの到達可能判定の許容誤差（無次元. 単位ベクトルの内積の差）
 constexpr double kReachTolerance = 1e-9;
 
-/// @brief 姿勢IKの特異判定 (旋回角が不定) の許容誤差 (無次元)
+/// @brief 姿勢IKの特異判定（工作物側回転軸の回転角が不定）の許容誤差（無次元）
 constexpr double kSingularTolerance = 1e-9;
 
 /// @brief 数値的に0とみなす許容誤差

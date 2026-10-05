@@ -7,7 +7,7 @@
  * @note 対象: LoadGeometry / LoadGeometryMesh / GeometrySpec::DisplayName
  *       - 正常系: STL (inch換算・溶接・折り目法線)、OBJ、プリミティブ (box・cylinder)、
  *         IGES (ルートAssemblyが子になる)、色・不透明度の反映と変換・名前を
- *         持たないこと (単位行列・空・可視)
+ *         持たないこと (単位行列・空・表示/非表示)
  *       - 正常系 (退化): 名前の無い形状の表示名 (ファイル名・プリミティブ種別)
  *       - スキップ: STEP (info)・inchのIGES (警告) は`nullptr`. 診断の文脈は
  *         呼び出し側が与えたもの
@@ -235,7 +235,7 @@ TEST(GeometryLoaderTest, Assembly_OverridesAppliedAndUnplaced) {
     EXPECT_NEAR(assembly->Display().color_override->g, 0.25, kTol);
     ASSERT_TRUE(assembly->Display().opacity_override.has_value());
     EXPECT_NEAR(static_cast<double>(*assembly->Display().opacity_override), 0.5, 1e-6);
-    // 変換・名前・可視性は呼び出し側が決めるので、読込器は付けない
+    // 変換・名前・表示/非表示は呼び出し側が決めるので、読込器は付けない
     EXPECT_TRUE(assembly->GetGlobalTransform().isIdentity(kTol));
     EXPECT_TRUE(assembly->Metadata().name.empty());
     EXPECT_TRUE(assembly->Display().visible);

@@ -22,10 +22,10 @@
  *       `work_mount`の子として置いたときの累積変換が同時刻の`tool:<n>`の累積変換と
  *       一致する.
  * @note 動作軌跡は工具の指令点の軌跡で、補間点、機械座標の移動、軸の指令のみの移動,
- *       到達不能で保持した姿勢を含む実際の動きを表す. 指令点は工具座標の
+ *       到達不能で保持したコンフィギュレーションを含む実際の動きを表す. 指令点は工具座標の
  *       (0, 0, command_point_z) とし、G43と制御点の設定は反映しない. 工具が無ければ
- *       取り付けフレームの原点とする. `trace:machine`には p_i = F_tm(q_i)·c を,
- *       `trace:work`には F_wm(q_i)⁻¹·p_i を置く (cは指令点のゼロポーズ機械座標).
+ *       取り付け部座標系の原点とする. `trace:machine`には p_i = F_tm(q_i)·c を,
+ *       `trace:work`には F_wm(q_i)⁻¹·p_i を置く（cは指令点の基準機械座標）.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_SIMULATION_MOTION_SCENE_H_
 #define IGESIO_EXTENSIONS_MACHINES_SIMULATION_MOTION_SCENE_H_
@@ -89,7 +89,7 @@ struct ToolTrajectoryOptions {
     std::optional<std::size_t> skip_sample;
 };
 
-/// @brief 工具軌跡の区間単位の可視性
+/// @brief 工具軌跡の区間単位の表示設定
 struct TrajectoryVisibility {
     /// @brief 工具軌跡全体を表示するか
     bool show = true;
@@ -118,33 +118,33 @@ struct MotionTraceOptions {
 /// @note 2つ以上あれば両端を含む
 std::vector<std::size_t> ThinIndices(std::size_t count, const Thinning& thinning);
 
-/// @brief 工具軌跡 (`trajectory:`の中身) を作り直す
+/// @brief 工具軌跡（`trajectory:`の中身）を作り直す
 /// @param[in,out] scene 構築済みのシーン
 /// @param track 動作のサンプル列
-/// @param program `track`の元のCLプログラム (`EnumeratePaths`で区間を分ける)
+/// @param program `track`の元のCLプログラム（`EnumeratePaths`で区間を分ける）
 /// @param options 設定
-/// @param[out] warnings 警告の追加先 (`nullptr`なら追加しない)
+/// @param[out] warnings 警告の追加先（`nullptr`なら追加しない）
 /// @throw std::invalid_argument `scene`が未構築、または`thinning`が不正な場合
-///        (`ThinIndices`から伝播)
-/// @note 区間kのサンプルは`record_index`が区間内のもの. 工具番号が区間内で変わる
-///       場合は工具ごとに`tool<n>`を分ける. 工具表に無い番号と工具なしのサンプルは
-///       省き、番号ごとに1回警告する
+///        （`ThinIndices`から伝播）
+/// @note 区間kのサンプルは`record_index`が区間内のもの. 工具番号が区間内で変わる場合は
+///       工具ごとに`tool<n>`を分ける. 未登録の工具番号と工具なしのサンプルは省略し,
+///       番号ごとに1回警告する
 void RebuildToolTrajectory(MachineScene& scene, const MotionTrack& track,
                            const ClProgram& program,
                            const ToolTrajectoryOptions& options = {},
                            std::vector<Diagnostic>* warnings = nullptr);
 
-/// @brief 工具軌跡の区間単位の可視性を設定する
+/// @brief 工具軌跡の区間単位の表示設定を変更する
 /// @param[in,out] scene 構築済みのシーン
-/// @param visibility 可視性
+/// @param visibility 表示設定
 /// @throw std::invalid_argument `thinning`が不正な場合 (`ThinIndices`から伝播)
 /// @note 未構築、または工具軌跡が無ければ何もしない
 void SetToolTrajectoryVisible(MachineScene& scene,
                               const TrajectoryVisibility& visibility);
 
-/// @brief 工具軌跡の全区間のホルダ部の可視性を設定する
+/// @brief 工具軌跡の全区間のホルダ部の表示/非表示を切り替える
 /// @param[in,out] scene 構築済みのシーン
-/// @param visible 表示するなら`true`
+/// @param visible 表示するか
 /// @note 未構築、または工具軌跡が無ければ何もしない
 void SetToolTrajectoryHolderVisible(MachineScene& scene, bool visible);
 

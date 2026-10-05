@@ -4,10 +4,12 @@
  * @author Yayoi Habami
  * @date 2026-09-12
  * @copyright 2026 Yayoi Habami
- * @note 構築順: 運動学モデル → 初期姿勢 → 工具表 → 取り付け名の解決 →
- *       全形状のゼロポーズ機械座標への同次変換 (`Geometries()`) →
- *       工具オフセットの実効値 → `[[collision.machine_pair]]`のペア規則.
- *       取り付け名の解決では、ワーク座標系・モデルのゼロポーズ機械座標への
+ * @note 構築順：
+ *       (1) 運動学モデル → (2) 初期コンフィギュレーション →
+ *       (3) 工具 → (4) 取り付け名の解決 →
+ *       (5) 全形状の基準機械座標への同次変換（`Geometries()`）→
+ *       (6) 工具オフセットの実効値 → (7) `[[collision.machine_pair]]`のペア規則.
+ *       取り付け名の解決では、ワーク座標系・モデルの基準機械座標への
  *       同次変換の計算、および閉路の検出も行う.
  */
 #include "igesio/extensions/machines/project/setup.h"
@@ -37,7 +39,7 @@ namespace igesio::extensions::machines {
 namespace {
 
 /// @brief 取り付け先の解決結果
-///        (所属コンポーネント, 取り付け先座標系→ゼロポーズ機械座標の同次変換A)
+///        （所属コンポーネント、取り付け先座標系→基準機械座標の同次変換A）
 using AttachFrame = std::pair<std::size_t, igesio::Matrix4d>;
 
 /// @brief 仕様違反を`DataFormatError`として投げる
@@ -94,7 +96,7 @@ std::string ModelContext(const std::string& name) {
 
 
 /**
- * ---- 工具表 ----
+ * ---- 工具の登録 ----
  */
 
 /// @brief ライブラリ参照工具の参照先ライブラリを取得する
@@ -109,11 +111,11 @@ const ToolLibrarySpec* LibraryOf(const ProjectDefinition& project,
 }
 
 /// @brief 簡易アセンブリ形式の工具を解決する
-/// @param entry 工具表の項目
+/// @param entry 登録工具の項目
 /// @param simple 簡易アセンブリ形式の工具仕様
 /// @param warnings 警告の集計先
-/// @return 解決した工具 (名前は`entry.name`、空なら切れ刃の既定名)
-/// @throw igesio::DataFormatError 幾何が不正な場合 (読込済みの定義では起きない)
+/// @return 解決した工具（名前は`entry.name`、空なら切れ刃の既定名）
+/// @throw igesio::DataFormatError 幾何が不正な場合（読込済みの定義では起きない）
 ToolAssemblySpec ResolveSimpleTool(
         const ToolEntry& entry, const SimpleToolSpec& simple,
         std::vector<Diagnostic>& warnings) {
@@ -131,9 +133,9 @@ ToolAssemblySpec ResolveSimpleTool(
 }
 
 /// @brief 輪郭形式の工具を解決する
-/// @param entry 工具表の項目
-/// @param profile 輪郭形式の工具仕様 (読込時に検証済み)
-/// @return 解決した工具 (名前は`entry.name`)
+/// @param entry 登録工具の項目
+/// @param profile 輪郭形式の工具仕様（読込時に検証済）
+/// @return 解決した工具（名前は`entry.name`）
 ToolAssemblySpec ResolveProfileTool(const ToolEntry& entry,
                                     const ToolProfile& profile) {
     ToolAssemblySpec spec;
@@ -144,11 +146,11 @@ ToolAssemblySpec ResolveProfileTool(const ToolEntry& entry,
 
 /// @brief ライブラリ参照形式の工具をコールバックで解決する
 /// @param project プロジェクト定義
-/// @param entry 工具表の項目
+/// @param entry 登録工具の項目
 /// @param ref ライブラリ参照形式の工具仕様
 /// @param options セットアップの構築設定
 /// @param warnings 警告の集計先
-/// @return 解決できなければ`std::nullopt` (警告を追加する)
+/// @return 解決できなければ`std::nullopt`（警告を追加する）
 std::optional<ToolAssemblySpec> ResolveLibraryTool(
         const ProjectDefinition& project, const ToolEntry& entry,
         const LibraryToolRef& ref, const SetupOptions& options,
@@ -171,7 +173,7 @@ std::optional<ToolAssemblySpec> ResolveLibraryTool(
 }
 
 /// @brief 工具のゲージラインを決定する
-/// @param entry 工具表の項目
+/// @param entry 登録工具の項目
 /// @param[out] profile ゲージラインの書き込み先
 /// @param warnings 警告の集計先
 /// @note `gauge_length`があればその値、無ければ輪郭に基づいて決める
@@ -187,11 +189,11 @@ void ApplyGaugeLine(const ToolEntry& entry, ToolProfile& profile,
     ForwardWarnings(local, ToolContext(entry.number), entry.line, warnings);
 }
 
-/// @brief 工具表を作る (解決済みのみ)
+/// @brief 登録工具の対応を作る（解決済みのもののみ）
 /// @param project プロジェクト定義
 /// @param options セットアップの構築設定
 /// @param warnings 警告の集計先
-/// @return 工具番号→解決済みの工具 (未解決のライブラリ参照は含まない)
+/// @return 工具番号→解決済みの工具（未解決のライブラリ参照は含まない）
 /// @throw igesio::DataFormatError 簡易アセンブリの幾何が不正な場合
 std::map<int, ToolAssemblySpec> ResolveTools(
         const ProjectDefinition& project, const SetupOptions& options,
@@ -231,7 +233,7 @@ struct Resolver {
     const ProjectDefinition& project;
     /// @brief 運動学モデル
     const MachineModel& model;
-    /// @brief 初期姿勢の軸変位量 (登録値形式のチェーン外の軸に用いる)
+    /// @brief 初期コンフィギュレーションの軸変位量（登録値形式の連鎖外の軸に用いる）
     const JointVector& base_q;
     /// @brief 解決済みの名前 (メモ)
     std::map<std::string, AttachFrame>& frames;
@@ -244,16 +246,16 @@ struct Resolver {
 AttachFrame Resolve(Resolver& resolver, const std::string& name,
                     const std::string& context, int line);
 
-/// @brief 登録値形式のワーク座標→ゼロポーズ機械座標の同次変換W_0を計算する
+/// @brief 登録値形式のワーク座標系→基準機械座標系の同次変換W_0を計算する
 /// @param resolver 名前解決の状態
 /// @param spec ワークオフセットとワーク座標系
-/// @param values `[[work_offset]].values`の登録値 (チェーン上の軸のNC値)
-/// @param carrier ワーク座標系の所属コンポーネント (work_mount) の添字
+/// @param values `[[work_offset]].values`の登録値（連鎖上の軸のNC値）
+/// @param carrier ワーク座標系の所属コンポーネント（work_mount）のインデックス
 /// @return W_0
-/// @throw igesio::DataFormatError `values`にチェーン外の軸がある場合
-/// @note W_0 = F_a(q*)⁻¹ · T(p_from). q*はチェーン上の軸を`values` (省略0),
-///       チェーン外の軸を`base_q`とした軸変位量. p_fromはq*における基準点の
-///       機械座標. F(0) = Iなので補正項は不要
+/// @throw igesio::DataFormatError `values`に連鎖外の軸がある場合
+/// @note W_0 = F_a(q*)⁻¹ · T(p_from). q*は連鎖上の軸を`values`（省略時0）,
+///       連鎖外の軸を`base_q`とした軸変位量. p_fromはq*における基準点の機械座標.
+///       F(0) = Iなので補正項は不要
 igesio::Matrix4d RegisteredWorkFrame(
         const Resolver& resolver, const WorkOffsetSpec& spec,
         const NcValues& values, const std::size_t carrier) {
@@ -283,9 +285,9 @@ igesio::Matrix4d RegisteredWorkFrame(
 /// @brief ワークオフセットのワーク座標系を解決する
 /// @param resolver 名前解決の状態
 /// @param spec ワークオフセット
-/// @return (work_mountの添字, ワーク座標→ゼロポーズ機械座標の同次変換W_0)
+/// @return (work_mountのインデックス、ワーク座標→基準機械座標の同次変換W_0)
 /// @throw igesio::DataFormatError `attach`がwork_mountに至らない場合
-///        (名前の不在・閉路は`Resolve`から伝播)
+///        （指定した名前が存在しない場合や、閉路検出時は`Resolve`から伝播）
 AttachFrame ResolveWorkOffset(Resolver& resolver, const WorkOffsetSpec& spec) {
     const std::string context = WorkOffsetContext(spec.id);
     const AttachFrame attach = Resolve(resolver, spec.attach, context, spec.line);
@@ -329,7 +331,7 @@ std::optional<AttachFrame> ResolveMachineName(const MachineModel& model,
 /// @param name 取り付け先の名前 (予約語/コンポーネント名/モデル名/ワークオフセットID)
 /// @param context 参照元の場所 (エラー文言用)
 /// @param line 参照元の行番号
-/// @return 解決結果 (所属コンポーネント, 取り付け先座標系→ゼロポーズ機械座標の同次変換)
+/// @return 解決結果（所属コンポーネント、取り付け先座標系→基準機械座標系の同次変換）
 /// @throw igesio::DataFormatError 名前が無い、または閉路の場合
 AttachFrame Resolve(Resolver& resolver, const std::string& name,
                     const std::string& context, const int line) {
@@ -445,9 +447,9 @@ void ValidateMachinePairs(const ProjectDefinition& project,
  * ---- 工具オフセット ----
  */
 
-/// @brief 工具オフセットの実効値を計算する (省略値は工具のゲージ長・切れ刃部の半径)
+/// @brief 工具オフセットの実効値を計算する（省略値は工具のゲージ長・切れ刃部の半径）
 /// @param project プロジェクト定義
-/// @param tools 解決済みの工具表 (`ResolveTools`の結果)
+/// @param tools 解決済みの登録工具（`ResolveTools`の結果）
 /// @param warnings 警告の集計先
 /// @return オフセット番号→実効値
 std::map<int, ResolvedToolOffset> ResolveToolOffsets(
@@ -490,10 +492,10 @@ std::map<int, ResolvedToolOffset> ResolveToolOffsets(
 
 
 /**
- * ---- 形状のゼロポーズ機械座標への同次変換 ----
+ * ---- 形状の基準機械座標系への同次変換 ----
  */
 
-/// @brief 機械コンポーネントの形状とモデルをゼロポーズに置いた並びを作る
+/// @brief 機械コンポーネントの形状とモデルを基準コンフィギュレーションに置いた並びを作る
 /// @param model 運動学モデル
 /// @param models 取り付け先を解決済みのモデル
 /// @return 機械部品 (コンポーネント順、各コンポーネント内は定義順)、

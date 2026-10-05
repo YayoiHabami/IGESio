@@ -8,9 +8,9 @@
  *       SetToolTrajectoryHolderVisible / ToolTrajectoryMetallicIds /
  *       RebuildMotionTrace / UpdateCurrentRecord
  *       - 正常系: 間引きの3方式、区間ごとの工具軌跡と同次変換 (work_mount相対),
- *         区間内の工具の切り替え、区間単位の可視性、動作軌跡の点と分割、機械座標の
+ *         区間内の工具の切り替え、区間単位の表示/非表示、動作軌跡の点と分割、機械座標の
  *         移動の包含、現在レコードの差し替え、金属材質のID
- *       - 正常系 (境界値・退化): 要素数2以下の間引き、工具なしと工具表に無い番号の
+ *       - 正常系 (境界値・退化): 要素数2以下の間引き、工具なしと未登録の工具番号の
  *         サンプル、動作でないレコードと範囲外のレコードの強調、空のサンプル列
  *       - 異常系: 未構築のシーン (`invalid_argument`)、不正な間引きの指定
  *         (`invalid_argument`)
@@ -326,7 +326,7 @@ TEST(MotionSceneTest, Trajectory_ThinningKeepsEnds) {
 TEST(MotionSceneTest, Trajectory_ToolChangeSplitsRun) {
     const mc::MachiningSetup setup = MakeSetup(TwoToolProject());
     BuiltScene built = MakeScene(setup);
-    // 区切りで1区間にまとめ、区間内で工具1 → 2 → 工具なし → 工具表に無い9と変える
+    // 区切りで1区間にまとめ、区間内で工具1 → 2 → 工具なし → 未登録の工具番号9と変える
     const mc::ClProgram program = Program({
             mc::ClMarker{mc::ClMarker::Kind::kPathBegin, "p"},
             mc::ClLoadTool{1}, MoveTo(0.0, 0.0), MoveTo(10.0, 0.0),
@@ -386,7 +386,7 @@ TEST(MotionSceneTest, Trajectory_VisibilityAcrossRuns) {
     EXPECT_FALSE(visible(1));
     EXPECT_FALSE(visible(2));
 
-    // ホルダ部の可視性は全区間に及ぶ
+    // ホルダ部の表示/非表示は全区間に及ぶ
     mc::SetToolTrajectoryHolderVisible(scene, false);
     for (std::size_t k = 0; k < 3; ++k) {
         const auto holder = FindChild(*RunOf(scene, k)->GetChildAssemblies()[0],
@@ -439,7 +439,7 @@ TEST(MotionSceneTest, Trace_MachineAndWork) {
     ASSERT_NE(current, nullptr);
     EXPECT_FALSE(current->Display().visible);
 
-    // 早送りの折れ線は初期姿勢からレコード1の終点まで、切削はその終点から末尾まで
+    // 早送りの折れ線は初期コンフィギュレーションからレコード1の終点まで、切削はその終点から末尾まで
     const std::size_t first_cut = track.record_first_sample[2];
     EXPECT_EQ(machine_rapid[0]->GetCount(), first_cut);
     EXPECT_EQ(machine_cut[0]->GetCount(), track.samples.size() - first_cut + 1);

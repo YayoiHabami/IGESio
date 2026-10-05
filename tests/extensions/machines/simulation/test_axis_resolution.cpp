@@ -8,10 +8,10 @@
  *       - 正常系: 回転軸の指令の書き込みと姿勢IKとの一致、`keep_tool_axis`,
  *         回転角の解の連続性、直前の指令値の引き継ぎ、G43.4形式での出力,
  *         1点の解と動作生成のサンプルの一致、工具長補正、無制限回転軸の回転方向,
- *         特異姿勢
+ *         特異コンフィギュレーション
  *       - 正常系 (退化): 対象外のレコード (機械座標、制御点なし、回転軸の指令あり)
  *         は変更しない、工具軸方向の無いプログラム (+Zの仮定)、工具なしと
- *         工具表に無い番号 (ゲージライン)
+ *         未登録の工具番号 (ゲージライン)
  *       - 警告: 到達不能で直前の回転軸の指令を書く、1点の解の到達不能 (`nullopt`)
  *       - 異常系: 未定義のワークオフセット、ゼロベクトルの工具軸方向、軸数と異なる
  *         `prev_q` (`std::invalid_argument`)
@@ -203,7 +203,7 @@ TEST(AxisResolutionTest, Resolve_ContinuousBranch) {
     mc::AxisResolutionOptions options;
     options.branch = mc::BranchPolicy::kContinuous;
     const mc::ClProgram resolved = mc::ResolveAxisWords(setup, WithHead(records), options);
-    // 初期姿勢A=-20°に近い負側の候補から始まり、往復しても符号が反転しない
+    // 初期コンフィギュレーションのA=-20°に近い負側の候補から始まり、往復しても符号が反転しない
     for (const mc::ClGoto* motion : Records<mc::ClGoto>(resolved)) {
         EXPECT_LT(motion->axis_words.At("A"), 0.0);
     }
@@ -282,7 +282,8 @@ TEST(AxisResolutionTest, SolveClTarget_MatchesPlanMotion) {
     EXPECT_LT(solution->error->position, kIkTol);
     EXPECT_FALSE(solution->singular);
 
-    // 工具軸方向が+Z (旋回軸と平行) なら特異姿勢. 診断は追加しない
+    // 工具軸方向が+Z (工作物側回転軸と平行) なら特異コンフィギュレーション.
+    // 診断は追加しない
     const auto singular = mc::SolveClTarget(setup, TargetAt(Vector3d::UnitZ()),
                                             setup.BaseQ(), std::nullopt, &warnings);
     ASSERT_TRUE(singular.has_value());
@@ -338,7 +339,7 @@ TEST(AxisResolutionTest, SolveClTarget_ContinuesUnlimitedRotaryFromPrevious) {
     const mc::ClTarget target = TargetAt(Tilted(20.0));
     const auto first = mc::SolveClTarget(setup, target, setup.BaseQ());
     ASSERT_TRUE(first.has_value());
-    // 直前の姿勢のCを1回転進めておくと、同じ目標でも1回転進んだ側の解になる
+    // 直前のコンフィギュレーションのCを1回転進めておくと、同じ目標でも1回転進んだ側の解になる
     const double c0 = first->nc.At("C");
     const mc::JointVector turned = mc::JointsFromNc(
             model, mc::NcValues{{"C", c0 + mc::kFullTurn}}, *first->q);

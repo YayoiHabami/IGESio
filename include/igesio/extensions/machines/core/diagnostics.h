@@ -5,9 +5,9 @@
  * @date 2026-09-08
  * @copyright 2026 Yayoi Habami
  * @note 読込・動作生成の各段は、処理を中断する必要のない不備を`Diagnostic`
- *       として呼び出し側へ返す (例外にはしない). 仕様違反等の処理を終了すべき
- *       不備は`igesio::DataFormatError`等の既存例外を用い、到達不能姿勢のような
- *       運動学上の不備のみ本ヘッダの`KinematicsError`で表す.
+ *       として呼び出し側へ返す (例外にはしない). 仕様違反等の処理を終了すべき不備は
+ *       `igesio::DataFormatError`等の既存例外を用い、到達不能なコンフィギュレーション
+ *       のような、運動学上の不備のみ本ヘッダの`KinematicsError`で表す.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_CORE_DIAGNOSTICS_H_
 #define IGESIO_EXTENSIONS_MACHINES_CORE_DIAGNOSTICS_H_
@@ -42,8 +42,9 @@ struct Diagnostic {
     int line = 0;
 };
 
-/// @brief 到達不能姿勢・ストローク超過などの運動学上のエラー
-/// @note 動作生成時にこれが発生した場合は、姿勢を変更せず直前の姿勢を維持する.
+/// @brief 到達不能なコンフィギュレーション、ストローク超過などの運動学上のエラー
+/// @note 動作生成時にこのエラーが発生した場合は、コンフィギュレーションを変更せず
+///       直前のコンフィギュレーションを維持する.
 ///       対応外の軸構成は`igesio::NotImplementedError`であり、本クラスではない.
 class KinematicsError : public igesio::ComputationError {
  public:

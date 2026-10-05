@@ -1,7 +1,7 @@
 /**
  * @file extensions/machines/simulation/motion.h
- * @brief 動作生成 (Animation用の、CLプログラムをもとに時間軸上で等間隔に
- *        補間・サンプリングした姿勢列)
+ * @brief 動作生成（Animation用の、CLプログラムをもとに時間軸上で等間隔に
+ *        補間・サンプリングしたコンフィギュレーション列）
  * @author Yayoi Habami
  * @date 2026-09-15
  * @copyright 2026 Yayoi Habami
@@ -17,9 +17,9 @@
  *           レコードで指定されなかった軸はこの値を保つ
  *       (3) 登録値相対の座標語: TCP無効時 (G43/G49) の座標語. 機械のNC指令値は
  *           座標語+ワークオフセットの登録値+工具長補正
- * @note 座標系はすべてゼロポーズ機械座標. ワーク座標の制御点と工具軸方向は
- *       `ClState::work_offset`のワーク座標→ゼロポーズ機械座標の同次変換W_0
- *       (`MachiningSetup::FindWorkFrame`) で変換する.
+ * @note 座標系はすべて基準機械座標系. ワーク座標の制御点と工具軸方向は
+ *       `ClState::work_offset`のワーク座標系→基準機械座標系の同次変換W_0
+ *       （`MachiningSetup::FindWorkFrame`）で変換する.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_SIMULATION_MOTION_H_
 #define IGESIO_EXTENSIONS_MACHINES_SIMULATION_MOTION_H_
@@ -40,25 +40,25 @@
 
 namespace igesio::extensions::machines {
 
-/// @brief 1時刻の姿勢（機械動作の描画用サンプリング点）
+/// @brief 1時刻のコンフィギュレーション（機械動作の描画用サンプリング点）
 /// @note 表示用のNC指令値は保持せず、`DisplayNc(model, q)`で求める
 struct MotionSample {
     /// @brief 累積時刻 [s]
     double time = 0.0;
     /// @brief 全軸の軸変位量
     JointVector q;
-    /// @brief 動作レコードのインデックス (`ClProgram::records`)
+    /// @brief 動作レコードのインデックス（`ClProgram::records`）
     std::size_t record_index = 0;
-    /// @brief レコードの終点 (`true`) か補間点 (`false`) か
-    /// @note 先頭の初期姿勢データでは`false`
+    /// @brief レコードの終点（`true`）か補間点（`false`）か
+    /// @note 先頭の初期コンフィギュレーションのデータでは`false`
     bool is_command_point = false;
     /// @brief 動作の種類
     /// @note 円弧の分割点は`kArcCw`/`kArcCcw`、ドウェルは`kLinear`.
-    ///       先頭の初期姿勢サンプリング点は最初の通過点の種類
+    ///       先頭の初期コンフィギュレーションのサンプリング点は最初の通過点の種類
     MotionKind kind = MotionKind::kLinear;
-    /// @brief 選択中の工具番号 (`ClState::tool`)
+    /// @brief 選択中の工具番号（`ClState::tool`）
     int tool_number = kNoTool;
-    /// @brief この通過点で発生した警告 (`MotionTrack::warnings`のインデックス)
+    /// @brief この通過点で発生した警告（`MotionTrack::warnings`のインデックス）
     /// @note 同じ通過点の複数の警告は1件に連結する. 無ければ`std::nullopt`
     std::optional<std::size_t> warning;
 };
@@ -71,7 +71,7 @@ struct MotionStats {
     std::size_t sample_count = 0;
     /// @brief レコードの終点であるサンプリング点の数
     std::size_t command_point_count = 0;
-    /// @brief 到達不能で直前の姿勢を保持した通過点の数 (補間点を含む)
+    /// @brief 到達不能で直前のコンフィギュレーションを保持した通過点の数（補間点を含む）
     std::size_t unreachable_count = 0;
     /// @brief 可動範囲外の警告の数 (`OvertravelPolicy::kWarning`のみ)
     std::size_t overtravel_count = 0;
@@ -91,9 +91,9 @@ struct MotionStats {
 
 /// @brief 動作のサンプリング点列
 struct MotionTrack {
-    /// @brief サンプリング点列 (時刻の昇順)
-    /// @note 動作レコードがあれば、先頭は時刻0の初期姿勢 (`MachiningSetup::BaseQ`)
-    ///       のサンプリング点. 動作レコードが無ければ空
+    /// @brief サンプリング点列（時刻の昇順）
+    /// @note 動作レコードがあれば、先頭は時刻0の初期コンフィギュレーション
+    ///       （`MachiningSetup::BaseQ`）のサンプリング点. 動作レコードが無ければ空
     std::vector<MotionSample> samples;
     /// @brief レコード → そのレコード以降で最初の動作レコードの先頭サンプリング点
     /// @note `ClProgram::records`と同じ長さ. 末尾に動作レコードが無ければ
@@ -131,7 +131,8 @@ struct MotionOptions {
 };
 
 /// @brief CLプログラムから動作のサンプリング点列を作成する
-/// @param setup 加工セットアップ (運動学モデル、工具、ワーク座標系、初期姿勢)
+/// @param setup 加工セットアップ
+///        （運動学モデル、工具、ワーク座標系、初期コンフィギュレーション）
 /// @param program CLプログラム
 /// @param options 設定
 /// @return サンプリング点列
@@ -140,7 +141,7 @@ struct MotionOptions {
 /// @throw igesio::NotImplementedError 逆運動学が対応しない軸構成の場合
 /// @throw std::invalid_argument `fps`/`fallback_feed`/`arc_chord_tolerance`/
 ///        `fixed_record_seconds`が正でない、または`max_samples`が0の場合
-/// @note 到達不能な通過点は警告して直前の姿勢を保つ (例外にしない)
+/// @note 到達不能な通過点は警告して直前のコンフィギュレーションを保つ（例外にしない）
 MotionTrack PlanMotion(const MachiningSetup& setup, const ClProgram& program,
                        const MotionOptions& options = {});
 

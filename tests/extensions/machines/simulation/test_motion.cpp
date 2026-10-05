@@ -6,7 +6,7 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: PlanMotion / SampleIndexAtTime / CommandSampleOfRecord / DisplayNc
  *       - 正常系: 区間時間の閉形式 (早送り/切削/送り不明)、ドウェル、通過点ごとの
- *         固定時間 (`fixed_record_seconds`)、初期姿勢サンプル、回転方向の正規化,
+ *         固定時間 (`fixed_record_seconds`)、初期コンフィギュレーションのサンプル、回転方向の正規化,
  *         fpsの低減、TCP区間と直接指令の補間、レコードの終点のサンプル,
  *         登録値相対の座標語と工具長補正、機械座標、工具軸方向の継続と仮定,
  *         到達不能、可動範囲外の扱い、円弧の分割、回転角の解の連続性、制御点,
@@ -19,10 +19,10 @@
  *         (`std::invalid_argument`)
  *       TODO: `NotImplementedError` (対応しない軸構成) は逆運動学側で検証済み
  *       (`test_inverse_kinematics.cpp`) のため本ファイルでは扱わない
- * @note フィクスチャは実例機 (工具側XYZ・ワーク側AC. 工具取り付け点 (0,-180,250.5),
+ * @note フィクスチャは実例機 (工具側XYZ・工作物側AC. 工具取り付け点 (0,-180,250.5),
  *       各軸に動特性あり) と`MinimalProject` (簡易ボール工具#1・G54登録値・
  *       G55幾何形式・初期Z=100). G54は`W_0 = I`、工具#1の制御点 (先端) の
- *       `tool_mount`フレーム座標は (0, 0, -90)
+ *       工具取り付け部座標は (0, 0, -90)
  */
 #include <gtest/gtest.h>
 
@@ -73,7 +73,7 @@ using motion_test::WithTool;
 constexpr double kTol = 1e-9;
 /// @brief 逆運動学を経た値の比較の許容誤差
 constexpr double kIkTol = 1e-6;
-/// @brief 工具#1の制御点 (先端) の`tool_mount`フレーム座標のz [mm] (ゲージ長90)
+/// @brief 工具#1の制御点 (先端) の工具取り付け部座標のz [mm] (ゲージ長90)
 constexpr double kTipZ = -90.0;
 /// @brief 実例機の直進軸の早送り/最大送り [mm/s] (6000 mm/min)
 constexpr double kLinearFeed = 100.0;
@@ -89,13 +89,13 @@ std::vector<mc::MotionSample> CommandSamples(const mc::MotionTrack& track) {
     return found;
 }
 
-/// @brief 工具#1の制御点 (先端) のゼロポーズ機械座標 (`tool_mount`に固定. H_tm·c)
+/// @brief 工具#1の制御点 (先端) の基準機械座標 (`tool_mount`に固定. H_tm·c)
 Vector3d ControlHome(const mc::MachineModel& model) {
     return mc::ApplyPoint(model.MountPlacement(mc::MountKind::kToolMount),
                           Vector3d(0.0, 0.0, kTipZ));
 }
 
-/// @brief 制御点のゼロポーズ機械座標 (`work_mount`基準) を順運動学で計算する
+/// @brief 制御点の基準機械座標 (`work_mount`基準) を順運動学で計算する
 Vector3d ControlPointHome(const mc::MachineModel& model, const mc::JointVector& q,
                           const Vector3d& control_home) {
     const auto frames = mc::Forward(model, q);
@@ -103,7 +103,7 @@ Vector3d ControlPointHome(const mc::MachineModel& model, const mc::JointVector& 
                           mc::ApplyPoint(frames[model.ToolMountIndex()], control_home));
 }
 
-/// @brief 現在姿勢の工具軸方向 (ワーク座標. `work_mount`基準) を順運動学で計算する
+/// @brief 現在のコンフィギュレーションの工具軸方向 (ワーク座標. `work_mount`基準) を順運動学で計算する
 Vector3d ToolAxisWork(const mc::MachineModel& model, const mc::JointVector& q) {
     const auto frames = mc::Forward(model, q);
     return mc::ApplyDirection(mc::RigidInverse(frames[model.WorkMountIndex()]),
@@ -127,7 +127,7 @@ double NcOf(const mc::MachineModel& model, const mc::JointVector& q,
 
 TEST(MotionTest, Time_ClosedForm) {
     const auto setup = MakeSetup();
-    // 早送り: 制御点は初期姿勢の (0, -180, 260.5) から (10, 0, 0) へ (Zの260.5 mmが最長)
+    // 早送り: 制御点は初期コンフィギュレーションの (0, -180, 260.5) から (10, 0, 0) へ (Zの260.5 mmが最長)
     // 切削: Y方向に50 mmをF = 5 mm/sで10 s (軸の最大送りでは0.5 s)
     const mc::ClProgram program = WithTool({
             mc::ClFeed{5.0},
@@ -540,7 +540,7 @@ TEST(MotionTest, Unreachable_KeepsPrevious) {
 }
 
 TEST(MotionTest, PrevNc_ContinuesAcrossRecords) {
-    // 初期姿勢A=-20°から始め、kContinuousでは負側の回転角候補を採り続ける
+    // 初期コンフィギュレーションのA=-20°から始め、kContinuousでは負側の回転角候補を採り続ける
     const auto setup = MakeSetup(Replace(MinimalProject(), "Z = 100.0", "Z = 100.0\nA = -20.0"));
     const mc::MachineModel& model = setup.Model();
     std::vector<mc::ClRecord> records;

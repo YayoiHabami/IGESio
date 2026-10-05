@@ -37,9 +37,9 @@ bool SameState(const igesio::Matrix4d& lhs, const igesio::Matrix4d& rhs,
     return (lhs - rhs).cwiseAbs().maxCoeff() <= tolerance;
 }
 
-/// @brief 2つの可視性が同じか
-/// @param lhs 比較する可視性
-/// @param rhs 比較する可視性
+/// @brief 2つの表示/非表示が同じか
+/// @param lhs 比較する表示/非表示
+/// @param rhs 比較する表示/非表示
 /// @note 第3引数 (許容誤差) は用いない
 bool SameState(const bool lhs, const bool rhs, double) { return lhs == rhs; }
 
@@ -52,7 +52,8 @@ bool SameState(const std::int64_t lhs, const std::int64_t rhs, double) {
 }
 
 /// @brief 1ターゲット (または1イベント名) 分のキー発行の管理用クラス
-/// @tparam State キーの値の型 (変換は`Matrix4d`、可視性は`bool`、イベントは`int64_t`)
+/// @tparam State キーの値の型
+///         （変換は`Matrix4d`、表示/非表示は`bool`、イベントは`int64_t`）
 /// @note 同時刻に複数の値が来た場合は最後の値だけをキーにするため、値を保留して
 ///       時刻が進んだときに発行する. `skip`なら直前に発行した値と同じキーを省く.
 ///       クリップへの追加は種別ごとに異なるため、発行先は呼び出し側が渡す
@@ -110,11 +111,11 @@ class KeySlot {
     std::optional<std::pair<double, State>> pending_;
 };
 
-/// @brief 工具1つ分の可視性キーの対象と管理用構造体
+/// @brief 工具1つ分の表示/非表示キーの対象と管理用構造体
 struct ToolSlot {
     /// @brief 工具のアセンブリのID
     ObjectID id;
-    /// @brief 可視性キーの発行管理
+    /// @brief 表示/非表示キーの発行管理
     KeySlot<bool> visibility;
 };
 
@@ -172,7 +173,7 @@ class ClipBuilder {
         };
     }
 
-    /// @brief 可視性キーを追加する関数を作る
+    /// @brief 表示/非表示キーを追加する関数を作る
     /// @param id 対象のアセンブリのID (呼び出し側で寿命を保つこと)
     auto VisibilityEmitter(const ObjectID& id) {
         return [this, &id](const double time, const bool visible) {
@@ -188,7 +189,7 @@ class ClipBuilder {
         };
     }
 
-    /// @brief サンプルの姿勢を各コンポーネントの変換キーにする
+    /// @brief サンプルのコンフィギュレーションを各コンポーネントの変換キーにする
     /// @param sample サンプル
     void PushTransforms(const MotionSample& sample) {
         Forward(scene_.Model(), sample.q, &forward_buffer_);
@@ -198,9 +199,9 @@ class ClipBuilder {
         }
     }
 
-    /// @brief サンプルの工具番号を各工具の可視性キーにする
+    /// @brief サンプルの工具番号を各工具の表示/非表示キーにする
     /// @param sample サンプル
-    /// @note 工具表に無い番号は番号ごとに1回警告する (全工具が非表示になる)
+    /// @note 未登録の工具番号は番号ごとに1回警告する（全工具が非表示になる）
     void PushVisibility(const MotionSample& sample) {
         const int number = sample.tool_number;
         if (number != kNoTool && tools_.count(number) == 0
@@ -271,7 +272,7 @@ class ClipBuilder {
     std::vector<KeySlot<igesio::Matrix4d>> transforms_;
     /// @brief コンポーネントのアセンブリのID (`Component()`の順)
     std::vector<ObjectID> component_ids_;
-    /// @brief 工具ごとの可視性キーの対象とKeySlot (工具番号→`ToolSlot`)
+    /// @brief 工具ごとの表示/非表示キーの対象とKeySlot（工具番号→`ToolSlot`）
     std::map<int, ToolSlot> tools_;
     /// @brief `"tool"`イベントのKeySlot
     KeySlot<std::int64_t> tool_event_;
@@ -279,7 +280,7 @@ class ClipBuilder {
     KeySlot<std::int64_t> record_event_;
     /// @brief `"program"`イベントのKeySlot
     KeySlot<std::int64_t> program_event_;
-    /// @brief 警告済みの工具表に無い工具番号
+    /// @brief 警告を出した未登録の工具番号
     std::set<int> unknown_tools_;
     /// @brief 順運動学の出力バッファ
     std::vector<igesio::Matrix4d> forward_buffer_;

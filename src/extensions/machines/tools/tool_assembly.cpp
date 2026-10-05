@@ -27,7 +27,7 @@ std::string_view ControlPointName(const ControlPoint point) {
 igesio::Vector3d ControlLocal(const ToolAssemblySpec& spec,
                               const std::optional<double> g43_length) {
     if (spec.control_point == ControlPoint::kGauge) {
-        // ゲージラインは取り付けフレームの原点. G43はそこから先端側へ補正する
+        // ゲージラインは取り付け部座標系の原点. G43はそこから先端側へ補正する
         return igesio::Vector3d(0.0, 0.0, g43_length.has_value() ? -*g43_length : 0.0);
     }
     return igesio::Vector3d(

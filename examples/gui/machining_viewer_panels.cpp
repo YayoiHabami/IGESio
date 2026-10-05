@@ -1060,7 +1060,7 @@ void MachiningViewerGUI::RenderTrajectorySettings() {
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "settings changed");
     }
 
-    // 可視性の設定 (即時反映)
+    // 表示/非表示の設定 (即時反映)
     ImGui::TextDisabled("Visibility");
     m::TrajectoryVisibility& visibility = trajectory_visibility_;
     if (ImGui::Checkbox("Show trajectory", &visibility.show)) {

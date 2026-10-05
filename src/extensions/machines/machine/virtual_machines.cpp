@@ -27,11 +27,11 @@ constexpr std::string_view kToolMountName = "Tool";
 constexpr std::string_view kWorkMountName = "Table";
 
 /// @brief 可動軸のコンポーネントを作る
-/// @param name コンポーネント名 (軸名にも用いる)
+/// @param name コンポーネント名（軸名にも用いる）
 /// @param parent 親コンポーネント名
 /// @param type `kLinear`または`kRotary`
-/// @param direction 軸方向 (コンポーネント座標 = ゼロポーズ機械座標)
-/// @param limit 可動範囲 ±値 [mm] or [rad] (無ければ無制限)
+/// @param direction 軸方向（コンポーネント座標 = 基準機械座標）
+/// @param limit 可動範囲 ±値 [mm] or [rad]（無ければ無制限）
 /// @return 回転軸は原点を通る
 ComponentSpec AxisComponent(const std::string_view name,
                             const std::string_view parent,
@@ -55,18 +55,18 @@ ComponentSpec AxisComponent(const std::string_view name,
     return component;
 }
 
-/// @brief 旋回軸C (軸+z、無制限、`wrap_start = 0`) のコンポーネントを作る
+/// @brief 工作物側回転軸C（軸+z、無制限、`wrap_start = 0`）のコンポーネントを作る
 /// @param parent 親コンポーネント名
-/// @note 傾斜軸は無制限でも`wrap_start`を持たず、NC指令値を正規化しない
-///       (傾斜-30°を330°にしない)
-ComponentSpec SwivelComponent(const std::string_view parent) {
+/// @note 工具側回転軸は無制限でも`wrap_start`を持たず、NC指令値を正規化しない
+///       （工具側回転軸の回転角-30°を330°にしない）
+ComponentSpec WorkSideRotaryComponent(const std::string_view parent) {
     ComponentSpec component = AxisComponent("C", parent, ComponentType::kRotary,
                                             igesio::Vector3d::UnitZ(), std::nullopt);
     component.axis->wrap_start = 0.0;
     return component;
 }
 
-/// @brief 取り付け点のコンポーネントを作る (取り付けフレームは原点)
+/// @brief 取り付け点のコンポーネントを作る（取り付け部座標系は原点）
 /// @param name コンポーネント名
 /// @param parent 親コンポーネント名
 /// @param type `kToolMount`または`kWorkMount`
@@ -92,12 +92,12 @@ void AppendLinearAxes(std::vector<ComponentSpec>& components) {
                                        igesio::Vector3d::UnitZ(), std::nullopt));
 }
 
-/// @brief 種類ごとの運動学ツリーを作る
+/// @brief 種類ごとの機械構造ツリーを作る
 /// @param kind 仮想機械の種類
-/// @param tilt_limit 傾斜軸の可動範囲 ±値 [rad] (無ければ無制限)
+/// @param tool_side_limit 工具側回転軸の可動範囲 ±値 [rad]（無ければ無制限）
 /// @return コンポーネント (`base`は末尾)
 std::vector<ComponentSpec> BuildComponents(const VirtualMachineKind kind,
-                                           const std::optional<double> tilt_limit) {
+                                           const std::optional<double> tool_side_limit) {
     std::vector<ComponentSpec> components;
     AppendLinearAxes(components);
     switch (kind) {
@@ -108,9 +108,10 @@ std::vector<ComponentSpec> BuildComponents(const VirtualMachineKind kind,
                                                 ComponentType::kWorkMount));
             break;
         case VirtualMachineKind::kHeadBc:
-            components.push_back(SwivelComponent("Z"));
+            components.push_back(WorkSideRotaryComponent("Z"));
             components.push_back(AxisComponent("B", "C", ComponentType::kRotary,
-                                               igesio::Vector3d::UnitY(), tilt_limit));
+                                               igesio::Vector3d::UnitY(),
+                                               tool_side_limit));
             components.push_back(
                     MountComponent(kToolMountName, "B", ComponentType::kToolMount));
             components.push_back(MountComponent(kWorkMountName, kBaseComponentName,
@@ -121,8 +122,9 @@ std::vector<ComponentSpec> BuildComponents(const VirtualMachineKind kind,
                     MountComponent(kToolMountName, "Z", ComponentType::kToolMount));
             components.push_back(AxisComponent("A", kBaseComponentName,
                                                ComponentType::kRotary,
-                                               igesio::Vector3d::UnitX(), tilt_limit));
-            components.push_back(SwivelComponent("A"));
+                                               igesio::Vector3d::UnitX(),
+                                               tool_side_limit));
+            components.push_back(WorkSideRotaryComponent("A"));
             components.push_back(
                     MountComponent(kWorkMountName, "C", ComponentType::kWorkMount));
             break;
@@ -174,15 +176,16 @@ MachineDefinition MakeVirtualMachineDefinition(const VirtualMachineKind kind,
     if (options.name.empty()) {
         throw std::invalid_argument("MakeVirtualMachineDefinition: name is empty");
     }
-    if (options.tilt_limit_rad.has_value() && !(*options.tilt_limit_rad > 0.0)) {
+    if (options.tool_side_limit_rad.has_value()
+        && !(*options.tool_side_limit_rad > 0.0)) {
         throw std::invalid_argument(
-                "MakeVirtualMachineDefinition: tilt_limit_rad must be positive");
+                "MakeVirtualMachineDefinition: tool_side_limit_rad must be positive");
     }
     MachineDefinition definition;
     definition.format_version = kMachineFormatVersion;
     definition.name = options.name;
     definition.description = DescriptionOf(kind);
-    definition.components = BuildComponents(kind, options.tilt_limit_rad);
+    definition.components = BuildComponents(kind, options.tool_side_limit_rad);
     definition.branch = options.branch;
     definition.source_name = options.name;
     return definition;

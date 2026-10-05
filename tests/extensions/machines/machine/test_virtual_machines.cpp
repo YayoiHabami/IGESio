@@ -6,13 +6,14 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: MakeVirtualMachineDefinition
  *       - 正常系: 3種の`MachineModel`構築 (軸数、姿勢を決める回転軸、工具軸方向,
- *         取り付けフレーム、チェーン)、設定 (名前/回転角の解の選択方針)、任意の
- *         工具軸方向への到達 (`kHeadBc`/`kTableAc`)、傾斜軸の可動範囲、暗黙のG54で
+ *         取り付け部座標系、連鎖)、設定 (名前/回転角の解の選択方針)、任意の
+ *         工具軸方向への到達 (`kHeadBc`/`kTableAc`)、工具側回転軸の可動範囲,
+ *         暗黙のG54で
  *         W_0 = I (`MakeProjectDefinition`+`MachiningSetup`)、TOMLの書き出しと
  *         読み戻し
  *       - 正常系 (退化): `kThreeAxis`で傾斜した工具軸方向は到達不能
- *         (`KinematicsError`)、傾斜軸の可動範囲の端
- *       - 異常系: 名前が空、`tilt_limit_rad`が正でない (`std::invalid_argument`)
+ *         (`KinematicsError`)、工具側回転軸の可動範囲の端
+ *       - 異常系: 名前が空、`tool_side_limit_rad`が正でない (`std::invalid_argument`)
  */
 #include <gtest/gtest.h>
 
@@ -47,10 +48,10 @@ using mc::ToRadians;
 /// @brief 角度・位置の比較の許容誤差
 constexpr double kTol = 1e-9;
 
-/// @brief 制御点の`tool_mount`フレームでの座標 (工具長100の先端)
+/// @brief 制御点の工具取り付け部座標系での座標 (工具長100の先端)
 const Vector3d kControl(0.0, 0.0, -100.0);
 
-/// @brief 到達性の検証に用いる目標点 (ゼロポーズ機械座標)
+/// @brief 到達性の検証に用いる目標点 (基準機械座標)
 const Vector3d kTarget(10.0, 20.0, 30.0);
 
 /// @brief 傾斜`tilt_deg`・方位角`azimuth_deg`の工具軸方向を作る
@@ -68,7 +69,7 @@ std::vector<std::string> AxisNames(const mc::MachineModel& model) {
     return names;
 }
 
-/// @brief 姿勢を決める回転軸の軸名の一覧を取得する (先頭が外側)
+/// @brief 姿勢を決める回転軸の軸名の一覧を取得する (先頭が工作物側回転軸)
 std::vector<std::string> OrientationNames(const mc::MachineModel& model) {
     std::vector<std::string> names;
     for (const std::size_t index : model.OrientationAxes()) {
@@ -77,7 +78,7 @@ std::vector<std::string> OrientationNames(const mc::MachineModel& model) {
     return names;
 }
 
-/// @brief 全種類に共通の性質 (工具軸方向+Z、取り付けフレーム原点、無制限の直進軸)
+/// @brief 全種類に共通の性質 (工具軸方向+Z、取り付け部座標系の原点、無制限の直進軸)
 ///        を検証する
 void ExpectCommonShape(const mc::MachineModel& model) {
     EXPECT_TRUE(model.ToolAxisHome().isApprox(Vector3d::UnitZ(), kTol));
@@ -121,7 +122,7 @@ TEST(VirtualMachinesTest, MakeVirtual_ThreeAxisStructure) {
     ExpectCommonShape(model);
     EXPECT_EQ(AxisNames(model), (std::vector<std::string>{"X", "Y", "Z"}));
     EXPECT_TRUE(model.OrientationAxes().empty());
-    // 工具側チェーンはbase→X→Y→Z→Tool、ワーク側はbase→Table
+    // 工具側連鎖はbase→X→Y→Z→Tool、工作物側連鎖はbase→Table
     EXPECT_EQ(model.ToolChain().size(), 5u);
     EXPECT_EQ(model.WorkChain().size(), 2u);
     EXPECT_EQ(model.ChainRegisters(), (std::vector<std::string>{"X", "Y", "Z"}));
@@ -143,7 +144,7 @@ TEST(VirtualMachinesTest, MakeVirtual_HeadBcStructure) {
     const mc::MachineModel model(definition);
     ExpectCommonShape(model);
     EXPECT_EQ(AxisNames(model), (std::vector<std::string>{"X", "Y", "Z", "C", "B"}));
-    // 旋回軸C (外側) と傾斜軸B (内側) はいずれも工具側 (σ=+1)
+    // 工作物側回転軸Cと工具側回転軸Bはいずれも工具側連鎖上 (σ=+1)
     EXPECT_EQ(OrientationNames(model), (std::vector<std::string>{"C", "B"}));
     const mc::AxisInfo& c = model.Axes()[*model.FindAxis("C")];
     const mc::AxisInfo& b = model.Axes()[*model.FindAxis("B")];
@@ -167,7 +168,7 @@ TEST(VirtualMachinesTest, MakeVirtual_TableAcStructure) {
             mc::MakeVirtualMachineDefinition(mc::VirtualMachineKind::kTableAc));
     ExpectCommonShape(model);
     EXPECT_EQ(AxisNames(model), (std::vector<std::string>{"X", "Y", "Z", "A", "C"}));
-    // 旋回軸C (外側) と傾斜軸A (内側) はいずれもワーク側 (σ=-1)
+    // 工作物側回転軸Cと工具側回転軸Aはいずれも工作物側連鎖上 (σ=-1)
     EXPECT_EQ(OrientationNames(model), (std::vector<std::string>{"C", "A"}));
     const mc::AxisInfo& a = model.Axes()[*model.FindAxis("A")];
     const mc::AxisInfo& c = model.Axes()[*model.FindAxis("C")];
@@ -179,7 +180,7 @@ TEST(VirtualMachinesTest, MakeVirtual_TableAcStructure) {
     EXPECT_TRUE(c.on_work_chain);
     EXPECT_FALSE(a.wrap_start.has_value());
     ASSERT_TRUE(c.wrap_start.has_value());
-    // ワーク側チェーンはbase→A→C→Table
+    // 工作物側連鎖はbase→A→C→Table
     EXPECT_EQ(model.WorkChain().size(), 4u);
     ASSERT_TRUE(model.WorkPivotReference().has_value());
     EXPECT_TRUE(model.WorkPivotReference()->isZero(kTol));
@@ -205,7 +206,7 @@ TEST(VirtualMachinesTest, MakeVirtual_ReachesArbitraryToolAxis) {
                         << "tilt " << tilt << " azimuth " << azimuth;
                 EXPECT_LT(solution.error->position, kTol)
                         << "tilt " << tilt << " azimuth " << azimuth;
-                // 無制限の軸なので可動範囲外にならず、特異姿勢も診断しない
+                // 無制限の軸なので可動範囲外にならず、特異コンフィギュレーションも診断しない
                 EXPECT_TRUE(solution.warnings.empty())
                         << "tilt " << tilt << " azimuth " << azimuth;
                 EXPECT_EQ(solution.singular, tilt == 0.0);
@@ -229,9 +230,9 @@ TEST(VirtualMachinesTest, MakeVirtual_ThreeAxisCannotTilt) {
                  mc::KinematicsError);
 }
 
-TEST(VirtualMachinesTest, MakeVirtual_TiltLimitRestrictsTiltAxis) {
+TEST(VirtualMachinesTest, MakeVirtual_ToolSideLimitRestrictsToolSideAxis) {
     mc::VirtualMachineOptions options;
-    options.tilt_limit_rad = ToRadians(90.0);
+    options.tool_side_limit_rad = ToRadians(90.0);
     const mc::MachineModel model(mc::MakeVirtualMachineDefinition(
             mc::VirtualMachineKind::kHeadBc, options));
     const mc::AxisInfo& b = model.Axes()[*model.FindAxis("B")];
@@ -239,7 +240,7 @@ TEST(VirtualMachinesTest, MakeVirtual_TiltLimitRestrictsTiltAxis) {
     ASSERT_TRUE(b.limits.has_value());
     EXPECT_NEAR((*b.limits)[0], ToRadians(-90.0), kTol);
     EXPECT_NEAR((*b.limits)[1], ToRadians(90.0), kTol);
-    // 旋回軸Cは無制限のまま
+    // 工作物側回転軸Cは無制限のまま
     EXPECT_TRUE(model.Axes()[*model.FindAxis("C")].unlimited);
 
     // 可動範囲の端 (傾斜90°) までは警告なく解け、超えると可動範囲外の警告
@@ -281,7 +282,7 @@ TEST(VirtualMachinesTest, MakeVirtual_ImplicitG54IsIdentity) {
         ASSERT_EQ(setup.WorkFrames().size(), 1u);
         EXPECT_EQ(setup.WorkFrames()[0].id, mc::kImplicitWorkOffsetId);
         EXPECT_EQ(setup.InitialWorkOffset(), mc::kImplicitWorkOffsetId);
-        // 取り付けフレームが原点なので、ワーク座標 = ゼロポーズ機械座標
+        // 取り付け部座標系が原点なので、ワーク座標 = 基準機械座標
         EXPECT_TRUE(setup.WorkFrames()[0].w0.isIdentity(kTol));
         EXPECT_EQ(setup.WorkFrames()[0].carrier, setup.Model().WorkMountIndex());
         for (std::size_t i = 0; i < setup.BaseQ().Size(); ++i) {
@@ -297,7 +298,7 @@ TEST(VirtualMachinesTest, MakeVirtual_RoundTripsThroughToml) {
          {mc::VirtualMachineKind::kThreeAxis, mc::VirtualMachineKind::kHeadBc,
           mc::VirtualMachineKind::kTableAc}) {
         mc::VirtualMachineOptions options;
-        options.tilt_limit_rad = ToRadians(120.0);
+        options.tool_side_limit_rad = ToRadians(120.0);
         const mc::MachineDefinition original =
                 mc::MakeVirtualMachineDefinition(kind, options);
         const std::string text = mc::WriteMachineDefinitionToString(original, base_dir);
@@ -340,18 +341,18 @@ TEST(VirtualMachinesTest, MakeVirtual_ThrowsInvalidArgumentWhenNameIsEmpty) {
                  std::invalid_argument);
 }
 
-TEST(VirtualMachinesTest, MakeVirtual_ThrowsInvalidArgumentWhenTiltLimitIsNotPositive) {
+TEST(VirtualMachinesTest, MakeVirtual_ThrowsInvalidArgumentWhenToolSideLimitIsNotPositive) {
     mc::VirtualMachineOptions options;
-    options.tilt_limit_rad = 0.0;
+    options.tool_side_limit_rad = 0.0;
     EXPECT_THROW(mc::MakeVirtualMachineDefinition(mc::VirtualMachineKind::kHeadBc,
                                                   options),
                  std::invalid_argument);
-    options.tilt_limit_rad = -ToRadians(90.0);
+    options.tool_side_limit_rad = -ToRadians(90.0);
     EXPECT_THROW(mc::MakeVirtualMachineDefinition(mc::VirtualMachineKind::kTableAc,
                                                   options),
                  std::invalid_argument);
     // 正の値なら受理する (3軸機では使わないが検証はする)
-    options.tilt_limit_rad = 1e-9;
+    options.tool_side_limit_rad = 1e-9;
     EXPECT_NO_THROW(mc::MakeVirtualMachineDefinition(
             mc::VirtualMachineKind::kThreeAxis, options));
 }

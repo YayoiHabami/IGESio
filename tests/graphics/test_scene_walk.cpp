@@ -1,6 +1,6 @@
 /**
  * @file tests/graphics/test_scene_walk.cpp
- * @brief レンダラのAssemblyツリー走査(累積変換のリフレッシュ・可視/抑制スキップ)の検証
+ * @brief レンダラのAssemblyツリー走査(累積変換のリフレッシュ・表示/非表示・抑制スキップ)の検証
  * @author Yayoi Habami
  * @date 2026-05-29
  * @copyright 2026 Yayoi Habami

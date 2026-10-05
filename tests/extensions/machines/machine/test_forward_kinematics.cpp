@@ -6,11 +6,12 @@
  * @copyright 2026 Yayoi Habami
  * @note 対象: InitialJoints / JointsFromNc / NcFromJoints / Forward (2つの多重定義)
  *       - 正常系 (実例): `t-ZYX-b-AC-w.toml`について、各コンポーネントの剛体変換行列が
- *         閉形式と一致すること、NC↔軸変位量の往復とワーク側軸の符号反転、
+ *         閉形式と一致すること、NC↔軸変位量の往復と工作物側の軸の符号反転、
  *         戻り値版と出力引数版の一致 (2回目で再確保しないこと)
- *       - 正常系 (退化): ゼロポーズ (既定姿勢) で全コンポーネントの剛体変換行列が単位行列になること
+ *       - 正常系 (退化): 基準コンフィギュレーションで全コンポーネントの剛体変換行列が
+ *         単位行列になること
  *       - 異常系: 軸数不一致・出力先が`nullptr`・未知の軸名で`std::invalid_argument`
- * @note 構造の検証中に順運動学を使うテスト (派生構成の従動軸・チェーン外の軸等) は
+ * @note 構造の検証中に順運動学を使うテスト (派生構成の従動軸・連鎖外の軸等) は
  *       `test_machine_model.cpp`側にある.
  */
 #include <gtest/gtest.h>
@@ -39,7 +40,7 @@ using machines_test::kFixturePath;
 /// @brief 行列・ベクトル比較の許容誤差
 constexpr double kTol = 1e-9;
 
-/// @brief 実例TOML (工具側ZYX・ワーク側AC) から運動学モデルを作る
+/// @brief 実例TOML (工具側ZYX・工作物側AC) から運動学モデルを作る
 mc::MachineModel FixtureModel() {
     return mc::MachineModel(mc::ReadMachineDefinition(kFixturePath));
 }
@@ -75,7 +76,7 @@ TEST(ForwardKinematicsTest, Fixture_ForwardMatchesClosedForm) {
     EXPECT_TRUE(Placement(model, f, "X").isApprox(
             mc::Translation(Vector3d(xyz.x(), 0.0, 0.0)), kTol));
     EXPECT_TRUE(Placement(model, f, "Z").isApprox(mc::Translation(xyz), kTol));
-    // フレーム原点(0,-180,250.5)はMountPlacement側にあり、F_Toolには含まれない
+    // 工具取り付け部座標系の原点(0,-180,250.5)はMountPlacement側にあり、F_Toolには含まれない
     EXPECT_TRUE(Placement(model, f, "Tool").isApprox(mc::Translation(xyz), kTol));
     const Matrix4d attach =
             mc::RotationAboutLine(Vector3d::UnitX(), Vector3d(0.0, 0.0, 60.0), -a)

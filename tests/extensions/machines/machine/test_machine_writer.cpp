@@ -234,7 +234,7 @@ Matrix3d RotZ90() {
     return mc::RotationAboutAxis(Vector3d::UnitZ(), mc::kQuarterTurn);
 }
 
-/// @brief C++で組み立てた最小の機械定義 (工具側XYZ・ワーク側AC・暗黙base)
+/// @brief C++で組み立てた最小の機械定義 (工具側XYZ・工作物側AC・暗黙base)
 /// @note A軸は(0,0,60)を通るx軸 (limits ±90°、initial 10°、動特性2値)、
 ///       C軸は無制限 (wrap_start 0)、Toolは(0,-180,250.5)でz軸まわり90°回転、
 ///       Z軸はlocal_frame (原点(1,2,3)・z軸まわり90°. 軸方向zは不変) と

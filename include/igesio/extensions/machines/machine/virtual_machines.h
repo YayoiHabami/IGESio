@@ -8,13 +8,12 @@
  *       単体テスト、ヘッドレスな使用例が`MachiningSetup`/`MachineScene`/
  *       `PlanMotion`をそのまま使えるように、代表的な軸構成の機械定義を
  *       構造体として直接組み立てる (TOMLを経由しない).
- * @note 全軸は可動範囲無制限 (`unlimited = true`) で軸の動特性を持たない
- *       (動作生成では`fallback_feed`を用い、情報を1件のみ報告する). 旋回軸Cは
- *       `wrap_start = 0`で、傾斜軸 (B/A) は`wrap_start`を持たない (NC指令値を
- *       0〜2πに正規化しない). 取り付けフレームは`tool_mount`/`work_mount`とも
- *       ゼロポーズ機械座標の原点で、工具軸方向は+Z. 暗黙のG54では
- *       ワーク座標→ゼロポーズ機械座標の同次変換がW_0 = I
- *       (ワーク座標 = ゼロポーズ機械座標) になる.
+ * @note 各軸は可動範囲無制限（`unlimited = true`）で軸の動特性を持たない
+ *       （動作生成では`fallback_feed`を用い、infoを1つだけ報告）. 工作物側回転軸C
+ *       は`wrap_start = 0`で、工具側回転軸は`wrap_start`を持たない（NC指令値は
+ *       0〜2πに正規化しない）. 取り付け部座標系は`tool_mount`/`work_mount`とも
+ *       基準機械座標の原点で、工具軸方向は+Z. 暗黙のG54ではワーク座標→基準機械座標の
+ *       同次変換がW_0 = I（ワーク座標 = 基準機械座標）になる.
  */
 #ifndef IGESIO_EXTENSIONS_MACHINES_MACHINE_VIRTUAL_MACHINES_H_
 #define IGESIO_EXTENSIONS_MACHINES_MACHINE_VIRTUAL_MACHINES_H_
@@ -28,30 +27,30 @@
 namespace igesio::extensions::machines {
 
 /// @brief 仮想機械の種類
-/// @note 括弧内は運動学ツリー. 軸名はコンポーネント名と同じ
+/// @note 括弧内は機械構造ツリー. 軸名はコンポーネント名と同じ
 enum class VirtualMachineKind {
     /// @brief 工具側X-Y-Z. 回転軸なし
     /// @note base→X→Y→Z→Tool、base→Table
     kThreeAxis,
-    /// @brief 工具側X-Y-Z-C-B (ヘッド・ヘッド型). ワーク側はTableのみ
+    /// @brief 工具側X-Y-Z-C-B（ヘッド・ヘッド型）. 工作物側はTableのみ
     /// @note base→X→Y→Z→C (軸+z)→B (軸+y)→Tool、base→Table.
-    ///       旋回軸はC (外側)、傾斜軸はB (内側)
+    ///       工作物側回転軸はC、工具側回転軸はB
     kHeadBc,
-    /// @brief 工具側X-Y-Z、ワーク側A-C (テーブル・テーブル型)
+    /// @brief 工具側X-Y-Z、工作物側A-C（テーブル・テーブル型）
     /// @note base→X→Y→Z→Tool、base→A (軸+x)→C (軸+z)→Table.
-    ///       旋回軸はC (外側)、傾斜軸はA (内側)
+    ///       工作物側回転軸はC、工具側回転軸はA
     kTableAc,
 };
 
 /// @brief 仮想機械の設定
 struct VirtualMachineOptions {
-    /// @brief 機械名 (`MachineDefinition::name`. シーンでは`machine:<name>`)
+    /// @brief 機械名（`MachineDefinition::name`. シーンでは`machine:<name>`）
     std::string name = "virtual";
     /// @brief 逆運動学における回転角の解の選択方針
     BranchPolicy branch = BranchPolicy::kContinuous;
-    /// @brief 傾斜軸 (B/A) の可動範囲 ±値 [rad]
+    /// @brief 工具側回転軸の可動範囲 ±値 [rad]
     /// @note 省略時は無制限. 回転軸の無い`kThreeAxis`では使わない
-    std::optional<double> tilt_limit_rad;
+    std::optional<double> tool_side_limit_rad;
 };
 
 /// @brief 仮想機械の指定 (種類と設定の組)
@@ -80,14 +79,14 @@ std::string_view VirtualMachineKindName(VirtualMachineKind kind);
 /// @return 機械定義 (`format_version`は`kMachineFormatVersion`、単位は
 ///         デフォルト (mm/deg)、`components`は暗黙のbaseと同様に
 ///         `base`を末尾に置く. 形状、干渉チェック設定、警告は無し)
-/// @throw std::invalid_argument `name`が空、または`tilt_limit_rad`が正でない場合
+/// @throw std::invalid_argument `name`が空、または`tool_side_limit_rad`が正でない場合
 MachineDefinition MakeVirtualMachineDefinition(
         VirtualMachineKind kind, const VirtualMachineOptions& options = {});
 
 /// @brief 仮想機械の指定から機械定義を作る
 /// @param spec 仮想機械の種類と設定
 /// @return `MakeVirtualMachineDefinition(spec.kind, spec.options)`と同じ
-/// @throw std::invalid_argument `name`が空、または`tilt_limit_rad`が正でない場合
+/// @throw std::invalid_argument `name`が空、または`tool_side_limit_rad`が正でない場合
 MachineDefinition MakeVirtualMachineDefinition(const VirtualMachineSpec& spec);
 
 }  // namespace igesio::extensions::machines
