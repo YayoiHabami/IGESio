@@ -144,10 +144,15 @@ std::shared_ptr<i_ent::LinearPath> BuildParamSpaceBaseCurve(
 void ValidateBaseCurveInDomain(const i_ent::ISurface& surface,
                                const i_ent::ICurve& base_curve) {
     auto [umin, umax, vmin, vmax] = surface.GetParameterRange();
-    auto surf_bbox = i_num::BoundingBox(Vector3d(umin, vmin, 0),
-                                        Vector3d(umax, vmax, 0));
-    auto base_bbox = base_curve.GetBoundingBox();
-    if (surf_bbox.Contains(base_bbox)) return;
+    // バウンディングボックスによる早期判定は定義領域が有限なときのみ行う
+    // （無限平面などでは構築できないため、サンプル点判定で行う）
+    if (std::isfinite(umin) && std::isfinite(umax) &&
+        std::isfinite(vmin) && std::isfinite(vmax)) {
+        auto surf_bbox = i_num::BoundingBox(Vector3d(umin, vmin, 0),
+                                            Vector3d(umax, vmax, 0));
+        auto base_bbox = base_curve.GetBoundingBox();
+        if (surf_bbox.Contains(base_bbox)) return;
+    }
 
     // bboxが完全に含まれていない場合は、50点ほどサンプリングして確認
     auto [tmin, tmax] = base_curve.GetParameterRange();

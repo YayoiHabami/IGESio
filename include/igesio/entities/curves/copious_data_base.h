@@ -14,7 +14,9 @@
 #ifndef IGESIO_ENTITIES_CURVES_COPIOUS_DATA_BASE_H_
 #define IGESIO_ENTITIES_CURVES_COPIOUS_DATA_BASE_H_
 
+#include <cstdint>
 #include <utility>
+#include <vector>
 
 #include "igesio/numerics/geometric/bounding_box.h"
 #include "igesio/entities/entity_base.h"
@@ -222,6 +224,19 @@ class CopiousDataBase : public EntityBase {
     ///         範囲外の場合は距離をinfinityとする
     /// @note kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
     std::pair<size_t, double> GetNearestVertexAt(const double) const;
+
+    /// @brief 各頂点までの累積弧長を取得する
+    /// @return 要素iが始点から頂点iまでの折れ線長（要素0では0）. 頂点数と同じ長さ
+    ///         であり、kPlanarLoopの閉鎖辺は含まない（Length()は閉鎖辺を加えた値）
+    /// @note 遅延構築し、座標変更（GeometryRevisionの更新）時に再構築する
+    const std::vector<double>& CumulativeLengths() const;
+
+ private:
+    /// @brief 各頂点までの累積弧長のキャッシュ（CumulativeLengths参照）
+    mutable std::vector<double> cumulative_lengths_;
+    /// @brief cumulative_lengths_を構築したときのGeometryRevision
+    /// @note 未構築の際は0
+    mutable uint64_t cumulative_lengths_revision_ = 0;
 
 
 

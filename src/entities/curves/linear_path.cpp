@@ -8,6 +8,8 @@
  */
 #include "igesio/entities/curves/linear_path.h"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -21,20 +23,6 @@ using i_ent::LinearPath;
 using i_ent::CopiousDataType;
 using igesio::Vector3d;
 
-/// @brief 各頂点における累積弧長を計算する
-/// @param base CopiousDataBaseの参照
-/// @return 頂点ごとの累積弧長 (サイズ n, 先頭は 0.0)
-std::vector<double>
-ComputeVertexLengths(const i_ent::CopiousDataBase& base) {
-    const size_t n = base.GetCount();
-    std::vector<double> lengths(n, 0.0);
-    for (size_t i = 1; i < n; ++i) {
-        lengths[i] = lengths[i - 1]
-            + (base.Coordinate(i) - base.Coordinate(i - 1)).norm();
-    }
-    return lengths;
-}
-
 /// @brief 弧長パラメータ t に対応する頂点インデックスを返す
 /// @param vertex_lengths ComputeVertexLengths の結果
 /// @param t パラメータ値
@@ -43,8 +31,14 @@ ComputeVertexLengths(const i_ent::CopiousDataBase& base) {
 std::optional<size_t>
 FindVertexIndex(const std::vector<double>& vertex_lengths,
                 const double t, const double eps = 1e-9) {
-    for (size_t i = 0; i < vertex_lengths.size(); ++i) {
-        if (std::abs(vertex_lengths[i] - t) < eps) return i;
+    // 累積弧長は単調非減少なので、t-eps以上となる最初の要素から順に調べる
+    const auto it = std::lower_bound(vertex_lengths.begin(),
+                                     vertex_lengths.end(), t - eps);
+    for (auto jt = it; jt != vertex_lengths.end(); ++jt) {
+        if (std::abs(*jt - t) < eps) {
+            return static_cast<size_t>(jt - vertex_lengths.begin());
+        }
+        if (*jt - t >= eps) break;
     }
     return std::nullopt;
 }
@@ -98,6 +92,7 @@ LinearPath::LinearPath(const std::vector<Vector2d>& coordinates, const bool is_c
         coordinates_.block<2, 1>(0, i) = coordinates[i];
         coordinates_(2, i) = 0.0;  // z座標は0に設定
     }
+    MarkGeometryModified();
 }
 
 LinearPath::LinearPath(const std::vector<Vector3d>& coordinates)
@@ -107,6 +102,7 @@ LinearPath::LinearPath(const std::vector<Vector3d>& coordinates)
     for (size_t i = 0; i < coordinates.size(); ++i) {
         coordinates_.block<3, 1>(0, i) = coordinates[i];
     }
+    MarkGeometryModified();
 }
 
 
@@ -120,7 +116,7 @@ std::vector<std::array<double, 2>> LinearPath::GetLinearSegments() const {
     if (n < 2) return {};
 
     const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
-    const auto vertex_lengths = ComputeVertexLengths(*this);
+    const auto& vertex_lengths = CopiousDataBase::CumulativeLengths();
 
     std::vector<std::array<double, 2>> segments;
     segments.reserve(is_loop ? n : n - 1);
@@ -140,7 +136,7 @@ std::vector<double> LinearPath::GetCornerParams() const {
     if (n < 2) return {};
 
     const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
-    const auto vertex_lengths = ComputeVertexLengths(*this);
+    const auto& vertex_lengths = CopiousDataBase::CumulativeLengths();
 
     std::vector<double> corners;
     if (is_loop) {
@@ -165,7 +161,7 @@ std::optional<Vector3d> LinearPath::TryGetDefinedLeftTangentAt(const double t) c
     if (n < 2) return std::nullopt;
 
     const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
-    const auto vertex_lengths = ComputeVertexLengths(*this);
+    const auto& vertex_lengths = CopiousDataBase::CumulativeLengths();
 
     const auto idx_opt = FindVertexIndex(vertex_lengths, t);
     if (!idx_opt.has_value()) return ICurve::TryGetDefinedLeftTangentAt(t);
@@ -192,7 +188,7 @@ std::optional<Vector3d> LinearPath::TryGetDefinedRightTangentAt(const double t) 
     if (n < 2) return std::nullopt;
 
     const bool is_loop = (GetDataType() == CopiousDataType::kPlanarLoop);
-    const auto vertex_lengths = ComputeVertexLengths(*this);
+    const auto& vertex_lengths = CopiousDataBase::CumulativeLengths();
 
     const auto idx_opt = FindVertexIndex(vertex_lengths, t);
     if (!idx_opt.has_value()) return ICurve::TryGetDefinedRightTangentAt(t);

@@ -8,6 +8,7 @@
 #include "igesio/entities/curves/composite_curve.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -297,43 +298,15 @@ igesio::ValidationResult CompositeCurve::ValidatePD() const {
  */
 
 std::vector<std::array<double, 2>> CompositeCurve::GetLinearSegments() const {
-    std::vector<std::array<double, 2>> result;
-    const auto offsets = GetCurveBreakParameters();
-    for (size_t i = 0; i < curves_.size(); ++i) {
-        auto curve = curves_[i].GetEntity<ICurve>();
-        if (!curve) continue;
-        const double offset = offsets[i];
-        const double local_start = curve->GetParameterRange()[0];
-        for (const auto& seg : curve->GetLinearSegments()) {
-            // 構成曲線が直線部を持てば、その区間をグローバルパラメータ空間に
-            // マッピングして追加
-            result.push_back({offset + (seg[0] - local_start),
-                              offset + (seg[1] - local_start)});
-        }
-    }
-    return result;
+    return GetDerivedParameterCache().linear_segments;
 }
 
 std::vector<double> CompositeCurve::GetCornerParams() const {
-    std::vector<double> result;
-    const auto offsets = GetCurveBreakParameters();
-    for (size_t i = 0; i < curves_.size(); ++i) {
-        auto curve = curves_[i].GetEntity<ICurve>();
-        if (!curve) continue;
-        const double offset = offsets[i];
-        const double local_start = curve->GetParameterRange()[0];
-        // 接合点を角点として追加 (最初の曲線は除く)
-        if (i > 0) result.push_back(offset);
-        // 構成曲線の角点をグローバルパラメータ空間にマッピング
-        for (const double tc : curve->GetCornerParams()) {
-            result.push_back(offset + (tc - local_start));
-        }
-    }
-    return result;
+    return GetDerivedParameterCache().corners;
 }
 
 std::optional<Vector3d> CompositeCurve::TryGetDefinedLeftTangentAt(const double t) const {
-    const auto offsets = GetCurveBreakParameters();
+    const auto& offsets = GetDerivedParameterCache().breaks;
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
         if (std::abs(t - offsets[i]) < 1e-9) {
@@ -350,7 +323,7 @@ std::optional<Vector3d> CompositeCurve::TryGetDefinedLeftTangentAt(const double 
 }
 
 std::optional<Vector3d> CompositeCurve::TryGetDefinedRightTangentAt(const double t) const {
-    const auto offsets = GetCurveBreakParameters();
+    const auto& offsets = GetDerivedParameterCache().breaks;
     // 接合点かチェック: offsets[i] (i >= 1) に一致する場合
     for (size_t i = 1; i < curves_.size(); ++i) {
         if (std::abs(t - offsets[i]) < 1e-9) {
@@ -616,27 +589,70 @@ i_num::BoundingBox CompositeCurve::GetDefinedBoundingBox() const {
  */
 
 std::vector<double> CompositeCurve::GetCurveBreakParameters() const {
-    std::vector<double> breaks;
-    breaks.reserve(curves_.size() + 1);
+    return GetDerivedParameterCache().breaks;
+}
+
+uint64_t CompositeCurve::ComputeDerivedCacheKey() const {
+    // 自身のリビジョンに、構成曲線の同一性 (ポインタ) とリビジョンを畳み込む.
+    // 構成曲線の差し替え/解決やジオメトリ変更のいずれでも鍵が変わる
+    uint64_t key = GeometryRevision();
+    const auto fold = [&key](const uint64_t v) {
+        key ^= v + 0x9e3779b97f4a7c15ULL + (key << 6) + (key >> 2);
+    };
+    for (const auto& container : curves_) {
+        auto curve = container.TryGetEntity<ICurve>();
+        if (!curve || !*curve) {
+            fold(0);
+            continue;
+        }
+        fold(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(curve->get())));
+        fold((*curve)->GeometryRevision());
+    }
+    return key;
+}
+
+const CompositeCurve::DerivedParameterCache&
+CompositeCurve::GetDerivedParameterCache() const {
+    const uint64_t key = ComputeDerivedCacheKey();
+    if (derived_cache_ && derived_cache_->key == key) return *derived_cache_;
+
+    DerivedParameterCache cache;
+    cache.key = key;
+    cache.breaks.reserve(curves_.size() + 1);
+    cache.is_searchable.reserve(curves_.size());
     double acc = 0.0;
-    breaks.push_back(0.0);
+    cache.breaks.push_back(0.0);
     for (const auto& container : curves_) {
         auto curve = container.TryGetEntity<ICurve>();
         if (!curve || !*curve) {
             // 未解決参照の曲線はパラメータ長0として扱う
-            breaks.push_back(acc);
+            cache.breaks.push_back(acc);
+            cache.is_searchable.push_back(false);
             continue;
         }
         const auto range = (*curve)->GetParameterRange();
         if (!std::isfinite(range[0]) || !std::isfinite(range[1])) {
             // 無限長の曲線はパラメータ長0として扱う
-            breaks.push_back(acc);
+            cache.breaks.push_back(acc);
+            cache.is_searchable.push_back(false);
             continue;
         }
+        // 角点（接合点と構成曲線の角点）と直線区間をグローバルパラメータに変換する
+        const size_t i = cache.is_searchable.size();
+        if (i > 0) cache.corners.push_back(acc);
+        for (const double tc : (*curve)->GetCornerParams()) {
+            cache.corners.push_back(acc + (tc - range[0]));
+        }
+        for (const auto& seg : (*curve)->GetLinearSegments()) {
+            cache.linear_segments.push_back(
+                    {acc + (seg[0] - range[0]), acc + (seg[1] - range[0])});
+        }
         acc += range[1] - range[0];
-        breaks.push_back(acc);
+        cache.breaks.push_back(acc);
+        cache.is_searchable.push_back(true);
     }
-    return breaks;
+    derived_cache_ = std::move(cache);
+    return *derived_cache_;
 }
 
 std::optional<double>
@@ -689,32 +705,36 @@ CompositeCurve::TryGetCurveIndexAtParameter(const double t) const {
     //       (構成曲線は自身の許容誤差kParameterToleranceで範囲外と判定する)
     if (i_num::IsApproxLessThan(t, 0.0)) return std::nullopt;
 
-    double accumulated_length = 0.0;
-    std::optional<std::pair<size_t, double>> last_curve_end;
-    for (size_t i = 0; i < curves_.size(); ++i) {
-        auto curve_container = curves_[i];
-        if (auto curve = curve_container.GetEntity<ICurve>()) {
-            const auto range = curve->GetParameterRange();
-            // 無限の長さを持つ曲線はパラメータ範囲の計算から除外
-            if (!std::isfinite(range[0]) || !std::isfinite(range[1])) {
-                continue;
-            }
-            const double current_length = range[1] - range[0];
-
-            if (t <= accumulated_length + current_length) {
-                // t_local = t_start + (t_global - accumulated_length) を、
-                // 丸め誤差や始端側の許容分を除くため曲線の範囲内へ丸める
-                const double t_local = std::clamp(
-                        range[0] + (t - accumulated_length), range[0], range[1]);
-                return std::make_pair(i, t_local);
-            }
-            accumulated_length += current_length;
-            last_curve_end = std::make_pair(i, range[1]);
-        }
+    // 接合点キャッシュ上の二分探索で、t <= breaks[i+1] を満たす最初の曲線iを求める.
+    // 無限長/未解決の曲線はパラメータ長0で登録されているため、該当した場合は
+    // 次の検索対象の曲線へ進める
+    const auto& cache = GetDerivedParameterCache();
+    const auto& breaks = cache.breaks;
+    const size_t n = cache.is_searchable.size();
+    // NaNはどの区間にも属さない（比較が常に偽）ため、終端側の判定に委ねる
+    size_t i = n;
+    if (!std::isnan(t)) {
+        i = static_cast<size_t>(std::lower_bound(breaks.begin() + 1,
+                                                 breaks.end(), t)
+                                - breaks.begin()) - 1;
+        while (i < n && !cache.is_searchable[i]) ++i;
     }
-    // 終端を許容誤差以内で超えた場合は最後の曲線の終端とみなす
-    if (last_curve_end && !i_num::IsApproxGreaterThan(t, accumulated_length)) {
-        return last_curve_end;
+    if (i < n) {
+        auto curve = curves_[i].GetEntity<ICurve>();
+        const auto range = curve->GetParameterRange();
+        // t_local = t_start + (t_global - breaks[i]) を、
+        // 丸め誤差や始端側の許容分を除くため曲線の範囲内へ丸める
+        const double t_local = std::clamp(
+                range[0] + (t - breaks[i]), range[0], range[1]);
+        return std::make_pair(i, t_local);
+    }
+
+    // 終端を許容誤差以内で超えた場合は最後の検索対象曲線の終端とみなす
+    if (i_num::IsApproxGreaterThan(t, breaks.back())) return std::nullopt;
+    for (size_t j = n; j-- > 0;) {
+        if (!cache.is_searchable[j]) continue;
+        auto curve = curves_[j].GetEntity<ICurve>();
+        return std::make_pair(j, curve->GetParameterRange()[1]);
     }
     // パラメータtが範囲外の場合
     return std::nullopt;

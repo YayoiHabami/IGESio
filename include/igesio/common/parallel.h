@@ -12,6 +12,7 @@
 #define IGESIO_COMMON_PARALLEL_H_
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <future>
 #include <thread>
@@ -48,26 +49,27 @@ void ParallelFor(const std::size_t count, const Func& func,
         return;
     }
 
-    // スレッド数を決定し、[0, count) を連続するチャンクへ分割する
+    // スレッド数を決定する
+    //   複雑な境界トリム等、要素ごとの処理時間に大きな偏りがあるため、固定割り当て
+    //   ではなく、各ワーカーが共有カウンタから次の要素を取り出す動的割り当てとする
     const std::size_t n_threads = std::min(static_cast<std::size_t>(hw), count);
-    const std::size_t chunk = (count + n_threads - 1) / n_threads;
+    std::atomic<std::size_t> next_index{0};
 
-    // 1チャンク [begin, end) を処理する
-    const auto run_chunk = [&func](std::size_t begin, std::size_t end) {
-        for (std::size_t i = begin; i < end; ++i) func(i);
+    // 共有カウンタが尽きるまで要素を取り出して処理する
+    const auto run_worker = [&func, &next_index, count]() {
+        for (std::size_t i = next_index.fetch_add(1); i < count;
+             i = next_index.fetch_add(1)) {
+            func(i);
+        }
     };
 
-    // 先頭のn_threads-1チャンクを非同期起動し、末尾チャンクは呼び出しスレッドで実行する
+    // n_threads-1個のワーカーを非同期起動し、呼び出しスレッドもワーカーとして働く
     std::vector<std::future<void>> futures;
     futures.reserve(n_threads - 1);
     for (std::size_t t = 0; t + 1 < n_threads; ++t) {
-        const std::size_t begin = t * chunk;
-        const std::size_t end = std::min(begin + chunk, count);
-        if (begin >= end) break;
-        futures.push_back(std::async(std::launch::async, run_chunk, begin, end));
+        futures.push_back(std::async(std::launch::async, run_worker));
     }
-    const std::size_t last_begin = (n_threads - 1) * chunk;
-    if (last_begin < count) run_chunk(last_begin, count);
+    run_worker();
 
     // 全ワーカーを待ち合わせる (例外は最初の一つを再送出する)
     for (auto& f : futures) f.get();

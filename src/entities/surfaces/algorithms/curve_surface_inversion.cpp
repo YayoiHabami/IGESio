@@ -31,26 +31,75 @@ struct ParamRange {
     double u_min, u_max, v_min, v_max;
 };
 
-/// @brief 曲面の代表寸法 L (BBの最大対角線長) を返す
-/// @return 有限BBが得られればその対角長、得られなければ 1.0
-double CharacteristicLength(const ISurface& surface) {
-    const auto bb = surface.GetBoundingBox();
-    if (!bb.IsEmpty() && bb.IsFinite()) {
-        const auto verts = bb.GetFiniteVertices();
-        double max_dist = 0.0;
-        for (size_t i = 0; i < verts.size(); ++i) {
-            for (size_t j = i + 1; j < verts.size(); ++j) {
-                max_dist = std::max(max_dist, (verts[i] - verts[j]).norm());
-            }
+/// @brief バウンディングボックスの最大の対角線長を計算する
+/// @return 有限かつ非退化なバウンディングボックスならその対角線長,
+///         そうでなければstd::nullopt
+std::optional<double> FiniteDiagonal(const i_num::BoundingBox& bb) {
+    if (bb.IsEmpty() || !bb.IsFinite()) return std::nullopt;
+    const auto verts = bb.GetFiniteVertices();
+    double max_dist = 0.0;
+    for (size_t i = 0; i < verts.size(); ++i) {
+        for (size_t j = i + 1; j < verts.size(); ++j) {
+            max_dist = std::max(max_dist, (verts[i] - verts[j]).norm());
         }
-        if (max_dist > i_num::kGeometryTolerance) return max_dist;
     }
+    if (max_dist > i_num::kGeometryTolerance) return max_dist;
+    return std::nullopt;
+}
+
+/// @brief 逆射影の対象の3次元点群の統計情報
+struct TargetExtent {
+    /// @brief 対象のバウンディングボックスの中心
+    Vector3d center = Vector3d::Zero();
+    /// @brief 対象のバウンディングボックスの対角長（単点なら0）
+    double diagonal = 0.0;
+};
+
+/// @brief 曲面の代表寸法Lを計算する
+/// @param surface 対象曲面
+/// @param target 射影対象の中心と幅
+/// @return 代表寸法（許容誤差と探索窓の基準）
+/// @note 有限な曲面ではバウンディングボックスの対角長を用いる.
+///       無限曲面（平面など）ではバウンディングボックスが無限大となるため,
+///       TargetIntentで代用する（さらに退化していれば1.0）.
+double CharacteristicLength(const ISurface& surface, const TargetExtent& target) {
+    if (const auto diag = FiniteDiagonal(surface.GetBoundingBox())) {
+        return *diag;
+    }
+    if (target.diagonal > i_num::kGeometryTolerance) return target.diagonal;
     return 1.0;
 }
 
-/// @brief 無限パラメータ範囲を代表寸法Lでクランプした有効範囲を返す
-ParamRange GetEffectiveRange(const ISurface& surface, const double extent) {
+/// @brief 無限パラメータ範囲をクランプした有効範囲を計算する
+/// @param surface 対象曲面
+/// @param L 代表寸法
+/// @param target 射影対象の中心と幅
+/// @return 有効なパラメータ範囲
+/// @note 平面のように原点から離れた位置にある対称でも、射影先のパラメータが
+///       ウィンドウサイズに収まるようにするため、無限方向のウィンドウサイズは
+///       代表寸法Lに加えて、範囲中心に対応する曲面上の点から射影対象までの距離と
+///       射影対象の幅とを含める（狭すぎると全点の射影が失敗するため）.
+ParamRange GetEffectiveRange(const ISurface& surface, const double L,
+                             const TargetExtent& target) {
     const auto r = surface.GetParameterRange();
+    const bool u_inf = std::isinf(r[0]) || std::isinf(r[1]);
+    const bool v_inf = std::isinf(r[2]) || std::isinf(r[3]);
+
+    // 無限方向のウィンドウサイズ
+    //   範囲中心（無限側は0）における曲面上の点から対象までの距離を加える
+    double extent = L;
+    if (u_inf || v_inf) {
+        const double uc = (std::isinf(r[0]) || std::isinf(r[1]))
+                ? 0.0 : 0.5 * (r[0] + r[1]);
+        const double vc = (std::isinf(r[2]) || std::isinf(r[3]))
+                ? 0.0 : 0.5 * (r[2] + r[3]);
+        if (const auto sc = surface.TryGetPointAt(uc, vc)) {
+            extent += (*sc - target.center).norm() + target.diagonal;
+        }
+        // 中心の両側に広げるためウィンドウサイズを2倍にする
+        extent *= 2.0;
+    }
+
     auto clamp_one = [&](const double lo,
                          const double hi) -> std::pair<double, double> {
         const bool lo_inf = std::isinf(lo);
@@ -65,12 +114,31 @@ ParamRange GetEffectiveRange(const ISurface& surface, const double extent) {
     return {u_min, u_max, v_min, v_max};
 }
 
+/// @brief 曲線のバウンディングボックスから射影対象の中心と幅を計算する
+/// @return バウンディングボックスが有限ならその中心と対角長.
+///         無限なら始点（取れなければ原点）を中心とし対角長0とする
+TargetExtent CurveTargetExtent(const i_ent::ICurve& curve) {
+    TargetExtent target;
+    const auto bb = curve.GetBoundingBox();
+    if (!bb.IsEmpty() && bb.IsFinite()) {
+        const auto verts = bb.GetFiniteVertices();
+        if (!verts.empty()) {
+            Vector3d sum = Vector3d::Zero();
+            for (const auto& p : verts) sum += p;
+            target.center = sum / static_cast<double>(verts.size());
+        }
+        target.diagonal = FiniteDiagonal(bb).value_or(0.0);
+        return target;
+    }
+    if (const auto p = curve.TryGetStartPoint()) target.center = *p;
+    return target;
+}
+
 /// @brief 1点の最近点射影をガウス・ニュートン法で解く
-///
-/// 残差 r = S(u,v) - P を最小化する。近似ヘッセに第一基本形式 [[E,F],[F,G]] を
-/// 用い、1階偏導関数のみで更新する。穴領域・退化(pole)・非収束では失敗を返す。
-///
-/// @return 収束または受理許容内に達した (u,v)。失敗時は `std::nullopt`
+/// @return 収束または許容内に収まった(u,v)。失敗時はnullopt
+/// @note 残差 r = S(u,v) - P を最小化する。近似ヘッセに第一基本形式
+///       [[E,F],[F,G]] を用い、1階偏導関数のみで更新する。穴領域,
+///       退化、非収束ではnulloptを返す。
 std::optional<std::array<double, 2>> RunInversion(
         const ISurface& surface, const Vector3d& p,
         double u, double v, const ParamRange& pr,
@@ -90,7 +158,11 @@ std::optional<std::array<double, 2>> RunInversion(
         const Vector3d r  = s - p;
 
         const double res = r.norm();
-        if (res < best_res) { best_res = res; best_u = u; best_v = v; }
+        if (res < best_res) {
+            best_res = res;
+            best_u = u;
+            best_v = v;
+        }
         if (res < tol_conv) return std::array<double, 2>{u, v};
 
         // 第一基本形式 (近似ヘッセ)
@@ -104,7 +176,7 @@ std::optional<std::array<double, 2>> RunInversion(
         // δ = -H^{-1} g,  g = [r·Su, r·Sv]
         const double gu = r.dot(su);
         const double gv = r.dot(sv);
-        const double du = -( G * gu - F * gv) / det;
+        const double du = -(+G * gu - F * gv) / det;
         const double dv = -(-F * gu + E * gv) / det;
 
         const double nu = std::clamp(u + du, pr.u_min, pr.u_max);
@@ -167,8 +239,10 @@ std::optional<std::array<double, 2>> i_ent::InvertPointOntoSurface(
         const ISurface& surface, const Vector3d& model_point,
         const std::array<double, 2>& init_uv,
         const CurveInversionParams& params) {
-    const double L = CharacteristicLength(surface);
-    const ParamRange pr = GetEffectiveRange(surface, L);
+    TargetExtent target;
+    target.center = model_point;
+    const double L = CharacteristicLength(surface, target);
+    const ParamRange pr = GetEffectiveRange(surface, L, target);
     return RunInversion(surface, model_point, init_uv[0], init_uv[1],
                         pr, L, params);
 }
@@ -176,8 +250,9 @@ std::optional<std::array<double, 2>> i_ent::InvertPointOntoSurface(
 std::vector<i_ent::ParamSpaceArc> i_ent::InvertCurveOntoSurface(
         const ISurface& surface, const ICurve& model_curve,
         const CurveInversionParams& params) {
-    const double L = CharacteristicLength(surface);
-    const ParamRange pr = GetEffectiveRange(surface, L);
+    const TargetExtent target = CurveTargetExtent(model_curve);
+    const double L = CharacteristicLength(surface, target);
+    const ParamRange pr = GetEffectiveRange(surface, L, target);
 
     // Cを折れ線近似して点列 (順序付き) を得る
     const auto poly = i_ent::ComputeApproximatePolygon(

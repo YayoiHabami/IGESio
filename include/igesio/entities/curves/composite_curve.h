@@ -8,6 +8,8 @@
 #ifndef IGESIO_ENTITIES_CURVES_COMPOSITE_CURVE_H_
 #define IGESIO_ENTITIES_CURVES_COMPOSITE_CURVE_H_
 
+#include <array>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <unordered_set>
@@ -296,6 +298,35 @@ class CompositeCurve : public EntityBase, public virtual ICurve3D {
     /// @note パラメータ値が範囲外の場合はnullptrを返す
     std::pair<std::shared_ptr<const ICurve>, double>
     GetCurveAtParameter(const double) const;
+
+    /// @brief 構成曲線から導出されるパラメータ情報のキャッシュ
+    /// @note 曲線評価のたびに全構成曲線を走査しないよう、接合点/角点/直線区間の
+    ///       評価結果をキャッシュする。
+    struct DerivedParameterCache {
+        /// @brief 前回構築時のハッシュ値
+        /// @note ComputeDerivedCacheKey()の戻り値、未構築時は0
+        uint64_t key = 0;
+        /// @brief 接合点のグローバルパラメータ（GetCurveBreakParametersと同じ）
+        std::vector<double> breaks;
+        /// @brief 各構成曲線が有限かつ解決済みか（パラメータ検索の対象か）
+        std::vector<bool> is_searchable;
+        /// @brief 角点のグローバルパラメータ（GetCornerParamsと同じ）
+        std::vector<double> corners;
+        /// @brief 直線区間のグローバルパラメータ（GetLinearSegmentsと同じ）
+        std::vector<std::array<double, 2>> linear_segments;
+    };
+
+    /// @brief 導出パラメータ情報のキャッシュ（遅延構築）
+    mutable std::optional<DerivedParameterCache> derived_cache_;
+    /// @brief 導出パラメータ情報のキャッシュを取得する
+    /// @return 現在の構成曲線に対応するキャッシュ
+    /// @note キャッシュのハッシュ値が現在の状態と異なる場合は再構築する
+    const DerivedParameterCache& GetDerivedParameterCache() const;
+
+    /// @brief 現在のCompositeCurveの状態に対応するハッシュ値を計算する
+    /// @note 現在のGeometryRevisionと、構成曲線が同一であるか
+    ///       （構成曲線のポインタとGeometryRevision）とを考慮したハッシュ値
+    uint64_t ComputeDerivedCacheKey() const;
 };
 
 

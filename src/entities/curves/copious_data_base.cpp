@@ -89,6 +89,7 @@ CopiousDataBase::CopiousDataBase(const CopiousDataType type,
     // 座標値を設定
     coordinates_ = coordinates;
     addition_ = addition;
+    MarkGeometryModified();
 
     if (auto result = ValidatePD(); !result.is_valid) {
         throw igesio::EntityValueError(
@@ -252,6 +253,7 @@ size_t CopiousDataBase::SetMainPDParameters(const pointer2ID& de2id) {
             addition_(2, i) = pd.access_as<double>(++index);
         }
     }
+    MarkGeometryModified();
 
     return index + 1;
 }
@@ -282,11 +284,26 @@ size_t CopiousDataBase::GetCount() const {
     return coordinates_.cols();
 }
 
-double CopiousDataBase::Length() const {
-    double total_length = 0.0;
-    for (size_t i = 1; i < coordinates_.cols(); ++i) {
-        total_length += (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
+const std::vector<double>& CopiousDataBase::CumulativeLengths() const {
+    // GeometryRevision変更時（座標変更時）には再構築する
+    if (cumulative_lengths_revision_ == GeometryRevision()) {
+        return cumulative_lengths_;
     }
+    const size_t n = coordinates_.cols();
+    std::vector<double> lengths(n, 0.0);
+    for (size_t i = 1; i < n; ++i) {
+        lengths[i] = lengths[i - 1]
+            + (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
+    }
+    cumulative_lengths_ = std::move(lengths);
+    cumulative_lengths_revision_ = GeometryRevision();
+    return cumulative_lengths_;
+}
+
+double CopiousDataBase::Length() const {
+    const auto& cumulative = CumulativeLengths();
+    if (cumulative.empty()) return 0.0;
+    double total_length = cumulative.back();
 
     // kPlanarLoopの場合、末端と先頭を結ぶ線分も加える
     if (GetDataType() == CopiousDataType::kPlanarLoop) {
@@ -297,28 +314,39 @@ double CopiousDataBase::Length() const {
     return total_length;
 }
 
+namespace {
+
+/// @brief 累積弧長上で、指定した弧長を含む線分の終端頂点を二分探索する
+/// @param cumulative 各頂点までの累積弧長（CumulativeLengths）
+/// @param length 弧長
+/// @return 累積弧長がlength以上となる最初の頂点のインデックス（1以上）.
+///         閉鎖辺または範囲外など、見つからない場合は頂点数
+size_t FindSegmentEndVertex(const std::vector<double>& cumulative,
+                            const double length) {
+    if (cumulative.size() < 2) return cumulative.size();
+    const auto it = std::lower_bound(cumulative.begin() + 1, cumulative.end(),
+                                     length);
+    return static_cast<size_t>(it - cumulative.begin());
+}
+
+}  // namespace
+
 std::optional<size_t>
 CopiousDataBase::GetSegmentIndexAt(const double length) const {
     if (length < 0.0 || length > Length()) {
         return std::nullopt;
     }
 
-    double accumulated_length = 0.0;
-    for (size_t i = 1; i < coordinates_.cols(); ++i) {
-        // 各セグメントごとに長さを計算し、指定された長さに達するか確認
-        double segment_length = (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
-        if (accumulated_length + segment_length >= length) {
-            // 指定された長さがこのセグメント内にある場合、そのセグメントのインデックスを返す
-            return i - 1;
-        }
-        accumulated_length += segment_length;
-    }
+    // 累積弧長の二分探索で、指定された長さに達する最初の線分を求める
+    const auto& cumulative = CumulativeLengths();
+    const size_t i = FindSegmentEndVertex(cumulative, length);
+    if (i < cumulative.size()) return i - 1;
 
     // kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
-    if (GetDataType() == CopiousDataType::kPlanarLoop) {
+    if (GetDataType() == CopiousDataType::kPlanarLoop && !cumulative.empty()) {
         size_t i_end = coordinates_.cols() - 1;
         double segment_length = (coordinates_.col(0) - coordinates_.col(i_end)).norm();
-        if (accumulated_length + segment_length >= length) {
+        if (cumulative.back() + segment_length >= length) {
             return i_end;
         }
     }
@@ -332,24 +360,21 @@ CopiousDataBase::GetCoordinateAtLength(const double length) const {
         return std::nullopt;
     }
 
-    double accumulated_length = 0.0;
-    for (size_t i = 1; i < coordinates_.cols(); ++i) {
-        // 各セグメントごとに長さを計算し、指定された長さに達するか確認
+    // 累積弧長の二分探索で線分を特定し、線形補間で座標を計算する
+    const auto& cumulative = CumulativeLengths();
+    const size_t i = FindSegmentEndVertex(cumulative, length);
+    if (i < cumulative.size()) {
         double segment_length = (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
-        if (accumulated_length + segment_length >= length) {
-            // 指定された長さがこのセグメント内にある場合、線形補間で座標を計算
-            double r = (length - accumulated_length) / segment_length;
-            return coordinates_.col(i - 1) * (1 - r) + coordinates_.col(i) * r;
-        }
-        accumulated_length += segment_length;
+        double r = (length - cumulative[i - 1]) / segment_length;
+        return coordinates_.col(i - 1) * (1 - r) + coordinates_.col(i) * r;
     }
 
     // kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
-    if (GetDataType() == CopiousDataType::kPlanarLoop) {
+    if (GetDataType() == CopiousDataType::kPlanarLoop && !cumulative.empty()) {
         size_t i_end = coordinates_.cols() - 1;
         double segment_length = (coordinates_.col(0) - coordinates_.col(i_end)).norm();
-        if (accumulated_length + segment_length >= length) {
-            double r = (length - accumulated_length) / segment_length;
+        if (cumulative.back() + segment_length >= length) {
+            double r = (length - cumulative.back()) / segment_length;
             return coordinates_.col(i_end) * (1 - r) + coordinates_.col(0) * r;
         }
     }
@@ -364,29 +389,26 @@ CopiousDataBase::GetNearestVertexAt(const double length) const {
         return {0, std::numeric_limits<double>::infinity()};
     }
 
-    double accumulated_length = 0.0;
-    for (size_t i = 1; i < coordinates_.cols(); ++i) {
-        double segment_length = (coordinates_.col(i) - coordinates_.col(i - 1)).norm();
-        if (accumulated_length + segment_length >= length) {
-            // 指定された長さがこのセグメント内にある場合、どちらの頂点が近いかを確認
-            double dist_to_prev = length - accumulated_length;
-            double dist_to_next = (accumulated_length + segment_length) - length;
-            if (dist_to_prev <= dist_to_next) {
-                return {i - 1, dist_to_prev};
-            } else {
-                return {i, dist_to_next};
-            }
+    // 累積弧長の二分探索で線分を特定し、どちらの頂点が近いかを確認する
+    const auto& cumulative = CumulativeLengths();
+    const size_t i = FindSegmentEndVertex(cumulative, length);
+    if (i < cumulative.size()) {
+        double dist_to_prev = length - cumulative[i - 1];
+        double dist_to_next = cumulative[i] - length;
+        if (dist_to_prev <= dist_to_next) {
+            return {i - 1, dist_to_prev};
+        } else {
+            return {i, dist_to_next};
         }
-        accumulated_length += segment_length;
     }
 
     // kPlanarLoopの場合、末端と先頭を結ぶ線分も考慮
-    if (GetDataType() == CopiousDataType::kPlanarLoop) {
+    if (GetDataType() == CopiousDataType::kPlanarLoop && !cumulative.empty()) {
         size_t i_end = coordinates_.cols() - 1;
         double segment_length = (coordinates_.col(0) - coordinates_.col(i_end)).norm();
-        if (accumulated_length + segment_length >= length) {
-            double dist_to_end = length - accumulated_length;
-            double dist_to_start = (accumulated_length + segment_length) - length;
+        if (cumulative.back() + segment_length >= length) {
+            double dist_to_end = length - cumulative.back();
+            double dist_to_start = (cumulative.back() + segment_length) - length;
             if (dist_to_end <= dist_to_start) {
                 return {i_end, dist_to_end};
             } else {
