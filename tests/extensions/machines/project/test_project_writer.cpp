@@ -9,15 +9,16 @@
  *         UTF-8での記載、読み戻しでの解決
  *       - 正常系 (往復): `sample.toml`を読込→書き出し→再読込して全フィールドと
  *         `retained`が一致し警告0件であること、C++で組み立てた定義 (ライブラリ参照
- *         工具・輪郭形式工具・幾何形式ワークオフセット・入れ子モデル・`machine_pair`・
- *         inch/rad宣言) の往復、輪郭形式工具 (TOML文字列) の往復、仮想機械の指定
+ *         工具 (代表形状/代替形状なし)・輪郭形式工具・幾何形式ワークオフセット・
+ *         入れ子モデル・`machine_pair`・inch/rad宣言) の往復、輪郭形式工具 (TOML文字列) の往復、仮想機械の指定
  *         (TOML文字列、`MakeProjectDefinition`で作った定義) の往復
  *       - 正常系 (出力形式): 常に書くセクション、単位の差し替え出力、`file`/`library`の
  *         復元と相対化、仮想機械のキー (既定値の省略、`tool_side_limit`の宣言単位),
  *         軸値の宣言単位、既定値の省略 (輪郭形式の直線の`type`を含む)、
- *         `retained`の末尾配置、日時リテラル
+ *         `retained`の末尾配置、日時リテラル、`[tool.library]`と`format`のキー
  *       - 異常系: 機械に無い軸名・`raw`空のライブラリ参照・ライブラリ参照の
- *         プログラム・セグメントを持たない部位要素の`invalid_argument`、
+ *         プログラム・セグメントを持たない部位要素・`fallback`と整合しない形状の
+ *         有無・空の`alias`/`source`/工具識別子の`invalid_argument`、
  *         出力先がディレクトリの`FileOpenError`
  *       TODO: 退化ケース (工具・モデル等が全て空の定義) は`Omission_Defaults`の
  *             最小構成で兼ねる
@@ -151,10 +152,19 @@ void ExpectSameTool(const mc::ToolEntry& expected, const mc::ToolEntry& actual) 
     EXPECT_EQ(expected.name, actual.name);
     ExpectSameOptional(expected.gauge_length, actual.gauge_length);
     EXPECT_EQ(expected.control_point, actual.control_point);
-    ASSERT_EQ(expected.source.index(), actual.source.index());
-    if (const auto* simple = std::get_if<mc::SimpleToolSpec>(&expected.source);
+    ASSERT_EQ(expected.library.has_value(), actual.library.has_value());
+    if (expected.library.has_value()) {
+        EXPECT_EQ(expected.library->source, actual.library->source);
+        EXPECT_EQ(expected.library->id, actual.library->id);
+        EXPECT_EQ(expected.library->fallback, actual.library->fallback);
+    }
+    ASSERT_EQ(expected.shape.has_value(), actual.shape.has_value());
+    if (!expected.shape.has_value()) return;
+
+    ASSERT_EQ(expected.shape->index(), actual.shape->index());
+    if (const auto* simple = std::get_if<mc::SimpleToolSpec>(&*expected.shape);
         simple != nullptr) {
-        const auto& other = std::get<mc::SimpleToolSpec>(actual.source);
+        const auto& other = std::get<mc::SimpleToolSpec>(*actual.shape);
         EXPECT_EQ(simple->cutter, other.cutter);
         EXPECT_EQ(simple->command_point, other.command_point);
         EXPECT_NEAR(simple->diameter, other.diameter, kTol);
@@ -164,14 +174,9 @@ void ExpectSameTool(const mc::ToolEntry& expected, const mc::ToolEntry& actual) 
         EXPECT_NEAR(simple->overhang, other.overhang, kTol);
         EXPECT_NEAR(simple->holder_diameter, other.holder_diameter, kTol);
         EXPECT_NEAR(simple->holder_length, other.holder_length, kTol);
-    } else if (const auto* profile = std::get_if<mc::ToolProfile>(&expected.source);
-               profile != nullptr) {
-        ExpectSameProfile(*profile, std::get<mc::ToolProfile>(actual.source));
     } else {
-        const auto& ref = std::get<mc::LibraryToolRef>(expected.source);
-        const auto& other = std::get<mc::LibraryToolRef>(actual.source);
-        EXPECT_EQ(ref.source, other.source);
-        EXPECT_EQ(ref.assembly, other.assembly);
+        ExpectSameProfile(std::get<mc::ToolProfile>(*expected.shape),
+                          std::get<mc::ToolProfile>(*actual.shape));
     }
 }
 
@@ -295,6 +300,7 @@ void ExpectSameProject(const mc::ProjectDefinition& expected,
     ASSERT_EQ(expected.tool_libraries.size(), actual.tool_libraries.size());
     for (std::size_t i = 0; i < expected.tool_libraries.size(); ++i) {
         EXPECT_EQ(expected.tool_libraries[i].alias, actual.tool_libraries[i].alias);
+        EXPECT_EQ(expected.tool_libraries[i].format, actual.tool_libraries[i].format);
         ExpectSameReference(expected.tool_libraries[i].file, actual.tool_libraries[i].file);
     }
     ASSERT_EQ(expected.tools.size(), actual.tools.size());
@@ -385,8 +391,9 @@ mc::ToolProfile BuiltProfile() {
     return profile;
 }
 
-/// @brief C++で組み立てた定義 (ライブラリ参照工具2本・幾何形式ワークオフセット・
-///        入れ子モデル・`machine_pair`・inch/deg宣言・保持断片)
+/// @brief C++で組み立てた定義 (ライブラリ2つ・ライブラリ参照工具2本 (代表形状の#3と
+///        代替形状なしの#9)・幾何形式ワークオフセット・入れ子モデル・`machine_pair`・
+///        inch/deg宣言・保持断片)
 /// @note 単位換算の往復を検証するため、内部値はmm・radで与える
 mc::ProjectDefinition BuiltInCpp() {
     mc::ProjectDefinition project;
@@ -402,6 +409,7 @@ mc::ProjectDefinition BuiltInCpp() {
 
     mc::ToolLibrarySpec std_lib;
     std_lib.alias = "std";
+    std_lib.format = "igesio-test";
     std_lib.file.raw = "tools/tools.json";
     std_lib.file.resolved = kMachinesDir / "tools" / "tools.json";
     std_lib.file.from_library = true;
@@ -414,9 +422,14 @@ mc::ProjectDefinition BuiltInCpp() {
     mc::ToolEntry library_tool;
     library_tool.number = 3;
     library_tool.name = "Lib 3";
-    library_tool.source = mc::LibraryToolRef{"local", 7};
+    library_tool.library =
+            mc::LibraryToolRef{"local", "LIB-7", mc::ToolFallback::kApproximate};
     library_tool.gauge_length = 254.0;
     library_tool.control_point = mc::ControlPoint::kGauge;
+    mc::ToolEntry no_shape_tool;
+    no_shape_tool.number = 9;
+    no_shape_tool.name = "Lib 9";
+    no_shape_tool.library = mc::LibraryToolRef{"std", "9", mc::ToolFallback::kNone};
     mc::ToolEntry simple_tool;
     simple_tool.number = 5;
     mc::SimpleToolSpec simple;
@@ -428,12 +441,13 @@ mc::ProjectDefinition BuiltInCpp() {
     simple.overhang = 101.6;
     simple.holder_diameter = 50.8;
     simple.holder_length = 76.2;
-    simple_tool.source = simple;
+    simple_tool.shape = simple;
+    library_tool.shape = simple;
     mc::ToolEntry profile_tool;
     profile_tool.number = 7;
     profile_tool.name = "Built profile";
-    profile_tool.source = BuiltProfile();
-    project.tools = {library_tool, simple_tool, profile_tool};
+    profile_tool.shape = BuiltProfile();
+    project.tools = {library_tool, simple_tool, profile_tool, no_shape_tool};
 
     mc::ToolOffsetEntry offset;
     offset.number = 3;
@@ -627,8 +641,8 @@ TEST(ProjectWriterTest, RoundTrip_VirtualMachineFromCpp) {
 TEST(ProjectWriterTest, Sections_AlwaysWritten) {
     auto project = ReadProjectText(MinimalProject());
     const std::string text = mc::WriteProjectToString(project, kProjectsDir);
-    EXPECT_TRUE(Contains(text, "# machining-project 1.2"));
-    EXPECT_TRUE(Contains(text, "[format]\nname = \"machining-project\"\nversion = [1, 2]"));
+    EXPECT_TRUE(Contains(text, "# machining-project 2.0"));
+    EXPECT_TRUE(Contains(text, "[format]\nname = \"machining-project\"\nversion = [2, 0]"));
     EXPECT_TRUE(Contains(text, "[project]\nname = \"minimal\""));
     EXPECT_TRUE(Contains(text, "[units]\nlength = \"mm\"\nangle = \"deg\""));
     EXPECT_TRUE(Contains(text, "[machine]\nlibrary = \"t-ZYX-b-AC-w.toml\""));
@@ -642,7 +656,7 @@ TEST(ProjectWriterTest, Sections_AlwaysWritten) {
     EXPECT_TRUE(Contains(inch, "Y = 7.0866141732283"));   // 180 / 25.4 (最短往復桁数)
     EXPECT_TRUE(Contains(inch, "diameter = 0.39370078740157"));
     const auto restored = mc::ReadProjectFromString(inch, kProjectsDir, DefaultOptions());
-    EXPECT_NEAR(std::get<mc::SimpleToolSpec>(restored.tools[0].source).diameter, 10.0, kTol);
+    EXPECT_NEAR(std::get<mc::SimpleToolSpec>(*restored.tools[0].shape).diameter, 10.0, kTol);
 }
 
 TEST(ProjectWriterTest, Paths_FileAndLibrary) {
@@ -742,6 +756,25 @@ target = "stock"
     EXPECT_TRUE(restored.warnings.empty());
 }
 
+TEST(ProjectWriterTest, ToolLibrary_KeysWritten) {
+    const std::string text = mc::WriteProjectToString(BuiltInCpp(), kProjectsDir);
+    EXPECT_TRUE(Contains(text, "[[tool_library]]\nalias = \"std\"\nformat = \"igesio-test\"\n"
+                               "library = \"tools/tools.json\""))
+            << text;
+    // `format`が空なら書かない
+    EXPECT_TRUE(Contains(text, "[[tool_library]]\nalias = \"local\"\nfile = "));
+    // `[tool.library]`はスカラーのキーの後、形状の前に置く
+    const std::size_t library = text.find("[tool.library]\nsource = \"local\"\nid = \"LIB-7\"\n"
+                                          "fallback = \"approximate\"");
+    ASSERT_NE(library, std::string::npos) << text;
+    EXPECT_LT(text.find("control_point = \"gauge\""), library);
+    EXPECT_LT(library, text.find("[tool.simple]", library));
+    // 代替形状なしの工具は形状のサブテーブルを持たない
+    EXPECT_TRUE(Contains(text, "[tool.library]\nsource = \"std\"\nid = \"9\"\n"
+                               "fallback = \"none\"\n"));
+    EXPECT_FALSE(Contains(text.substr(text.find("id = \"9\"")), "[tool.simple]"));
+}
+
 TEST(ProjectWriterTest, Retained_WrittenBack) {
     const auto original = mc::ReadProject(kProjectsDir / "sample.toml", DefaultOptions());
     const std::string text = mc::WriteProjectToString(original, kProjectsDir);
@@ -832,9 +865,49 @@ TEST(ProjectWriterTest, Throws_InvalidArgumentOnInexpressibleValues) {
     {
         auto project = BuiltInCpp();
         // セグメントを持たない部位要素は`start`を決められない
-        std::get<mc::ToolProfile>(project.tools[2].source).elements[0].segments.clear();
+        std::get<mc::ToolProfile>(*project.tools[2].shape).elements[0].segments.clear();
         EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
     }
+}
+
+TEST(ProjectWriterTest, Throws_InvalidArgumentWhenToolShapeDoesNotMatchFallback) {
+    {
+        // ライブラリ参照なしで形状が無い
+        auto project = BuiltInCpp();
+        project.tools[1].shape.reset();
+        EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
+    }
+    {
+        // 代表形状のはずが形状が無い
+        auto project = BuiltInCpp();
+        project.tools[0].shape.reset();
+        EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
+    }
+    {
+        // 代替形状なしのはずが形状を持つ
+        auto project = BuiltInCpp();
+        project.tools[3].shape = project.tools[0].shape;
+        EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
+    }
+}
+
+TEST(ProjectWriterTest, Throws_InvalidArgumentWhenLibraryAliasOrSourceIsEmpty) {
+    {
+        auto project = BuiltInCpp();
+        project.tool_libraries[0].alias.clear();
+        EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
+    }
+    {
+        auto project = BuiltInCpp();
+        project.tools[0].library->source.clear();
+        EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
+    }
+}
+
+TEST(ProjectWriterTest, Throws_InvalidArgumentWhenLibraryToolIdIsEmpty) {
+    auto project = BuiltInCpp();
+    project.tools[0].library->id.clear();
+    EXPECT_THROW(mc::WriteProjectToString(project, kProjectsDir), std::invalid_argument);
 }
 
 TEST(ProjectWriterTest, WriteProject_WritesFileAndThrowsFileOpenErrorOnDirectory) {

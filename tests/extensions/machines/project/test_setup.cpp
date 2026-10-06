@@ -7,7 +7,9 @@
  * @note 対象: MachiningSetup (BaseQ / Tools / WorkFrames / Models / Geometries /
  *       ToolOffsets / InitialWorkOffset / ResolveAttach)、MakeProjectDefinition
  *       - 正常系: 初期コンフィギュレーションの重ね合わせ (σを含む)、簡易工具の解決とゲージ長、
- *         ライブラリ参照工具のコールバック解決、輪郭形式工具の解決 (ホルダ上端の
+ *         ライブラリ参照工具のコールバック解決 (ライブラリの輪郭とゲージラインの優先,
+ *         エントリの名前と制御点)、未解決時の代替形状 (一致/代表形状/なしの警告と除外),
+ *         輪郭形式工具の解決 (ホルダ上端の
  *         ゲージ長・`gauge_length`の優先・ホルダ無しの警告)、ワーク座標系の登録値形式
  *         (直進のみ・回転軸あり・`from = "machine"`) と幾何形式 (取り付け先・
  *         モデル経由)、暗黙のG54、モデルの同次変換と所属、形状の同次変換一覧 (機械部品→
@@ -122,10 +124,25 @@ std::optional<mc::ToolAssemblySpec> FakeResolver(const mc::ToolLibrarySpec& libr
     simple.holder_diameter = 30.0;
     simple.holder_length = 40.0;
     mc::ToolAssemblySpec spec;
-    spec.name = library.alias + "#" + std::to_string(ref.assembly);
+    spec.name = library.alias + "#" + ref.id;
     spec.profile = mc::MakeSimpleToolProfile(simple, nullptr);
     spec.profile.gauge_line_z.reset();
     return spec;
+}
+
+/// @brief ゲージラインを持つ輪郭を返すコールバック (`FakeResolver`のゲージライン付き版)
+/// @note ゲージラインはホルダ上端 (30 + 40 = 70)
+std::optional<mc::ToolAssemblySpec> FakeResolverWithGaugeLine(
+        const mc::ToolLibrarySpec& library, const mc::LibraryToolRef& ref) {
+    std::optional<mc::ToolAssemblySpec> spec = FakeResolver(library, ref);
+    spec->profile.gauge_line_z = 70.0;
+    return spec;
+}
+
+/// @brief 何も解決しないコールバック (ライブラリを読めない処理系に相当)
+std::optional<mc::ToolAssemblySpec> NullResolver(const mc::ToolLibrarySpec&,
+                                                 const mc::LibraryToolRef&) {
+    return std::nullopt;
 }
 
 /// @brief 登録値形式のW_0を閉形式 F_wm(q*)⁻¹·T(p_from) で計算する
@@ -195,15 +212,39 @@ TEST(SetupTest, Tools_GaugeLengthOverride) {
     EXPECT_NEAR(setup.Tools().at(1).profile.GaugeLength(nullptr), 80.0, kTol);
 }
 
-TEST(SetupTest, Tools_LibraryRefUnresolved) {
+TEST(SetupTest, Tools_LibraryRefUnresolvedUsesFallbackShape) {
     const auto project = mc::ReadProject(kProjectsDir / "library_ref.toml", DefaultOptions());
     const mc::MachiningSetup setup(project);
-    ASSERT_EQ(setup.Tools().size(), 1u);
-    EXPECT_NE(setup.Tools().find(3), setup.Tools().end());
+    // #1は代替形状なしのため除外し、#2 (代表形状)・#4 (一致する代替形状) は代替形状を用いる
+    ASSERT_EQ(setup.Tools().size(), 3u);
+    EXPECT_EQ(setup.Tools().find(1), setup.Tools().end());
+    const mc::ToolAssemblySpec& second = setup.Tools().at(2);
+    EXPECT_EQ(second.name, "Special 7");
+    EXPECT_NEAR(second.profile.MaxRadius(mc::ToolPart::kCutter), 3.5, kTol);
+    EXPECT_NEAR(second.profile.gauge_line_z.value_or(0.0), 150.0, kTol);
+    EXPECT_EQ(second.control_point, mc::ControlPoint::kGauge);
+    // #4: 名前は簡易アセンブリの既定名、ゲージ長は簡易アセンブリの上端 (30 + 40)
+    const mc::ToolAssemblySpec& fourth = setup.Tools().at(4);
+    EXPECT_EQ(fourth.name, "ball");
+    EXPECT_NEAR(fourth.profile.gauge_line_z.value_or(0.0), 70.0, kTol);
+    // 警告は#1 (除外) と#2 (代表形状) のみ. #4 (一致) は警告しない
     ASSERT_EQ(setup.Warnings().size(), 2u);
-    EXPECT_NE(setup.Warnings()[0].message.find("library tool #1 is unresolved"),
+    EXPECT_EQ(setup.Warnings()[0].context, "[[tool]](#1)");
+    EXPECT_NE(setup.Warnings()[0].message.find("has no fallback shape; it is excluded"),
               std::string::npos);
     EXPECT_EQ(setup.Warnings()[1].context, "[[tool]](#2)");
+    EXPECT_NE(setup.Warnings()[1].message.find("approximate fallback shape is used"),
+              std::string::npos);
+}
+
+TEST(SetupTest, Tools_LibraryRefUnresolvedByCallbackUsesFallbackShape) {
+    const auto project = mc::ReadProject(kProjectsDir / "library_ref.toml", DefaultOptions());
+    mc::SetupOptions options;
+    options.tool_resolver = NullResolver;
+    const mc::MachiningSetup setup(project, options);
+    ASSERT_EQ(setup.Tools().size(), 3u);
+    EXPECT_EQ(setup.Tools().find(1), setup.Tools().end());
+    EXPECT_EQ(setup.Warnings().size(), 2u);
 }
 
 TEST(SetupTest, Tools_LibraryRefResolvedByCallback) {
@@ -211,19 +252,38 @@ TEST(SetupTest, Tools_LibraryRefResolvedByCallback) {
     mc::SetupOptions options;
     options.tool_resolver = FakeResolver;
     const mc::MachiningSetup setup(project, options);
-    ASSERT_EQ(setup.Tools().size(), 3u);
-    // #1: 名前はコールバック、ゲージ長は省略なので輪郭のホルダ上端で確定 (警告なし)
+    ASSERT_EQ(setup.Tools().size(), 4u);
+    EXPECT_TRUE(setup.Warnings().empty());
+    // #1: 代替形状なしでもライブラリから解決できれば登録する. 名前はエントリの値
     const mc::ToolAssemblySpec& first = setup.Tools().at(1);
-    EXPECT_EQ(first.name, "std#2");
+    EXPECT_EQ(first.name, "Std 2");
     EXPECT_EQ(first.number, 1);
     EXPECT_NEAR(first.profile.gauge_line_z.value_or(0.0), 30.0 + 40.0, kTol);
-    EXPECT_TRUE(setup.Warnings().empty());
-    // #2: エントリの名前・ゲージ長・制御点が優先される
+    // #2: ライブラリの輪郭 (D8) を代表形状 (D7) より優先する. ライブラリの輪郭が
+    //     ゲージラインを持たないため、エントリのゲージ長と制御点を用いる
     const mc::ToolAssemblySpec& second = setup.Tools().at(2);
     EXPECT_EQ(second.name, "Special 7");
+    EXPECT_NEAR(second.profile.MaxRadius(mc::ToolPart::kCutter), 4.0, kTol);
     EXPECT_NEAR(second.profile.gauge_line_z.value_or(0.0), 150.0, kTol);
     EXPECT_EQ(second.control_point, mc::ControlPoint::kGauge);
+    // #3: ライブラリ参照なし
     EXPECT_EQ(setup.Tools().at(3).name, "square");
+    // #4: 名前が無ければコールバックの名前、ゲージ長は輪郭のホルダ上端で確定
+    const mc::ToolAssemblySpec& fourth = setup.Tools().at(4);
+    EXPECT_EQ(fourth.name, "std#BM-R4");
+    EXPECT_NEAR(fourth.profile.gauge_line_z.value_or(0.0), 30.0 + 40.0, kTol);
+}
+
+TEST(SetupTest, Tools_LibraryGaugeLineOverridesEntryGaugeLength) {
+    const auto project = mc::ReadProject(kProjectsDir / "library_ref.toml", DefaultOptions());
+    mc::SetupOptions options;
+    options.tool_resolver = FakeResolverWithGaugeLine;
+    const mc::MachiningSetup setup(project, options);
+    // #2はエントリに`gauge_length = 150`があるが、ライブラリのゲージライン (70) を用いる
+    EXPECT_NEAR(setup.Tools().at(2).profile.gauge_line_z.value_or(0.0), 70.0, kTol);
+    // 制御点はライブラリではなくエントリの値
+    EXPECT_EQ(setup.Tools().at(2).control_point, mc::ControlPoint::kGauge);
+    EXPECT_TRUE(setup.Warnings().empty());
 }
 
 TEST(SetupTest, Tools_ProfileResolvedWithHolderTopAsGaugeLine) {

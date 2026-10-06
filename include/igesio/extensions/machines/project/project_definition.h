@@ -53,7 +53,7 @@ constexpr std::string_view kProjectFormatName = "machining-project";
 
 /// @brief 対応するプロジェクトフォーマットのバージョン `[major, minor]`
 /// @note 読込はmajorが一致するものを受理し、出力時は常にこの値を書く
-constexpr std::array<int, 2> kProjectFormatVersion = {1, 2};
+constexpr std::array<int, 2> kProjectFormatVersion = {2, 0};
 
 /// @brief 取り付け先名の予約語 (ワーク取り付け点)
 /// @note `type = "work_mount"`のコンポーネントを名前によらず指す
@@ -77,7 +77,7 @@ bool IsReservedAttachName(std::string_view name);
  * ---- 参照 ----
  */
 
-/// @brief ファイル参照 (通常パス`file` / グローバル相対パス`library`)
+/// @brief ファイル参照（通常パス`file` / グローバル相対パス`library`）
 /// @note 出力時は`raw`と`from_library`から`file =`/`library =`を復元する
 struct FileReference {
     /// @brief TOMLから読み込んだパス文字列（UTF-8）
@@ -85,7 +85,10 @@ struct FileReference {
     ///       その場合は`resolved`を基準ディレクトリから相対化して出力する
     std::string raw;
     /// @brief 解決済みのパス
-    /// @note 読込時に存在を確認済 (`[run.output].dir`のみ確認しない)
+    /// @note 読込時に存在を確認済. ただし`[run.output].dir`は確認せず,
+    ///       `[[tool_library]]`は見つからなくても警告して保持する
+    ///       （`library`形式で見つからない場合はプロジェクトのディレクトリからの
+    ///       相対パスとして解決した値）
     std::filesystem::path resolved;
     /// @brief `library`キー (ライブラリ検索パスからの相対) で指定されたか
     bool from_library = false;
@@ -94,47 +97,81 @@ struct FileReference {
 /// @brief 工具ライブラリの参照
 /// @note TOMLの`[[tool_library]]`に対応
 struct ToolLibrarySpec {
-    /// @brief `[[tool]].source`から参照する別名
-    /// @note ライブラリが1つのみなら空でもよい
+    /// @brief `[tool.library].source`から参照する別名（空でない文字列、一意）
     std::string alias;
+    /// @brief ライブラリ形式の識別子
+    /// @note 省略時は空. 値は検証せず、保持して書き戻す
+    std::string format;
     /// @brief ライブラリファイル
+    /// @note 参照先が見つからなくてもよい（読込時に警告する）
     FileReference file;
     /// @brief TOMLの行番号 (診断用)
     int line = 0;
 };
 
-/// @brief ライブラリ参照形式の工具
-/// @note TOMLの`[[tool]]`で`assembly`を指定した場合に対応. 解決は行わず,
-///       `MachiningSetup`が`SetupOptions::tool_resolver`で形状を取得する
+/// @brief ライブラリ参照工具の代替形状とライブラリ上の形状との関係
+/// @note TOMLの`[tool.library].fallback`に対応
+enum class ToolFallback {
+    /// @brief 代替形状はライブラリ上の形状と一致する
+    kExact,
+    /// @brief 代替形状は代表形状であり、ライブラリ上の形状とは一致しない
+    kApproximate,
+    /// @brief 代替形状を記録しない
+    kNone,
+};
+
+/// @brief 代替形状の関係の文字列を`ToolFallback`に変換する
+/// @param text `"exact"` / `"approximate"` / `"none"`（大文字小文字を区別する）
+/// @return 対応する関係. 未知の文字列なら`std::nullopt`
+std::optional<ToolFallback> ParseToolFallback(std::string_view text);
+
+/// @brief 代替形状の関係の名称（TOMLで用いる文字列）を取得する
+/// @param fallback 代替形状の関係
+std::string_view ToolFallbackName(ToolFallback fallback);
+
+/// @brief 工具のライブラリ参照
+/// @note TOMLの`[tool.library]`に対応. 解決は行わず,
+///       `MachiningSetup`で`SetupOptions::tool_resolver`を用いて形状を取得する
 struct LibraryToolRef {
-    /// @brief 参照する`[[tool_library]]`の`alias`
-    /// @note ライブラリが1つのみなら空でもよい
+    /// @brief 参照する`[[tool_library]]`の`alias`（空でない文字列）
     std::string source;
-    /// @brief ライブラリ内のアセンブリ番号
-    int assembly = 0;
+    /// @brief ライブラリ内の工具アセンブリの識別子（空でない文字列）
+    std::string id;
+    /// @brief 代替形状（`ToolEntry::shape`）とライブラリ上の形状との関係
+    /// @note `kNone`のときのみ`ToolEntry::shape`を持たない
+    ToolFallback fallback = ToolFallback::kExact;
 };
 
 /// @brief 工具番号と工具の対応
-/// @note TOMLの`[[tool]]`に対応
+/// @note TOMLの`[[tool]]`に対応. `library`があればライブラリ参照工具であり,
+///       `shape`はライブラリを解決できない場合の代替形状となる.
+///       `number`と`name`以外のメンバ（`shape`/`gauge_length`/`control_point`）
+///       を変更する場合は、`library`を削除するか、変更後の工具の参照に
+///       書き換えること（同じ参照先の内容に代替形状を合わせる場合を除く）
 struct ToolEntry {
-    /// @brief 工具番号 (正の整数、一意)
+    /// @brief 工具番号（正の整数、一意）
     int number = 0;
     /// @brief 表示名
-    /// @note 省略時は空 (表示名は`MachiningSetup`で補う). 輪郭形式では必須
+    /// @note 省略時は空（表示名は`MachiningSetup`で補う）.
+    ///       輪郭形式の場合と、代替形状を持たないライブラリ参照工具の場合は必須
     std::string name;
-    /// @brief 簡易アセンブリ形式 (`[tool.simple]`)、ライブラリ参照形式,
-    ///        または輪郭形式 (`[tool.profile]`)
-    /// @note 輪郭形式の`ToolProfile`は内部単位 [mm] で、各部位要素は回転軸上で
-    ///       閉じた状態 (`CloseElementOnAxis`適用済み) で保持する.
+    /// @brief ライブラリ参照（`[tool.library]`）
+    /// @note ライブラリ参照工具でなければ`std::nullopt`
+    std::optional<LibraryToolRef> library;
+    /// @brief 簡易アセンブリ形式（`[tool.simple]`）または輪郭形式
+    ///        （`[tool.profile]`）の形状
+    /// @note `library->fallback`が`kNone`の場合のみ`std::nullopt`.
+    ///       輪郭形式の`ToolProfile`は内部単位 [mm] で、各部位要素は回転軸上で
+    ///       閉じた状態（`CloseElementOnAxis`適用済み）で保持する.
     ///       `name`は`ToolEntry::name`と同じ値、`gauge_line_z`は未設定であり
     ///       `MachiningSetup`で確定する
-    std::variant<SimpleToolSpec, LibraryToolRef, ToolProfile> source;
+    std::optional<std::variant<SimpleToolSpec, ToolProfile>> shape;
     /// @brief 工具先端からゲージラインまでの長さ [mm]
-    /// @note 省略時は`std::nullopt` (輪郭側の値は`MachiningSetup`で適用)
+    /// @note 省略時は`std::nullopt`（輪郭側の値は`MachiningSetup`で適用）
     std::optional<double> gauge_length;
     /// @brief 位置IKの制御点
     ControlPoint control_point = ControlPoint::kTip;
-    /// @brief TOMLの行番号 (診断用)
+    /// @brief TOMLの行番号（診断用）
     int line = 0;
 };
 

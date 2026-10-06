@@ -29,6 +29,22 @@ bool IsReservedAttachName(const std::string_view name) {
  * ---- 列挙型 ----
  */
 
+std::optional<ToolFallback> ParseToolFallback(const std::string_view text) {
+    if (text == "exact") return ToolFallback::kExact;
+    if (text == "approximate") return ToolFallback::kApproximate;
+    if (text == "none") return ToolFallback::kNone;
+    return std::nullopt;
+}
+
+std::string_view ToolFallbackName(const ToolFallback fallback) {
+    switch (fallback) {
+        case ToolFallback::kApproximate: return "approximate";
+        case ToolFallback::kNone: return "none";
+        case ToolFallback::kExact: break;
+    }
+    return "exact";
+}
+
 std::optional<WorkOffsetFrom> ParseWorkOffsetFrom(const std::string_view text) {
     if (text == kToolMountAttach) return WorkOffsetFrom::kToolMount;
     if (text == "machine") return WorkOffsetFrom::kMachine;

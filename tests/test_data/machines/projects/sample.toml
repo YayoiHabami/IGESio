@@ -5,7 +5,7 @@
 
 [format]
 name = "machining-project"
-version = [1, 2]
+version = [2, 0]
 
 [project]
 name = "sample op10"
@@ -28,11 +28,26 @@ disabled_codes = ["G68.2"]
 alias = "std"
 library = "tools/tools.json"
 
-# ライブラリ参照形式
+# ライブラリ参照工具（代替形状は簡易アセンブリ）
 [[tool]]
 number = 1
+name = "Square D10 (library)"
+
+[tool.library]
 source = "std"
-assembly = 2
+id = "EM-D10"
+fallback = "exact"
+
+[tool.simple]
+cutter = "square"
+diameter = 10.0
+cutting_length = 25.0
+tool_length = 75.0
+overhang = 45.0
+
+[tool.simple.holder]
+diameter = 40.0
+length = 80.0
 
 # 簡易アセンブリ形式(ゲージ長を明示)
 [[tool]]

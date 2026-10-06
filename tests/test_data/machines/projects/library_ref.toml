@@ -1,9 +1,10 @@
-# ライブラリ参照形式の工具を持つプロジェクト (工具ライブラリ2つ・別名必須)
-# ライブラリファイルの内容は本拡張では読まない (存在確認のみ)。
+# ライブラリ参照工具を持つプロジェクト（工具ライブラリ2つ・別名必須）
+# ライブラリファイルの内容は本拡張では読まない（存在確認のみ）。
+# 工具#1は代替形状なし、#2は代表形状、#3はライブラリ参照なし、#4は一致する代替形状。
 
 [format]
 name = "machining-project"
-version = [1, 2]
+version = [2, 0]
 
 [project]
 name = "library reference"
@@ -13,6 +14,7 @@ library = "t-ZYX-b-AC-w.toml"
 
 [[tool_library]]
 alias = "std"
+format = "igesio-test"
 library = "tools/dummy.json"
 
 [[tool_library]]
@@ -21,16 +23,34 @@ library = "tools/dummy.json"
 
 [[tool]]
 number = 1
+name = "Std 2"
+
+[tool.library]
 source = "std"
-assembly = 2
+id = "2"
+fallback = "none"
 
 [[tool]]
 number = 2
 name = "Special 7"
-source = "special"
-assembly = 7
 gauge_length = 150.0
 control_point = "gauge"
+
+[tool.library]
+source = "special"
+id = "SP-7"
+fallback = "approximate"
+
+[tool.simple]
+cutter = "square"
+diameter = 7.0
+cutting_length = 20.0
+tool_length = 70.0
+overhang = 50.0
+
+[tool.simple.holder]
+diameter = 40.0
+length = 60.0
 
 [[tool]]
 number = 3
@@ -45,3 +65,22 @@ overhang = 50.0
 [tool.simple.holder]
 diameter = 50.0
 length = 80.0
+
+[[tool]]
+number = 4
+
+[tool.library]
+source = "std"
+id = "BM-R4"
+fallback = "exact"
+
+[tool.simple]
+cutter = "ball"
+diameter = 8.0
+cutting_length = 16.0
+tool_length = 50.0
+overhang = 30.0
+
+[tool.simple.holder]
+diameter = 30.0
+length = 40.0

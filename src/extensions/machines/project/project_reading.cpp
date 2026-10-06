@@ -111,17 +111,14 @@ void CheckReferencePath(const std::string& raw, const std::string& context,
 /// @brief `library`キーのパスをプロジェクトのディレクトリと
 ///        ライブラリ検索ディレクトリから解決する
 /// @param raw ファイルに記載されたパス
-/// @param context 読込箇所
-/// @param line パスの行番号
 /// @param ctx 読込全体で共有する内容
-/// @return 見つかったファイルの正規化済みパス
-/// @throw igesio::DataFormatError いずれのディレクトリでも見つからない場合
-/// @note 相対パスはプロジェクトのディレクトリ (`base_dir`) を最初に探し,
+/// @return 見つかったファイルの正規化済みパス. いずれのディレクトリでも
+///         見つからなければ`std::nullopt`
+/// @note 相対パスはプロジェクトのディレクトリ（`base_dir`）を最初に探し,
 ///       次にライブラリ検索ディレクトリを順に探す. プロジェクト相対の定義を
 ///       共有ライブラリ側より優先する. `raw`が絶対パスの場合は検索せず、正規化して返す
-std::filesystem::path ResolveLibraryPath(
-        const std::string& raw, const std::string& context, const int line,
-        const ReadContext& ctx) {
+std::optional<std::filesystem::path> ResolveLibraryPath(
+        const std::string& raw, const ReadContext& ctx) {
     // 絶対パスの場合は検索しない
     if (IsAbsolutePathString(raw)) {
         return utils::PathFromUtf8(raw).lexically_normal();
@@ -136,24 +133,24 @@ std::filesystem::path ResolveLibraryPath(
                 (dir / raw_path).lexically_normal();
         if (std::filesystem::exists(candidate)) return candidate;
     }
-    Fail(context,
-         "not found in the project directory or library directories: " + raw,
-         line);
+    return std::nullopt;
 }
 
 /// @brief `file`/`library`キーを持つテーブルからファイル参照を読む
 /// @param table `file`/`library`を持ち得るテーブル
 /// @param context 読込箇所
 /// @param ctx 読込全体で共有する内容
-/// @param allow_library `library`キーを許すか (`[[program]]`は`file`のみ)
-/// @param check_exists 解決したファイルの存在を要求するか
+/// @param allow_library `library`キーを許すか（`[[program]]`は`file`のみ）
+/// @param missing_is_error ファイルが見つからない場合をエラーとするか.
+///        `false`なら警告して読込を続ける
 /// @throw igesio::DataFormatError `file`/`library`の択一に反する、パスが空,
-///        またはファイルが存在しない場合 (ライブラリの探索失敗は
-///        `ResolveLibraryPath`から伝播)
+///        または`missing_is_error`でファイルが見つからない場合
+/// @note `library`形式で見つからない場合（警告時）の`resolved`は,
+///       プロジェクトのディレクトリからの相対パスとして解決した値とする
 FileReference ReadFileReference(
         const TomlValue& table, const std::string& context,
         const ReadContext& ctx, const bool allow_library,
-        const bool check_exists) {
+        const bool missing_is_error) {
     const std::optional<std::string> file =
             OptionalString(table, "file", context);
     const std::optional<std::string> library = allow_library
@@ -172,9 +169,11 @@ FileReference ReadFileReference(
         Fail(context, "invalid path: " + FormatValue(value), LineOf(value));
     }
     CheckReferencePath(reference.raw, context, LineOf(value), ctx);
-    if (reference.from_library) {
-        reference.resolved = ResolveLibraryPath(reference.raw, context,
-                                                LineOf(value), ctx);
+    const std::optional<std::filesystem::path> found = reference.from_library
+            ? ResolveLibraryPath(reference.raw, ctx)
+            : std::nullopt;
+    if (found.has_value()) {
+        reference.resolved = *found;
     } else if (IsAbsolutePathString(reference.raw)) {
         reference.resolved =
                 utils::PathFromUtf8(reference.raw).lexically_normal();
@@ -183,9 +182,14 @@ FileReference ReadFileReference(
                 (ctx.base_dir / utils::PathFromUtf8(reference.raw))
                         .lexically_normal();
     }
-    if (check_exists && !std::filesystem::exists(reference.resolved)) {
-        Fail(context, "file does not exist: " + reference.raw, LineOf(value));
-    }
+    if (std::filesystem::exists(reference.resolved)) return reference;
+
+    const std::string message = reference.from_library
+            ? "not found in the project directory or library directories: "
+                    + reference.raw
+            : "file does not exist: " + reference.raw;
+    if (missing_is_error) Fail(context, message, LineOf(value));
+    WarnAt(ctx, context, message, LineOf(value));
     return reference;
 }
 
@@ -437,9 +441,10 @@ std::optional<ControllerSpec> ReadController(const TomlValue& root,
 /// @brief `[[tool_library]]`を読む
 /// @param root TOMLのルートテーブル
 /// @param ctx 読込全体で共有する内容
-/// @throw igesio::DataFormatError ライブラリが2つ以上あるのに`alias`が無い,
-///        または`alias`が重複する場合 (ファイル参照の不備は
-///        `ReadFileReference`から伝播)
+/// @throw igesio::DataFormatError `alias`が無いか空、または重複する場合
+///        （ファイル参照の不備は`ReadFileReference`から伝播）
+/// @note 参照先のファイルが見つからない場合は警告して保持する. このライブラリを
+///       参照する工具は、解決できなければ代替形状を用いる
 std::vector<ToolLibrarySpec> ReadToolLibraries(const TomlValue& root,
                                                const ReadContext& ctx) {
     const std::vector<const TomlValue*> tables =
@@ -450,16 +455,14 @@ std::vector<ToolLibrarySpec> ReadToolLibraries(const TomlValue& root,
         const std::string context = Indexed("[[tool_library]]", i);
         ToolLibrarySpec library;
         library.line = LineOf(*tables[i]);
-        library.alias =
-                OptionalString(*tables[i], "alias", context).value_or("");
-        if (library.alias.empty() && tables.size() > 1) {
-            Fail(context, "alias is required when more than one tool library "
-                          "is defined", library.line);
-        }
-        if (!library.alias.empty() && !aliases.insert(library.alias).second) {
+        library.alias = RequireString(*tables[i], "alias", context);
+        if (!aliases.insert(library.alias).second) {
             Fail(context, "duplicate alias: " + library.alias, library.line);
         }
-        library.file = ReadFileReference(*tables[i], context, ctx, true, true);
+        library.format =
+                OptionalString(*tables[i], "format", context).value_or("");
+        library.file =
+                ReadFileReference(*tables[i], context, ctx, true, false);
         libraries.push_back(std::move(library));
     }
     return libraries;
@@ -777,29 +780,15 @@ ToolProfile ReadProfileTool(const TomlValue& table, const std::string& name,
     return profile;
 }
 
-/// @brief `[[tool]]`の`source` (ライブラリ別名) を読んで検証する
-/// @param table `[[tool]]`の要素のテーブル
+/// @brief `[tool.library]`の`source`（ライブラリ別名）を読んで検証する
+/// @param table `[tool.library]`のテーブル
 /// @param context 読込箇所
 /// @param ctx 読込全体で共有する内容
-/// @return 記載された別名. 未記載なら空 (ライブラリが1つの場合のみ許す)
-/// @throw igesio::DataFormatError 未記載でライブラリが1つでない,
-///        または未知の別名の場合
+/// @return 記載された別名
+/// @throw igesio::DataFormatError `source`が無いか空、または未知の別名の場合
 std::string ReadToolSource(const TomlValue& table, const std::string& context,
                            const ReadContext& ctx) {
-    const std::string source =
-            OptionalString(table, "source", context).value_or("");
-    const auto& libraries = ctx.project->tool_libraries;
-    if (source.empty()) {
-        if (libraries.size() != 1) {
-            Fail(context,
-                 libraries.empty()
-                         ? "assembly requires a [[tool_library]]"
-                         : "source is required when more than one tool "
-                           "library is defined",
-                 LineOf(table));
-        }
-        return source;
-    }
+    const std::string source = RequireString(table, "source", context);
     if (FindToolLibrary(*ctx.project, source) == nullptr) {
         Fail(context, "unknown tool library alias: " + source,
              LineOf(*Find(table, "source")));
@@ -807,50 +796,81 @@ std::string ReadToolSource(const TomlValue& table, const std::string& context,
     return source;
 }
 
-/// @brief `[[tool]]`の工具の形状 (3形式のいずれか) を読む
+/// @brief `[tool.library]`を読む
+/// @param table `[tool.library]`のテーブル
+/// @param context 読込箇所（`[[tool]](#n).library`）
+/// @param ctx 読込全体で共有する内容
+/// @throw igesio::DataFormatError テーブルでない、`id`が文字列でないか空,
+///        `fallback`が無いか未知の値の場合（`ReadToolSource`からも伝播）
+LibraryToolRef ReadToolLibraryRef(const TomlValue& table,
+                                  const std::string& context,
+                                  const ReadContext& ctx) {
+    EnsureTable(table, context + ": not a table");
+    LibraryToolRef ref;
+    ref.source = ReadToolSource(table, context, ctx);
+    ref.id = RequireString(table, "id", context);
+    const std::string text = RequireString(table, "fallback", context);
+    const auto fallback = ParseToolFallback(text);
+    if (!fallback.has_value()) {
+        Fail(context, "unknown fallback: " + text,
+             LineOf(*Find(table, "fallback")));
+    }
+    ref.fallback = *fallback;
+    return ref;
+}
+
+/// @brief `[[tool]]`の工具の形状（簡易アセンブリ形式または輪郭形式）を読む
 /// @param table `[[tool]]`の要素のテーブル
-/// @param name 工具名 (`[[tool]].name`. 輪郭形式では必須)
+/// @param name 工具名（`[[tool]].name`. 輪郭形式では必須）
+/// @param has_fallback_shape 形状を記述すべきか（ライブラリ参照工具で
+///        `fallback = "none"`の場合のみ`false`）
 /// @param context 読込箇所
 /// @param ctx 読込全体で共有する内容
-/// @return 簡易アセンブリ形式、ライブラリ参照形式、または輪郭形式の定義
-/// @throw igesio::DataFormatError `assembly`/`[tool.simple]`/`[tool.profile]`
-///        の択一に反する、または輪郭形式で`name`が空の場合
-///        (`ReadSimpleTool`/`ValidateSimpleTool`/`ReadProfileTool`/
-///        `ReadToolSource`からも伝播)
-std::variant<SimpleToolSpec, LibraryToolRef, ToolProfile> ReadToolShape(
+/// @return 簡易アセンブリ形式または輪郭形式の定義.
+///         `has_fallback_shape`が`false`なら`std::nullopt`
+/// @throw igesio::DataFormatError `[tool.simple]`/`[tool.profile]`の指定数が
+///        規則に反する、または輪郭形式で`name`が空の場合
+///        （`ReadSimpleTool`/`ValidateSimpleTool`/`ReadProfileTool`からも伝播）
+std::optional<std::variant<SimpleToolSpec, ToolProfile>> ReadToolShape(
         const TomlValue& table, const std::string& name,
-        const std::string& context, const ReadContext& ctx) {
-    if (PresentKeys(table, {"assembly", "simple", "profile"}).size() != 1) {
-        Fail(context,
-             "specify exactly one of assembly, [tool.simple], and "
-             "[tool.profile]",
+        const bool has_fallback_shape, const std::string& context,
+        const ReadContext& ctx) {
+    const std::size_t count = PresentKeys(table, {"simple", "profile"}).size();
+    if (!has_fallback_shape) {
+        if (count != 0) {
+            Fail(context,
+                 "[tool.simple] and [tool.profile] must not be specified "
+                 "with fallback = \"none\"",
+                 LineOf(table));
+        }
+        return std::nullopt;
+    }
+    if (count != 1) {
+        Fail(context, "specify exactly one of [tool.simple] and [tool.profile]",
              LineOf(table));
     }
+
     if (const TomlValue* simple = Find(table, "simple"); simple != nullptr) {
         const SimpleToolSpec spec =
                 ReadSimpleTool(*simple, context + ".simple", ctx);
         ValidateSimpleTool(spec, context + ".simple", LineOf(*simple), ctx);
         return spec;
     }
-    if (const TomlValue* profile = Find(table, "profile"); profile != nullptr) {
-        if (name.empty()) {
-            Fail(context, "name is required for [tool.profile]", LineOf(table));
-        }
-        return ReadProfileTool(*profile, name, context + ".profile", ctx);
+    if (name.empty()) {
+        Fail(context, "name is required for [tool.profile]", LineOf(table));
     }
-    LibraryToolRef ref;
-    ref.source = ReadToolSource(table, context, ctx);
-    ref.assembly = AsInteger(*Find(table, "assembly"), context + ".assembly");
-    return ref;
+    return ReadProfileTool(*Find(table, "profile"), name, context + ".profile",
+                           ctx);
 }
 
 /// @brief `[[tool]]`の1要素を読む
 /// @param table 要素のテーブル
-/// @param index `[[tool]]`内の添字 (`number`を読む前の読込箇所に用いる)
+/// @param index `[[tool]]`内の添字（`number`を読む前の読込箇所に用いる）
 /// @param ctx 読込全体で共有する内容
 /// @throw igesio::DataFormatError `number`が正でない、重複する,
-///        `gauge_length`が正でない、または未知の`control_point`の場合
-///        (`ReadToolShape`からも伝播)
+///        `fallback = "none"`で`name`が無い、`gauge_length`が正でない,
+///        または未知の`control_point`の場合
+///        （`ReadToolLibraryRef`/`ReadToolShape`からも伝播）
 ToolEntry ReadTool(const TomlValue& table, const std::size_t index,
                    const ReadContext& ctx) {
     ToolEntry entry;
@@ -865,7 +885,18 @@ ToolEntry ReadTool(const TomlValue& table, const std::size_t index,
         Fail(context, "duplicate tool number", entry.line);
     }
     entry.name = OptionalString(table, "name", context).value_or("");
-    entry.source = ReadToolShape(table, entry.name, context, ctx);
+    if (const TomlValue* library = Find(table, "library"); library != nullptr) {
+        entry.library =
+                ReadToolLibraryRef(*library, context + ".library", ctx);
+    }
+    const bool has_fallback_shape =
+            !entry.library.has_value() ||
+            entry.library->fallback != ToolFallback::kNone;
+    if (!has_fallback_shape && entry.name.empty()) {
+        Fail(context, "name is required for fallback = \"none\"", entry.line);
+    }
+    entry.shape = ReadToolShape(table, entry.name, has_fallback_shape, context,
+                                ctx);
     if (const TomlValue* gauge = Find(table, "gauge_length");
         gauge != nullptr) {
         entry.gauge_length =

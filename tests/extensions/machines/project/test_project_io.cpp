@@ -11,20 +11,23 @@
  *       - 正常系 (要素): `modified`の表記保持、`library`の検索 (プロジェクトの
  *         ディレクトリ優先)、機械定義の警告転記、仮想機械の指定 (種類3つ、
  *         設定と`tool_side_limit`の単位換算、`three_axis`での`tool_side_limit`の保持)、
- *         簡易工具の単位換算、ライブラリ参照の保持、輪郭形式の読込 (単位換算・
+ *         簡易工具の単位換算、ライブラリ参照工具の保持 (`format`、代替形状の
+ *         3種の関係)、輪郭形式の読込 (単位換算・
  *         軸上での閉包・円弧中心の補正)、省略値の`nullopt`保持、
  *         ワークオフセットの2形式と単位換算、役割別の`collision`既定、形状の再利用、
  *         `[initial]`・`[[program]]`・`[collision]`・`[run]`の各項目、`retained`
  *       - 正常系 (境界値): `[initial.axes]`の`limits`端と許容誤差、`block_skip`の1と9、
- *         古いminor版と現行minor版の受理、円弧中心の許容誤差、指令点の上限,
+ *         現行minor版の受理、円弧中心の許容誤差、指令点の上限,
  *         不透明度の0と1、微小な正の`tool_side_limit`
  *       - 異常系: 仕様§5.1の各項目を代表1件ずつ、例外型と識別語で検証
  *       - 警告: minor版、`overhang < cutting_length`、designの`collision`、
- *         可搬でないパス、`cut_stock`の拡張子
+ *         可搬でないパス、`cut_stock`の拡張子、工具ライブラリのファイル不在
  *       - 全角パス: 全角名のプロジェクトの読込と`file`/`library`参照の解決,
  *         プログラムの表示名、ファイル不在の例外の型と文言
  *       TODO: 退化ケース (セクションが全て省略された最小構成) は
  *             `WorkOffsets_NoImplicitEntry`の空定義で兼ねる
+ *       TODO: 古いminor版の受理は、現行major (2) にminor 0より古い版が無いため
+ *             検証しない
  */
 #include <gtest/gtest.h>
 
@@ -143,6 +146,35 @@ std::string WithProfile(const std::string& from, const std::string& to) {
     return WithSection(Replace(ProfileToolSection(), from, to));
 }
 
+/// @brief 工具ライブラリ1つ (別名`"lib"`、`tools/tools.json`) の`[[tool_library]]`
+constexpr const char* kSingleToolLibrary =
+        "[[tool_library]]\nalias = \"lib\"\nlibrary = \"tools/tools.json\"\n";
+
+/// @brief 代替形状に用いる簡易アセンブリ (D6のスクエア、ホルダ径30・長さ40)
+constexpr const char* kFallbackSimpleShape =
+        "[tool.simple]\ncutter = \"square\"\ndiameter = 6.0\n"
+        "cutting_length = 10.0\ntool_length = 40.0\noverhang = 30.0\n\n"
+        "[tool.simple.holder]\ndiameter = 30.0\nlength = 40.0\n";
+
+/// @brief ライブラリ参照工具#2 (名前`"Lib 2"`) の`[[tool]]`を作る
+/// @param library `[tool.library]`の本文 (キーの行)
+/// @param shape 形状のサブテーブル. 空なら形状を持たない
+std::string LibraryToolSection(const std::string& library,
+                               const std::string& shape) {
+    return "[[tool]]\nnumber = 2\nname = \"Lib 2\"\n\n[tool.library]\n"
+           + library + "\n" + shape;
+}
+
+/// @brief 工具ライブラリ1つとライブラリ参照工具#2を最小構成に追記する
+/// @param library `[tool.library]`の`source`以外のキーの行 (`source = "lib"`は
+///        先頭に補う)
+/// @param shape 形状のサブテーブル. 空なら形状を持たない
+std::string WithLibraryTool(const std::string& library,
+                            const std::string& shape) {
+    return WithSection(std::string(kSingleToolLibrary)
+                       + LibraryToolSection("source = \"lib\"\n" + library, shape));
+}
+
 
 
 /**
@@ -152,28 +184,24 @@ std::string WithProfile(const std::string& from, const std::string& to) {
 TEST(ProjectIoTest, Format_ThrowsDataFormatErrorWhenNameOrMajorMismatch) {
     ExpectDataFormatError(Replace(MinimalProject(), "machining-project", "cspace-project"),
                           "machining-project");
-    ExpectDataFormatError(Replace(MinimalProject(), "version = [1, 2]", "version = [2, 0]"),
+    ExpectDataFormatError(Replace(MinimalProject(), "version = [2, 0]", "version = [1, 2]"),
+                          "unsupported format version");
+    ExpectDataFormatError(Replace(MinimalProject(), "version = [2, 0]", "version = [3, 0]"),
                           "unsupported format version");
 }
 
 TEST(ProjectIoTest, Format_WarnsWhenMinorIsNewer) {
     const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [1, 2]", "version = [1, 3]"));
+            ReadProjectText(Replace(MinimalProject(), "version = [2, 0]", "version = [2, 1]"));
     ExpectSingleWarning(project, "newer minor");
-    EXPECT_EQ(project.format_version[1], 3);
+    EXPECT_EQ(project.format_version[1], 1);
 }
 
 TEST(ProjectIoTest, Format_AcceptsCurrentMinorWithoutWarning) {
     const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [1, 2]", "version = [1, 2]"));
+            ReadProjectText(Replace(MinimalProject(), "version = [2, 0]", "version = [2, 0]"));
     EXPECT_TRUE(project.warnings.empty());
-    EXPECT_EQ(project.format_version[1], 2);
-}
-
-TEST(ProjectIoTest, Format_AcceptsOlderMinorWithoutWarning) {
-    const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [1, 2]", "version = [1, 0]"));
-    EXPECT_TRUE(project.warnings.empty());
+    EXPECT_EQ(project.format_version[0], 2);
     EXPECT_EQ(project.format_version[1], 0);
 }
 
@@ -424,8 +452,10 @@ TEST(ProjectIoTest, Tools_SimpleIsValidatedNotResolved) {
     EXPECT_TRUE(tool.name.empty());
     EXPECT_FALSE(tool.gauge_length.has_value());
     EXPECT_EQ(tool.control_point, mc::ControlPoint::kTip);
-    ASSERT_TRUE(std::holds_alternative<mc::SimpleToolSpec>(tool.source));
-    const auto& simple = std::get<mc::SimpleToolSpec>(tool.source);
+    EXPECT_FALSE(tool.library.has_value());
+    ASSERT_TRUE(tool.shape.has_value());
+    ASSERT_TRUE(std::holds_alternative<mc::SimpleToolSpec>(*tool.shape));
+    const auto& simple = std::get<mc::SimpleToolSpec>(*tool.shape);
     EXPECT_EQ(simple.cutter, mc::SimpleToolSpec::Cutter::kBall);
     EXPECT_NEAR(simple.diameter, 10.0, kTol);
     EXPECT_NEAR(simple.holder_length, 50.0, kTol);
@@ -433,7 +463,7 @@ TEST(ProjectIoTest, Tools_SimpleIsValidatedNotResolved) {
 
     // inch宣言なら寸法はmmへ換算される
     const auto inch = ReadProjectText(WithInchUnits(MinimalProject()));
-    EXPECT_NEAR(std::get<mc::SimpleToolSpec>(inch.tools[0].source).diameter, 254.0, kTol);
+    EXPECT_NEAR(std::get<mc::SimpleToolSpec>(*inch.tools[0].shape).diameter, 254.0, kTol);
 }
 
 TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenSimpleGeometryIsInvalid) {
@@ -471,30 +501,44 @@ TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenNumberIsInvalid) {
                           "positive integer");
     ExpectDataFormatError(Replace(MinimalProject(), "number = 1", "number = 1.5"),
                           "not an integer");
-    ExpectDataFormatError(WithSection("[[tool]]\nnumber = 1\nassembly = 3\n"),
-                          "duplicate tool number");
-    ExpectDataFormatError(Replace(MinimalProject(), "number = 1", "number = 1\nassembly = 3"),
-                          "exactly one of assembly, [tool.simple], and [tool.profile]");
+    ExpectDataFormatError(WithSection("[[tool]]\nnumber = 1\n"), "duplicate tool number");
 }
 
 TEST(ProjectIoTest, Tools_LibraryRefIsKept) {
     const auto project = mc::ReadProject(kProjectsDir / "library_ref.toml", DefaultOptions());
     EXPECT_TRUE(project.warnings.empty());
     ASSERT_EQ(project.tool_libraries.size(), 2u);
+    EXPECT_EQ(project.tool_libraries[0].format, "igesio-test");
     EXPECT_EQ(project.tool_libraries[1].alias, "special");
-    ASSERT_EQ(project.tools.size(), 3u);
-    ASSERT_TRUE(std::holds_alternative<mc::LibraryToolRef>(project.tools[0].source));
-    const auto& ref = std::get<mc::LibraryToolRef>(project.tools[0].source);
-    EXPECT_EQ(ref.source, "std");
-    EXPECT_EQ(ref.assembly, 2);
+    EXPECT_TRUE(project.tool_libraries[1].format.empty());
+    ASSERT_EQ(project.tools.size(), 4u);
+
+    // #1: 代替形状なし
+    ASSERT_TRUE(project.tools[0].library.has_value());
+    const mc::LibraryToolRef& none = *project.tools[0].library;
+    EXPECT_EQ(none.source, "std");
+    EXPECT_EQ(none.id, "2");
+    EXPECT_EQ(none.fallback, mc::ToolFallback::kNone);
+    EXPECT_FALSE(project.tools[0].shape.has_value());
+    // #2: 代表形状 (簡易アセンブリ) とエントリの値
+    ASSERT_TRUE(project.tools[1].library.has_value());
+    EXPECT_EQ(project.tools[1].library->id, "SP-7");
+    EXPECT_EQ(project.tools[1].library->fallback, mc::ToolFallback::kApproximate);
+    ASSERT_TRUE(project.tools[1].shape.has_value());
+    EXPECT_TRUE(std::holds_alternative<mc::SimpleToolSpec>(*project.tools[1].shape));
     EXPECT_EQ(project.tools[1].name, "Special 7");
     EXPECT_NEAR(project.tools[1].gauge_length.value_or(0.0), 150.0, kTol);
     EXPECT_EQ(project.tools[1].control_point, mc::ControlPoint::kGauge);
-    EXPECT_TRUE(std::holds_alternative<mc::SimpleToolSpec>(project.tools[2].source));
+    // #3: ライブラリ参照なし
+    EXPECT_FALSE(project.tools[2].library.has_value());
+    // #4: 一致する代替形状
+    EXPECT_EQ(project.tools[3].library->fallback, mc::ToolFallback::kExact);
+    EXPECT_TRUE(project.tools[3].shape.has_value());
+
     EXPECT_NE(mc::FindToolLibrary(project, "std"), nullptr);
     EXPECT_EQ(mc::FindToolLibrary(project, "none"), nullptr);
-    EXPECT_NE(mc::FindTool(project, 3), nullptr);
-    EXPECT_EQ(mc::FindTool(project, 4), nullptr);
+    EXPECT_NE(mc::FindTool(project, 4), nullptr);
+    EXPECT_EQ(mc::FindTool(project, 5), nullptr);
 }
 
 TEST(ProjectIoTest, Tools_LibraryAliasRules) {
@@ -502,22 +546,127 @@ TEST(ProjectIoTest, Tools_LibraryAliasRules) {
             "[[tool_library]]\nalias = \"a\"\nlibrary = \"tools/tools.json\"\n"
             "[[tool_library]]\nalias = \"b\"\nlibrary = \"tools/dummy.json\"\n";
     ExpectDataFormatError(WithSection(Replace(two_libraries, "alias = \"b\"\n", "")),
-                          "alias is required");
+                          "alias is missing");
     ExpectDataFormatError(WithSection(Replace(two_libraries, "alias = \"b\"", "alias = \"a\"")),
                           "duplicate alias");
-    ExpectDataFormatError(WithSection(two_libraries + "[[tool]]\nnumber = 2\nassembly = 1\n"),
-                          "source is required");
-    ExpectDataFormatError(WithSection(two_libraries
-                                      + "[[tool]]\nnumber = 2\nsource = \"c\"\nassembly = 1\n"),
-                          "unknown tool library alias");
-    ExpectDataFormatError(WithSection("[[tool]]\nnumber = 2\nassembly = 1\n"),
-                          "requires a [[tool_library]]");
-    // ライブラリ1つなら別名も`source`も省略できる
-    const auto single = ReadProjectText(WithSection(
-            "[[tool_library]]\nlibrary = \"tools/tools.json\"\n"
-            "[[tool]]\nnumber = 2\nassembly = 1\n"));
-    EXPECT_TRUE(single.tool_libraries[0].alias.empty());
-    EXPECT_TRUE(std::get<mc::LibraryToolRef>(single.tools[1].source).source.empty());
+    const std::string id_only = "id = \"1\"\nfallback = \"exact\"\n";
+    ExpectDataFormatError(
+            WithSection(two_libraries + LibraryToolSection(id_only, kFallbackSimpleShape)),
+            "source is missing");
+    ExpectDataFormatError(
+            WithSection(two_libraries + LibraryToolSection("source = \"c\"\n" + id_only,
+                                                           kFallbackSimpleShape)),
+            "unknown tool library alias");
+    // `[[tool_library]]`が無ければ、どの別名も存在しない
+    ExpectDataFormatError(
+            WithSection(LibraryToolSection("source = \"a\"\n" + id_only, kFallbackSimpleShape)),
+            "unknown tool library alias");
+}
+
+TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenSingleLibraryOmitsAliasOrSource) {
+    const std::string id_only = "id = \"1\"\nfallback = \"exact\"\n";
+    // ライブラリが1つでも`alias`は省略できず、空文字列も不可
+    ExpectDataFormatError(
+            WithSection("[[tool_library]]\nlibrary = \"tools/tools.json\"\n"
+                        + LibraryToolSection("source = \"lib\"\n" + id_only,
+                                             kFallbackSimpleShape)),
+            "alias is missing");
+    ExpectDataFormatError(
+            WithSection("[[tool_library]]\nalias = \"\"\nlibrary = \"tools/tools.json\"\n"
+                        + LibraryToolSection("source = \"lib\"\n" + id_only,
+                                             kFallbackSimpleShape)),
+            "alias is missing");
+    // ライブラリが1つでも`source`は省略できず、空文字列も不可
+    ExpectDataFormatError(
+            WithSection(std::string(kSingleToolLibrary)
+                        + LibraryToolSection(id_only, kFallbackSimpleShape)),
+            "source is missing");
+    ExpectDataFormatError(
+            WithSection(std::string(kSingleToolLibrary)
+                        + LibraryToolSection("source = \"\"\n" + id_only,
+                                             kFallbackSimpleShape)),
+            "source is missing");
+}
+
+TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenLibraryRefKeysAreInvalid) {
+    ExpectDataFormatError(WithLibraryTool("fallback = \"exact\"\n", kFallbackSimpleShape),
+                          "id is missing");
+    ExpectDataFormatError(
+            WithLibraryTool("id = \"\"\nfallback = \"exact\"\n", kFallbackSimpleShape),
+            "id is missing");
+    // 識別子は文字列のみ (数値IDも文字列で書く)
+    ExpectDataFormatError(
+            WithLibraryTool("id = 1\nfallback = \"exact\"\n", kFallbackSimpleShape),
+            "id is missing");
+    ExpectDataFormatError(WithLibraryTool("id = \"1\"\n", kFallbackSimpleShape),
+                          "fallback is missing");
+    ExpectDataFormatError(
+            WithLibraryTool("id = \"1\"\nfallback = \"partial\"\n", kFallbackSimpleShape),
+            "unknown fallback: partial");
+    ExpectDataFormatError(WithSection(std::string(kSingleToolLibrary)
+                                      + "[[tool]]\nnumber = 2\nlibrary = \"x\"\n"
+                                      + kFallbackSimpleShape),
+                          "not a table");
+}
+
+TEST(ProjectIoTest, Tools_FallbackNoneHasNoShape) {
+    const auto project =
+            ReadProjectText(WithLibraryTool("id = \"1\"\nfallback = \"none\"\n", ""));
+    EXPECT_TRUE(project.warnings.empty());
+    ASSERT_EQ(project.tools.size(), 2u);
+    EXPECT_EQ(project.tools[1].library->fallback, mc::ToolFallback::kNone);
+    EXPECT_FALSE(project.tools[1].shape.has_value());
+    EXPECT_EQ(project.tools[1].name, "Lib 2");
+}
+
+TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenShapeCountIsInvalid) {
+    // ライブラリ参照なしで形状が無い
+    ExpectDataFormatError(WithSection("[[tool]]\nnumber = 2\n"),
+                          "exactly one of [tool.simple] and [tool.profile]");
+    // 代替形状を持つべき関係 (`exact`/`approximate`) で形状が無い
+    ExpectDataFormatError(WithLibraryTool("id = \"1\"\nfallback = \"exact\"\n", ""),
+                          "exactly one of [tool.simple] and [tool.profile]");
+    ExpectDataFormatError(WithLibraryTool("id = \"1\"\nfallback = \"approximate\"\n", ""),
+                          "exactly one of [tool.simple] and [tool.profile]");
+    // `none`で形状がある
+    ExpectDataFormatError(
+            WithLibraryTool("id = \"1\"\nfallback = \"none\"\n", kFallbackSimpleShape),
+            "must not be specified with fallback = \"none\"");
+}
+
+TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenSimpleAndProfileAreBothGiven) {
+    const std::string profile = ProfileToolSection().substr(
+            ProfileToolSection().find("[tool.profile]"));
+    ExpectDataFormatError(
+            WithSection("[[tool]]\nnumber = 2\nname = \"both\"\n\n"
+                        + std::string(kFallbackSimpleShape) + "\n" + profile),
+            "exactly one of [tool.simple] and [tool.profile]");
+}
+
+TEST(ProjectIoTest, Tools_ThrowsDataFormatErrorWhenFallbackNoneHasNoName) {
+    ExpectDataFormatError(
+            WithSection(std::string(kSingleToolLibrary)
+                        + "[[tool]]\nnumber = 2\n\n[tool.library]\n"
+                          "source = \"lib\"\nid = \"1\"\nfallback = \"none\"\n"),
+            "name is required for fallback = \"none\"");
+}
+
+TEST(ProjectIoTest, ToolLibraries_WarnsWhenFileIsMissing) {
+    const std::string ref = "source = \"lib\"\nid = \"1\"\nfallback = \"exact\"\n";
+    const auto project = ReadProjectText(WithSection(
+            "[[tool_library]]\nalias = \"lib\"\nlibrary = \"tools/none.json\"\n"
+            + LibraryToolSection(ref, kFallbackSimpleShape)));
+    ExpectSingleWarning(project, "not found in the project directory or library directories");
+    EXPECT_EQ(project.warnings[0].context, "[[tool_library]][0]");
+    // 見つからない`library`はプロジェクトのディレクトリからの相対として保持する
+    EXPECT_EQ(project.tool_libraries[0].file.raw, "tools/none.json");
+    EXPECT_EQ(project.tool_libraries[0].file.resolved,
+              (kProjectsDir / "tools" / "none.json").lexically_normal());
+
+    const auto file_ref = ReadProjectText(WithSection(
+            "[[tool_library]]\nalias = \"lib\"\nfile = \"tools/none.json\"\n"
+            + LibraryToolSection(ref, kFallbackSimpleShape)));
+    ExpectSingleWarning(file_ref, "file does not exist");
 }
 
 TEST(ProjectIoTest, Tools_ProfileIsReadAndClosedOnAxis) {
@@ -528,8 +677,8 @@ TEST(ProjectIoTest, Tools_ProfileIsReadAndClosedOnAxis) {
     EXPECT_EQ(tool.number, 5);
     EXPECT_EQ(tool.name, "Taper ball");
     EXPECT_FALSE(tool.gauge_length.has_value());
-    ASSERT_TRUE(std::holds_alternative<mc::ToolProfile>(tool.source));
-    const auto& profile = std::get<mc::ToolProfile>(tool.source);
+    ASSERT_TRUE(std::holds_alternative<mc::ToolProfile>(*tool.shape));
+    const auto& profile = std::get<mc::ToolProfile>(*tool.shape);
     EXPECT_EQ(profile.name, "Taper ball");
     EXPECT_NEAR(profile.command_point_z, 3.0, kTol);
     EXPECT_FALSE(profile.gauge_line_z.has_value());
@@ -575,7 +724,7 @@ TEST(ProjectIoTest, Tools_ProfileIsReadAndClosedOnAxis) {
 
     // inch宣言なら座標と指令点はmmへ換算される
     const auto inch = ReadProjectText(WithInchUnits(WithSection(ProfileToolSection())));
-    const auto& inch_profile = std::get<mc::ToolProfile>(inch.tools[1].source);
+    const auto& inch_profile = std::get<mc::ToolProfile>(*inch.tools[1].shape);
     EXPECT_NEAR(inch_profile.command_point_z, 3.0 * 25.4, kTol);
     EXPECT_NEAR(inch_profile.elements[0].segments[0].end.x(), 3.0 * 25.4, kTol);
     EXPECT_NEAR(inch_profile.elements[0].segments[0].center.y(), 3.0 * 25.4, kTol);
@@ -588,7 +737,7 @@ TEST(ProjectIoTest, Tools_ProfileArcCenterSnapsToAxisWhenEndpointIsOnAxis) {
     const auto project = ReadProjectText(
             WithProfile("center = [0.0, 3.0]", "center = [0.0005, 3.0]"));
     const mc::ProfileSegment& arc =
-            std::get<mc::ToolProfile>(project.tools[1].source).elements[0].segments[0];
+            std::get<mc::ToolProfile>(*project.tools[1].shape).elements[0].segments[0];
     EXPECT_NEAR(arc.center.x(), 0.0, kTol);
     EXPECT_NEAR(arc.center.y(), 3.0, kTol);
 
@@ -604,7 +753,7 @@ TEST(ProjectIoTest, Tools_ProfileArcCenterSnapsToAxisWhenEndpointIsOnAxis) {
             WithProfile("to = [3.0, 3.0], center = [0.0, 3.0]",
                         "to = [3.0, 3.0], center = [-1.0, 4.0]"));
     const mc::ProfileSegment& ogive_arc =
-            std::get<mc::ToolProfile>(ogive.tools[1].source).elements[0].segments[0];
+            std::get<mc::ToolProfile>(*ogive.tools[1].shape).elements[0].segments[0];
     EXPECT_NEAR(ogive_arc.center.x(), -1.0, kTol);
     EXPECT_NEAR(ogive_arc.center.y(), 4.0, kTol);
 }
@@ -618,7 +767,7 @@ TEST(ProjectIoTest, Tools_ProfileArcCenterSnapsAboveEndpointOnTipPlane) {
             "{ to = [2.0, 0.0] },\n"
             "    { type = \"arc\", to = [3.0, 1.0], center = [2.0, 0.9995], direction = \"ccw\" },"));
     const mc::ToolProfileElement& cutter =
-            std::get<mc::ToolProfile>(project.tools[1].source).elements[0];
+            std::get<mc::ToolProfile>(*project.tools[1].shape).elements[0];
     ASSERT_EQ(cutter.segments.size(), 4u);
     EXPECT_EQ(cutter.segments[1].kind, mc::ProfileSegment::Kind::kArc);
     EXPECT_NEAR(cutter.segments[1].center.x(), 2.0, kTol);
@@ -632,7 +781,7 @@ TEST(ProjectIoTest, Tools_ProfileArcCenterIsProjectedOntoBisector) {
     const auto project = ReadProjectText(
             WithProfile("center = [5.0, 15.0]", "center = [5.0004, 15.0003]"));
     const mc::ProfileSegment& arc =
-            std::get<mc::ToolProfile>(project.tools[1].source).elements[1].segments[2];
+            std::get<mc::ToolProfile>(*project.tools[1].shape).elements[1].segments[2];
     EXPECT_EQ(arc.kind, mc::ProfileSegment::Kind::kArc);
     EXPECT_NEAR(arc.center.x(), 5.00005, kTol);
     EXPECT_NEAR(arc.center.y(), 14.99995, kTol);
@@ -651,9 +800,6 @@ TEST(ProjectIoTest, Tools_ProfileArcCenterIsProjectedOntoBisector) {
 }
 
 TEST(ProjectIoTest, Tools_ProfileThrowsDataFormatErrorWhenKeysAreInvalid) {
-    ExpectDataFormatError(WithProfile("name = \"Taper ball\"",
-                                      "name = \"Taper ball\"\nassembly = 3"),
-                          "exactly one of assembly, [tool.simple], and [tool.profile]");
     ExpectDataFormatError(WithProfile("name = \"Taper ball\"\n", ""),
                           "name is required for [tool.profile]");
     ExpectDataFormatError(WithSection("[[tool]]\nnumber = 6\nname = \"empty\"\n\n"
@@ -1210,8 +1356,12 @@ TEST(ProjectIoTest, Sample_File_Reads) {
     EXPECT_EQ(project.tool_libraries[0].alias, "std");
     ASSERT_EQ(project.tools.size(), 2u);
     EXPECT_NEAR(project.tools[1].gauge_length.value_or(0.0), 120.0, kTol);
-    EXPECT_EQ(std::get<mc::SimpleToolSpec>(project.tools[1].source).command_point,
+    EXPECT_EQ(std::get<mc::SimpleToolSpec>(*project.tools[1].shape).command_point,
               mc::SimpleToolSpec::CommandPoint::kCenter);
+    ASSERT_TRUE(project.tools[0].library.has_value());
+    EXPECT_EQ(project.tools[0].library->id, "EM-D10");
+    EXPECT_EQ(project.tools[0].library->fallback, mc::ToolFallback::kExact);
+    EXPECT_TRUE(project.tools[0].shape.has_value());
     ASSERT_EQ(project.tool_offsets.size(), 2u);
     EXPECT_NEAR(project.tool_offsets[1].length_wear, -0.02, kTol);
     ASSERT_EQ(project.work_offsets.size(), 2u);

@@ -1027,7 +1027,7 @@ void MachiningViewerGUI::LoadVirtualProject(const VirtualProjectInput& input) {
         m::ToolEntry tool;
         tool.number = 1;
         tool.name = kVirtualToolNamePrefix + m::FormatFixed(diameter, 1);
-        tool.source = simple;
+        tool.shape = simple;
         tool.control_point = m::ControlPoint::kTip;
         project.tools.push_back(std::move(tool));
         project.initial_tool = 1;

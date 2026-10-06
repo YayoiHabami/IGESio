@@ -99,17 +99,6 @@ std::string ModelContext(const std::string& name) {
  * ---- 工具の登録 ----
  */
 
-/// @brief ライブラリ参照工具の参照先ライブラリを取得する
-/// @param project プロジェクト定義
-/// @param ref ライブラリ参照形式の工具
-/// @return 別名が空でライブラリが1つならそのライブラリ. 無ければ`nullptr`
-const ToolLibrarySpec* LibraryOf(const ProjectDefinition& project,
-                                 const LibraryToolRef& ref) {
-    if (!ref.source.empty()) return FindToolLibrary(project, ref.source);
-    return project.tool_libraries.size() == 1 ? &project.tool_libraries.front()
-                                              : nullptr;
-}
-
 /// @brief 簡易アセンブリ形式の工具を解決する
 /// @param entry 登録工具の項目
 /// @param simple 簡易アセンブリ形式の工具仕様
@@ -144,46 +133,91 @@ ToolAssemblySpec ResolveProfileTool(const ToolEntry& entry,
     return spec;
 }
 
-/// @brief ライブラリ参照形式の工具をコールバックで解決する
+/// @brief 代替形状から工具を解決する
+/// @param entry 登録工具の項目
+/// @param warnings 警告の集計先
+/// @return 解決した工具. 代替形状を持たなければ`std::nullopt`
+/// @throw igesio::DataFormatError 簡易アセンブリの幾何が不正な場合
+///        （`ResolveSimpleTool`から伝播）
+std::optional<ToolAssemblySpec> ResolveShapeTool(
+        const ToolEntry& entry, std::vector<Diagnostic>& warnings) {
+    if (!entry.shape.has_value()) return std::nullopt;
+    if (const auto* simple = std::get_if<SimpleToolSpec>(&*entry.shape);
+        simple != nullptr) {
+        return ResolveSimpleTool(entry, *simple, warnings);
+    }
+    return ResolveProfileTool(entry, std::get<ToolProfile>(*entry.shape));
+}
+
+/// @brief ライブラリ参照工具をコールバックで解決する
 /// @param project プロジェクト定義
 /// @param entry 登録工具の項目
-/// @param ref ライブラリ参照形式の工具仕様
+/// @param ref 工具のライブラリ参照
 /// @param options セットアップの構築設定
-/// @param warnings 警告の集計先
-/// @return 解決できなければ`std::nullopt`（警告を追加する）
+/// @return 解決した工具（名前は`entry.name`があればその値）. コールバックが無い,
+///         参照先のライブラリが無い、またはコールバックが解決できなければnullopt
+/// @note 名前が空のままで代替形状が簡易アセンブリなら、切れ刃の既定名とする
 std::optional<ToolAssemblySpec> ResolveLibraryTool(
         const ProjectDefinition& project, const ToolEntry& entry,
-        const LibraryToolRef& ref, const SetupOptions& options,
-        std::vector<Diagnostic>& warnings) {
-    const std::string context = ToolContext(entry.number);
-    const ToolLibrarySpec* library = LibraryOf(project, ref);
-    std::optional<ToolAssemblySpec> resolved;
-    if (library != nullptr && options.tool_resolver) {
-        resolved = options.tool_resolver(*library, ref);
+        const LibraryToolRef& ref, const SetupOptions& options) {
+    const ToolLibrarySpec* library = FindToolLibrary(project, ref.source);
+    if (library == nullptr || !options.tool_resolver) return std::nullopt;
+
+    std::optional<ToolAssemblySpec> resolved =
+            options.tool_resolver(*library, ref);
+    if (!resolved.has_value()) return std::nullopt;
+    if (!entry.name.empty()) {
+        resolved->name = entry.name;
+    } else if (resolved->name.empty() && entry.shape.has_value()) {
+        if (const auto* simple = std::get_if<SimpleToolSpec>(&*entry.shape);
+            simple != nullptr) {
+            resolved->name = std::string(SimpleCutterName(simple->cutter));
+        }
     }
-    if (!resolved.has_value()) {
-        Warn(warnings, context,
-             "library tool #" + std::to_string(entry.number)
-             + " is unresolved; the control point falls back to the gauge point",
-             entry.line);
-        return std::nullopt;
-    }
-    if (!entry.name.empty()) resolved->name = entry.name;
     return resolved;
+}
+
+/// @brief 解決できなかったライブラリ参照工具の警告を追加する
+/// @param entry 登録工具の項目（ライブラリ参照工具）
+/// @param warnings 警告の集計先
+/// @note 代替形状がライブラリ上の形状と一致する場合は警告しない
+void WarnUnresolvedLibraryTool(const ToolEntry& entry,
+                               std::vector<Diagnostic>& warnings) {
+    const std::string number = std::to_string(entry.number);
+    switch (entry.library->fallback) {
+        case ToolFallback::kExact:
+            return;
+        case ToolFallback::kApproximate:
+            Warn(warnings, ToolContext(entry.number),
+                 "library tool #" + number + " is unresolved; the approximate "
+                 "fallback shape is used",
+                 entry.line);
+            return;
+        case ToolFallback::kNone:
+            Warn(warnings, ToolContext(entry.number),
+                 "library tool #" + number + " is unresolved and has no "
+                 "fallback shape; it is excluded",
+                 entry.line);
+            return;
+    }
 }
 
 /// @brief 工具のゲージラインを決定する
 /// @param entry 登録工具の項目
+/// @param from_library 工具をライブラリから解決したか
 /// @param[out] profile ゲージラインの書き込み先
 /// @param warnings 警告の集計先
-/// @note `gauge_length`があればその値、無ければ輪郭に基づいて決める
+/// @note ライブラリから解決した輪郭がゲージラインを持てばその値を用いる.
+///       それ以外は`gauge_length`があればその値、無ければ輪郭に基づいて決める.
 ///       簡易アセンブリの輪郭は生成時に上端をゲージラインとして持つため警告は出ない
-void ApplyGaugeLine(const ToolEntry& entry, ToolProfile& profile,
-                    std::vector<Diagnostic>& warnings) {
+void ApplyGaugeLine(const ToolEntry& entry, const bool from_library,
+                    ToolProfile& profile, std::vector<Diagnostic>& warnings) {
+    if (from_library && profile.gauge_line_z.has_value()) return;
     if (entry.gauge_length.has_value()) {
         profile.gauge_line_z = *entry.gauge_length;
         return;
     }
+
     std::vector<Diagnostic> local;
     profile.gauge_line_z = profile.GaugeLength(&local);
     ForwardWarnings(local, ToolContext(entry.number), entry.line, warnings);
@@ -193,29 +227,28 @@ void ApplyGaugeLine(const ToolEntry& entry, ToolProfile& profile,
 /// @param project プロジェクト定義
 /// @param options セットアップの構築設定
 /// @param warnings 警告の集計先
-/// @return 工具番号→解決済みの工具（未解決のライブラリ参照は含まない）
+/// @return 工具番号→解決済みの工具（ライブラリを解決できず、代替形状も持たない
+///         工具は含まない）
 /// @throw igesio::DataFormatError 簡易アセンブリの幾何が不正な場合
+/// @note ライブラリ参照工具は、ライブラリから解決できればその定義を用い,
+///       できなければ代替形状を用いる. 制御点は常に`entry.control_point`とする
 std::map<int, ToolAssemblySpec> ResolveTools(
         const ProjectDefinition& project, const SetupOptions& options,
         std::vector<Diagnostic>& warnings) {
     std::map<int, ToolAssemblySpec> tools;
     for (const ToolEntry& entry : project.tools) {
         std::optional<ToolAssemblySpec> spec;
-        if (const auto* simple = std::get_if<SimpleToolSpec>(&entry.source);
-            simple != nullptr) {
-            spec = ResolveSimpleTool(entry, *simple, warnings);
-        } else if (const auto* profile = std::get_if<ToolProfile>(&entry.source);
-                   profile != nullptr) {
-            spec = ResolveProfileTool(entry, *profile);
-        } else {
-            spec = ResolveLibraryTool(project, entry,
-                                      std::get<LibraryToolRef>(entry.source),
-                                      options, warnings);
+        if (entry.library.has_value()) {
+            spec = ResolveLibraryTool(project, entry, *entry.library, options);
+            if (!spec.has_value()) WarnUnresolvedLibraryTool(entry, warnings);
         }
+        const bool from_library = spec.has_value();
+        if (!from_library) spec = ResolveShapeTool(entry, warnings);
         if (!spec.has_value()) continue;
+
         spec->number = entry.number;
         spec->control_point = entry.control_point;
-        ApplyGaugeLine(entry, spec->profile, warnings);
+        ApplyGaugeLine(entry, from_library, spec->profile, warnings);
         tools.emplace(entry.number, std::move(*spec));
     }
     return tools;

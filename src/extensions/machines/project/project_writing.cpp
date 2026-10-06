@@ -33,10 +33,14 @@ namespace igesio::extensions::machines::detail {
 
 namespace {
 
-/// @brief 出力の先頭に置く見出しコメント
-constexpr const char* kHeaderComment =
-        "# machining-project 1.2 "
-        "(written by the IGESio machines extension)\n\n";
+/// @brief 出力の先頭に置く見出しコメントを作成する
+/// @return `# machining-project <major>.<minor> (written by ...)`と空行
+std::string MakeHeaderComment() {
+    return "# " + std::string(kProjectFormatName) + " "
+           + std::to_string(kProjectFormatVersion[0]) + "."
+           + std::to_string(kProjectFormatVersion[1])
+           + " (written by the IGESio machines extension)\n\n";
+}
 
 /// @brief 軸名→回転軸かの表
 /// @note NC指令値の単位換算に用いる
@@ -209,20 +213,57 @@ TomlValue MakeProfileTool(const ToolProfile& profile, const WriteContext& ctx) {
     return table;
 }
 
+/// @brief `[tool.library]`を書く
+/// @param ref 出力するライブラリ参照
+/// @param context 例外の文言に用いる箇所
+/// @throw std::invalid_argument `source`または`id`が空の場合
+TomlValue MakeToolLibraryRef(const LibraryToolRef& ref,
+                             const std::string& context) {
+    if (ref.source.empty()) {
+        throw std::invalid_argument(context + ": tool library source is empty");
+    }
+    if (ref.id.empty()) {
+        throw std::invalid_argument(context + ": library tool id is empty");
+    }
+    TomlValue table = Table();
+    table["source"] = ref.source;
+    table["id"] = ref.id;
+    table["fallback"] = std::string(ToolFallbackName(ref.fallback));
+    return table;
+}
+
+/// @brief 工具の形状の有無がライブラリ参照の代替形状の関係と整合するか検証する
+/// @param entry 出力する工具
+/// @param context 例外の文言に用いる箇所
+/// @throw std::invalid_argument `fallback`が`kNone`なのに形状を持つ,
+///        または`kNone`以外（ライブラリ参照なしを含む）なのに形状を持たない場合
+void CheckToolShapePresence(const ToolEntry& entry,
+                            const std::string& context) {
+    const bool expects_shape = !entry.library.has_value() ||
+                               entry.library->fallback != ToolFallback::kNone;
+    if (entry.shape.has_value() == expects_shape) return;
+
+    throw std::invalid_argument(
+            context + (expects_shape
+                    ? ": tool has no shape ([tool.simple] or [tool.profile])"
+                    : ": tool with fallback = \"none\" must not have a shape"));
+}
+
 /// @brief `[[tool]]`の1要素を書く
 /// @param entry 出力する工具 (内部単位)
 /// @param ctx TOML出力全体で共有する内容
-/// @note 形状のサブテーブル (`[tool.simple]`/`[tool.profile]`) はスカラーの
-///       キーの後に置く
+/// @throw std::invalid_argument 形状の有無が`fallback`と整合しない、または
+///        ライブラリ参照の`source`/`id`が空の場合
+/// @note サブテーブル（`[tool.library]`、`[tool.simple]`/`[tool.profile]`）は
+///       スカラーのキーの後に置く
 TomlValue MakeTool(const ToolEntry& entry, const WriteContext& ctx) {
+    const std::string context =
+            "[[tool]](#" + std::to_string(entry.number) + ")";
+    CheckToolShapePresence(entry, context);
+
     TomlValue table = Table();
     table["number"] = entry.number;
     if (!entry.name.empty()) table["name"] = entry.name;
-    if (const auto* ref = std::get_if<LibraryToolRef>(&entry.source);
-        ref != nullptr) {
-        if (!ref->source.empty()) table["source"] = ref->source;
-        table["assembly"] = ref->assembly;
-    }
     if (entry.gauge_length.has_value()) {
         table["gauge_length"] = Real(*entry.gauge_length / ctx.length_scale);
     }
@@ -230,12 +271,18 @@ TomlValue MakeTool(const ToolEntry& entry, const WriteContext& ctx) {
         table["control_point"] =
                 std::string(ControlPointName(entry.control_point));
     }
-    if (const auto* simple = std::get_if<SimpleToolSpec>(&entry.source);
+    if (entry.library.has_value()) {
+        table["library"] =
+                MakeToolLibraryRef(*entry.library, context + ".library");
+    }
+    if (!entry.shape.has_value()) return table;
+
+    if (const auto* simple = std::get_if<SimpleToolSpec>(&*entry.shape);
         simple != nullptr) {
         table["simple"] = MakeSimpleTool(*simple, ctx);
-    } else if (const auto* profile = std::get_if<ToolProfile>(&entry.source);
-               profile != nullptr) {
-        table["profile"] = MakeProfileTool(*profile, ctx);
+    } else {
+        table["profile"] =
+                MakeProfileTool(std::get<ToolProfile>(*entry.shape), ctx);
     }
     return table;
 }
@@ -265,15 +312,21 @@ TomlValue MakeToolOffset(
 /// @param library 出力するライブラリ参照
 /// @param index `[[tool_library]]`内の添字 (例外の文言に用いる)
 /// @param ctx TOML出力全体で共有する内容
-/// @throw std::invalid_argument ライブラリ参照で`raw`が空、または`file`参照で
-///        `raw`/`resolved`とも空の場合 (`PutFileReference`から伝播)
+/// @throw std::invalid_argument `alias`が空の場合、およびライブラリ参照で
+///        `raw`が空、または`file`参照で`raw`/`resolved`とも空の場合
+///        （後者は`PutFileReference`から伝播）
 TomlValue MakeToolLibrary(
         const ToolLibrarySpec& library, const std::size_t index,
         const WriteContext& ctx) {
+    const std::string context =
+            "[[tool_library]][" + std::to_string(index) + "]";
+    if (library.alias.empty()) {
+        throw std::invalid_argument(context + ": alias is empty");
+    }
     TomlValue table = Table();
-    if (!library.alias.empty()) table["alias"] = library.alias;
-    PutFileReference(table, library.file,
-                     "[[tool_library]][" + std::to_string(index) + "]", ctx);
+    table["alias"] = library.alias;
+    if (!library.format.empty()) table["format"] = library.format;
+    PutFileReference(table, library.file, context, ctx);
     return table;
 }
 
@@ -639,7 +692,7 @@ std::string FormatProject(const ProjectDefinition& project,
     for (const auto& [key, opaque] : project.retained) {
         root[key] = FromOpaque(key, opaque);
     }
-    return kHeaderComment + toml::format(root);
+    return MakeHeaderComment() + toml::format(root);
 }
 
 }  // namespace igesio::extensions::machines::detail

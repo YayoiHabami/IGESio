@@ -51,10 +51,14 @@ namespace igesio::extensions::machines {
 /// @brief セットアップの構築設定
 struct SetupOptions {
     /// @brief ライブラリ参照工具の解決用関数
-    /// @note 引数は参照先のライブラリと参照 (別名・アセンブリ番号). 工具形状を
-    ///       定義する `ToolAssemblySpec` (`number`/`control_point`はエントリの
-    ///       値で上書きする) を返す. 省略時、または`std::nullopt`を返した場合は
-    ///       未解決のまま警告し、`Tools()`に含めない
+    /// @note 引数は参照先のライブラリと参照（別名、識別子、代替形状の関係）.
+    ///       工具形状を定義する`ToolAssemblySpec`を返す. 解決結果はライブラリ上の
+    ///       定義として代替形状より優先する. ただし`number`/`control_point`は
+    ///       エントリの値で上書きし、`name`はエントリに値があれば上書きする.
+    ///       輪郭の`gauge_line_z`が未設定ならエントリの`gauge_length`を用いる
+    /// @note 省略時、または`std::nullopt`を返した場合（ライブラリを読めない,
+    ///       識別子が見つからない等）は代替形状を用いる. 代替形状が代表形状なら警告し,
+    ///       代替形状が無ければ警告して`Tools()`に含めない
     std::function<std::optional<ToolAssemblySpec>(
             const ToolLibrarySpec&, const LibraryToolRef&)> tool_resolver;
 };
@@ -162,7 +166,7 @@ class MachiningSetup {
     /// @note 表示用のNC指令値は`NcFromJoints(Model(), BaseQ())`で得る
     const JointVector& BaseQ() const { return base_q_; }
     /// @brief 解決済みの登録工具（工具番号→定義）
-    /// @note 未解決のライブラリ参照工具は含まない
+    /// @note ライブラリを解決できず、代替形状も持たない工具は含まない
     const std::map<int, ToolAssemblySpec>& Tools() const { return tools_; }
     /// @brief ワーク座標系（定義順. 定義が無ければ暗黙の`G54`のみ）
     const std::vector<WorkFrame>& WorkFrames() const { return work_frames_; }
