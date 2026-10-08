@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 
 #include "igesio/common/errors.h"
 #include "igesio/utils/path_encoding.h"
@@ -20,6 +21,33 @@
 #include "extensions/machines/project/project_writing.h"
 
 namespace igesio::extensions::machines {
+
+namespace {
+
+/// @brief 既存のファイルがテンプレートのプロジェクト定義かを判定する
+/// @param path 判定するファイルのパス
+/// @return `[format].is_template`が`true`であれば`true`. ファイルが無い場合,
+///         TOMLとして解析できない場合、またはキーが無いか真偽値でない場合は`false`
+/// @note `[format].name`/`version`の検証や機械定義の読込は行わない
+///       (プロジェクト定義として読めないファイルでも判定できるようにするため)
+bool IsTemplateProjectFile(const std::filesystem::path& path) {
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(path, error)) return false;
+
+    detail::TomlValue root;
+    try {
+        root = detail::ParseTomlFile(path, utils::PathToUtf8(path.filename()));
+    } catch (const igesio::IGESioError&) {
+        return false;
+    }
+    const detail::TomlValue* format = detail::Find(root, "format");
+    const detail::TomlValue* flag =
+            format == nullptr ? nullptr : detail::Find(*format, "is_template");
+    return flag != nullptr && flag->is_boolean() && flag->as_boolean();
+}
+
+}  // namespace
+
 
 ProjectDefinition ReadProject(const std::filesystem::path& path,
                               const ReadProjectOptions& options) {
@@ -40,9 +68,14 @@ ProjectDefinition ReadProjectFromString(
 }
 
 void WriteProject(const ProjectDefinition& project,
-                  const std::filesystem::path& path) {
+                  const std::filesystem::path& path,
+                  const WriteProjectOptions& options) {
     // 文字列化の例外 (invalid_argument) はファイルを作る前に出す
     const std::string text = detail::FormatProject(project, path.parent_path());
+    if (!options.overwrite_template && IsTemplateProjectFile(path)) {
+        throw igesio::FileWriteProtectedError(utils::PathToUtf8(path));
+    }
+
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     if (!stream) {
         throw igesio::FileOpenError("Failed to open project file: " +

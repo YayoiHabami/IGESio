@@ -648,6 +648,7 @@ std::string FormatProject(const ProjectDefinition& project,
     const AxisKinds kinds = CollectAxisKinds(project.machine);
     TomlValue root = Table();
     root["format"] = MakeFormat(kProjectFormatName, kProjectFormatVersion);
+    if (project.is_template) root["format"]["is_template"] = true;
     root["project"] = MakeProjectMeta(project);
     root["units"] = MakeUnits(project.units);
     root["machine"] = MakeMachine(project.machine_source, ctx);

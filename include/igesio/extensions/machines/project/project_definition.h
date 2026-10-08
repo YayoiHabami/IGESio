@@ -53,7 +53,7 @@ constexpr std::string_view kProjectFormatName = "machining-project";
 
 /// @brief 対応するプロジェクトフォーマットのバージョン `[major, minor]`
 /// @note 読込はmajorが一致するものを受理し、出力時は常にこの値を書く
-constexpr std::array<int, 2> kProjectFormatVersion = {2, 0};
+constexpr std::array<int, 2> kProjectFormatVersion = {2, 1};
 
 /// @brief 取り付け先名の予約語 (ワーク取り付け点)
 /// @note `type = "work_mount"`のコンポーネントを名前によらず指す
@@ -501,6 +501,11 @@ struct RunSettings {
 struct ProjectDefinition {
     /// @brief フォーマットバージョン `[major, minor]`
     std::array<int, 2> format_version{0, 0};
+    /// @brief テンプレートか (`[format].is_template`)
+    /// @note テンプレートのファイルは`WriteProject`で上書きしない.
+    ///       テンプレートから別のファイルに保存する場合は、呼び出し側でfalse
+    ///       にしてから書き出すこと
+    bool is_template = false;
     /// @brief プロジェクト名
     std::string name;
     /// @brief 説明

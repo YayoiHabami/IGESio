@@ -68,16 +68,31 @@ ProjectDefinition ReadProjectFromString(
         const ReadProjectOptions& options = {},
         const std::string& source_name = "<string>");
 
+/// @brief プロジェクトファイルの書出し設定
+struct WriteProjectOptions {
+    /// @brief テンプレートのファイル (`[format].is_template = true`) を
+    ///        上書きするか
+    /// @note テンプレートの更新を利用者が明示的に指示した場合にのみtrueにする
+    bool overwrite_template = false;
+};
+
 /// @brief プロジェクト定義をTOMLファイルへ書き出す (同名ファイルは上書きする)
 /// @param project 書き出すプロジェクト定義. 値は内部単位 (mm・rad) であること
 /// @param path 出力するプロジェクトTOMLのパス. 参照ファイルの`file`はこのファイルの
 ///        ディレクトリからの相対パスで書く (相対化できなければ絶対パス)
+/// @param options 書出し設定
+/// @throw igesio::FileWriteProtectedError `path`の既存ファイルがテンプレートであり,
+///        `options.overwrite_template`がfalseの場合 (ファイルは変更しない)
 /// @throw igesio::FileOpenError ファイルを開けない、または書き込めない場合
 /// @throw std::invalid_argument TOMLで表現できない値を含む場合
 ///        (機械に無い軸名の`values`、`raw`が空のライブラリ参照等)
 /// @note 書き出す要素と省略規則は`WriteProjectToString`と同じ
+/// @note テンプレートかは`path`の既存ファイルの`[format].is_template`で判定し,
+///       `project.is_template`は判定に用いない. 既存ファイルをTOMLとして
+///       解析できない場合はテンプレートとみなさない
 void WriteProject(const ProjectDefinition& project,
-                  const std::filesystem::path& path);
+                  const std::filesystem::path& path,
+                  const WriteProjectOptions& options = {});
 
 /// @brief プロジェクト定義をTOML形式の文字列にする
 /// @param project 書き出すプロジェクト定義. 値は内部単位 (mm・rad) であること
@@ -96,6 +111,7 @@ void WriteProject(const ProjectDefinition& project,
 ///       `[[collision.tool_pair]]`の`enabled`は組の既定と一致すれば省略する.
 ///       仮想機械の`[machine]`の`name`/`branch`は`VirtualMachineOptions`の
 ///       既定と一致すれば省略する.
+///       `[format]`の`is_template`は`true`の場合のみ書く.
 ///       `[format]`/`[project]`/`[units]`/`[machine]`は常に書き,
 ///       `[controller]`/`[collision]`は値を持つとき、`[initial]`/`[run]`
 ///       は既定と異なるときのみ書く

@@ -16,6 +16,11 @@
  *         復元と相対化、仮想機械のキー (既定値の省略、`tool_side_limit`の宣言単位),
  *         軸値の宣言単位、既定値の省略 (輪郭形式の直線の`type`を含む)、
  *         `retained`の末尾配置、日時リテラル、`[tool.library]`と`format`のキー
+ *       - テンプレート: `is_template`は`true`の場合のみ書くこと、新しいパスへの
+ *         テンプレートの作成、既存テンプレートの上書き禁止 (`FileWriteProtectedError`・
+ *         ファイル不変)、`overwrite_template`での上書き、別名での保存とその再保存,
+ *         テンプレートと判定されない既存ファイル (`false`/真偽値でない/
+ *         解析できない内容) の上書き
  *       - 異常系: 機械に無い軸名・`raw`空のライブラリ参照・ライブラリ参照の
  *         プログラム・セグメントを持たない部位要素・`fallback`と整合しない形状の
  *         有無・空の`alias`/`source`/工具識別子の`invalid_argument`、
@@ -284,6 +289,7 @@ void ExpectSameCollision(const std::optional<mc::ProjectCollisionSettings>& expe
 void ExpectSameProject(const mc::ProjectDefinition& expected,
                        const mc::ProjectDefinition& actual) {
     EXPECT_EQ(expected.format_version, actual.format_version);
+    EXPECT_EQ(expected.is_template, actual.is_template);
     EXPECT_EQ(expected.name, actual.name);
     EXPECT_EQ(expected.description, actual.description);
     EXPECT_EQ(expected.author, actual.author);
@@ -546,6 +552,31 @@ mc::ProjectDefinition BuiltInCpp() {
     return project;
 }
 
+/// @brief ファイルの内容をバイト列のまま読み込む
+/// @param path 読み込むファイルのパス
+/// @return ファイルの内容 (開けなければ空)
+std::string ReadFileBytes(const fs::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(stream),
+                       std::istreambuf_iterator<char>());
+}
+
+/// @brief テキストをファイルにバイト列のまま書き込む (既存ファイルは上書き)
+/// @param path 書き込むファイルのパス
+/// @param text 書き込む内容
+void WriteFileBytes(const fs::path& path, const std::string& text) {
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    stream << text;
+}
+
+/// @brief テンプレートのプロジェクト定義を作成する
+/// @return `MinimalProject()`を読み込み、`is_template = true`にしたもの
+mc::ProjectDefinition MinimalTemplate() {
+    auto project = ReadProjectText(MinimalProject());
+    project.is_template = true;
+    return project;
+}
+
 }  // namespace
 
 
@@ -641,8 +672,8 @@ TEST(ProjectWriterTest, RoundTrip_VirtualMachineFromCpp) {
 TEST(ProjectWriterTest, Sections_AlwaysWritten) {
     auto project = ReadProjectText(MinimalProject());
     const std::string text = mc::WriteProjectToString(project, kProjectsDir);
-    EXPECT_TRUE(Contains(text, "# machining-project 2.0"));
-    EXPECT_TRUE(Contains(text, "[format]\nname = \"machining-project\"\nversion = [2, 0]"));
+    EXPECT_TRUE(Contains(text, "# machining-project 2.1"));
+    EXPECT_TRUE(Contains(text, "[format]\nname = \"machining-project\"\nversion = [2, 1]"));
     EXPECT_TRUE(Contains(text, "[project]\nname = \"minimal\""));
     EXPECT_TRUE(Contains(text, "[units]\nlength = \"mm\"\nangle = \"deg\""));
     EXPECT_TRUE(Contains(text, "[machine]\nlibrary = \"t-ZYX-b-AC-w.toml\""));
@@ -657,6 +688,17 @@ TEST(ProjectWriterTest, Sections_AlwaysWritten) {
     EXPECT_TRUE(Contains(inch, "diameter = 0.39370078740157"));
     const auto restored = mc::ReadProjectFromString(inch, kProjectsDir, DefaultOptions());
     EXPECT_NEAR(std::get<mc::SimpleToolSpec>(*restored.tools[0].shape).diameter, 10.0, kTol);
+}
+
+TEST(ProjectWriterTest, Format_IsTemplateWrittenOnlyWhenTrue) {
+    auto project = ReadProjectText(MinimalProject());
+    EXPECT_FALSE(Contains(mc::WriteProjectToString(project, kProjectsDir), "is_template"));
+
+    project.is_template = true;
+    const std::string text = mc::WriteProjectToString(project, kProjectsDir);
+    EXPECT_TRUE(Contains(text, "version = [2, 1]\nis_template = true\n")) << text;
+    const auto restored = mc::ReadProjectFromString(text, kProjectsDir, DefaultOptions());
+    EXPECT_TRUE(restored.is_template);
 }
 
 TEST(ProjectWriterTest, Paths_FileAndLibrary) {
@@ -925,6 +967,92 @@ TEST(ProjectWriterTest, WriteProject_WritesFileAndThrowsFileOpenErrorOnDirectory
               std::get<fs::path>(original.models[0].geometry.source).lexically_normal());
     EXPECT_THROW(mc::WriteProject(original, dir), igesio::FileOpenError);
     fs::remove_all(dir);
+}
+
+
+
+/**
+ * ---- テンプレートの上書き禁止 ----
+ */
+
+TEST(ProjectWriterTest, WriteProject_CreatesTemplateAtNewPath) {
+    const igesio::tests::UnicodeTempDir dir("project_template_create");
+    const fs::path path = dir.Join("template.toml");
+    mc::WriteProject(MinimalTemplate(), path);
+    EXPECT_TRUE(Contains(ReadFileBytes(path), "is_template = true"));
+}
+
+TEST(ProjectWriterTest, WriteProject_ThrowsFileWriteProtectedErrorWhenOverwritingTemplate) {
+    const igesio::tests::UnicodeTempDir dir("project_template_protect");
+    const fs::path path = dir.Join("template.toml");
+    mc::WriteProject(MinimalTemplate(), path);
+    const std::string before = ReadFileBytes(path);
+
+    // 書き出す定義がテンプレートかによらず、既存のテンプレートは上書きしない
+    auto edited = MinimalTemplate();
+    edited.description = "edited";
+    EXPECT_THROW(mc::WriteProject(edited, path), igesio::FileWriteProtectedError);
+    edited.is_template = false;
+    try {
+        mc::WriteProject(edited, path);
+        FAIL() << "FileWriteProtectedError was not thrown";
+    } catch (const igesio::FileWriteProtectedError& e) {
+        EXPECT_EQ(e.getFilename(), igesio::utils::PathToUtf8(path));
+    }
+    EXPECT_EQ(ReadFileBytes(path), before);
+}
+
+TEST(ProjectWriterTest, WriteProject_OverwritesTemplateWhenExplicitlyAllowed) {
+    const igesio::tests::UnicodeTempDir dir("project_template_allow");
+    const fs::path path = dir.Join("template.toml");
+    mc::WriteProject(MinimalTemplate(), path);
+
+    auto edited = MinimalTemplate();
+    edited.description = "edited";
+    mc::WriteProjectOptions options;
+    options.overwrite_template = true;
+    mc::WriteProject(edited, path, options);
+    const std::string text = ReadFileBytes(path);
+    EXPECT_TRUE(Contains(text, "description = \"edited\"")) << text;
+    EXPECT_TRUE(Contains(text, "is_template = true")) << text;
+}
+
+TEST(ProjectWriterTest, WriteProject_SavesProjectFromTemplateToAnotherPath) {
+    const igesio::tests::UnicodeTempDir dir("project_template_save_as");
+    const fs::path template_path = dir.Join("template.toml");
+    mc::WriteProject(MinimalTemplate(), template_path);
+    const std::string before = ReadFileBytes(template_path);
+
+    // テンプレートから作ったプロジェクトは`is_template = false`にして別名で保存し,
+    // 保存したファイルはその後も上書きできる
+    auto project = MinimalTemplate();
+    project.is_template = false;
+    const fs::path path = dir.Join("project.toml");
+    mc::WriteProject(project, path);
+    project.description = "edited";
+    mc::WriteProject(project, path);
+    const std::string text = ReadFileBytes(path);
+    EXPECT_TRUE(Contains(text, "description = \"edited\"")) << text;
+    EXPECT_FALSE(Contains(text, "is_template")) << text;
+    EXPECT_EQ(ReadFileBytes(template_path), before);
+}
+
+TEST(ProjectWriterTest, WriteProject_OverwritesFileNotMarkedAsTemplate) {
+    const igesio::tests::UnicodeTempDir dir("project_template_overwrite");
+    const fs::path path = dir.Join("existing.toml");
+    // 既存ファイルがテンプレートと判定されない場合: (1) `is_template = false`,
+    // (2) 真偽値でない`is_template`, (3) TOMLとして解析できない内容
+    const std::string contents[] = {
+            "[format]\nis_template = false\n",
+            "[format]\nis_template = \"true\"\n",
+            "[format\nis_template = true\n",
+    };
+    for (const std::string& content : contents) {
+        WriteFileBytes(path, content);
+        // 通常のファイルをテンプレートとして保存し直すことも許可する
+        EXPECT_NO_THROW(mc::WriteProject(MinimalTemplate(), path)) << content;
+        EXPECT_TRUE(Contains(ReadFileBytes(path), "is_template = true")) << content;
+    }
 }
 
 

@@ -218,6 +218,33 @@ class FileOpenError : public FileError {
     static std::string ErrorName() { return "FileOpenError"; }
 };
 
+/// @brief 書込みが禁止されたファイルに書き込もうとした場合のエラー
+/// @note テンプレートのプロジェクト定義の上書き等
+class FileWriteProtectedError : public FileError {
+ private:
+    std::string filename_;
+
+ public:
+    /// @brief 書込み禁止の例外を初期化する
+    /// @param filename 書き込もうとしたファイルのパス
+    explicit FileWriteProtectedError(const std::string& filename)
+        : FileError(ErrorName(), filename),
+          filename_(filename) {}
+
+    /// @brief デストラクタ
+    virtual ~FileWriteProtectedError() noexcept = default;
+
+    /// @brief 書き込もうとしたファイル名を取得する
+    /// @return ファイルのパス
+    const std::string& getFilename() const noexcept {
+        return filename_;
+    }
+
+ protected:
+    /// @brief このクラスのエラー名
+    static std::string ErrorName() { return "FileWriteProtectedError"; }
+};
+
 
 
 /******************************************************************************

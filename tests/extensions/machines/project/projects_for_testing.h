@@ -48,7 +48,7 @@ inline igesio::extensions::machines::ReadProjectOptions DefaultOptions() {
 inline std::string MinimalProject() {
     return R"([format]
 name = "machining-project"
-version = [2, 0]
+version = [2, 1]
 
 [project]
 name = "minimal"

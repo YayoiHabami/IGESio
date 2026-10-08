@@ -8,16 +8,16 @@
  *       (書き出し WriteProject / WriteProjectToString は`test_project_writer.cpp`)
  *       - 正常系 (実例): `sample.toml`・`library_ref.toml`が警告0件で読め、
  *         参照・工具・ワークオフセット・モデル・プログラム・保持セクションが入ること
- *       - 正常系 (要素): `modified`の表記保持、`library`の検索 (プロジェクトの
- *         ディレクトリ優先)、機械定義の警告転記、仮想機械の指定 (種類3つ、
- *         設定と`tool_side_limit`の単位換算、`three_axis`での`tool_side_limit`の保持)、
+ *       - 正常系 (要素): `is_template`の既定値と読込、`modified`の表記保持,
+ *         `library`の検索 (プロジェクトのディレクトリ優先)、機械定義の警告転記,
+ *         仮想機械の指定 (種類3つ、設定と`tool_side_limit`の単位換算、`three_axis`での`tool_side_limit`の保持)、
  *         簡易工具の単位換算、ライブラリ参照工具の保持 (`format`、代替形状の
  *         3種の関係)、輪郭形式の読込 (単位換算・
  *         軸上での閉包・円弧中心の補正)、省略値の`nullopt`保持、
  *         ワークオフセットの2形式と単位換算、役割別の`collision`既定、形状の再利用、
  *         `[initial]`・`[[program]]`・`[collision]`・`[run]`の各項目、`retained`
  *       - 正常系 (境界値): `[initial.axes]`の`limits`端と許容誤差、`block_skip`の1と9、
- *         現行minor版の受理、円弧中心の許容誤差、指令点の上限,
+ *         現行minor版と古いminor版の受理、円弧中心の許容誤差、指令点の上限,
  *         不透明度の0と1、微小な正の`tool_side_limit`
  *       - 異常系: 仕様§5.1の各項目を代表1件ずつ、例外型と識別語で検証
  *       - 警告: minor版、`overhang < cutting_length`、designの`collision`、
@@ -26,8 +26,6 @@
  *         プログラムの表示名、ファイル不在の例外の型と文言
  *       TODO: 退化ケース (セクションが全て省略された最小構成) は
  *             `WorkOffsets_NoImplicitEntry`の空定義で兼ねる
- *       TODO: 古いminor版の受理は、現行major (2) にminor 0より古い版が無いため
- *             検証しない
  */
 #include <gtest/gtest.h>
 
@@ -184,25 +182,54 @@ std::string WithLibraryTool(const std::string& library,
 TEST(ProjectIoTest, Format_ThrowsDataFormatErrorWhenNameOrMajorMismatch) {
     ExpectDataFormatError(Replace(MinimalProject(), "machining-project", "cspace-project"),
                           "machining-project");
-    ExpectDataFormatError(Replace(MinimalProject(), "version = [2, 0]", "version = [1, 2]"),
+    ExpectDataFormatError(Replace(MinimalProject(), "version = [2, 1]", "version = [1, 2]"),
                           "unsupported format version");
-    ExpectDataFormatError(Replace(MinimalProject(), "version = [2, 0]", "version = [3, 0]"),
+    ExpectDataFormatError(Replace(MinimalProject(), "version = [2, 1]", "version = [3, 0]"),
                           "unsupported format version");
 }
 
 TEST(ProjectIoTest, Format_WarnsWhenMinorIsNewer) {
     const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [2, 0]", "version = [2, 1]"));
+            ReadProjectText(Replace(MinimalProject(), "version = [2, 1]", "version = [2, 2]"));
     ExpectSingleWarning(project, "newer minor");
-    EXPECT_EQ(project.format_version[1], 1);
+    EXPECT_EQ(project.format_version[1], 2);
 }
 
 TEST(ProjectIoTest, Format_AcceptsCurrentMinorWithoutWarning) {
+    const auto project = ReadProjectText(MinimalProject());
+    EXPECT_TRUE(project.warnings.empty());
+    EXPECT_EQ(project.format_version[0], 2);
+    EXPECT_EQ(project.format_version[1], 1);
+}
+
+TEST(ProjectIoTest, Format_AcceptsOlderMinorWithoutWarning) {
     const auto project =
-            ReadProjectText(Replace(MinimalProject(), "version = [2, 0]", "version = [2, 0]"));
+            ReadProjectText(Replace(MinimalProject(), "version = [2, 1]", "version = [2, 0]"));
     EXPECT_TRUE(project.warnings.empty());
     EXPECT_EQ(project.format_version[0], 2);
     EXPECT_EQ(project.format_version[1], 0);
+}
+
+TEST(ProjectIoTest, Format_IsTemplateDefaultsToFalse) {
+    EXPECT_FALSE(ReadProjectText(MinimalProject()).is_template);
+    const auto explicit_false = ReadProjectText(Replace(
+            MinimalProject(), "version = [2, 1]",
+            "version = [2, 1]\nis_template = false"));
+    EXPECT_FALSE(explicit_false.is_template);
+}
+
+TEST(ProjectIoTest, Format_IsTemplateIsRead) {
+    const auto project = ReadProjectText(Replace(
+            MinimalProject(), "version = [2, 1]",
+            "version = [2, 1]\nis_template = true"));
+    EXPECT_TRUE(project.is_template);
+    EXPECT_TRUE(project.warnings.empty());
+}
+
+TEST(ProjectIoTest, Format_ThrowsDataFormatErrorWhenIsTemplateIsNotBoolean) {
+    ExpectDataFormatError(Replace(MinimalProject(), "version = [2, 1]",
+                                  "version = [2, 1]\nis_template = \"yes\""),
+                          "is_template");
 }
 
 TEST(ProjectIoTest, Project_ModifiedIsKept) {

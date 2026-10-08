@@ -292,6 +292,16 @@ void CheckWorkOffsetId(const std::string& id, const std::string& context,
  * ---- メタ情報/機械/制御装置 ----
  */
 
+/// @brief `[format].is_template`を読む
+/// @param root TOMLのルートテーブル
+/// @return 省略時は`false`
+/// @note `[format]`の存在は`ReadFormat`で検証済みであること
+/// @throw igesio::DataFormatError 真偽値でない場合
+bool ReadIsTemplate(const TomlValue& root) {
+    return OptionalBool(*Find(root, "format"), "is_template", false,
+                        "[format]");
+}
+
 /// @brief `[project]`を読む
 /// @param root TOMLのルートテーブル
 /// @param[out] project 読んだ内容の格納先
@@ -1583,6 +1593,7 @@ ProjectDefinition ReadProjectDocument(const TomlValue& root,
 
     project.format_version = ReadFormat(
             root, kProjectFormatName, kProjectFormatVersion, project.warnings);
+    project.is_template = ReadIsTemplate(root);
     ReadProjectMeta(root, project);
     project.units = ReadUnits(root);
     ReadMachineSection(root, ctx);
