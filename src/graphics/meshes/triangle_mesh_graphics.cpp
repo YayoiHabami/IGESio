@@ -97,27 +97,28 @@ void i_graph::TriangleMeshGraphics::PrewarmCpu() {
     const auto& mesh = entity_->Mesh();
 
     // 法線が無い場合は折り目で分割した面積重み平均で補う
-    // (コピーに対して計算する. entity_は読み取り専用のため書き戻さない).
-    // 全周平均では平らな面の角まで丸められ、大きな三角形の上で法線が大きく
-    // 傾いて放射状の縞が出るため、折り目では法線を分割する
+    // （コピーに対して計算する. entity_は読み取り専用のため書き込まない）.
+    // 全周平均では平らな面の角まで丸められ、大きな三角形の上で法線が大きく傾いて
+    // 放射状の縞が出るため、折り目では法線を分割する.
+    // エッジ（kWireFrame用の全エッジとkShaded用の特徴エッジ）は法線補完前の
+    // meshから抽出する（補完後は折り目で頂点が複製され、稜線が繋がらなくなるため）.
+    // 法線を補完する場合は、面法線と稜線の隣接情報の構築を補完と抽出で共有する
     i_num::TriangleMeshd recomputed;
     const i_num::TriangleMeshd* source = &mesh;
+    i_num::MeshEdgeSet edges;
     if (!mesh.HasNormals()) {
         recomputed = mesh;
-        i_num::RecomputeNormalsWithCrease(recomputed, kCreaseAngleCos);
+        edges = i_num::RecomputeNormalsWithCreaseAndExtractEdges(
+                recomputed, kCreaseAngleCos);
         source = &recomputed;
+    } else {
+        edges = i_num::ExtractMeshEdges(mesh, kCreaseAngleCos);
     }
 
     // 汎用曲面シェーダーのレイアウト (位置3+法線3+UV2) へinterleaveする.
     // GPU境界のためここで単精度へ変換する (CPU正準値はdoubleのまま)
     staging_vertices_ = BuildInterleavedVertices(*source);
     staging_indices_.assign(source->indices.begin(), source->indices.end());
-
-    // エッジ抽出 (kWireFrame用の全エッジとkShaded用の特徴エッジ.
-    // 面法線は頂点位置から計算されるため、法線補完前のmeshを渡す.
-    // 補完後 (*source) は折り目で頂点が複製されており稜線の連結が切れるため、
-    // ここをsourceへ変えないこと)
-    const auto edges = i_num::ExtractMeshEdges(mesh, kCreaseAngleCos);
     staging_all_edges_ = FlattenEdgeSegments(mesh.positions, edges.all_edges);
     staging_feature_edges_ =
             FlattenEdgeSegments(mesh.positions, edges.feature_edges);

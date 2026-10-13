@@ -183,12 +183,14 @@ ninja --version
 | [Dear ImGui](https://github.com/ocornut/imgui) | MIT | GUI | - | `IGESIO_BUILD_GUI` |
 | [stb](https://github.com/nothings/stb) | MIT | 画像読み込み・書き出し | - | `IGESIO_ENABLE_TEXTURE_IO` |
 | [toml11](https://github.com/ToruNiina/toml11) | MIT | TOMLの入出力（機械定義とプロジェクト定義） | - | `IGESIO_ENABLE_MACHINES_EXTENSION` |
+| [fast_float](https://github.com/fastfloat/fast_float) | MIT, Apache-2.0, BSL-1.0（※3） | 数値の読み取り（STL/OBJのテキスト読み込み） | - | `IGESIO_ENABLE_STL_EXTENSION` or `IGESIO_ENABLE_OBJ_EXTENSION` |
 
 **ライセンス互換性**: すべての依存関係はMITと互換性のあるライセンスを使用しています。完全なライセンステキストは[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md)を参照してください。
 
 **備考**:
 - ※1 Eigen3はヘッダーオンリーライブラリで、現在はビルドに必須です。将来的に`IGESIO_ENABLE_EIGEN`オプションによる有効化/無効化に対応予定です。Eigen3はIGESioの公開ヘッダに現れるため、インストール済みIGESioを`find_package`で利用するプロジェクトにもEigen3が必要です。
 - ※2 gladのソースコード自体はMITライセンスですが、同梱のKhronos XML API RegistryはApache License 2.0です
+- ※3 fast_floatは3つのライセンスから選択して利用でき、IGESioはMITライセンスで利用しています。ヘッダーオンリーでSTL/OBJの読み込み処理の内部でのみ使用するため、インストール済みIGESioを利用するプロジェクトには不要です
 - Google Testはビルド時のみ使用され、ライブラリと一緒に配布されません
 
 ## ビルド方法

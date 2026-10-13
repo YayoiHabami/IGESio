@@ -1,12 +1,14 @@
 /**
  * @file extensions/stl/stl_io.cpp
- * @brief STL (stereolithography) ファイルの入出力
+ * @brief STL（Stereolithography）ファイルの入出力
  * @author Yayoi Habami
  * @date 2026-06-11
  * @copyright 2026 Yayoi Habami
  */
 #include "igesio/extensions/stl/stl_io.h"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -14,21 +16,22 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
-#include <sstream>
 #include <string>
+#include <string_view>
 #include <tuple>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "igesio/common/errors.h"
 #include "igesio/numerics/meshes/algorithms.h"
 #include "igesio/utils/path_encoding.h"
+#include "extensions/common/text_scanner.h"
 
 namespace {
 
 namespace fs = std::filesystem;
 namespace i_ext = igesio::extensions;
+namespace i_detail = igesio::extensions::detail;
 namespace i_num = igesio::numerics;
 using Vec3f = Eigen::Vector3f;
 
@@ -62,12 +65,12 @@ std::vector<char> ReadAllBytes(const std::string& path) {
     return bytes;
 }
 
-/// @brief バイト列からリトルエンディアンの値を読み取る
-/// @tparam T 読み取る型 (uint32_t / float)
+/// @brief バイト列から値を読み取る
+/// @tparam T 読み取る型（uint32_t/float）
 /// @param bytes 読み取り元
 /// @param offset 読み取り開始位置
 /// @return 読み取った値
-/// @note 本実装はリトルエンディアン環境 (x86/x64/ARM64) を前提とする
+/// @note リトルエンディアンを前提とする
 template <typename T>
 T ReadLE(const std::vector<char>& bytes, const std::size_t offset) {
     T value;
@@ -78,8 +81,9 @@ T ReadLE(const std::vector<char>& bytes, const std::size_t offset) {
 /// @brief バイト列がバイナリSTLか判定する
 /// @param bytes ファイルの内容
 /// @return バイナリSTLの場合はtrue
-/// @note ヘッダの文字列 ("solid"等) には依存せず、ファイルサイズと三角形数の
-///       整合のみで判定する (バイナリのヘッダが"solid"で始まる場合に備える)
+/// @note バイナリのヘッダが"solid"で始まる場合でも読めるように,
+///       ヘッダの文字列（"solid"等）には依存せず、ファイルサイズと三角形数の
+///       整合性で判定する
 bool IsBinaryStl(const std::vector<char>& bytes) {
     if (bytes.size() < kBinaryHeaderSize) return false;
     const auto count = ReadLE<std::uint32_t>(bytes, 80);
@@ -88,32 +92,36 @@ bool IsBinaryStl(const std::vector<char>& bytes) {
 }
 
 /// @brief バイナリSTLをポリゴンスープへ読み込む
-/// @param bytes ファイルの内容 (IsBinaryStlで判定済み)
+/// @param bytes ファイルの内容（IsBinaryStlで判定済み）
 /// @return ポリゴンスープ
 StlSoup ReadBinarySoup(const std::vector<char>& bytes) {
     const auto count = ReadLE<std::uint32_t>(bytes, 80);
     StlSoup soup;
-    soup.vertices.reserve(count * 3u);
-    soup.facet_normals.reserve(count);
+    soup.vertices.resize(static_cast<std::size_t>(count) * 3);
+    soup.facet_normals.resize(count);
 
-    std::size_t offset = kBinaryHeaderSize;
-    for (std::uint32_t t = 0; t < count; ++t) {
-        Vec3f normal;
-        for (int i = 0; i < 3; ++i) {
-            normal[i] = ReadLE<float>(bytes, offset + i * sizeof(float));
+    // 1三角形分の法線と3頂点（計12個のfloat）を読み込む
+    const char* record = bytes.data() + kBinaryHeaderSize;
+    for (std::size_t t = 0; t < count; ++t) {
+        std::array<float, 12> values;
+        std::memcpy(values.data(), record, sizeof(values));
+        soup.facet_normals[t] = Vec3f(values[0], values[1], values[2]);
+        for (std::size_t v = 0; v < 3; ++v) {
+            soup.vertices[3 * t + v] = Vec3f(values[3 + 3 * v],
+                                             values[4 + 3 * v],
+                                             values[5 + 3 * v]);
         }
-        soup.facet_normals.push_back(normal);
-        for (int v = 0; v < 3; ++v) {
-            Vec3f vertex;
-            for (int i = 0; i < 3; ++i) {
-                vertex[i] = ReadLE<float>(
-                        bytes, offset + (3 + v * 3 + i) * sizeof(float));
-            }
-            soup.vertices.push_back(vertex);
-        }
-        offset += kBinaryTriangleSize;  // 末尾2バイトの属性はスキップ
+        record += kBinaryTriangleSize;  // 末尾2バイトの属性はスキップ
     }
     return soup;
+}
+
+/// @brief 空白で区切られた3つの実数を読み取る
+/// @param[in,out] scanner TextScanner
+/// @param[out] vector 読み取ったベクトル
+/// @return 3つとも読み取れた場合はtrue
+bool ReadVector(i_detail::TextScanner& scanner, Vec3f& vector) {
+    return scanner.ReadReals(vector.data(), 3);
 }
 
 /// @brief ASCII STLをポリゴンスープへ読み込む
@@ -122,30 +130,30 @@ StlSoup ReadBinarySoup(const std::vector<char>& bytes) {
 /// @return ポリゴンスープ
 /// @throw igesio::ParseError ASCII STLとして不正な場合
 StlSoup ReadAsciiSoup(const std::vector<char>& bytes, const std::string& path) {
-    std::istringstream stream(std::string(bytes.begin(), bytes.end()));
+    i_detail::TextScanner scanner(std::string_view(bytes.data(), bytes.size()));
     StlSoup soup;
+    // 1三角形あたり約250バイトとして確保する要素数を見積もる
+    soup.vertices.reserve(bytes.size() / 250 * 3);
+    soup.facet_normals.reserve(bytes.size() / 250);
     Vec3f current_normal = Vec3f::Zero();
 
-    std::string token;
     bool found_solid = false;
-    while (stream >> token) {
+    for (auto token = scanner.NextToken(); !token.empty();
+         token = scanner.NextToken()) {
         if (token == "solid") {
             found_solid = true;
             // solid名 (行末まで) はスキップ
-            std::string rest;
-            std::getline(stream, rest);
+            scanner.SkipToLineEnd();
         } else if (token == "facet") {
             // "facet normal nx ny nz"
-            stream >> token;  // "normal"
-            if (token != "normal" ||
-                !(stream >> current_normal[0] >> current_normal[1]
-                         >> current_normal[2])) {
+            if (scanner.NextToken() != "normal" ||
+                !ReadVector(scanner, current_normal)) {
                 throw igesio::ParseError(
                         "Invalid 'facet normal' record in STL file: " + path);
             }
         } else if (token == "vertex") {
             Vec3f vertex;
-            if (!(stream >> vertex[0] >> vertex[1] >> vertex[2])) {
+            if (!ReadVector(scanner, vertex)) {
                 throw igesio::ParseError(
                         "Invalid 'vertex' record in STL file: " + path);
             }
@@ -165,7 +173,9 @@ StlSoup ReadAsciiSoup(const std::vector<char>& bytes, const std::string& path) {
     return soup;
 }
 
-/// @brief 溶接キー (量子化した座標の組)
+/// @brief 頂点を統合する際の判定用キー（量子化した座標の組）
+/// @note 許容距離が0より大きければ、頂点のx,y,z座標を許容距離で割った結果
+///       （整数値）、許容距離が0以下であれば、x,y,z座標floatのビット表現.
 using WeldKey = std::tuple<std::int64_t, std::int64_t, std::int64_t>;
 
 /// @brief WeldKeyのハッシュ関数
@@ -183,10 +193,10 @@ struct WeldKeyHash {
     }
 };
 
-/// @brief 頂点の溶接キーを計算する
+/// @brief WeldKeyを計算する
 /// @param vertex 頂点座標
 /// @param tolerance 許容距離 (0以下の場合はビット単位の完全一致)
-/// @return 溶接キー
+/// @return WeldKey
 WeldKey MakeWeldKey(const Vec3f& vertex, const double tolerance) {
     WeldKey key;
     if (tolerance > 0.0) {
@@ -202,13 +212,13 @@ WeldKey MakeWeldKey(const Vec3f& vertex, const double tolerance) {
     return key;
 }
 
-/// @brief 溶接に用いる許容距離を決定する
+/// @brief 頂点を統合する際の許容距離を決める
 /// @param soup ポリゴンスープ
-/// @param params 読み込みの制御パラメータ
-/// @return 溶接の許容距離. 0以下の場合はビット単位の完全一致で溶接する
-/// @note 絶対値 (weld_tolerance) の指定を優先し、未指定の場合はバウンディングボックスの
-///       対角長に相対値を掛けた値とする. 頂点が無い場合や全頂点が一致して
-///       対角長がゼロになる場合は完全一致へ退避する
+/// @param params 読み込み設定
+/// @return 許容距離. 0以下の場合はビット単位の完全一致の頂点のみを統合する
+/// @note 絶対値 (weld_tolerance) の指定を優先し、未指定の場合は
+///       バウンディングボックスの対角長に相対値を掛けた値とする. 頂点が無い場合や
+///       全頂点が一致して対角長がゼロになる場合は完全一致のみ統合する
 double ResolveWeldTolerance(const StlSoup& soup,
                             const i_ext::StlReadParams& params) {
     if (params.weld_tolerance > 0.0) return params.weld_tolerance;
@@ -216,37 +226,104 @@ double ResolveWeldTolerance(const StlSoup& soup,
         return 0.0;
     }
 
-    Vec3f lower = soup.vertices.front();
-    Vec3f upper = lower;
+    // Eigenの式（cwiseMin等）はデバッグビルドで遅いため成分ごとに比較
+    std::array<float, 3> lower = {soup.vertices.front()[0],
+                                  soup.vertices.front()[1],
+                                  soup.vertices.front()[2]};
+    std::array<float, 3> upper = lower;
     for (const auto& vertex : soup.vertices) {
-        lower = lower.cwiseMin(vertex);
-        upper = upper.cwiseMax(vertex);
+        const float* p = vertex.data();
+        for (std::size_t i = 0; i < 3; ++i) {
+            lower[i] = std::min(lower[i], p[i]);
+            upper[i] = std::max(upper[i], p[i]);
+        }
     }
-    return static_cast<double>((upper - lower).norm())
+    const Vec3f diagonal(upper[0] - lower[0], upper[1] - lower[1],
+                         upper[2] - lower[2]);
+    return static_cast<double>(diagonal.norm())
            * params.weld_relative_tolerance;
 }
 
-/// @brief ポリゴンスープを溶接してインデックスメッシュへ変換する
-/// @param soup ポリゴンスープ
-/// @param tolerance 溶接の許容距離
-/// @return 共有頂点化したメッシュ (法線チャンネルなし)
-i_num::TriangleMeshf WeldSoup(const StlSoup& soup, const double tolerance) {
-    i_num::TriangleMeshf mesh;
-    std::unordered_map<WeldKey, std::uint32_t, WeldKeyHash> index_of;
-    std::vector<Vec3f> unique_vertices;
-    mesh.indices.reserve(soup.vertices.size());
+/// @brief WeldKeyから統合後の頂点番号を取得するオープンアドレス法のハッシュ表
+/// @note 枠の数は2のべき乗. 衝突時は次の枠を順に調べる（線形探索）
+struct WeldTable {
+    /// @brief 空きスロットを示すindicesの値
+    static constexpr std::uint32_t kEmptySlot = 0xffffffffU;
 
+    /// @brief 各スロットのWeldKey
+    std::vector<WeldKey> keys;
+    /// @brief 各枠の頂点番号（空のスロットはkEmptySlot）
+    std::vector<std::uint32_t> indices;
+
+    /// @brief WeldKeyの格納先を探す（同じキーのスロット、なければ空きスロット）
+    /// @param key WeldKey
+    /// @return スロットの番号
+    std::size_t FindSlot(const WeldKey& key) const {
+        // WeldKeyHashの値は下位ビットの偏りが大きいため、上位ビットに混ぜてから使う
+        constexpr std::uint64_t kFibonacci = 0x9e3779b97f4a7c15ULL;
+        const std::size_t mask = indices.size() - 1;
+        std::size_t slot = static_cast<std::size_t>(
+                (static_cast<std::uint64_t>(WeldKeyHash{}(key)) * kFibonacci)
+                >> 20) & mask;
+        while (indices[slot] != kEmptySlot && keys[slot] != key) {
+            slot = (slot + 1) & mask;
+        }
+        return slot;
+    }
+
+    /// @brief リサイズ
+    /// @param capacity スロットの数（2のべき乗）
+    void Resize(const std::size_t capacity) {
+        keys.resize(capacity);
+        indices.assign(capacity, kEmptySlot);
+    }
+
+    /// @brief スロット数を2倍にする
+    /// @note 既存のキーとインデックスは保持する
+    void Grow() {
+        WeldTable grown;
+        grown.Resize(keys.size() * 2);
+        for (std::size_t s = 0; s < indices.size(); ++s) {
+            if (indices[s] == kEmptySlot) continue;
+            const auto slot = grown.FindSlot(keys[s]);
+            grown.keys[slot] = keys[s];
+            grown.indices[slot] = indices[s];
+        }
+        *this = std::move(grown);
+    }
+};
+
+/// @brief ポリゴンスープの頂点を統合してインデックスメッシュへ変換する
+/// @param soup ポリゴンスープ
+/// @param tolerance 頂点統合の許容距離
+/// @return 共有頂点化したメッシュ（頂点法線は空）
+/// @note 頂点番号は各頂点がスープに初めて現れた順に付ける
+i_num::TriangleMeshf WeldSoup(const StlSoup& soup, const double tolerance) {
+    // 閉じたメッシュでは統合後の頂点数がスープの約1/6になるため、
+    // スープの頂点数の半分以上を初期の枠の数とし、使用率が1/2を超えたら広げる
+    std::size_t capacity = 16;
+    while (capacity < soup.vertices.size() / 2) capacity *= 2;
+    WeldTable table;
+    table.Resize(capacity);
+
+    i_num::TriangleMeshf mesh;
+    std::vector<Vec3f> unique_vertices;
+    unique_vertices.reserve(soup.vertices.size() / 5);
+    mesh.indices.reserve(soup.vertices.size());
     for (const auto& vertex : soup.vertices) {
         const auto key = MakeWeldKey(vertex, tolerance);
-        auto it = index_of.find(key);
-        if (it == index_of.end()) {
-            const auto index = static_cast<std::uint32_t>(unique_vertices.size());
-            index_of.emplace(key, index);
+        auto slot = table.FindSlot(key);
+        if (table.indices[slot] == WeldTable::kEmptySlot) {
+            if ((unique_vertices.size() + 1) * 2 > table.indices.size()) {
+                table.Grow();
+                slot = table.FindSlot(key);
+            }
+            table.keys[slot] = key;
+            table.indices[slot] =
+                    static_cast<std::uint32_t>(unique_vertices.size());
             unique_vertices.push_back(vertex);
-            mesh.indices.push_back(index);
-        } else {
-            mesh.indices.push_back(it->second);
         }
+        mesh.indices.push_back(table.indices[slot]);
     }
 
     mesh.positions.resize(3, static_cast<Eigen::Index>(unique_vertices.size()));
@@ -256,7 +333,7 @@ i_num::TriangleMeshf WeldSoup(const StlSoup& soup, const double tolerance) {
     return mesh;
 }
 
-/// @brief ポリゴンスープを溶接せずにインデックスメッシュへ変換する
+/// @brief ポリゴンスープの頂点を統合せずにインデックスメッシュへ変換する
 /// @param soup ポリゴンスープ
 /// @return 3頂点/三角形のままのメッシュ (面法線を各頂点へ展開する)
 i_num::TriangleMeshf ExpandSoup(const StlSoup& soup) {
@@ -360,7 +437,7 @@ igesio::numerics::TriangleMeshf i_ext::ReadStl(const std::string& path,
 
 std::shared_ptr<igesio::entities::MeshEntity>
 i_ext::ReadStlAsEntity(const std::string& path, const StlReadParams& params) {
-    // CPU正準値の方針 (double) に合わせて変換して保持する
+    // CPU側の値はdoubleで保持するため倍精度に変換
     return std::make_shared<entities::MeshEntity>(
             i_num::CastScalar<double>(ReadStl(path, params)));
 }

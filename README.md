@@ -181,12 +181,14 @@ This library retrieves third-party dependencies using CMake's FetchContent (sour
 | [Dear ImGui](https://github.com/ocornut/imgui) | MIT | GUI | - | `IGESIO_BUILD_GUI` |
 | [stb](https://github.com/nothings/stb) | MIT | Image loading and saving | - | `IGESIO_ENABLE_TEXTURE_IO` |
 | [toml11](https://github.com/ToruNiina/toml11) | MIT | TOML parsing (machine and project definitions) | - | `IGESIO_ENABLE_MACHINES_EXTENSION` |
+| [fast_float](https://github.com/fastfloat/fast_float) | MIT, Apache-2.0, BSL-1.0 (※3) | Number parsing (STL/OBJ text readers) | - | `IGESIO_ENABLE_STL_EXTENSION` or `IGESIO_ENABLE_OBJ_EXTENSION` |
 
 **License Compatibility**: All dependencies use licenses compatible with MIT. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES.md) for full license texts.
 
 **Note**:
 - ※1 Eigen3 is a header-only library and is currently required for building. In the future, we plan to support enabling/disabling via the `IGESIO_ENABLE_EIGEN` option. Because Eigen3 is exposed through IGESio's public headers, projects consuming an installed IGESio via `find_package` must also have Eigen3 available.
 - ※2 glad's source code is licensed under MIT license, and the included Khronos XML API Registry is licensed under Apache License 2.0
+- ※3 fast_float is available under any of the three licenses at the user's option; IGESio uses it under the MIT license. It is header-only and used only inside the STL/OBJ readers, so it is not required by projects consuming an installed IGESio
 - Google Test is only used during development and is not distributed with the library
 
 ## Building

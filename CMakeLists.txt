@@ -318,6 +318,31 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
   endif()
 endif()
 
+# fast_float (header-only number parser) for the STL/OBJ text readers.
+# std::from_chars for floating point is not available on every supported
+# toolchain (e.g. MinGW GCC 11), and iostream parsing is far slower.
+# Prefer a locally installed fast_float; fetch it only as a fallback.
+if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION)
+  find_package(FastFloat QUIET CONFIG)
+  if(FastFloat_FOUND)
+    message(STATUS "fast_float found locally: ${FastFloat_DIR}")
+  else()
+    message(STATUS "fast_float not found locally. Fetching via FetchContent...")
+    # fast_float is a private build-time dependency; do not install it with IGESio
+    set(FASTFLOAT_INSTALL OFF CACHE BOOL "" FORCE)
+    include(FetchContent)
+    igesio_disable_build_testing()
+    FetchContent_Declare(
+      fast_float
+      GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
+      GIT_TAG        v8.0.2
+      GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(fast_float)
+    igesio_restore_build_testing()
+  endif()
+endif()
+
 
 
 # Option to build GUI (with GLFW and ImGui)

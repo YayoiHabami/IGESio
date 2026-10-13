@@ -17,6 +17,7 @@ This document lists the third-party libraries used in this project, along with t
   - [stb (MIT)](#stb-mit)
 - [For Extensions](#for-extensions)
   - [toml11 (MIT)](#toml11-mit)
+  - [fast\_float (MIT)](#fast_float-mit)
 
 ## For Development
 
@@ -473,4 +474,43 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+```
+
+### fast_float (MIT)
+
+This project uses the fast_float library for parsing floating-point numbers in the text readers of the STL and OBJ extensions. It is only included when the `IGESIO_ENABLE_STL_EXTENSION` or `IGESIO_ENABLE_OBJ_EXTENSION` CMake option is enabled during the build process. fast_float is header-only and is not exposed through the public headers of IGESio. fast_float is available under the Apache-2.0, MIT, or BSL-1.0 license at the user's option; IGESio uses it under the MIT license.
+
+- **Name**: fast_float
+- **Website**: [fast_float](https://github.com/fastfloat/fast_float)
+- **Version**: 8.0.2
+- **License**: MIT (also available under Apache-2.0 or BSL-1.0)
+
+```plaintext
+MIT License
+
+Copyright (c) 2021 The fast_float authors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 ```

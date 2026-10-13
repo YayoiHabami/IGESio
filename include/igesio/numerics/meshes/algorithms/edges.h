@@ -29,71 +29,96 @@ struct MeshEdgeSet {
     std::vector<std::array<std::uint32_t, 2>> feature_edges;
 };
 
+/// @brief 隠蔽用名前空間
+/// @note 直接使用しないこと
+namespace detail {
+
+/// @brief 稜線を全エッジと特徴エッジに分類する
+/// @param adjacency BuildEdgeAdjacencyの結果
+/// @param crease_angle_cos 折り目判定のしきい値
+/// @param unit_normal_of 三角形番号から単位面法線を取得する関数
+////       （退化三角形はゼロベクトルを返すこと）
+/// @return エッジ抽出結果（ExtractMeshEdgesの戻り値と同じ規約）
+template <typename UnitNormalOf>
+MeshEdgeSet ClassifyMeshEdges(const EdgeAdjacency& adjacency,
+                              const double crease_angle_cos,
+                              const UnitNormalOf& unit_normal_of) {
+    MeshEdgeSet result;
+    result.all_edges.reserve(adjacency.edges.size());
+    for (const auto& edge : adjacency.edges) {
+        const std::array<std::uint32_t, 2> pair = {edge.v0, edge.v1};
+        result.all_edges.push_back(pair);
+
+        // 境界と非多様体は特徴エッジ. 退化三角形が絡む場合は面法線が
+        // 計算できないため、特徴エッジとして扱う
+        bool is_feature = (edge.adjacent_count != 2);
+        if (!is_feature) {
+            const auto n0 = unit_normal_of(edge.triangles[0]);
+            const auto n1 = unit_normal_of(edge.triangles[1]);
+            if (n0.squaredNorm() == 0 || n1.squaredNorm() == 0) {
+                is_feature = true;
+            } else {
+                is_feature =
+                        static_cast<double>(n0.dot(n1)) < crease_angle_cos;
+            }
+        }
+        if (is_feature) result.feature_edges.push_back(pair);
+    }
+    return result;
+}
+
+}  // namespace detail
+
 /// @brief メッシュのユニークエッジと特徴エッジを抽出する
-/// @param mesh 対象のメッシュ (Validateを通る整合したメッシュであること)
-/// @param crease_angle_cos 折り目判定のしきい値. 隣接2面の単位面法線の内積が
-///        この値を下回るエッジを折り目とする (例: cos(30°))
-/// @return エッジ抽出結果. 特徴エッジは以下のいずれかを満たすエッジ:
-///         - 境界 (隣接三角形が1枚)
-///         - 非多様体 (隣接三角形が3枚以上)
-///         - 折り目 (隣接2枚の面法線の内積がしきい値未満)
-///         - 退化三角形が隣接する (面法線が計算不能のため安全側で特徴扱い)
-/// @note 同一頂点を結ぶ長さゼロのエッジ (退化三角形の重複インデックス) は
+/// @param mesh 対象のメッシュ（Validateを通る整合したメッシュであること）
+/// @param crease_angle_cos 折り目判定のしきい値. 隣接する2面の単位面法線の内積が
+///        この値を下回るエッジを折り目とする（例: cos(30°)）
+/// @return エッジ抽出結果. 特徴エッジは以下のいずれかを満たすエッジ：
+///         - 境界（隣接する三角形が1つ）,
+///         - 非多様体（隣接する三角形が3つ以上）,
+///         - 折り目（隣接する2面の面法線の内積がしきい値未満）,
+///         - 退化三角形が隣接する（このとき、面法線は計算できないため特徴エッジとして扱う）
+/// @note 同一頂点を結ぶ長さゼロのエッジ（退化三角形の重複インデックス）は
 ///       列挙から除外する
 template <typename Scalar>
 MeshEdgeSet ExtractMeshEdges(const TriangleMeshT<Scalar>& mesh,
                              const double crease_angle_cos) {
-    MeshEdgeSet result;
-    const auto triangle_count = mesh.TriangleCount();
-    if (triangle_count == 0) return result;
+    if (mesh.TriangleCount() == 0) return {};
 
     const auto face_normals = ComputeFaceNormals(mesh);
-
-    // (小さい頂点番号, 大きい頂点番号, 三角形番号) を全三角形分列挙する
-    struct EdgeRecord {
-        std::uint32_t v0, v1, tri;
+    const auto adjacency = detail::BuildEdgeAdjacency(mesh);
+    const auto unit_normal_of = [&face_normals](const std::uint32_t t) {
+        return face_normals.col(static_cast<Eigen::Index>(t));
     };
-    std::vector<EdgeRecord> records;
-    records.reserve(mesh.indices.size());
-    for (std::size_t t = 0; t < triangle_count; ++t) {
-        for (int k = 0; k < 3; ++k) {
-            const auto a = mesh.indices[3 * t + k];
-            const auto b = mesh.indices[3 * t + (k + 1) % 3];
-            if (a == b) continue;  // 長さゼロのエッジは除外
-            records.push_back({std::min(a, b), std::max(a, b),
-                               static_cast<std::uint32_t>(t)});
-        }
-    }
-    std::sort(records.begin(), records.end(),
-              [](const EdgeRecord& l, const EdgeRecord& r) {
-                  return (l.v0 != r.v0) ? (l.v0 < r.v0) : (l.v1 < r.v1);
-              });
+    return detail::ClassifyMeshEdges(adjacency, crease_angle_cos,
+                                     unit_normal_of);
+}
 
-    // 同一 (v0, v1) のラン = 1ユニークエッジとして隣接数と二面角で分類する
-    for (std::size_t i = 0; i < records.size();) {
-        std::size_t j = i;
-        while (j < records.size() && records[j].v0 == records[i].v0 &&
-               records[j].v1 == records[i].v1) {
-            ++j;
-        }
-        const std::array<std::uint32_t, 2> edge = {records[i].v0, records[i].v1};
-        result.all_edges.push_back(edge);
-
-        const std::size_t adjacent_count = j - i;
-        bool is_feature = (adjacent_count != 2);  // 境界または非多様体
-        if (adjacent_count == 2) {
-            const auto n0 = face_normals.col(records[i].tri);
-            const auto n1 = face_normals.col(records[i + 1].tri);
-            if (n0.squaredNorm() == Scalar(0) || n1.squaredNorm() == Scalar(0)) {
-                is_feature = true;  // 退化三角形絡みは安全側で特徴扱い
-            } else {
-                is_feature = static_cast<double>(n0.dot(n1)) < crease_angle_cos;
-            }
-        }
-        if (is_feature) result.feature_edges.push_back(edge);
-        i = j;
+/// @brief 折り目で分割した頂点法線を再計算し、分割前のエッジを抽出する
+/// @param[in,out] mesh 対象のメッシュ
+///                （positions/normals/uvs/indicesを更新する）
+/// @param crease_angle_cos 折り目判定のしきい値（例: cos(30°)）
+/// @return 法線を再計算する前のmeshに対するExtractMeshEdgesの結果
+/// @note meshの更新内容はRecomputeNormalsWithCreaseと同じ.
+///       両方の結果が必要な場合に、面法線と稜線の隣接情報を一括で構築する
+template <typename Scalar>
+MeshEdgeSet RecomputeNormalsWithCreaseAndExtractEdges(
+        TriangleMeshT<Scalar>& mesh, const double crease_angle_cos) {
+    if (mesh.TriangleCount() == 0) {
+        mesh.normals.setZero(3, mesh.positions.cols());
+        return {};
     }
-    return result;
+
+    const auto faces = detail::ComputeFaceVectors(mesh);
+    const auto adjacency = detail::BuildEdgeAdjacency(mesh);
+    const auto unit_normal_of = [&faces](const std::uint32_t t) {
+        return faces.unit[t];
+    };
+    auto edges = detail::ClassifyMeshEdges(adjacency, crease_angle_cos,
+                                           unit_normal_of);
+    // 稜線の分類はインデックスを書き換える前の位相に対して行う
+    detail::ApplyCreaseNormals(mesh, faces, adjacency, crease_angle_cos);
+    return edges;
 }
 
 /// @brief メッシュの全ユニークエッジを抽出する (分類なしの軽量版)

@@ -12,8 +12,11 @@
  *       - `RecomputeNormalsWithCrease` (折り目での頂点分割と法線)
  *       - `ComputeFaceNormals`
  *       - `ExtractMeshEdges` (全エッジ/特徴エッジの分類)
+ *       - `RecomputeNormalsWithCreaseAndExtractEdges` (法線補完とエッジ抽出の共有)
  *       - `ExtractUniqueEdges` (分類なしの軽量版)
  *       - `CastScalar`
+ * @note 折り目法線とエッジ抽出は、二分探索による素直な参照実装と、
+ *       退化/非多様体/重複/孤立頂点/高次数頂点を含む乱数メッシュで突き合わせる.
  * @note TODO: 大規模メッシュの性能は対象外 (機能検証のみ).
  */
 #include <gtest/gtest.h>
@@ -23,6 +26,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
+#include <map>
+#include <random>
+#include <utility>
 #include <vector>
 
 #include "igesio/numerics/meshes/triangle_mesh.h"
@@ -85,6 +92,274 @@ bool ContainsEdge(const std::vector<std::array<std::uint32_t, 2>>& edges,
                   const std::uint32_t v0, const std::uint32_t v1) {
     const std::array<std::uint32_t, 2> target = {v0, v1};
     return std::find(edges.begin(), edges.end(), target) != edges.end();
+}
+
+/// @brief 退化/非多様体/重複/孤立頂点/高次数頂点を含む乱数メッシュを生成する
+/// @param seed 乱数の種
+/// @return 起伏のある格子面 (6×6頂点) に以下を加えたメッシュ (UVと面グループ付き):
+///         (1) 格子の1辺を3枚で共有する非多様体のひれ,
+///         (2) 面積ゼロの退化三角形と、同一頂点を重複参照する三角形,
+///         (3) 格子の三角形と同じ頂点を持つ重複三角形,
+///         (4) 1頂点を40枚の三角形が囲む円錐 (高次数頂点),
+///         (5) どの三角形にも属さない孤立頂点
+/// @note 格子の高さは乱数で大きく変え、折り目と滑らかな稜線を混在させる
+TriangleMeshd MakeMixedRandomMesh(const unsigned seed) {
+    std::mt19937 engine(seed);
+    std::uniform_real_distribution<double> height(-0.6, 0.6);
+    constexpr int kGrid = 6;
+    constexpr int kFan = 40;
+    std::vector<std::array<double, 3>> points;
+    for (int y = 0; y < kGrid; ++y) {
+        for (int x = 0; x < kGrid; ++x) {
+            points.push_back({double(x), double(y), height(engine)});
+        }
+    }
+    std::vector<std::uint32_t> indices;
+    for (int y = 0; y + 1 < kGrid; ++y) {
+        for (int x = 0; x + 1 < kGrid; ++x) {
+            const auto v = static_cast<std::uint32_t>(y * kGrid + x);
+            indices.insert(indices.end(), {v, v + 1, v + kGrid + 1});
+            indices.insert(indices.end(), {v, v + kGrid + 1, v + kGrid});
+        }
+    }
+    // (1) 辺(0,1)を共有する3枚目の三角形 (ひれ)
+    points.push_back({0.5, -0.5, 1.0});
+    indices.insert(indices.end(), {0, 1, std::uint32_t(points.size() - 1)});
+    // (2) 退化三角形: 辺(1,2)上の点と、頂点の重複参照
+    points.push_back({1.5, 0.0, 0.5 * (points[1][2] + points[2][2])});
+    indices.insert(indices.end(), {1, std::uint32_t(points.size() - 1), 2});
+    indices.insert(indices.end(), {3, 3, 4});
+    // (3) 重複三角形 (格子の先頭の三角形と同じ頂点)
+    indices.insert(indices.end(), {0, 1, kGrid + 1});
+    // (4) 円錐: 頂点を共有する40枚の三角形
+    const auto apex = static_cast<std::uint32_t>(points.size());
+    points.push_back({10.0, 10.0, 3.0});
+    const auto ring = static_cast<std::uint32_t>(points.size());
+    for (int k = 0; k < kFan; ++k) {
+        const double angle = 2.0 * igesio::kPi * k / kFan;
+        points.push_back({10.0 + std::cos(angle), 10.0 + std::sin(angle),
+                          height(engine) * 0.1});
+    }
+    for (int k = 0; k < kFan; ++k) {
+        indices.insert(indices.end(), {apex, ring + std::uint32_t(k),
+                                       ring + std::uint32_t((k + 1) % kFan)});
+    }
+    // (5) 孤立頂点
+    points.push_back({-5.0, -5.0, -5.0});
+
+    TriangleMeshd mesh;
+    const auto count = static_cast<Eigen::Index>(points.size());
+    mesh.positions.resize(3, count);
+    mesh.uvs.resize(2, count);
+    for (Eigen::Index c = 0; c < count; ++c) {
+        const auto& p = points[static_cast<std::size_t>(c)];
+        mesh.positions.col(c) << p[0], p[1], p[2];
+        mesh.uvs.col(c) << 0.1 * p[0], 0.1 * p[1];
+    }
+    mesh.indices = std::move(indices);
+    mesh.groups.push_back({"grid", "", 0, 50});
+    mesh.groups.push_back({"rest", "m", 50,
+                           std::uint32_t(mesh.TriangleCount() - 50)});
+    return mesh;
+}
+
+/// @brief 稜線 (小さい頂点番号, 大きい頂点番号) から隣接三角形の番号列への対応
+using ReferenceEdgeMap =
+        std::map<std::pair<std::uint32_t, std::uint32_t>,
+                 std::vector<std::uint32_t>>;
+
+/// @brief 稜線ごとの隣接三角形を素直な方法で列挙する
+/// @param mesh 対象のメッシュ
+/// @return 稜線から隣接三角形 (三角形番号の昇順) への対応.
+///         長さゼロの稜線は含まない
+ReferenceEdgeMap BuildReferenceEdgeMap(const TriangleMeshd& mesh) {
+    ReferenceEdgeMap edges;
+    for (std::uint32_t t = 0; t < mesh.TriangleCount(); ++t) {
+        for (std::uint32_t k = 0; k < 3; ++k) {
+            const auto a = mesh.indices[3 * t + k];
+            const auto b = mesh.indices[3 * t + (k + 1) % 3];
+            if (a != b) edges[{std::min(a, b), std::max(a, b)}].push_back(t);
+        }
+    }
+    return edges;
+}
+
+/// @brief 三角形ごとの外積 (面積の2倍の大きさ) を計算する
+/// @param mesh 対象のメッシュ
+/// @return 三角形ごとの外積ベクトル
+std::vector<Eigen::Vector3d> ComputeReferenceCross(const TriangleMeshd& mesh) {
+    std::vector<Eigen::Vector3d> cross(mesh.TriangleCount());
+    for (std::size_t t = 0; t < cross.size(); ++t) {
+        const Eigen::Vector3d p0 = mesh.positions.col(mesh.indices[3 * t]);
+        const Eigen::Vector3d e1 =
+                Eigen::Vector3d(mesh.positions.col(mesh.indices[3 * t + 1])) - p0;
+        const Eigen::Vector3d e2 =
+                Eigen::Vector3d(mesh.positions.col(mesh.indices[3 * t + 2])) - p0;
+        cross[t] = e1.cross(e2);
+    }
+    return cross;
+}
+
+/// @brief 外積から単位面法線 (退化三角形はゼロベクトル) を計算する
+/// @param cross 三角形の外積ベクトル
+/// @return 単位面法線
+Eigen::Vector3d ReferenceUnit(const Eigen::Vector3d& cross) {
+    const double norm = cross.norm();
+    return (norm > 0.0) ? Eigen::Vector3d(cross / norm)
+                        : Eigen::Vector3d(Eigen::Vector3d::Zero());
+}
+
+/// @brief 稜線を挟む2三角形が滑らかにつながるか判定する
+/// @param tris 稜線の隣接三角形
+/// @param cross 三角形ごとの外積
+/// @param crease_angle_cos 折り目判定のしきい値
+/// @return 隣接がちょうど2枚、両方とも非退化、かつ法線の内積がしきい値以上の
+///         場合はtrue
+bool IsReferenceSmoothEdge(const std::vector<std::uint32_t>& tris,
+                           const std::vector<Eigen::Vector3d>& cross,
+                           const double crease_angle_cos) {
+    if (tris.size() != 2) return false;
+    const auto n0 = ReferenceUnit(cross[tris[0]]);
+    const auto n1 = ReferenceUnit(cross[tris[1]]);
+    if (n0.squaredNorm() == 0.0 || n1.squaredNorm() == 0.0) return false;
+    return n0.dot(n1) >= crease_angle_cos;
+}
+
+/// @brief 二分探索 (std::map) で稜線を引く素直な実装で折り目法線を計算する
+/// @param[in,out] mesh 対象のメッシュ
+/// @param crease_angle_cos 折り目判定のしきい値
+/// @note 頂点の複製順と法線の加算順は公開実装と同じ規約 (頂点番号→三角形番号→
+///       コーナー番号の昇順) に従う
+void ReferenceRecomputeNormalsWithCrease(TriangleMeshd& mesh,
+                                         const double crease_angle_cos) {
+    const auto cross = ComputeReferenceCross(mesh);
+    const auto edges = BuildReferenceEdgeMap(mesh);
+    std::vector<std::array<std::uint32_t, 3>> corners;
+    for (std::uint32_t s = 0; s < mesh.indices.size(); ++s) {
+        corners.push_back({mesh.indices[s], s / 3, s % 3});
+    }
+    std::sort(corners.begin(), corners.end());
+
+    std::vector<Eigen::Vector3d> sums(std::size_t(mesh.positions.cols()),
+                                      Eigen::Vector3d::Zero());
+    std::vector<Eigen::Index> duplicated_from;
+    auto new_indices = mesh.indices;
+    for (std::size_t i = 0; i < corners.size();) {
+        std::size_t j = i;
+        while (j < corners.size() && corners[j][0] == corners[i][0]) ++j;
+        // 頂点まわりのコーナーを、滑らかな稜線で隣り合うもの同士で併合する
+        std::vector<std::size_t> parent(j - i);
+        for (std::size_t q = 0; q < parent.size(); ++q) parent[q] = q;
+        const auto root_of = [&parent](std::size_t x) {
+            while (parent[x] != x) x = parent[x];
+            return x;
+        };
+        for (std::size_t c = i; c < j; ++c) {
+            const auto v = corners[c][0], t = corners[c][1], k = corners[c][2];
+            for (const auto other : {mesh.indices[3 * t + (k + 1) % 3],
+                                     mesh.indices[3 * t + (k + 2) % 3]}) {
+                if (other == v) continue;
+                const auto& tris = edges.at({std::min(v, other),
+                                             std::max(v, other)});
+                if (!IsReferenceSmoothEdge(tris, cross, crease_angle_cos)) {
+                    continue;
+                }
+                const auto neighbor = (tris[0] == t) ? tris[1] : tris[0];
+                for (std::size_t q = i; q < j; ++q) {
+                    if (corners[q][1] != neighbor) continue;
+                    parent[root_of(q - i)] = root_of(c - i);
+                    break;
+                }
+            }
+        }
+        // 最初に現れたクラスタが元の頂点番号を引き継ぎ、以降は複製する
+        std::vector<std::pair<std::size_t, std::uint32_t>> assigned;
+        for (std::size_t c = i; c < j; ++c) {
+            const auto root = root_of(c - i);
+            auto it = std::find_if(assigned.begin(), assigned.end(),
+                                   [root](const auto& a) {
+                                       return a.first == root;
+                                   });
+            if (it == assigned.end()) {
+                auto column = corners[c][0];
+                if (!assigned.empty()) {
+                    column = static_cast<std::uint32_t>(sums.size());
+                    duplicated_from.push_back(corners[c][0]);
+                    sums.push_back(Eigen::Vector3d::Zero());
+                }
+                assigned.emplace_back(root, column);
+                it = std::prev(assigned.end());
+            }
+            new_indices[3 * corners[c][1] + corners[c][2]] = it->second;
+            sums[it->second] += cross[corners[c][1]];
+        }
+        i = j;
+    }
+
+    const auto original = mesh.positions.cols();
+    const auto total = original + Eigen::Index(duplicated_from.size());
+    mesh.positions.conservativeResize(3, total);
+    if (mesh.HasUVs()) mesh.uvs.conservativeResize(2, total);
+    for (std::size_t d = 0; d < duplicated_from.size(); ++d) {
+        const auto dst = original + Eigen::Index(d);
+        mesh.positions.col(dst) = mesh.positions.col(duplicated_from[d]);
+        if (mesh.uvs.cols() == total) {
+            mesh.uvs.col(dst) = mesh.uvs.col(duplicated_from[d]);
+        }
+    }
+    mesh.indices = std::move(new_indices);
+    mesh.normals.setZero(3, total);
+    for (std::size_t c = 0; c < sums.size(); ++c) {
+        mesh.normals.col(Eigen::Index(c)) = ReferenceUnit(sums[c]);
+    }
+}
+
+/// @brief 素直な実装 (std::map) でエッジ抽出の参照結果を計算する
+/// @param mesh 対象のメッシュ
+/// @param crease_angle_cos 折り目判定のしきい値
+/// @return ExtractMeshEdgesと同じ規約のエッジ抽出結果
+i_num::MeshEdgeSet ReferenceExtractMeshEdges(const TriangleMeshd& mesh,
+                                             const double crease_angle_cos) {
+    const auto cross = ComputeReferenceCross(mesh);
+    i_num::MeshEdgeSet result;
+    for (const auto& [key, tris] : BuildReferenceEdgeMap(mesh)) {
+        const std::array<std::uint32_t, 2> pair = {key.first, key.second};
+        result.all_edges.push_back(pair);
+        if (!IsReferenceSmoothEdge(tris, cross, crease_angle_cos)) {
+            result.feature_edges.push_back(pair);
+        }
+    }
+    return result;
+}
+
+/// @brief 2つの行列の成分ごとの差の絶対値の最大を計算する
+/// @param a 比較する行列
+/// @param b 比較する行列 (aと同じ大きさ)
+/// @return 差の絶対値の最大. 空の行列の場合は0
+double MaxAbsDifference(const Eigen::MatrixXd& a, const Eigen::MatrixXd& b) {
+    if (a.size() == 0) return 0.0;
+    return (a - b).cwiseAbs().maxCoeff();
+}
+
+/// @brief 2つのメッシュの頂点/法線/UV/インデックス/グループが一致することを検証する
+/// @param actual 検証対象のメッシュ
+/// @param expected 期待するメッシュ
+void ExpectSameMesh(const TriangleMeshd& actual, const TriangleMeshd& expected) {
+    ASSERT_EQ(actual.positions.cols(), expected.positions.cols());
+    ASSERT_EQ(actual.normals.cols(), expected.normals.cols());
+    ASSERT_EQ(actual.uvs.cols(), expected.uvs.cols());
+    EXPECT_EQ(actual.indices, expected.indices);
+    EXPECT_NEAR(MaxAbsDifference(actual.positions, expected.positions), 0.0,
+                kTol);
+    EXPECT_NEAR(MaxAbsDifference(actual.normals, expected.normals), 0.0, kTol);
+    EXPECT_NEAR(MaxAbsDifference(actual.uvs, expected.uvs), 0.0, kTol);
+    ASSERT_EQ(actual.groups.size(), expected.groups.size());
+    for (std::size_t g = 0; g < actual.groups.size(); ++g) {
+        EXPECT_EQ(actual.groups[g].first_triangle,
+                  expected.groups[g].first_triangle);
+        EXPECT_EQ(actual.groups[g].triangle_count,
+                  expected.groups[g].triangle_count);
+    }
 }
 
 }  // namespace
@@ -510,6 +785,68 @@ TEST(TriangleMeshExtractEdgesTest, ZeroLengthEdgeIsExcluded) {
 // 正常系 (退化): 空メッシュは空のエッジ集合を返す
 TEST(TriangleMeshExtractEdgesTest, EmptyMeshYieldsNoEdges) {
     const auto edges = i_num::ExtractMeshEdges(TriangleMeshd{}, kCos30Deg);
+    EXPECT_TRUE(edges.all_edges.empty());
+    EXPECT_TRUE(edges.feature_edges.empty());
+}
+
+
+
+/**
+ * 参照実装との突き合わせ (RecomputeNormalsWithCrease / ExtractMeshEdges /
+ * RecomputeNormalsWithCreaseAndExtractEdges)
+ */
+
+/// @brief 乱数メッシュの種を与える突き合わせテスト
+class TriangleMeshReferenceTest : public ::testing::TestWithParam<unsigned> {};
+
+// 正常系: 折り目法線が参照実装と一致する (頂点の複製順/インデックス/法線/UV)
+TEST_P(TriangleMeshReferenceTest, RecomputeNormalsWithCrease_MatchesReference) {
+    auto actual = MakeMixedRandomMesh(GetParam());
+    auto expected = actual;
+    i_num::RecomputeNormalsWithCrease(actual, kCos30Deg);
+    ReferenceRecomputeNormalsWithCrease(expected, kCos30Deg);
+    ExpectSameMesh(actual, expected);
+}
+
+// 正常系: エッジ抽出が参照実装と一致する (全エッジ/特徴エッジの集合と順序)
+TEST_P(TriangleMeshReferenceTest, ExtractMeshEdges_MatchesReference) {
+    const auto mesh = MakeMixedRandomMesh(GetParam());
+    const auto actual = i_num::ExtractMeshEdges(mesh, kCos30Deg);
+    const auto expected = ReferenceExtractMeshEdges(mesh, kCos30Deg);
+    EXPECT_EQ(actual.all_edges, expected.all_edges);
+    EXPECT_EQ(actual.feature_edges, expected.feature_edges);
+}
+
+// 正常系: 共有版は、法線補完とエッジ抽出を個別に呼んだ結果と一致する
+TEST_P(TriangleMeshReferenceTest,
+       RecomputeNormalsWithCreaseAndExtractEdges_MatchesSeparateCalls) {
+    const auto mesh = MakeMixedRandomMesh(GetParam());
+    auto combined = mesh;
+    const auto combined_edges =
+            i_num::RecomputeNormalsWithCreaseAndExtractEdges(combined,
+                                                             kCos30Deg);
+    auto separate = mesh;
+    i_num::RecomputeNormalsWithCrease(separate, kCos30Deg);
+    const auto separate_edges = i_num::ExtractMeshEdges(mesh, kCos30Deg);
+
+    ExpectSameMesh(combined, separate);
+    EXPECT_EQ(combined_edges.all_edges, separate_edges.all_edges);
+    EXPECT_EQ(combined_edges.feature_edges, separate_edges.feature_edges);
+}
+
+// 乱数の種 (各種で格子の起伏と円錐の高さが変わる)
+INSTANTIATE_TEST_SUITE_P(Seeds, TriangleMeshReferenceTest,
+                         ::testing::Values(1u, 2u, 3u, 42u, 2026u));
+
+// 正常系 (退化): 三角形の無いメッシュでは、共有版も法線をゼロにし空のエッジを返す
+TEST(TriangleMeshCreaseAndEdgesTest, MeshWithoutTrianglesGetsZeroNormals) {
+    TriangleMeshd mesh;
+    mesh.positions.setZero(3, 2);
+    const auto edges =
+            i_num::RecomputeNormalsWithCreaseAndExtractEdges(mesh, kCos30Deg);
+
+    ASSERT_EQ(mesh.normals.cols(), 2);
+    EXPECT_NEAR(mesh.normals.cwiseAbs().maxCoeff(), 0.0, kTol);
     EXPECT_TRUE(edges.all_edges.empty());
     EXPECT_TRUE(edges.feature_edges.empty());
 }

@@ -1,15 +1,15 @@
 /**
  * @file extensions/obj/obj_io.h
- * @brief OBJ (Wavefront OBJ) ファイルの入出力
+ * @brief OBJ（Wavefront OBJ）ファイルの入出力
  * @author Yayoi Habami
  * @date 2026-06-11
  * @copyright 2026 Yayoi Habami
  * @note IGESIO_ENABLE_OBJ_EXTENSION有効時にのみビルドされる拡張モジュール.
- *       メッシュデータ (numerics::TriangleMeshd) との相互変換と、
- *       エンティティ直結の読み込み (ReadObjAsEntity) を提供する.
- * @note マテリアルライブラリ (.mtl) の実体 (色・テクスチャパス等) は扱わない.
- *       usemtlの参照名のみをMeshGroup::material_nameへ保持/出力する
- *       (TODO: .mtlの読み書き対応).
+ *       メッシュデータ（numerics::TriangleMeshd）との相互変換と、
+ *       エンティティ直結の読み込み（ReadObjAsEntity）を提供する.
+ * @note マテリアルライブラリ（.mtl）の実体（色・テクスチャパス等）は扱わない.
+ *       現時点では、usemtlの参照名のみをMeshGroup::material_nameへ保持/出力する
+ *       （TODO: .mtlの読み書き対応）.
  */
 #ifndef IGESIO_EXTENSIONS_OBJ_OBJ_IO_H_
 #define IGESIO_EXTENSIONS_OBJ_OBJ_IO_H_
@@ -23,13 +23,13 @@
 /// @brief IGESio本体の拡張モジュール (外部フォーマット入出力等)
 namespace igesio::extensions {
 
-/// @brief OBJ書き出しの制御パラメータ
+/// @brief OBJ出力時の設定
 struct WriteObjParams {
-    /// @brief 頂点法線 (vn) を出力するか
-    /// @note メッシュが法線チャンネルを持つ場合にのみ有効
+    /// @brief 頂点法線（vn）を出力するか
+    /// @note メッシュが頂点法線を持つ場合にのみ有効
     bool write_normals = true;
     /// @brief テクスチャ座標 (vt) を出力するか
-    /// @note メッシュがUVチャンネルを持つ場合にのみ有効
+    /// @note メッシュがUVを持つ場合にのみ有効
     bool write_uvs = true;
     /// @brief 面グループ (g / usemtl) を出力するか
     /// @note メッシュが面グループを持つ場合にのみ有効.
@@ -39,9 +39,11 @@ struct WriteObjParams {
 
 /// @brief OBJファイルを読み込む
 /// @param path OBJファイルのパス（UTF-8）
-/// @return 読み込んだ三角形メッシュ (OBJはASCII十進数のため倍精度).
-///         多角形フェイスはファン分割し、v/vt/vnの多重インデックスは
-///         コーナー重複排除で単一インデックス空間へ正規化する
+/// @return 読み込んだ三角形メッシュ（OBJはASCII十進数のため倍精度）.
+///         多角形の面は、先頭頂点を共有する三角形に分割する.
+///         OBJの面は位置・UV・法線を別々のインデックスで参照するため、
+///         (v, vt, vn)の組が等しい角を1頂点にまとめ、位置・UV・法線を
+///         共通の1つのインデックスで参照する形式に変換する
 /// @throw igesio::FileOpenError ファイルが開けなかった場合
 /// @throw igesio::ParseError ファイルがOBJとして不正な場合
 ///        (頂点インデックスが範囲外・面の頂点が3未満等)
@@ -50,15 +52,14 @@ struct WriteObjParams {
 ///       usemtlはMeshGroup::material_nameへ参照名のみ保持する
 numerics::TriangleMeshd ReadObj(const std::string& path);
 
-/// @brief OBJファイルを読み込み、メッシュエンティティとして返す
+/// @brief OBJファイルをメッシュエンティティとして読み込む
 /// @param path OBJファイルのパス（UTF-8）
 /// @return 読み込んだメッシュを保持するMeshEntity.
-///         Assemblyへ追加すればそのまま描画パイプラインに乗る
 /// @throw igesio::FileOpenError ファイルが開けなかった場合
 /// @throw igesio::ParseError ファイルがOBJとして不正な場合
 std::shared_ptr<entities::MeshEntity> ReadObjAsEntity(const std::string& path);
 
-/// @brief メッシュをOBJファイルへ書き出す
+/// @brief メッシュをOBJファイルとして書き出す
 /// @param mesh 書き出す三角形メッシュ
 /// @param path 出力するOBJファイルのパス（UTF-8、同名ファイルは上書きする）
 /// @param params 書き出しの制御パラメータ

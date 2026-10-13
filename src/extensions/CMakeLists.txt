@@ -2,6 +2,13 @@
 # 有効化されたフォーマットのソースのみを追加する
 set(EXTENSIONS_SOURCES "")
 
+if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION)
+    # STL/OBJのテキスト読み込み用の字句解析と数値の読取
+    list(APPEND EXTENSIONS_SOURCES
+        common/text_scanner.cpp
+    )
+endif()
+
 if(IGESIO_ENABLE_STL_EXTENSION)
     list(APPEND EXTENSIONS_SOURCES
         stl/stl_io.cpp
@@ -122,6 +129,12 @@ target_link_libraries(igesio_extensions
 if(IGESIO_ENABLE_GRAPHICS)
     # graphics有効時のみ、拡張固有の描画関連ソースをリンク可能にする
     target_link_libraries(igesio_extensions PUBLIC IGESio::graphics)
+endif()
+if(IGESIO_ENABLE_STL_EXTENSION OR IGESIO_ENABLE_OBJ_EXTENSION)
+    # fast_floatはヘッダオンリーで、STL/OBJの.cpp内でのみ使用している.
+    # toml11と同じくBUILD_INTERFACEで囲い、install(EXPORT)の要求から外す
+    target_link_libraries(igesio_extensions
+        PRIVATE $<BUILD_INTERFACE:FastFloat::fast_float>)
 endif()
 if(IGESIO_ENABLE_MACHINES_EXTENSION)
     # toml11はヘッダオンリーで、.cpp内でのみ使用している. BUILD_INTERFACEで囲い、

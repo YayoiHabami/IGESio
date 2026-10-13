@@ -1,12 +1,11 @@
 /**
  * @file numerics/meshes/triangle_mesh.h
- * @brief インデックス付き三角形メッシュ (純粋データ)
+ * @brief インデックス付き三角形メッシュ
  * @author Yayoi Habami
  * @date 2026-06-10
  * @copyright 2026 Yayoi Habami
- * @note IGESエンティティ・描画・ファイル入出力 (STL等) から独立した、
- *       メッシュの正準データ構造. アルゴリズムは同階層のalgorithms.hに
- *       関数として置く (関数指向).
+ * @note メッシュ用データ構造は、IGESのエンティティや描画、ファイル入出力（STL等）
+ *       とは独立して定義する. アルゴリズムは同階層のalgorithms.hで定義する.
  */
 #ifndef IGESIO_NUMERICS_MESHES_TRIANGLE_MESH_H_
 #define IGESIO_NUMERICS_MESHES_TRIANGLE_MESH_H_
@@ -36,15 +35,17 @@ struct MeshGroup {
     std::uint32_t triangle_count = 0;
 };
 
-/// @brief インデックス付き三角形メッシュ (純粋データ)
-/// @tparam Scalar スカラー型 (float / double)
-/// @note 設計上の選択:
-///       - 三角形限定 (多角形は読み込み側でファン分割する)
-///       - 単一インデックス空間 (1頂点 = 位置+法線+UVの組. OBJの多重インデックスは
-///         読み込み側でコーナー重複排除により正規化する)
-///       - SoAレイアウト+オプションチャンネル (法線・UVは列数0で「なし」を表す)
-///       - スカラー型はテンプレート (解析・オーサリング=double、
-///         GPUステージング・STLバイナリ=float)
+/// @brief インデックス付き三角形メッシュ
+/// @tparam Scalar スカラー型（float/double）
+/// @note 以下の形式でデータを保持する.
+///       (i) 三角形のみ（多角形は読み込み側で先頭頂点を共有する三角形に分割する）.
+///       (i) 位置・法線・UVを共通の1つのインデックスで参照する
+///          （頂点ごとに位置+法線+UVの組. OBJのように要素ごとに別のインデックスを
+///            持つ形式では、読み込み側で(v, vt, vn)の組ごとに頂点をまとめて変換する）.
+///       (i) SoAレイアウトであり、頂点位置・法線・UVを別々の行列で保持する.
+///           法線とUVの指定は任意（未指定の場合は列数ゼロの行列とする）.
+///       (i) 基本的にはScalar=doubleとし、
+///           GPUステージングやSTLバイナリとの変換ではScalar=floatとする
 template <typename Scalar>
 struct TriangleMeshT {
     /// @brief 3×N行列の別名
@@ -52,15 +53,15 @@ struct TriangleMeshT {
     /// @brief 2×N行列の別名
     using Matrix2X = Eigen::Matrix<Scalar, 2, Eigen::Dynamic>;
 
-    /// @brief 頂点位置 (3×N; 各列が1頂点)
+    /// @brief 頂点位置（3×N; 各列が1頂点）
     Matrix3X positions;
-    /// @brief 頂点法線 (3×N or 列数0=法線なし)
+    /// @brief 頂点法線（3×N; 法線を指定しない場合は列数ゼロ）
     Matrix3X normals;
-    /// @brief テクスチャ座標 (2×N or 列数0=UVなし)
+    /// @brief テクスチャ座標（2×N; UVを指定しない場合は列数ゼロ）
     Matrix2X uvs;
-    /// @brief 三角形インデックス (3要素で1三角形; positionsの列番号)
+    /// @brief 三角形インデックス（3要素で1つの三角形; positionsの列番号）
     std::vector<std::uint32_t> indices;
-    /// @brief 面グループ (空ならグループなし)
+    /// @brief 面グループ（空ならグループなし）
     std::vector<MeshGroup> groups;
 
     /// @brief 頂点法線を持つか
@@ -71,13 +72,13 @@ struct TriangleMeshT {
     std::size_t VertexCount() const {
         return static_cast<std::size_t>(positions.cols());
     }
-    /// @brief 三角形数を取得する
+    /// @brief 三角形の数を取得する
     std::size_t TriangleCount() const { return indices.size() / 3; }
 };
 
-/// @brief 倍精度の三角形メッシュ (解析・オーサリングの既定)
+/// @brief 倍精度の三角形メッシュ（既定）
 using TriangleMeshd = TriangleMeshT<double>;
-/// @brief 単精度の三角形メッシュ (GPUステージング・STLバイナリ)
+/// @brief 単精度の三角形メッシュ（GPUステージング・STLバイナリとの変換用）
 using TriangleMeshf = TriangleMeshT<float>;
 
 }  // namespace igesio::numerics

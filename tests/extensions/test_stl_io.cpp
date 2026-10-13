@@ -7,7 +7,9 @@
  * @note テスト対象:
  *       - `WriteStl` / `ReadStl` の往復 (バイナリ・ASCII)
  *       - バイナリ/ASCIIの自動判別
+ *       - ASCII形式の数値の書式 (`std::istream`の`>>`と同じ成否と値) と区切り
  *       - 溶接 (weld_vertices / weld_tolerance / weld_relative_tolerance) の挙動
+ *         (溶接用ハッシュ表が拡張される規模での、素直な実装との一致を含む)
  *       - `ReadStlAsEntity`
  *       - 異常系 (ファイルなし・不正ファイル・不正メッシュ)
  *       - 全角文字を含むパスでの往復と例外 (親ディレクトリの自動作成を含む)
@@ -16,10 +18,17 @@
  */
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <map>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "igesio/common/errors.h"
 #include "igesio/numerics/meshes/triangle_mesh.h"
@@ -91,6 +100,79 @@ i_num::TriangleMeshf MakeQuadSoupWithRoundingNoise() {
                       0.0f, 0.0f,   0.0f,     0.0f, kNoise, 0.0f;
     soup.indices = {0, 1, 2, 3, 4, 5};
     return soup;
+}
+
+/// @brief 文字列を改行コードの変換なしでファイルへ書き出す
+void WriteBytes(const std::string& path, const std::string& content) {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file << content;
+}
+
+/// @brief 1つ目の頂点のx座標の語を差し替えた、三角形1枚のASCII STLを生成する
+/// @param x_token 1つ目の頂点のx座標として書く語
+/// @return 面法線 (0, 0, 1)、頂点 (x_token, 0, 0)/(1, 0, 0)/(0, 1, 0) のテキスト
+std::string MakeAsciiTriangleWithX(const std::string& x_token) {
+    return "solid t\n"
+           "facet normal 0 0 1\n"
+           "outer loop\n"
+           "vertex " + x_token + " 0 0\n"
+           "vertex 1 0 0\n"
+           "vertex 0 1 0\n"
+           "endloop\n"
+           "endfacet\n"
+           "endsolid t\n";
+}
+
+/// @brief 共有頂点の多い格子と、頂点を共有しない散在三角形を混ぜたスープを生成する
+/// @return 格子 (40×40頂点; 共有あり) の三角形の後に、乱数座標の三角形
+///         (3000枚; 座標は1/8刻みのため一部は偶然一致する) を並べたスープ
+/// @note 溶接後の頂点数がスープの頂点数の1/4を大きく超えるため、溶接用の
+///       ハッシュ表が読み込み中に拡張される
+i_num::TriangleMeshf MakeMixedSoupForWelding() {
+    constexpr int kGrid = 40;
+    constexpr int kScattered = 3000;
+    std::vector<std::array<float, 3>> corners;
+    for (int y = 0; y + 1 < kGrid; ++y) {
+        for (int x = 0; x + 1 < kGrid; ++x) {
+            const auto p = [](int i, int j) {
+                return std::array<float, 3>{float(i), float(j), 0.0f};
+            };
+            for (const auto& c : {p(x, y), p(x + 1, y), p(x + 1, y + 1),
+                                  p(x, y), p(x + 1, y + 1), p(x, y + 1)}) {
+                corners.push_back(c);
+            }
+        }
+    }
+    std::mt19937 engine(7);
+    std::uniform_int_distribution<int> coordinate(-800, 800);
+    for (int t = 0; t < 3 * kScattered; ++t) {
+        corners.push_back({coordinate(engine) / 8.0f, coordinate(engine) / 8.0f,
+                           coordinate(engine) / 8.0f + 50.0f});
+    }
+
+    i_num::TriangleMeshf soup;
+    soup.positions.resize(3, static_cast<Eigen::Index>(corners.size()));
+    for (std::size_t c = 0; c < corners.size(); ++c) {
+        soup.positions.col(static_cast<Eigen::Index>(c))
+                << corners[c][0], corners[c][1], corners[c][2];
+        soup.indices.push_back(static_cast<std::uint32_t>(c));
+    }
+    return soup;
+}
+
+/// @brief ビット単位の完全一致で溶接した頂点番号を素直な方法で計算する
+/// @param soup ポリゴンスープ (indicesが0,1,2,...の順に並ぶこと)
+/// @return 各スープ頂点の溶接後の頂点番号 (初出順に番号を付ける)
+std::vector<std::uint32_t> WeldBitExactByMap(const i_num::TriangleMeshf& soup) {
+    std::map<std::array<std::uint32_t, 3>, std::uint32_t> index_of;
+    std::vector<std::uint32_t> indices;
+    for (Eigen::Index c = 0; c < soup.positions.cols(); ++c) {
+        std::array<std::uint32_t, 3> bits;
+        std::memcpy(bits.data(), soup.positions.col(c).data(), sizeof(bits));
+        const auto next = static_cast<std::uint32_t>(index_of.size());
+        indices.push_back(index_of.emplace(bits, next).first->second);
+    }
+    return indices;
 }
 
 }  // namespace
@@ -205,6 +287,71 @@ TEST(StlIOTest, AbsoluteToleranceTakesPrecedenceOverRelative) {
     EXPECT_EQ(i_ext::ReadStl(path, coarse).VertexCount(), 1u);
 }
 
+// 溶接用ハッシュ表が拡張される規模でも、初出順の頂点番号が素直な実装と一致する
+TEST(StlIOTest, WeldMatchesMapBasedWeldingWhenTableGrows) {
+    const auto soup = MakeMixedSoupForWelding();
+    const auto path = OutputPath("stl_weld_table_growth.stl");
+    ASSERT_TRUE(i_ext::WriteStl(soup, path));
+
+    i_ext::StlReadParams exact;
+    exact.weld_relative_tolerance = 0.0;
+    const auto mesh = i_ext::ReadStl(path, exact);
+
+    const auto expected = WeldBitExactByMap(soup);
+    ASSERT_EQ(mesh.indices.size(), expected.size());
+    EXPECT_EQ(mesh.indices, expected);
+    for (std::size_t s = 0; s < expected.size(); ++s) {
+        const auto source = static_cast<Eigen::Index>(s);
+        const auto welded = static_cast<Eigen::Index>(mesh.indices[s]);
+        EXPECT_NEAR((mesh.positions.col(welded) - soup.positions.col(source))
+                            .cwiseAbs().maxCoeff(),
+                    0.0f, kTol);
+    }
+}
+
+
+
+/**
+ * 正常系: ASCII形式の書式
+ */
+
+// istreamと同じ書式 (先頭の+、小数点で始まる/終わる値、大文字の指数) と、
+// CRLF/タブの区切り、空白を含むsolid名を受け付ける
+TEST(StlIOTest, AsciiAcceptsIstreamCompatibleFormats) {
+    const auto path = OutputPath("stl_ascii_formats.stl");
+    WriteBytes(path,
+        "solid my part\r\n"
+        "facet normal 0 0 +1\r\n"
+        "\touter loop\r\n"
+        "\t\tvertex 0 0 0\r\n"
+        "\t\tvertex 1E0\t0 0\r\n"
+        "\t\tvertex .0 1. 0\r\n"
+        "\tendloop\r\n"
+        "endfacet\r\n"
+        "endsolid my part\r\n");
+
+    i_ext::StlReadParams params;
+    params.weld_vertices = false;
+    const auto mesh = i_ext::ReadStl(path, params);
+    ASSERT_EQ(mesh.VertexCount(), 3u);
+    EXPECT_NEAR(mesh.positions(0, 1), 1.0f, kTol);
+    EXPECT_NEAR(mesh.positions(1, 2), 1.0f, kTol);
+    EXPECT_NEAR(mesh.normals(2, 0), 1.0f, kTol);
+}
+
+// 単精度の最大値 (オーバーフローの境界の内側) は読み取れる
+TEST(StlIOTest, AsciiAcceptsFloatMaximum) {
+    const auto path = OutputPath("stl_ascii_float_max.stl");
+    WriteBytes(path, MakeAsciiTriangleWithX("3.4028234e38"));
+
+    i_ext::StlReadParams params;
+    params.weld_vertices = false;
+    const auto mesh = i_ext::ReadStl(path, params);
+    ASSERT_EQ(mesh.VertexCount(), 3u);
+    EXPECT_NEAR(mesh.positions(0, 0) / std::numeric_limits<float>::max(), 1.0f,
+                kTol);
+}
+
 
 
 /**
@@ -244,6 +391,24 @@ TEST(StlIOTest, ReadThrowsParseErrorWhenNotStl) {
     }
     EXPECT_THROW(i_ext::ReadStl(path), igesio::ParseError);
 }
+
+/// @brief istreamが受け付けない数値の書式の読み取りテスト (ASCII STL)
+class StlInvalidNumberTest : public ::testing::TestWithParam<std::string> {};
+
+// 受け付けない書式はParseError
+TEST_P(StlInvalidNumberTest, ReadThrowsParseErrorWhenNumberIsInvalid) {
+    const auto path = OutputPath("stl_ascii_invalid_number.stl");
+    WriteBytes(path, MakeAsciiTriangleWithX(GetParam()));
+    EXPECT_THROW(i_ext::ReadStl(path), igesio::ParseError);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        IstreamIncompatible, StlInvalidNumberTest,
+        ::testing::Values(
+                "inf", "nan",  // 無限大/非数の綴り
+                "3.5e38",      // 単精度のオーバーフロー (境界の外側)
+                "1e",          // 不完全な指数
+                "1,5"));       // 小数点がカンマ (後続の",5"が不正)
 
 // 不正なメッシュ (範囲外インデックス) の書き出しはstd::invalid_argument
 TEST(StlIOTest, WriteThrowsInvalidArgumentWhenMeshInvalid) {
