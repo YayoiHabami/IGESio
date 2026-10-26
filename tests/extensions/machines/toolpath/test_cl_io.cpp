@@ -4,18 +4,23 @@
  * @author Yayoi Habami
  * @date 2026-09-15
  * @copyright 2026 Yayoi Habami
- * @note 対象: ReadClText / ReadClFile / WriteClText / WriteClFile (3行1組・APT)
+ * @note 対象: ReadClText / ReadClFile / WriteClText / WriteClTextWithLines /
+ *       WriteClFile (3行1組・APT)
  *       - 正常系 (代表値): 3行1組の早送り/切削の判別と軸の正規化、行番号,
  *         単位換算と行範囲、APTの各文 (GOTO/RAPID/FEDRAT/LOADTL/SPINDL/COOLNT/
- *         DELAY/MULTAX/CIRCLE/PARTNO/PPRINT/$$/FINI)、出力と読み戻しの一致
+ *         DELAY/MULTAX/CIRCLE/PARTNO/PPRINT/$$/FINI)、出力と読み戻しの一致,
+ *         レコードの出力行 (APTの各文、3行1組の点数×3行、改行を含む要素、CRLF)
  *       - 正常系 (境界値): 行数がちょうど3の倍数、GOTOの引数3個と6個
  *       - 正常系 (退化): 空の入力、工具軸の無い移動 (+Zを仮定)、FINIの無い出力
  *       - 異常系: 行数が3の倍数でない、数値でない行、ゼロベクトルの軸,
  *         引数の数の不備、ON/OFF以外の引数 (いずれも`DataFormatError`)
  *       TODO: `ReadClFile`の`FileOpenError`は`core/text_file`側で検証する
+ *       TODO: `JoinWithLineRanges` (内部ヘッダ) の範囲外の区間による
+ *             `std::out_of_range`は、公開APIからは起こらないため検証しない
  */
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -694,4 +699,206 @@ TEST(ClIoTest, Apt_WriteFileAndReadBack) {
     std::filesystem::remove(path);
     EXPECT_EQ(back.name, "ROUND TRIP");
     EXPECT_EQ(back.records.size(), 16u);
+}
+
+
+
+namespace {
+
+/// @brief 出力行の範囲を比較する
+/// @param range 比較する範囲
+/// @param first 期待する先頭行
+/// @param count 期待する行数
+void ExpectLineRange(const mc::OutputLineRange& range, const int first,
+                     const int count) {
+    EXPECT_EQ(range.first, first);
+    EXPECT_EQ(range.count, count);
+}
+
+/// @brief 出力を物理行に分ける (末尾の改行の後の空要素は含めない、CRは除く)
+/// @param text 出力した文字列
+/// @return 行の一覧 (`lines[n - 1]`が行番号nの行)
+std::vector<std::string> PhysicalLines(const std::string& text) {
+    std::vector<std::string> lines;
+    std::string current;
+    for (const char c : text) {
+        if (c == '\n') {
+            lines.push_back(current);
+            current.clear();
+        } else if (c != '\r') {
+            current.push_back(c);
+        }
+    }
+    if (!current.empty()) lines.push_back(current);
+    return lines;
+}
+
+/// @brief 出力行の範囲の整合を検証する
+/// @param result 文字列化の結果
+/// @param record_count レコード数
+/// @note 範囲が出力の行内に収まり、互いに重ならず、`first`が単調非減少であること
+void ExpectConsistentLineRanges(const mc::ProgramText& result,
+                                const std::size_t record_count) {
+    ASSERT_EQ(result.record_lines.size(), record_count);
+    const int total = static_cast<int>(
+            std::count(result.text.begin(), result.text.end(), '\n'));
+    int next_free = 1;
+    for (std::size_t i = 0; i < record_count; ++i) {
+        const mc::OutputLineRange& range = result.record_lines[i];
+        EXPECT_GE(range.count, 0) << "record " << i;
+        EXPECT_GE(range.first, next_free) << "record " << i;
+        EXPECT_LE(range.first + range.count, total + 1) << "record " << i;
+        next_free = range.first + range.count;
+    }
+}
+
+}  // namespace
+
+
+
+// ---- 出力行の対応 ----
+
+TEST(ClIoTest, Lines_TextIsSameAsWriteClText) {
+    const mc::ClProgram triplet = TripletSample();
+    const mc::ClProgram apt = AptSample();
+    std::vector<mc::Diagnostic> expected_warnings;
+    std::vector<mc::Diagnostic> warnings;
+    const std::string expected = mc::WriteClText(
+            triplet, mc::ClFileFormat::kTriplet, {}, &expected_warnings);
+    const mc::ProgramText result = mc::WriteClTextWithLines(
+            triplet, mc::ClFileFormat::kTriplet, {}, &warnings);
+    EXPECT_EQ(result.text, expected);
+    EXPECT_EQ(warnings.size(), expected_warnings.size());
+    ExpectConsistentLineRanges(result, triplet.records.size());
+
+    const mc::ProgramText apt_result =
+            mc::WriteClTextWithLines(apt, mc::ClFileFormat::kApt);
+    EXPECT_EQ(apt_result.text, mc::WriteClText(apt, mc::ClFileFormat::kApt));
+    ExpectConsistentLineRanges(apt_result, apt.records.size());
+}
+
+TEST(ClIoTest, Lines_AptRecordsMapToStatements) {
+    const mc::ClProgram sample = AptSample();
+    const mc::ProgramText result =
+            mc::WriteClTextWithLines(sample, mc::ClFileFormat::kApt);
+    const std::vector<std::string> lines = PhysicalLines(result.text);
+    ASSERT_EQ(lines.size(), 20u) << result.text;
+    ASSERT_EQ(result.record_lines.size(), sample.records.size());
+    const std::vector<mc::OutputLineRange>& ranges = result.record_lines;
+
+    // 1行目のPARTNOはどのレコードにも属さず、状態レコードは1行ずつ続く
+    EXPECT_EQ(lines[0], "PARTNO/ROUND TRIP");
+    for (std::size_t i = 0; i < 8; ++i) {
+        ExpectLineRange(ranges[i], static_cast<int>(i) + 2, 1);
+    }
+    EXPECT_EQ(lines[ranges[1].first - 1], "LOADTL/3");
+    EXPECT_EQ(lines[ranges[4].first - 1], "FEDRAT/600.00000,MMPM");
+    // 工具軸を持つ最初の早送りは`MULTAX/ON`、`RAPID`、`GOTO`の3行
+    ExpectLineRange(ranges[8], 10, 3);
+    EXPECT_EQ(lines[9], "MULTAX/ON");
+    EXPECT_EQ(lines[10], "RAPID");
+    EXPECT_EQ(lines[11].rfind("GOTO/", 0), 0u);
+    ExpectLineRange(ranges[9], 13, 1);
+    // 円弧は`CIRCLE`と`GOTO`の2行
+    ExpectLineRange(ranges[10], 14, 2);
+    EXPECT_EQ(lines[13].rfind("CIRCLE/", 0), 0u);
+    EXPECT_EQ(lines[14].rfind("GOTO/", 0), 0u);
+    for (std::size_t i = 11; i < 15; ++i) {
+        ExpectLineRange(ranges[i], static_cast<int>(i) + 5, 1);
+    }
+    // `ClEnd`は`FINI`
+    ExpectLineRange(ranges[15], 20, 1);
+    EXPECT_EQ(lines[19], "FINI");
+}
+
+TEST(ClIoTest, Lines_AptOmittedRecordsAreEmptyAtInsertionPoint) {
+    mc::ClProgram program;
+    program.records.push_back(mc::ClComment{"c"});
+    program.records.push_back(Goto(mc::MotionKind::kLinear, Vector3d(1.0, 2.0, 3.0)));
+    program.records.push_back(mc::ClEnd{});
+    program.records.push_back(Goto(mc::MotionKind::kLinear, Vector3d(4.0, 5.0, 6.0)));
+    mc::ClWriteOptions options;
+    options.comments = false;
+    const mc::ProgramText result =
+            mc::WriteClTextWithLines(program, mc::ClFileFormat::kApt, options);
+    EXPECT_EQ(result.text, "GOTO/1.00000,2.00000,3.00000\nFINI\n");
+    ASSERT_EQ(result.record_lines.size(), 4u);
+    // 省いたコメントは直後の行の位置、終了後のレコードは最終行 + 1の位置で空
+    ExpectLineRange(result.record_lines[0], 1, 0);
+    EXPECT_FALSE(result.record_lines[0].IsEmitted());
+    ExpectLineRange(result.record_lines[1], 1, 1);
+    ExpectLineRange(result.record_lines[2], 2, 1);
+    ExpectLineRange(result.record_lines[3], 3, 0);
+}
+
+TEST(ClIoTest, Lines_AptAppendedFiniIsNotAttributed) {
+    mc::ClProgram program;
+    program.records.push_back(Goto(mc::MotionKind::kLinear, Vector3d(1.0, 2.0, 3.0)));
+    const mc::ProgramText result =
+            mc::WriteClTextWithLines(program, mc::ClFileFormat::kApt);
+    ASSERT_EQ(result.record_lines.size(), 1u);
+    ExpectLineRange(result.record_lines[0], 1, 1);
+    EXPECT_EQ(result.record_lines[0].Last(), 1);
+}
+
+TEST(ClIoTest, Lines_EmbeddedNewlineShiftsFollowingRecords) {
+    mc::ClProgram program;
+    program.records.push_back(mc::ClPassThrough{"apt", "A\nB"});
+    program.records.push_back(Goto(mc::MotionKind::kLinear, Vector3d(1.0, 2.0, 3.0)));
+    const mc::ProgramText result =
+            mc::WriteClTextWithLines(program, mc::ClFileFormat::kApt);
+    ASSERT_EQ(result.record_lines.size(), 2u);
+    // 改行を含む1要素は2行を占め、後続のレコードは1行ずれる
+    ExpectLineRange(result.record_lines[0], 1, 2);
+    ExpectLineRange(result.record_lines[1], 3, 1);
+    EXPECT_EQ(PhysicalLines(result.text)[2], "GOTO/1.00000,2.00000,3.00000");
+}
+
+TEST(ClIoTest, Lines_CrlfKeepsLineNumbers) {
+    const mc::ClProgram sample = AptSample();
+    mc::ClWriteOptions options;
+    options.newline = mc::NewlineStyle::kCrlf;
+    const mc::ProgramText lf = mc::WriteClTextWithLines(sample, mc::ClFileFormat::kApt);
+    const mc::ProgramText crlf =
+            mc::WriteClTextWithLines(sample, mc::ClFileFormat::kApt, options);
+    EXPECT_EQ(crlf.text, mc::WriteClText(sample, mc::ClFileFormat::kApt, options));
+    ASSERT_EQ(crlf.record_lines.size(), lf.record_lines.size());
+    for (std::size_t i = 0; i < lf.record_lines.size(); ++i) {
+        ExpectLineRange(crlf.record_lines[i], lf.record_lines[i].first,
+                        lf.record_lines[i].count);
+    }
+}
+
+TEST(ClIoTest, Lines_TripletMotionsUseThreeLinesPerPoint) {
+    const mc::ClProgram sample = TripletSample();
+    const mc::ProgramText result =
+            mc::WriteClTextWithLines(sample, mc::ClFileFormat::kTriplet);
+    const int total = static_cast<int>(PhysicalLines(result.text).size());
+    ASSERT_EQ(result.record_lines.size(), 5u);
+    const std::vector<mc::OutputLineRange>& ranges = result.record_lines;
+    // 工具の選択と送りは表せないため空
+    ExpectLineRange(ranges[0], 1, 0);
+    ExpectLineRange(ranges[1], 1, 3);
+    ExpectLineRange(ranges[2], 4, 0);
+    ExpectLineRange(ranges[3], 4, 3);
+    // 円弧は折れ線化した点数 × 3行で、末尾まで続く
+    EXPECT_EQ(ranges[4].first, 7);
+    EXPECT_GE(ranges[4].count, 3);
+    EXPECT_EQ(ranges[4].count % 3, 0);
+    EXPECT_EQ(ranges[4].Last(), total);
+}
+
+TEST(ClIoTest, Lines_TripletWritesRecordsAfterEnd) {
+    mc::ClProgram program;
+    program.records.push_back(Goto(mc::MotionKind::kRapid, Vector3d(1.0, 0.0, 0.0),
+                                   Vector3d(0.0, 0.0, 1.0)));
+    program.records.push_back(mc::ClEnd{});
+    program.records.push_back(Goto(mc::MotionKind::kLinear, Vector3d(2.0, 0.0, 0.0)));
+    const mc::ProgramText result =
+            mc::WriteClTextWithLines(program, mc::ClFileFormat::kTriplet);
+    ASSERT_EQ(result.record_lines.size(), 3u);
+    // 3行1組は`ClEnd`を表せず、後続のレコードも出力する
+    ExpectLineRange(result.record_lines[0], 1, 3);
+    ExpectLineRange(result.record_lines[1], 4, 0);
+    ExpectLineRange(result.record_lines[2], 4, 3);
 }

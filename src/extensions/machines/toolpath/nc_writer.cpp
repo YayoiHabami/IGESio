@@ -30,6 +30,7 @@
 #include "igesio/extensions/machines/toolpath/cl_transform.h"
 #include "igesio/extensions/machines/toolpath/nc_block.h"
 #include "extensions/machines/toolpath/nc_emit.h"
+#include "extensions/machines/toolpath/output_lines.h"
 
 namespace igesio::extensions::machines {
 
@@ -275,16 +276,6 @@ bool NcEmitter::SameToolAxis(const igesio::Vector3d& axis) const {
         if (std::abs((*last_tool_axis_)[i] - axis[i]) > kSameValueTolerance) return false;
     }
     return true;
-}
-
-std::string NcEmitter::Join(const NewlineStyle newline) const {
-    const std::string_view separator = NewlineText(newline);
-    std::string text;
-    for (const std::string& line : lines_) {
-        text += line;
-        text += separator;
-    }
-    return text;
 }
 
 
@@ -769,6 +760,13 @@ std::optional<std::string> NcWriteOptions::Validate() const {
 std::string WriteNcToString(const ClProgram& program, const NcDialect& dialect,
                             const NcWriteOptions& options,
                             std::vector<Diagnostic>* warnings) {
+    return WriteNcToStringWithLines(program, dialect, options, warnings).text;
+}
+
+ProgramText WriteNcToStringWithLines(const ClProgram& program,
+                                     const NcDialect& dialect,
+                                     const NcWriteOptions& options,
+                                     std::vector<Diagnostic>* warnings) {
     if (const std::optional<std::string> error = options.Validate()) {
         throw std::invalid_argument(*error);
     }
@@ -776,11 +774,16 @@ std::string WriteNcToString(const ClProgram& program, const NcDialect& dialect,
     const bool has_sources = program.HasSources();
     detail::NcEmitter emitter(dialect, options, warnings);
     emitter.BeginProgram(program);
+    std::vector<detail::ElementRange> ranges;
+    ranges.reserve(program.records.size());
     for (std::size_t i = 0; i < program.records.size(); ++i) {
+        // 終了後のレコードは何も出力されないため、空の区間になる
+        const std::size_t begin = emitter.ElementCount();
         emitter.Emit(program.records[i], has_sources ? &program.sources[i] : nullptr);
+        ranges.push_back(detail::ElementRange{begin, emitter.ElementCount()});
     }
     emitter.EndProgram();
-    return emitter.Join(options.newline);
+    return detail::JoinWithLineRanges(emitter.Elements(), ranges, options.newline);
 }
 
 void WriteNc(const std::filesystem::path& path, const ClProgram& program,

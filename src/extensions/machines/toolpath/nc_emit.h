@@ -29,8 +29,9 @@
 namespace igesio::extensions::machines::detail {
 
 /// @brief レコード列をNCの行に変換する
-/// @note `BeginProgram` → 各レコードの`Emit` → `EndProgram` → `Join`の順に呼ぶ.
-///       警告は構築時に受け取った配列に追記する (`nullptr`なら報告しない)
+/// @note `BeginProgram` → 各レコードの`Emit` → `EndProgram`の順に呼び,
+///       `Elements`を`JoinWithLineRanges`（`output_lines.h`）で結合する.
+///       警告は構築時に受け取った配列に追記する（`nullptr`なら報告しない）
 class NcEmitter {
  public:
     /// @brief 出力設定を解決して初期化する
@@ -96,10 +97,14 @@ class NcEmitter {
     void Emit(const ClEnd& record);
     /// @brief プログラムの末尾 (フッタ、終了コード、`%`) と集計した警告を出力する
     void EndProgram();
-    /// @brief 出力した行を改行で連結する
-    /// @param newline 改行の種類
-    /// @return 各行の末尾に改行を付けた文字列
-    std::string Join(NewlineStyle newline) const;
+    /// @brief 出力した行要素の数を取得する
+    /// @note レコードの`Emit`の前後で比べ、レコードの行要素の区間を求めるのに用いる
+    std::size_t ElementCount() const { return lines_.size(); }
+    /// @brief 出力した行要素を取得する
+    /// @return 行要素の一覧
+    /// @note 改行を含む要素が存在しうる.
+    ///       各要素の末尾に改行を付けて連結したものが出力の文字列
+    const std::vector<std::string>& Elements() const { return lines_; }
 
  private:
     /// @brief `kWork`の直線移動を出力する

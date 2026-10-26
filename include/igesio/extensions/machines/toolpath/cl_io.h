@@ -97,6 +97,21 @@ std::string WriteClText(const ClProgram& program, ClFileFormat format,
                         const ClWriteOptions& options = {},
                         std::vector<Diagnostic>* warnings = nullptr);
 
+/// @brief CLプログラムを文字列化し、レコードごとの出力行を求める
+/// @param program 出力するプログラム
+/// @param format 形式
+/// @param options 出力設定
+/// @param[out] warnings `WriteClText`と同じ
+/// @return 文字列と、`program.records`と同じ長さの出力行の範囲
+/// @note 文字列と警告は`WriteClText`と同一. 省いたものおよびAPTの`ClEnd`より後のもの
+///      　などの出力されないレコードは`count == 0`とする. APTの`PARTNO`,
+///       `ClEnd`が無い場合に補う`FINI`など、どのレコードにも属さない行は
+///       いずれの範囲にも含めない.
+/// @note 3行1組では`ClEnd`より後のレコードも出力する
+ProgramText WriteClTextWithLines(const ClProgram& program, ClFileFormat format,
+                                 const ClWriteOptions& options = {},
+                                 std::vector<Diagnostic>* warnings = nullptr);
+
 /// @brief CLプログラムをファイルに出力する
 /// @param path 出力先
 /// @param program 出力するプログラム

@@ -79,6 +79,7 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machines/toolpath/nc_modal.cpp
         machines/toolpath/nc_interpreter.cpp
         machines/toolpath/nc_writer.cpp
+        machines/toolpath/output_lines.cpp
         machines/toolpath/text_utils.cpp
         machines/simulation/motion_planning.cpp
         machines/simulation/motion.cpp

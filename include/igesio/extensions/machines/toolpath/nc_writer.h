@@ -134,6 +134,29 @@ std::string WriteNcToString(const ClProgram& program, const NcDialect& dialect,
                             const NcWriteOptions& options = {},
                             std::vector<Diagnostic>* warnings = nullptr);
 
+/// @brief CLプログラムをNCプログラムとして文字列化し、レコードごとの出力行を求める
+/// @param program 出力するプログラム
+/// @param dialect 制御装置の定義
+/// @param options 出力の設定
+/// @param[out] warnings `WriteNcToString`と同じ
+/// @return 文字列と、`program.records`と同じ長さの出力行の範囲
+/// @note 文字列、例外、警告は`WriteNcToString`と同一. 範囲は各レコードが実際に
+///       出力した行で、以下のとおり.
+///       (1) 移動/円弧：ロールコメント（`role_comments`時）から移動ブロックまで.
+///           折れ線化した円弧は全ブロック. 省いた円弧もロールコメントは範囲に含む.
+///       (2) `ClFeed`：単独では出力しないため`count == 0`（Fは次の切削ブロックに付く）.
+///       (3) `ClEnd`：フッタテンプレートから`program_end`まで.
+///       (4) `ClEnd`より後のレコード：`count == 0`.
+/// @note どのレコードにも属さない行（`%`、`O`番号、ヘッダテンプレート、冒頭の
+///       モーダルコード、`ClEnd`が無い場合に補うフッタと`program_end`）は
+///       いずれの範囲にも含めない
+/// @throw std::invalid_argument `WriteNcToString`と同じ
+/// @throw igesio::DataFormatError `WriteNcToString`と同じ
+ProgramText WriteNcToStringWithLines(const ClProgram& program,
+                                     const NcDialect& dialect,
+                                     const NcWriteOptions& options = {},
+                                     std::vector<Diagnostic>* warnings = nullptr);
+
 /// @brief CLプログラムをNCファイルに出力する
 /// @param path 出力先
 /// @param program 出力するプログラム

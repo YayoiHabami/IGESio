@@ -4,12 +4,14 @@
  * @author Yayoi Habami
  * @date 2026-09-15
  * @copyright 2026 Yayoi Habami
- * @note 対象: WriteNcToString / WriteNc / NcWriteOptions::Validate
+ * @note 対象: WriteNcToString / WriteNcToStringWithLines / WriteNc /
+ *       NcWriteOptions::Validate
  *       - 正常系 (代表値): 出力の並び (`%`/O番号/ヘッダ/フッタ/M30)、テンプレート変数,
  *         前置モーダル、モーダル省略 (動作コード/座標/平面/G53)、TCPの3形式,
  *         円弧 (3平面/法線の向き/折れ線化/全円)、Fコードの出力、各状態レコード,
  *         構文の置き換え (区切り/N番号/`%`/コメント形式/小数桁)、期待出力 (D200Z),
- *         NC→CL→NCの往復
+ *         NC→CL→NCの往復、レコードの出力行 (ヘッダ/フッタ/ロールコメント/N番号/
+ *         折れ線化した円弧/終了後のレコード)
  *       - 正常系 (境界値): プログラム番号0、弦誤差の微小正値、レコード無し
  *       - 正常系 (退化): 始点不明の円弧 (警告してスキップ)、工具軸無し (+Zを仮定)
  *       - 異常系: `Validate`の不備で`std::invalid_argument`、`kRotaryWords`で回転軸の指令が
@@ -1180,4 +1182,199 @@ TEST(NcWriterTest, RoundTrip_TcpIjk) {
 
 TEST(NcWriterTest, RoundTrip_RotaryWords) {
     ExpectRoundTrip(kDataDir / "nc" / "rotary_words.nc", mc::TcpStyle::kRotaryWords);
+}
+
+
+
+namespace {
+
+/// @brief 出力行の範囲を比較する
+/// @param range 比較する範囲
+/// @param first 期待する先頭行
+/// @param count 期待する行数
+void ExpectLineRange(const mc::OutputLineRange& range, const int first,
+                     const int count) {
+    EXPECT_EQ(range.first, first);
+    EXPECT_EQ(range.count, count);
+}
+
+/// @brief 出力行の範囲の整合を検証する
+/// @param result 文字列化の結果
+/// @param record_count レコード数
+/// @note 範囲が出力の行内に収まり、互いに重ならず、`first`が単調非減少であること
+void ExpectConsistentLineRanges(const mc::ProgramText& result,
+                                const std::size_t record_count) {
+    ASSERT_EQ(result.record_lines.size(), record_count);
+    const int total = static_cast<int>(
+            std::count(result.text.begin(), result.text.end(), '\n'));
+    int next_free = 1;
+    for (std::size_t i = 0; i < record_count; ++i) {
+        const mc::OutputLineRange& range = result.record_lines[i];
+        EXPECT_GE(range.count, 0) << "record " << i;
+        EXPECT_GE(range.first, next_free) << "record " << i;
+        EXPECT_LE(range.first + range.count, total + 1) << "record " << i;
+        next_free = range.first + range.count;
+    }
+}
+
+/// @brief ヘッダ2行とフッタ1行を持つ制御装置の定義
+/// @note 出力は`%`、`O0001`、`(H1)`、`(H2)`、本文、`(F1)`、`M30`、`%`の順になる
+mc::NcDialect DialectWithHeaderFooter() {
+    mc::NcDialect dialect = mc::DefaultFanucDialect();
+    dialect.header = {"(H1)", "(H2)"};
+    dialect.footer = {"(F1)"};
+    return dialect;
+}
+
+}  // namespace
+
+
+
+// ---- 出力行の対応 ----
+
+TEST(NcWriterTest, Lines_GoldenTextIsSameAndRangesAreConsistent) {
+    const mc::ClProgram program =
+            mc::ReadClFile(kDataDir / "cl" / "apt.cl", mc::ClFileFormat::kApt);
+    mc::NcWriteOptions options;
+    options.program_number = 22;
+    std::vector<mc::Diagnostic> expected_warnings;
+    std::vector<mc::Diagnostic> warnings;
+    const std::string expected = mc::WriteNcToString(
+            program, toolpath_test::MakinoD200zDialect(), options, &expected_warnings);
+    const mc::ProgramText result = mc::WriteNcToStringWithLines(
+            program, toolpath_test::MakinoD200zDialect(), options, &warnings);
+    EXPECT_EQ(result.text, expected);
+    EXPECT_EQ(warnings.size(), expected_warnings.size());
+    ExpectConsistentLineRanges(result, program.records.size());
+
+    // `ClEnd` (末尾のレコード) はフッタから`M30`までで、末尾の`%`は含まない
+    const std::vector<std::string> lines = Lines(result.text);
+    ASSERT_FALSE(program.records.empty());
+    ASSERT_TRUE(std::holds_alternative<mc::ClEnd>(program.records.back()));
+    const mc::OutputLineRange& end = result.record_lines.back();
+    ASSERT_TRUE(end.IsEmitted());
+    EXPECT_EQ(lines[end.first - 1], "G91G28Z0");
+    EXPECT_EQ(lines[end.Last() - 1], "M30");
+    EXPECT_EQ(end.Last(), static_cast<int>(lines.size()) - 1);
+}
+
+TEST(NcWriterTest, Lines_HeaderIsNotAttributedAndEndCoversFooter) {
+    mc::NcWriteOptions options;
+    options.tcp = mc::TcpStyle::kNone;
+    const mc::ProgramText result = mc::WriteNcToStringWithLines(
+            Program({mc::ClFeed{5.0}, Goto(mc::MotionKind::kLinear, 10, 0, 0),
+                     mc::ClEnd{}}),
+            DialectWithHeaderFooter(), options);
+    const std::vector<std::string> expected = {
+            "%", "O0001", "(H1)", "(H2)", "G01X10.Y0.Z0.F300", "(F1)", "M30", "%"};
+    EXPECT_EQ(Lines(result.text), expected);
+    ASSERT_EQ(result.record_lines.size(), 3u);
+    // 送りは単独では出力せず、Fコードは次の切削ブロックに付く
+    ExpectLineRange(result.record_lines[0], 5, 0);
+    ExpectLineRange(result.record_lines[1], 5, 1);
+    ExpectLineRange(result.record_lines[2], 6, 2);
+}
+
+TEST(NcWriterTest, Lines_AppendedProgramEndIsNotAttributed) {
+    const mc::ProgramText result = mc::WriteNcToStringWithLines(
+            Program({mc::ClCoolant{true}}), DialectWithHeaderFooter(), Bare());
+    ASSERT_EQ(result.record_lines.size(), 1u);
+    ExpectLineRange(result.record_lines[0], 3, 1);
+    EXPECT_EQ(Lines(result.text)[2], "M08");
+}
+
+TEST(NcWriterTest, Lines_RecordsAfterEndAreEmpty) {
+    const mc::ProgramText result = mc::WriteNcToStringWithLines(
+            Program({mc::ClEnd{}, mc::ClCoolant{true}, mc::ClCoolant{false}}),
+            mc::DefaultFanucDialect(), Bare());
+    ASSERT_EQ(result.record_lines.size(), 3u);
+    ExpectLineRange(result.record_lines[0], 3, 1);
+    // 終了後のレコードは、末尾の`%`の位置で空
+    ExpectLineRange(result.record_lines[1], 4, 0);
+    ExpectLineRange(result.record_lines[2], 4, 0);
+}
+
+TEST(NcWriterTest, Lines_RoleCommentIncludedInMotionRange) {
+    mc::NcWriteOptions options = Bare();
+    options.tcp = mc::TcpStyle::kNone;
+    options.role_comments = true;
+    mc::ClGoto approach = Goto(mc::MotionKind::kRapid, 0, 0, 10);
+    approach.role = mc::PathRole::kApproach;
+    const mc::ProgramText result = mc::WriteNcToStringWithLines(
+            Program({approach, Goto(mc::MotionKind::kLinear, 0, 0, 0),
+                     Goto(mc::MotionKind::kLinear, 5, 0, 0)}),
+            mc::DefaultFanucDialect(), options);
+    ASSERT_EQ(result.record_lines.size(), 3u);
+    // ロールが変わる移動はコメント行を含む2行、変わらない移動は1行
+    ExpectLineRange(result.record_lines[0], 3, 2);
+    ExpectLineRange(result.record_lines[1], 5, 2);
+    ExpectLineRange(result.record_lines[2], 7, 1);
+    const std::vector<std::string> lines = Lines(result.text);
+    EXPECT_EQ(lines[2], "(Approach)");
+    EXPECT_EQ(lines[4], "(Cut)");
+}
+
+TEST(NcWriterTest, Lines_SkippedArcKeepsRoleCommentInRange) {
+    mc::NcWriteOptions options = Bare();
+    options.tcp = mc::TcpStyle::kNone;
+    options.role_comments = true;
+    const mc::ProgramText result = mc::WriteNcToStringWithLines(
+            Program({Arc(0, 10, 0, 0, 0, 0, 0, 0, 1)}),
+            mc::DefaultFanucDialect(), options);
+    ASSERT_EQ(result.record_lines.size(), 1u);
+    // 始点不明の円弧は省くが、先に出力したロールコメントは範囲に含む
+    ExpectLineRange(result.record_lines[0], 3, 1);
+    EXPECT_EQ(Lines(result.text)[2], "(Cut)");
+}
+
+TEST(NcWriterTest, Lines_LineNumbersDoNotChangeRanges) {
+    mc::NcWriteOptions options = Bare();
+    options.tcp = mc::TcpStyle::kNone;
+    const mc::ClProgram program = Program({
+            mc::ClComment{"c"}, Goto(mc::MotionKind::kRapid, 1, 0, 0)});
+    const mc::ProgramText plain = mc::WriteNcToStringWithLines(
+            program, mc::DefaultFanucDialect(), options);
+    mc::NcSyntax syntax;
+    syntax.line_number_step = 10;
+    syntax.line_number_digits = 3;
+    options.syntax = syntax;
+    const mc::ProgramText numbered = mc::WriteNcToStringWithLines(
+            program, mc::DefaultFanucDialect(), options);
+    ASSERT_EQ(plain.record_lines.size(), 2u);
+    ASSERT_EQ(numbered.record_lines.size(), 2u);
+    ExpectLineRange(numbered.record_lines[0], 3, 1);
+    ExpectLineRange(numbered.record_lines[1], 4, 1);
+    for (std::size_t i = 0; i < 2; ++i) {
+        ExpectLineRange(numbered.record_lines[i], plain.record_lines[i].first,
+                        plain.record_lines[i].count);
+    }
+}
+
+TEST(NcWriterTest, Lines_LinearizedArcSpansAllBlocks) {
+    mc::NcWriteOptions options = Bare();
+    options.tcp = mc::TcpStyle::kNone;
+    options.arc = mc::ArcOutput::kLinearize;
+    options.arc_chord_tolerance = 1.0;
+    const mc::ProgramText result = mc::WriteNcToStringWithLines(
+            Program({Goto(mc::MotionKind::kLinear, 10, 0, 0),
+                     Arc(0, 10, 0, 0, 0, 0, 0, 0, 1)}),
+            mc::DefaultFanucDialect(), options);
+    ASSERT_EQ(result.record_lines.size(), 2u);
+    // R=10、90°、ε=1の円弧は2ブロックに折れ線化される
+    ExpectLineRange(result.record_lines[0], 3, 1);
+    ExpectLineRange(result.record_lines[1], 4, 2);
+    const std::vector<std::string> lines = Lines(result.text);
+    EXPECT_EQ(lines[3], "X7.0711Y7.0711");
+    EXPECT_EQ(lines[4], "X0.Y10.");
+}
+
+TEST(NcWriterTest, Lines_ThrowsInvalidArgumentWhenProgramNumberIsNegative) {
+    mc::NcWriteOptions options;
+    options.program_number = -1;
+    EXPECT_THROW(mc::WriteNcToStringWithLines(Program({}), mc::DefaultFanucDialect(),
+                                              options),
+                 std::invalid_argument);
+    options.program_number = 0;
+    EXPECT_NO_THROW(mc::WriteNcToStringWithLines(Program({}),
+                                                 mc::DefaultFanucDialect(), options));
 }

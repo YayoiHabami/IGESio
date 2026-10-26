@@ -83,6 +83,31 @@ struct SourceLocation {
     int line = 0;
 };
 
+/// @brief 出力されたテキスト上の行の範囲
+/// @note 入力側の`SourceLocation`に対する、出力側の対応
+struct OutputLineRange {
+    /// @brief 先頭の行番号（1始まり）
+    /// @note `count == 0`の場合は、出力されていれば配置されたはずの行とする
+    ///       （直後に出力された行の番号、末尾なら最終行+1）.
+    ///       レコード順に`first`は単調非減少となる
+    int first = 0;
+    /// @brief 行数（0 = 出力されなかった）
+    int count = 0;
+
+    /// @brief 1行以上出力されたか
+    bool IsEmitted() const { return count > 0; }
+    /// @brief 末尾の行番号（`IsEmitted()`の場合のみ有効）
+    int Last() const { return first + count - 1; }
+};
+
+/// @brief 文字列化の結果とレコードの出力行の対応
+struct ProgramText {
+    /// @brief 出力された文字列
+    std::string text;
+    /// @brief レコードごとの出力行の範囲（`records`と同じ長さ）
+    std::vector<OutputLineRange> record_lines;
+};
+
 
 
 /**

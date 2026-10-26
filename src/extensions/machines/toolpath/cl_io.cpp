@@ -24,12 +24,15 @@
 #include "igesio/extensions/machines/core/tolerances.h"
 #include "igesio/extensions/machines/core/units.h"
 #include "igesio/extensions/machines/toolpath/cl_transform.h"
+#include "extensions/machines/toolpath/output_lines.h"
 #include "extensions/machines/toolpath/text_utils.h"
 
 namespace igesio::extensions::machines {
 
 namespace {
 
+using detail::ElementRange;
+using detail::JoinWithLineRanges;
 using detail::PushDiagnostic;
 using detail::PushWarning;
 using detail::ToUpper;
@@ -156,20 +159,6 @@ void PushRecord(ClProgram& program, ClRecord record, const int program_index,
                 const int line) {
     program.records.push_back(std::move(record));
     program.sources.push_back(SourceLocation{program_index, line});
-}
-
-/// @brief 行を改行で連結する (末尾にも改行を付ける)
-/// @param lines 行の一覧
-/// @param newline 改行の種類
-/// @return 連結した文字列
-std::string JoinLines(const std::vector<std::string>& lines,
-                      const NewlineStyle newline) {
-    std::string text;
-    for (const std::string& line : lines) {
-        text += line;
-        text += NewlineText(newline);
-    }
-    return text;
 }
 
 
@@ -327,17 +316,21 @@ struct TripletWriter {
     void operator()(const ClEnd&) { ++omitted; }
 };
 
-/// @brief 3行1組の文字列を作る
+/// @brief 3行1組の文字列とレコードごとの出力行を作る
 /// @param program 出力するプログラム
 /// @param options 出力設定
 /// @param[out] warnings 省いたレコードの警告 (`nullptr`なら報告しない)
-/// @return 3行1組の文字列
-std::string WriteTriplet(const ClProgram& program, const ClWriteOptions& options,
+/// @return 3行1組の文字列と、`program.records`と同じ長さの出力行の範囲
+ProgramText WriteTriplet(const ClProgram& program, const ClWriteOptions& options,
                          std::vector<Diagnostic>* warnings) {
     TripletWriter writer(options);
+    std::vector<ElementRange> ranges;
+    ranges.reserve(program.records.size());
     for (const ClRecord& record : program.records) {
+        const std::size_t begin = writer.lines.size();
         std::visit(writer, record);
         writer.state.Apply(record);
+        ranges.push_back(ElementRange{begin, writer.lines.size()});
     }
 
     if (writer.omitted > 0) {
@@ -352,7 +345,7 @@ std::string WriteTriplet(const ClProgram& program, const ClWriteOptions& options
         PushWarning(warnings, std::to_string(writer.missing_axis)
                     + " motion(s) had no tool axis; +Z assumed");
     }
-    return JoinLines(writer.lines, options.newline);
+    return JoinWithLineRanges(writer.lines, ranges, options.newline);
 }
 
 
@@ -780,24 +773,30 @@ struct AptWriter {
     }
 };
 
-/// @brief APTの文字列を作る
+/// @brief APTの文字列とレコードごとの出力行を作る
 /// @param program 出力するプログラム
 /// @param options 出力設定
 /// @param[out] warnings 省いたレコードと`PPRINT`化の警告/情報 (`nullptr`なら
 ///        報告しない)
-/// @return APTの文字列
-std::string WriteApt(const ClProgram& program, const ClWriteOptions& options,
+/// @return APTの文字列と、`program.records`と同じ長さの出力行の範囲
+/// @note `PARTNO`と補う`FINI`はどのレコードの範囲にも含めない
+ProgramText WriteApt(const ClProgram& program, const ClWriteOptions& options,
                      std::vector<Diagnostic>* warnings) {
     AptWriter writer(options);
     if (!program.name.empty()) writer.lines.push_back("PARTNO/" + program.name);
+    std::vector<ElementRange> ranges;
+    ranges.reserve(program.records.size());
     for (const ClRecord& record : program.records) {
-        // 終了後のレコードは出力しない
+        const std::size_t begin = writer.lines.size();
+        // 終了後のレコードは出力しない (空の区間にする)
         if (writer.ended) {
             ++writer.omitted;
+            ranges.push_back(ElementRange{begin, begin});
             continue;
         }
         std::visit(writer, record);
         writer.state.Apply(record);
+        ranges.push_back(ElementRange{begin, writer.lines.size()});
     }
     if (!writer.ended) writer.lines.push_back("FINI");
 
@@ -814,7 +813,7 @@ std::string WriteApt(const ClProgram& program, const ClWriteOptions& options,
         PushWarning(warnings, std::to_string(writer.pprint_passthrough)
                     + " pass-through record(s) of another dialect written as PPRINT");
     }
-    return JoinLines(writer.lines, options.newline);
+    return JoinWithLineRanges(writer.lines, ranges, options.newline);
 }
 
 }  // namespace
@@ -837,6 +836,12 @@ ClProgram ReadClFile(const std::filesystem::path& path, const ClFileFormat forma
 std::string WriteClText(const ClProgram& program, const ClFileFormat format,
                         const ClWriteOptions& options,
                         std::vector<Diagnostic>* warnings) {
+    return WriteClTextWithLines(program, format, options, warnings).text;
+}
+
+ProgramText WriteClTextWithLines(const ClProgram& program, const ClFileFormat format,
+                                 const ClWriteOptions& options,
+                                 std::vector<Diagnostic>* warnings) {
     return format == ClFileFormat::kTriplet ? WriteTriplet(program, options, warnings)
                                             : WriteApt(program, options, warnings);
 }
