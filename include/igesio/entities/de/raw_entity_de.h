@@ -386,7 +386,11 @@ HierarchyType ToHierarchyType(const std::string&);
 /// @param second ディレクトリエントリセクションの2行目 (80文字)
 /// @return ディレクトリエントリセクションのパラメータ
 /// @throw igesio::TypeConversionError IGES文字列の型変換エラー
-/// @throw igesio::SectionFormatError 必要なパラメータが不足している場合
+/// @throw igesio::SectionFormatError 必要なパラメータが不足している場合、
+///        1行目が非ASCII文字を1文字として数えて桁を揃えた行（80バイト超）の場合
+/// @note 2行目が80バイトを超える場合（非ASCII文字を1文字として数えて桁を揃えた行）,
+///       超過分はエンティティラベルの幅に含め、エンティティ添字番号は右端から数えた
+///       位置で取得する.
 /// @throw igesio::DataFormatError いずれかのパラメータの値が仕様に合致しない場合
 RawEntityDE ToRawEntityDE(const std::string&, const std::string&);
 

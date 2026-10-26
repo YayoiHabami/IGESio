@@ -10,6 +10,7 @@
 #include <climits>
 #include <string>
 #include <optional>
+#include <vector>
 
 #include "igesio/common/errors.h"
 #include "igesio/common/serialization.h"
@@ -880,3 +881,71 @@ TEST_F(FromIgesLogicalTest, SpecialCharacters) {
     EXPECT_TRUE(throwsConversionError("０"));  // 全角数字
 }
 
+
+
+
+/******************************************************************************
+ * 非ASCII文字を含むH文字列のテスト
+ * (EnumerateHollerithContentEnds, FromIgesStringWithFormat)
+ *****************************************************************************/
+
+namespace {
+
+/// @brief "年度"のUTF-8のバイト列 (2文字、6バイト)
+const std::string kNendoUtf8 = "\xE5\xB9\xB4\xE5\xBA\xA6";
+/// @brief "年度"のShift_JISのバイト列 (2文字、4バイト)
+const std::string kNendoShiftJis = "\x94" "N" "\x93" "x";
+
+}  // namespace
+
+// ASCII文字のみの場合、候補はバイト数で数えた位置のみ
+TEST(EnumerateHollerithContentEnds, AsciiOnly) {
+    const std::vector<std::size_t> expected = {5};
+    EXPECT_EQ(igesio::EnumerateHollerithContentEnds("3HABC,", 2, 3), expected);
+}
+
+// UTF-8の場合、バイト数で数えた位置の次にUTF-8の文字数で数えた位置が並ぶ
+TEST(EnumerateHollerithContentEnds, Utf8) {
+    const auto ends = igesio::EnumerateHollerithContentEnds(
+            "2H" + kNendoUtf8 + ",", 2, 2);
+    ASSERT_GE(ends.size(), 2u);
+    EXPECT_EQ(ends[0], 4u);
+    EXPECT_EQ(ends[1], 8u);
+}
+
+// Shift_JISの場合、UTF-8としては不正なため、Shift_JISの文字数で数えた位置が並ぶ
+TEST(EnumerateHollerithContentEnds, ShiftJis) {
+    const std::vector<std::size_t> expected = {4, 6};
+    EXPECT_EQ(igesio::EnumerateHollerithContentEnds(
+            "2H" + kNendoShiftJis + ",", 2, 2), expected);
+}
+
+// 文字の途中で文字列が終わる場合、その数え方の候補は含まない
+TEST(EnumerateHollerithContentEnds, TruncatedCharacter) {
+    // "年"のUTF-8の先頭2バイトのみ (UTF-8でもShift_JISでも2文字に満たない)
+    const std::vector<std::size_t> expected = {4};
+    EXPECT_EQ(igesio::EnumerateHollerithContentEnds(
+            "2H\xE5\xB9", 2, 2), expected);
+}
+
+// H文字列の長さを非ASCII文字の文字数で数えた文字列も変換できる
+TEST(FromIgesStringWithFormat, NonAsciiCountedInChars) {
+    EXPECT_EQ(igesio::FromIgesString("6H" + kNendoUtf8), kNendoUtf8);
+    EXPECT_EQ(igesio::FromIgesString("2H" + kNendoUtf8), kNendoUtf8);
+    EXPECT_EQ(igesio::FromIgesString("4H" + kNendoShiftJis), kNendoShiftJis);
+    EXPECT_EQ(igesio::FromIgesString("2H" + kNendoShiftJis), kNendoShiftJis);
+}
+
+// H文字列の長さがどの数え方とも一致しない場合はエラーとする
+TEST(FromIgesStringWithFormat,
+     ThrowsTypeConversionErrorWhenNonAsciiLengthMatchesNoCount) {
+    // UTF-8の"年度"は2文字/6バイトであり、1、3、5、7とは一致しない
+    EXPECT_THROW(igesio::FromIgesString("1H" + kNendoUtf8),
+                 igesio::TypeConversionError);
+    EXPECT_THROW(igesio::FromIgesString("3H" + kNendoUtf8),
+                 igesio::TypeConversionError);
+    EXPECT_THROW(igesio::FromIgesString("5H" + kNendoUtf8),
+                 igesio::TypeConversionError);
+    EXPECT_THROW(igesio::FromIgesString("7H" + kNendoUtf8),
+                 igesio::TypeConversionError);
+}

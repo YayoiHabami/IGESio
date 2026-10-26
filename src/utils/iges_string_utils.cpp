@@ -43,10 +43,37 @@ bool i_util::IsOnlySpace(const std::string& s) {
  * IGES文字列の検証
  */
 
+namespace {
+
+/// @brief 行末の固定欄（セクション判別文字とシーケンス番号）のバイト数
+constexpr std::size_t kTrailingFieldBytes = iio::kMaxColumn - iio::kColIdentify + 1;
+
+/// @brief 80バイトを超える行が、非ASCII文字を1文字として数えて桁を揃えた行かを判定する
+/// @param line 80バイトを超える行
+/// @return 行末の固定欄より前の非ASCIIバイト数が超過バイト数以上であり、
+///         かつ行長がkMaxTolerantLineBytes以下の場合はtrue
+/// @note 非ASCII文字は1文字あたり2バイト以上であり、1文字として数えた場合の
+///       超過バイト数は、必ず非ASCIIバイト数より小さくなる
+bool IsWideLineExplainedByNonAscii(const std::string& line) {
+    if (line.size() > i_util::kMaxTolerantLineBytes) return false;
+
+    const std::size_t excess = line.size() - iio::kMaxColumn;
+    const auto data_end = line.end() - kTrailingFieldBytes;
+    const auto non_ascii = static_cast<std::size_t>(std::count_if(
+            line.begin(), data_end,
+            [](const char c) { return static_cast<unsigned char>(c) >= 0x80; }));
+    return excess <= non_ascii;
+}
+
+}  // namespace
+
 void i_util::AssertLength(const std::string& line,
                           const bool is_compressed) {
     if (line.size() > kMaxColumn) {
-        // どの形式であっても、最大長さを超えている場合はエラー
+        // 非ASCII文字を1文字として数えて桁を揃えた行は許容する
+        if (IsWideLineExplainedByNonAscii(line)) return;
+
+        // それ以外は、どの形式であっても最大長さを超えている場合はエラー
         throw iio::LineFormatError(
                 "A single line of IGES is up to " + std::to_string(kMaxColumn) +
                 " characters long, but this line is " + std::to_string(line.size()) +
@@ -69,6 +96,14 @@ void i_util::AssertLength(const std::string& line,
     }
 }
 
+std::size_t i_util::GetExcessByteCount(const std::string& line) {
+    // 許容条件を満たさない行は、従来通り左端から数えるため超過なしとする
+    if (line.size() <= kMaxColumn || !IsWideLineExplainedByNonAscii(line)) {
+        return 0;
+    }
+    return line.size() - kMaxColumn;
+}
+
 
 
 /**
@@ -82,7 +117,8 @@ igesio::SectionType i_util::GetSectionType(const std::string& line,
     // 長さの検証が通り、かつ73文字未満の場合は圧縮形式のデータ部
     if (line.size() < kColIdentify) return SectionType::kData;
 
-    char section_char = line[kColIdentify - 1];
+    // 80バイトを超える行では、セクション判別文字を右端から数えた位置で取得する
+    char section_char = line[kColIdentify - 1 + GetExcessByteCount(line)];
     if (is_compressed && (section_char == 'D' || section_char == 'P')) {
         // 圧縮形式の場合、73文字目にDまたはPを持つ行は存在しない
         throw iio::SectionFormatError(
@@ -116,7 +152,7 @@ unsigned int i_util::GetSequenceNumber(const std::string& line,
     }
 
     // シーケンス番号は、行の末尾7桁の数値
-    std::string seq_num = line.substr(kColIdentify, 7);
+    std::string seq_num = line.substr(kColIdentify + GetExcessByteCount(line), 7);
     try {
         // デフォルト値なしで整数に変換
         return FromIgesInteger(seq_num, std::nullopt);
@@ -133,7 +169,8 @@ unsigned int i_util::GetDEPointer(const std::string& line) {
                 "The line is not a parameter section: " + line);
     }
 
-    std::string pd_pointer = line.substr(kColDEPointer - 1, kFixedColWidth);
+    std::string pd_pointer = line.substr(
+            kColDEPointer - 1 + GetExcessByteCount(line), kFixedColWidth);
     try {
         // デフォルト値なしで整数に変換
         return FromIgesInteger(pd_pointer, std::nullopt);
@@ -147,6 +184,8 @@ std::string i_util::GetDataPart(const std::string& line,
                                 const SectionType section_type) {
     std::string error_msg = "The length of the line is too short "
             "for the " + SectionTypeToString(section_type) + " section: '";
+    // 80バイトを超える行では、データ部を超過バイト数だけ長く取る
+    const std::size_t excess = GetExcessByteCount(line);
 
     switch (section_type) {
         case SectionType::kFlag:
@@ -163,7 +202,7 @@ std::string i_util::GetDataPart(const std::string& line,
             if (line.size() < kColDEPointer - 1) {
                 throw iio::LineFormatError(error_msg + line + "'");
             }
-            return line.substr(0, kColDEPointer - 1);
+            return line.substr(0, kColDEPointer - 1 + excess);
         case SectionType::kData:
             // 圧縮形式のデータセクションはセクション判別文字の1文字前まで
             if (line.size() >= kColIdentify) {
@@ -175,7 +214,7 @@ std::string i_util::GetDataPart(const std::string& line,
             if (line.size() < kColIdentify - 1) {
                 throw iio::LineFormatError(error_msg + line + "'");
             }
-            return line.substr(0, kColIdentify - 1);
+            return line.substr(0, kColIdentify - 1 + excess);
     }
 }
 
@@ -191,6 +230,10 @@ namespace {
 ///       終端を直接算出する. それ以外は次の区切り文字までをパラメータとする.
 ///       H判定は「先頭の数字列の直後が'H'か」を有界に確認する (遠方のHは探さない).
 ///       宣言長が0 ('0H'等) の場合は従来通り非H文字列として扱う.
+/// @note 宣言長をバイト数とした位置の直後が区切り文字でない場合は、
+///       EnumerateHollerithContentEndsの他の候補（非ASCII文字を文字数で数えた位置）を
+///       優先順に試し、直後が区切り文字となる最初の候補を採用する. いずれも該当しない
+///       場合はバイト数とした位置を返す（呼び出し側でエラーとなる）.
 std::size_t FindParameterEnd(const std::string& connected, const std::size_t pos,
                              const std::string& delimiters) {
     // 先頭の数字列を走査する
@@ -204,7 +247,19 @@ std::size_t FindParameterEnd(const std::string& connected, const std::size_t pos
             h_length = h_length * 10 + (connected[i] - '0');
         }
         // 内容 [d+1, d+1+h_length) の直後を終端とする (内容中の区切り文字は飛ばす)
-        if (h_length > 0) return d + 1 + h_length;
+        if (h_length > 0) {
+            const auto is_delimiter_at = [&](const std::size_t end) {
+                return end < connected.size() &&
+                       delimiters.find(connected[end]) != std::string::npos;
+            };
+            const std::size_t byte_end = d + 1 + h_length;
+            if (is_delimiter_at(byte_end)) return byte_end;
+
+            const auto ends = igesio::EnumerateHollerithContentEnds(
+                    connected, d + 1, h_length);
+            const auto it = std::find_if(ends.begin(), ends.end(), is_delimiter_at);
+            return (it != ends.end()) ? *it : byte_end;
+        }
     }
 
     // 非H文字列: 次の区切り文字までをパラメータとする

@@ -566,3 +566,115 @@ TEST(ParseFreeFormattedDataTest, ThrowsSectionFormatErrorWhenNoRecordDelimiter) 
     EXPECT_THROW(i_util::ParseFreeFormattedData(lines, ',', ';'),
                  igesio::SectionFormatError);
 }
+
+
+
+/******************************************************************************
+ * 80バイトを超える行 (非ASCII文字を1文字として数えて桁を揃えた行) のテスト
+ *****************************************************************************/
+
+namespace {
+
+/// @brief "年"のUTF-8のバイト列 (1文字、3バイト)
+const std::string kNenUtf8 = "\xE5\xB9\xB4";
+/// @brief "年度"のUTF-8のバイト列 (2文字、6バイト)
+const std::string kNendoUtf8 = "\xE5\xB9\xB4\xE5\xBA\xA6";
+/// @brief "年度"のShift_JISのバイト列 (2文字、4バイト)
+const std::string kNendoShiftJis = "\x94" "N" "\x93" "x";
+
+/// @brief 非ASCII文字の後ろを空白で埋め、行末の固定欄を付けた行を作成する
+/// @param non_ascii 行頭に置く非ASCII文字のバイト列
+/// @param total_bytes 行全体のバイト数
+/// @param tail 行末の固定欄 (8バイト、PD行の場合は16バイト)
+/// @return 改行文字を含まない行
+std::string MakeWideLine(const std::string& non_ascii,
+                         const std::size_t total_bytes,
+                         const std::string& tail) {
+    return non_ascii +
+           std::string(total_bytes - non_ascii.size() - tail.size(), ' ') + tail;
+}
+
+}  // namespace
+
+// 超過バイト数が非ASCIIバイト数以下の行は許容する
+TEST(AssertLengthTest, WideLine_ExcessWithinNonAsciiBytes) {
+    // 3バイトの非ASCII文字に対し、超過1バイト (UTF-8で1文字として数えた場合は2バイト)
+    EXPECT_NO_THROW(i_util::AssertLength(MakeWideLine(kNenUtf8, 81, "S      1")));
+    // 超過バイト数が非ASCIIバイト数に等しい境界
+    EXPECT_NO_THROW(i_util::AssertLength(MakeWideLine(kNenUtf8, 83, "S      1")));
+    // 許容する最大バイト数の境界 (非ASCIIバイトのみで埋めた行)
+    const std::size_t max_bytes = i_util::kMaxTolerantLineBytes;
+    EXPECT_NO_THROW(i_util::AssertLength(
+            std::string(max_bytes - 8, '\xE5') + "S      1"));
+}
+
+// 超過バイト数が非ASCIIバイト数を超える行はエラーとする
+TEST(AssertLengthTest, ThrowsLineFormatErrorWhenExcessExceedsNonAsciiBytes) {
+    // 非ASCIIバイト数3に対し、超過4バイト
+    EXPECT_THROW(i_util::AssertLength(MakeWideLine(kNenUtf8, 84, "S      1")),
+                 igesio::LineFormatError);
+    // 非ASCIIバイトが行末の固定欄にしかない場合は数えない
+    EXPECT_THROW(i_util::AssertLength(
+            std::string(81 - 8, ' ') + "S\xE5     1"),
+                 igesio::LineFormatError);
+    // 許容する最大バイト数を超える行
+    const std::size_t max_bytes = i_util::kMaxTolerantLineBytes;
+    EXPECT_THROW(i_util::AssertLength(
+            std::string(max_bytes + 1 - 8, '\xE5') + "S      1"),
+                 igesio::LineFormatError);
+}
+
+// 80バイトを超える分のバイト数
+TEST(GetExcessByteCountTest, NormalCase) {
+    EXPECT_EQ(i_util::GetExcessByteCount(SV2S(kValidStartL5)), 0u);
+    EXPECT_EQ(i_util::GetExcessByteCount(SV2S(kValidCompDataC72)), 0u);
+    EXPECT_EQ(i_util::GetExcessByteCount(
+            MakeWideLine(kNendoUtf8, 84, "G      2")), 4u);
+    // 許容条件を満たさない (ASCII文字のみの) 行は超過なしとする
+    EXPECT_EQ(i_util::GetExcessByteCount(
+            MakeWideLine("ab", 84, "G      2")), 0u);
+}
+
+// 80バイトを超える行のセクション判別文字、シーケンス番号、DEポインタ、データ部を
+// 右端から数えた位置で取得する
+TEST(GetSectionTypeTest, WideLine_FieldsFromRightEnd) {
+    const auto global = MakeWideLine(kNendoUtf8, 84, "G      2");
+    EXPECT_EQ(i_util::GetSectionType(global), SType::kGlobal);
+    EXPECT_EQ(i_util::GetSequenceNumber(global), 2u);
+    EXPECT_EQ(i_util::GetDataPart(global, SType::kGlobal),
+              global.substr(0, 76));
+
+    const auto param = MakeWideLine(kNendoShiftJis, 82, "      13P      7");
+    EXPECT_EQ(i_util::GetSectionType(param), SType::kParameter);
+    EXPECT_EQ(i_util::GetSequenceNumber(param), 7u);
+    EXPECT_EQ(i_util::GetDEPointer(param), 13u);
+    EXPECT_EQ(i_util::GetDataPart(param, SType::kParameter),
+              param.substr(0, 66));
+}
+
+// H文字列の長さを非ASCII文字の文字数で数えた場合も、区切り文字の位置で分割できる
+TEST(ParseFreeFormattedDataTest, HollerithCountedInChars) {
+    // UTF-8で2文字 (6バイト)
+    std::vector<std::string> lines = {"2H" + kNendoUtf8 + ",3HA,B;"};
+    std::vector<std::string> expected = {"2H" + kNendoUtf8, "3HA,B"};
+    EXPECT_EQ(i_util::ParseFreeFormattedData(lines, ',', ';'), expected);
+
+    // Shift_JISで2文字 (4バイト)
+    lines = {"2H" + kNendoShiftJis + ",3HA,B;"};
+    expected = {"2H" + kNendoShiftJis, "3HA,B"};
+    EXPECT_EQ(i_util::ParseFreeFormattedData(lines, ',', ';'), expected);
+
+    // バイト数で数えた場合 (規定通り) はバイト数を優先する
+    lines = {"6H" + kNendoUtf8 + ",3HA,B;"};
+    expected = {"6H" + kNendoUtf8, "3HA,B"};
+    EXPECT_EQ(i_util::ParseFreeFormattedData(lines, ',', ';'), expected);
+}
+
+// H文字列の長さがどの数え方とも一致しない場合はエラーとする
+TEST(ParseFreeFormattedDataTest,
+     ThrowsSectionFormatErrorWhenHollerithLengthMatchesNoCount) {
+    // "年度"は2文字/4〜6バイトであり、3はどの数え方とも一致しない
+    const std::vector<std::string> lines = {"3H" + kNendoUtf8 + ",1;"};
+    EXPECT_THROW(i_util::ParseFreeFormattedData(lines, ',', ';'),
+                 igesio::SectionFormatError);
+}

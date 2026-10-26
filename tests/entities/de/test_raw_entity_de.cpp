@@ -379,3 +379,47 @@ TEST(ToRawEntityDETest, ThrowsSectionFormatErrorWhenOutOfRangeNumber) {
 
     EXPECT_THROW(i_ent::ToRawEntityDE(f, s), igesio::SectionFormatError);
 }
+
+
+
+/******************************************************************************
+ * ToRawEntityDEのテスト (80バイトを超える行)
+ *****************************************************************************/
+
+namespace {
+
+/// @brief "年度"のUTF-8のバイト列 (2文字、6バイト)
+const std::string kNendoUtf8 = "\xE5\xB9\xB4\xE5\xBA\xA6";
+
+}  // namespace
+
+// 2行目のエンティティラベルに非ASCII文字を含み、桁を文字数で揃えた (84バイトの) 行の場合、
+// 超過分をラベルに含め、添字番号を右端から数えた位置で取得する
+TEST(ToRawEntityDETest, WideSecondLine_LabelWithNonAscii) {
+    const std::string f =
+        "     406       2       0       0       0                        00010000D      3";
+    const std::string s =
+        "     406       0       0       1      15                      " + kNendoUtf8 +
+        "      12D      4";
+    ASSERT_EQ(s.size(), 84u);
+
+    i_ent::RawEntityDE de;
+    ASSERT_NO_THROW(de = i_ent::ToRawEntityDE(f, s));
+    CheckDEParamL2(de, 0, 0, 1, 15, kNendoUtf8, 12);
+}
+
+// 1行目は文字列フィールドを持たないため、非ASCII文字を含み80バイトを超える場合は
+// エラーとする
+TEST(ToRawEntityDETest, ThrowsSectionFormatErrorWhenFirstLineExceeds80Bytes) {
+    const std::string s =
+        "     406       0       0       1      15                                0D      4";
+    // 80バイトちょうどであれば読み込める
+    const std::string f80 =
+        "     406       2       0       0       0                        00010000D      3";
+    EXPECT_NO_THROW(i_ent::ToRawEntityDE(f80, s));
+
+    // 81バイト (固定欄の前に非ASCIIバイトを1つ追加) の場合はエラー
+    std::string f81 = f80;
+    f81.insert(48, "\xE5");
+    EXPECT_THROW(i_ent::ToRawEntityDE(f81, s), igesio::SectionFormatError);
+}

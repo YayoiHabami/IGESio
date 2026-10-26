@@ -7,6 +7,7 @@
  */
 #include "igesio/entities/pd.h"
 
+#include <algorithm>
 #include <atomic>
 #include <string>
 #include <tuple>
@@ -94,8 +95,24 @@ i_ent::RawEntityPD i_ent::ToRawEntityPD(
     // データ部 (各行の先頭kColDEPointer-1文字) をパラメータ区切り文字で分割する.
     // 生の行をそのまま渡し、ParseFreeFormattedData内で切り詰めることで、
     // 行ごとの部分文字列確保 (GetDataPart) を避ける.
-    std::vector<std::string> data = iu::ParseFreeFormattedData(
-            lines, p_delim, r_delim, iio::kColDEPointer - 1);
+    // ただし80バイトを超える行（非ASCII文字を1文字として数えて桁を揃えた行）を
+    // 含む場合は、データ部の幅が行ごとに異なるため、各行のデータ部を切り出して渡す.
+    const bool has_wide_line = std::any_of(
+            lines.begin(), lines.end(),
+            [](const std::string& line) { return iu::GetExcessByteCount(line) > 0; });
+    std::vector<std::string> data;
+    if (has_wide_line) {
+        std::vector<std::string> data_parts;
+        data_parts.reserve(lines.size());
+        for (const auto& line : lines) {
+            data_parts.push_back(
+                    iu::GetDataPart(line, iio::SectionType::kParameter));
+        }
+        data = iu::ParseFreeFormattedData(data_parts, p_delim, r_delim);
+    } else {
+        data = iu::ParseFreeFormattedData(
+                lines, p_delim, r_delim, iio::kColDEPointer - 1);
+    }
 
     // エンティティタイプを取得
     const int type_number = std::stoi(data[0]);

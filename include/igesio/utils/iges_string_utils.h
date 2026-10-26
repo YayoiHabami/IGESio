@@ -39,12 +39,31 @@ bool IsOnlySpace(const std::string&);
  * IGES文字列の検証
  */
 
+/// @brief 読込時に許容する1行の最大バイト数（改行文字を除く）
+/// @note 非ASCII文字を1文字として数えて80桁に揃えた行は80バイトを超えるため、
+///       読込時はこの長さまでを1行として読み込む. 1文字が最大4バイト
+///       （UTF-8）となることを想定している.
+constexpr std::size_t kMaxTolerantLineBytes = 4 * kMaxColumn;
+
 /// @brief 文字列長さがIGESの規定値以外ではないかを確認する
 /// @param line 文字列
 /// @param is_compressed 圧縮形式かどうかのフラグ、通常はfalse
 /// @throw igesio::LineFormatError 文字列長さが規定値以外の場合
-/// @note 基本的には80文字であるが、圧縮形式のデータセクションのみ73文字未満
+/// @note 基本的には80文字であるが、圧縮形式のデータセクションのみ73文字未満.
+/// @note 80バイトを超える行は、行末の固定欄（セクション判別文字とシーケンス番号）
+///       より前に非ASCIIバイトがあり、超過バイト数がその個数以下で、かつ
+///       kMaxTolerantLineBytes以下の場合に限り許容する. このとき非ASCII文字を1文字
+///       として数えて桁を揃えた行とみなす. このような行の固定欄は右端から数えて扱う.
 void AssertLength(const std::string&, const bool = false);
+
+/// @brief 行の長さが80バイトを超える分のバイト数を取得する
+/// @param line 行（改行文字を含まない）
+/// @return 80バイトを超える分のバイト数. 80バイト以下の場合や、
+///         AssertLengthの80バイト超の許容条件を満たさない場合は0
+/// @note 固定欄の位置は、規定のカラム位置にこの値を加えて求める
+///       （右端から数えた位置と一致する）. 許容条件を満たさない行は,
+///       従来通り左端から数えた位置で扱う.
+std::size_t GetExcessByteCount(const std::string&);
 
 
 
@@ -88,6 +107,8 @@ unsigned int GetDEPointer(const std::string&);
 ///       - 64文字: パラメータデータセクション (DEポインタの1文字前まで)
 ///       - 72文字以下: 圧縮形式のデータセクション
 ///       - 72文字: それ以外のセクション (セクション判別文字の1文字前まで)
+///       80バイトを超える行（AssertLength参照）では、パラメータデータセクションと
+///       それ以外のセクションのデータ部は超過バイト数だけ長くなる.
 /// @throw igesio::LineFormatError 1行の長さが取得される文字数よりも短い場合
 std::string GetDataPart(const std::string&, const SectionType);
 
@@ -113,6 +134,9 @@ std::string GetDataPart(const std::string&, const SectionType);
 ///       分割されてしまう.
 /// @note PDセクションのコメント (レコード区切り文字の後に追加されうる文字列) は
 ///       無視される (単純に切り捨てられ、返されない).
+/// @note H文字列の宣言長は、バイト数として数えた位置の直後に区切り文字がない場合に
+///       限り、非ASCII文字を文字数で数えた位置も試す
+///       （EnumerateHollerithContentEnds参照）.
 std::vector<std::string>
 ParseFreeFormattedData(const std::vector<std::string>&, const char, const char,
                        const std::size_t = std::string::npos);

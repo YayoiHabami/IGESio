@@ -68,9 +68,11 @@ DetectLineBreakChar(const std::array<char, 2>& bytes, const std::size_t bytes_re
 /// @param fs 読み込むファイルストリーム
 /// @param line_break 改行文字 (CRLFの場合は `{'\r', '\n'}`)
 /// @return 改行文字を除いた文字列
-/// @throw igesio::LineFormatError kMaxColumn+1文字目までに
+/// @throw igesio::LineFormatError kMaxTolerantLineBytes+1バイト目までに
 ///        改行文字が見つからなかった場合
-/// @note 改行文字の末端までfsを読込 (次のfs.get()で次の行の1文字目を取得可能)
+/// @note 改行文字の末端までfsを読込（次のfs.get()で次の行の1文字目を取得可能）
+/// @note 非ASCII文字を1文字として数えて桁を揃えた行を読み込むため、80バイトを
+///       超える行も読み込む. 行長の妥当性は呼び出し側（AssertLength）で検証する.
 std::string
 ReadToNextLineBreak(std::ifstream& fs, const std::vector<char>& line_break) {
     std::string line;
@@ -79,13 +81,13 @@ ReadToNextLineBreak(std::ifstream& fs, const std::vector<char>& line_break) {
     char c;
     bool line_break_found = false;
 
-    while (pos <= iio::kMaxColumn && fs.get(c)) {
+    while (pos <= i_util::kMaxTolerantLineBytes && fs.get(c)) {
         pos++;
         if (c != line_break[0]) {
             // 改行文字の最初の文字と一致しない場合
             line.push_back(c);
-            // 81文字目までに改行文字が出てこない場合はbreak
-            if (pos == iio::kMaxColumn + 1) break;
+            // 許容する最大バイト数を超えても改行文字が出てこない場合はbreak
+            if (pos == i_util::kMaxTolerantLineBytes + 1) break;
             continue;
         }
 
@@ -116,10 +118,10 @@ ReadToNextLineBreak(std::ifstream& fs, const std::vector<char>& line_break) {
             // 何らかのエラーが発生した場合は、以下のエラーを投げる
         }
 
-        // kMaxColumn+1文字目までに改行文字が見つからなかった場合
+        // kMaxTolerantLineBytes+1バイト目までに改行文字が見つからなかった場合
         throw iio::LineFormatError(
             "The line break character was not found within " +
-            std::to_string(iio::kMaxColumn) + " characters: " + line);
+            std::to_string(i_util::kMaxTolerantLineBytes) + " bytes: " + line);
     }
     return line;
 }
@@ -196,24 +198,41 @@ IBReader::~IgesBinaryReader() {
 
 void IBReader::DetectLineBreak() {
     // NOTE: BOMはないものとする
-    // 最初のkMaxColumn文字を読み込むためのバッファ
-    std::vector<char> buffer(kMaxColumn);
-    file_.read(buffer.data(), kMaxColumn);
+    // 1行目は非ASCII文字を1文字として数えて桁を揃えた行（80バイト超）の可能性があるため,
+    // 最初のCR/LFまでを読み込む
+    std::string first_line;
+    first_line.reserve(kMaxColumn);
+    std::array<char, 2> next_bytes{};
+    std::size_t bytes_read = 0;
+    char c;
+    while (first_line.size() <= kMaxTolerantLineBytes && file_.get(c)) {
+        if (c == '\r' || c == '\n') {
+            next_bytes[0] = c;
+            bytes_read = 1;
+            break;
+        }
+        first_line.push_back(c);
+    }
 
-    // 読み込んだバイト数がkMaxColumn未満の場合、EOFに達している
-    if (file_.gcount() != kMaxColumn) {
+    // 1行目の長さが80バイト未満の場合（EOFに達した場合を含む）はエラー
+    if (first_line.size() < static_cast<std::size_t>(kMaxColumn)) {
         throw iio::LineFormatError(
                 "The first line length is less than " + std::to_string(kMaxColumn) +
                 " characters. The file may be corrupted or not in IGES format.");
     }
+    // 1行目の長さを検証する（80バイトを超える行の許容条件はAssertLengthに従う）
+    AssertLength(first_line);
 
-    // 73文字目がCの場合は圧縮形式
-    if (buffer[iio::kColIdentify - 1] == 'C') is_compressed_ = true;
+    // セクション判別文字（80バイトを超える行では右端から数えた位置）がCの場合は圧縮形式
+    const std::size_t identify_pos =
+            iio::kColIdentify - 1 + GetExcessByteCount(first_line);
+    if (first_line[identify_pos] == 'C') is_compressed_ = true;
 
-    // 改行文字の検出のため、次の2バイトを読み込む
-    std::array<char, 2> next_bytes{};
-    file_.read(next_bytes.data(), 2);
-    auto bytes_read = file_.gcount();
+    // 改行文字の検出のため、CRの場合は次の1バイトも読み込む
+    if (bytes_read == 1 && next_bytes[0] == '\r' && file_.get(c)) {
+        next_bytes[1] = c;
+        bytes_read = 2;
+    }
 
     // 改行文字を検出する
     line_break_ = DetectLineBreakChar(next_bytes, bytes_read);

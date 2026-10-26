@@ -543,6 +543,16 @@ i_ent::ToRawEntityDE(const std::string& first, const std::string& second) {
     // 一時保存用文字列
     std::string tmp;
 
+    // 1行目は文字列フィールドを持たないため、非ASCII文字を1文字として数えて
+    // 桁を揃えた行（80バイト超）は許容しない
+    if (i_util::GetExcessByteCount(first) > 0) {
+        throw iio::SectionFormatError(
+                "The first line of a directory entry record must be " +
+                std::to_string(kMaxColumn) + " bytes long: '" + first + "'");
+    }
+    // 2行目で80バイトを超える分は、エンティティラベルの非ASCII文字によるものとみなす
+    const std::size_t excess = i_util::GetExcessByteCount(second);
+
     // 1行目を変換
     try {
         // Parameter 1: Entity Type Number
@@ -646,13 +656,14 @@ i_ent::ToRawEntityDE(const std::string& first, const std::string& second) {
         i += 2;
 
         // Parameter 18: Entity Label
-        tmp = second.substr(++i * w, w);
+        // 80バイトを超える行では、超過分をラベルの幅に含める
+        tmp = second.substr(++i * w, w + excess);
         de.entity_label = i_util::ltrim(tmp);
         de.SetIsDefault(18, i_util::IsOnlySpace(tmp));
 
         // Parameter 19: Entity Subscript Number
         de.entity_subscript_number = igesio::FromIgesInteger(
-                second.substr(++i * w, w), kDefaultEntitySubscriptNumber);
+                second.substr(++i * w + excess, w), kDefaultEntitySubscriptNumber);
 
         // Parameter 20: Sequence Number (skip)
     } catch (const iio::TypeConversionError& e) {

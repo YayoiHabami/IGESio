@@ -15,6 +15,7 @@
 #include <string>
 #include <typeinfo>
 #include <utility>
+#include <vector>
 
 #include "igesio/common/errors.h"
 #include "igesio/common/id_generator.h"
@@ -237,8 +238,26 @@ FromIgesRealWithFormat(const std::string&, const std::optional<double> = 0.0);
 /// @throw igesio::TypeConversionError 入力文字列が変換できず（空白のみ）、
 ///        default_valueがstd::nulloptの場合.
 ///        文字列の長さがH指定と異なる場合（例: "5Hello")
+/// @note 文字列の長さの照合はEnumerateHollerithContentEndsの候補のいずれかに
+///       一致すればよい (非ASCII文字を文字数で数えた長さも許容する).
 std::pair<std::string, ValueFormat>
 FromIgesStringWithFormat(const std::string&, const std::optional<std::string> = "");
+
+/// @brief H文字列の内容の終端位置の候補を列挙する
+/// @param str H文字列を含む文字列
+/// @param begin 内容の開始位置 ('H'の次の位置)
+/// @param declared_length 'H'の前に宣言された長さ
+/// @return 内容の終端位置 (内容の最後の文字の次の位置) の候補. 優先順に
+///         (1) 宣言長をバイト数とした位置
+///         (2) 宣言長をUTF-8の文字数とした位置
+///         (3) 宣言長をShift_JISの文字数とした位置
+///         を重複を除いて並べる. (1)は常に先頭に含まれ、strの長さを超えうる.
+///         (2)(3)は、内容がその符号化として不正な場合やstrの長さを超える場合は含まない.
+/// @note IGESの規定ではバイト数で数えるが、非ASCII文字を文字数で数えて出力する
+///       ソフトウェアがあるため、読込時はこれらの数え方も許容する.
+///       内容がASCII文字のみであれば、候補は(1)のみとなる.
+std::vector<std::size_t> EnumerateHollerithContentEnds(
+        const std::string&, const std::size_t, const std::size_t);
 
 /// @brief 文字列をポインタに変換し、そのフォーマットも返す
 /// @param str 変換する文字列

@@ -7,6 +7,7 @@
  */
 #include "igesio/common/serialization.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <charconv>
 #include <cmath>
@@ -16,6 +17,7 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "igesio/common/errors.h"
 
@@ -112,6 +114,86 @@ RealFormatInfo AnalyzeRealFormat(const std::string& str,
         }
     }
     return info;
+}
+
+/// @brief H文字列の内容の文字数を数える際の符号化
+enum class HollerithTextEncoding {
+    /// @brief UTF-8
+    kUtf8,
+    /// @brief Shift_JIS (CP932)
+    kShiftJis
+};
+
+/// @brief UTF-8の文字列から、指定位置の1文字のバイト数を取得する
+/// @param str 対象文字列
+/// @param pos 文字の開始位置
+/// @return 1文字のバイト数. 先頭バイトや継続バイトが不正な場合、
+///         文字がstrの末尾を超える場合は0
+std::size_t GetUtf8CharByteCount(const std::string& str, const std::size_t pos) {
+    const auto lead = static_cast<unsigned char>(str[pos]);
+    std::size_t count = 0;
+    if (lead < 0x80) {
+        count = 1;
+    } else if (0xC2 <= lead && lead <= 0xDF) {
+        count = 2;
+    } else if (0xE0 <= lead && lead <= 0xEF) {
+        count = 3;
+    } else if (0xF0 <= lead && lead <= 0xF4) {
+        count = 4;
+    } else {
+        return 0;
+    }
+    if (pos + count > str.size()) return 0;
+
+    // 2バイト目以降は継続バイト (0x80〜0xBF) でなければならない
+    for (std::size_t i = 1; i < count; ++i) {
+        const auto c = static_cast<unsigned char>(str[pos + i]);
+        if (c < 0x80 || 0xBF < c) return 0;
+    }
+    return count;
+}
+
+/// @brief Shift_JISの文字列から、指定位置の1文字のバイト数を取得する
+/// @param str 対象文字列
+/// @param pos 文字の開始位置
+/// @return 1文字のバイト数. 先頭バイトや2バイト目が不正な場合、
+///         文字がstrの末尾を超える場合は0
+/// @note 1バイト文字はASCIIと半角カナ (0xA1〜0xDF) とする
+std::size_t GetShiftJisCharByteCount(const std::string& str, const std::size_t pos) {
+    const auto lead = static_cast<unsigned char>(str[pos]);
+    if (lead < 0x80 || (0xA1 <= lead && lead <= 0xDF)) return 1;
+
+    const bool is_lead = (0x81 <= lead && lead <= 0x9F) ||
+                         (0xE0 <= lead && lead <= 0xFC);
+    if (!is_lead || pos + 2 > str.size()) return 0;
+
+    const auto trail = static_cast<unsigned char>(str[pos + 1]);
+    const bool is_trail = (0x40 <= trail && trail <= 0x7E) ||
+                          (0x80 <= trail && trail <= 0xFC);
+    return is_trail ? 2 : 0;
+}
+
+/// @brief 文字列を指定した符号化で指定文字数だけ進めた位置を取得する
+/// @param str 対象文字列
+/// @param begin 開始位置
+/// @param char_count 進める文字数
+/// @param encoding 文字列の符号化
+/// @return 進めた後の位置. 途中に不正なバイト列がある場合、
+///         strの末尾に達する前に文字数を満たせない場合はstd::nullopt
+std::optional<std::size_t> AdvanceByCharacters(
+        const std::string& str, const std::size_t begin,
+        const std::size_t char_count, const HollerithTextEncoding encoding) {
+    std::size_t pos = begin;
+    for (std::size_t i = 0; i < char_count; ++i) {
+        if (pos >= str.size()) return std::nullopt;
+
+        const std::size_t bytes = (encoding == HollerithTextEncoding::kUtf8)
+                ? GetUtf8CharByteCount(str, pos)
+                : GetShiftJisCharByteCount(str, pos);
+        if (bytes == 0) return std::nullopt;
+        pos += bytes;
+    }
+    return pos;
 }
 
 }  // namespace
@@ -345,16 +427,41 @@ std::pair<std::string, igesio::ValueFormat> igesio::FromIgesStringWithFormat(
         throw igesio::TypeConversionError("String length out of range: '" + str + "'");
     }
 
-    // Hの位置からの文字列長さが指定された長さと異なる場合はエラー
-    if (str.substr(pos + 1).length() != static_cast<size_t>(num)) {
+    // Hの位置からの文字列長さが指定された長さと異なる場合はエラー.
+    // バイト数で一致しない場合に限り、非ASCII文字を文字数で数えた長さも許容する
+    const std::size_t content_length = str.size() - (pos + 1);
+    bool is_length_matched =
+            num >= 0 && content_length == static_cast<size_t>(num);
+    if (num >= 0 && !is_length_matched) {
+        const auto ends = EnumerateHollerithContentEnds(
+                str, pos + 1, static_cast<size_t>(num));
+        is_length_matched =
+                std::find(ends.begin(), ends.end(), str.size()) != ends.end();
+    }
+    if (!is_length_matched) {
         throw igesio::TypeConversionError(
             error_msg + " Length mismatch: expected " +
             std::to_string(num) + " characters, but got " +
-            std::to_string(str.substr(pos + 1).length()) + " characters.");
+            std::to_string(content_length) + " characters.");
     }
 
     // Hの位置からの文字列を取得して返す
     return {str.substr(pos + 1), ValueFormat::String()};
+}
+
+std::vector<std::size_t> igesio::EnumerateHollerithContentEnds(
+        const std::string& str, const std::size_t begin,
+        const std::size_t declared_length) {
+    std::vector<std::size_t> ends = {begin + declared_length};
+    for (const auto encoding : {HollerithTextEncoding::kUtf8,
+                                HollerithTextEncoding::kShiftJis}) {
+        const auto end = AdvanceByCharacters(
+                str, begin, declared_length, encoding);
+        if (!end.has_value()) continue;
+        if (std::find(ends.begin(), ends.end(), *end) != ends.end()) continue;
+        ends.push_back(*end);
+    }
+    return ends;
 }
 
 std::pair<int, igesio::ValueFormat> igesio::FromIgesPointerWithFormat(
