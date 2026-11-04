@@ -138,7 +138,9 @@ class PointerContainer {
     /// @return ポインタが設定されており、参照先が有効な場合はtrue、そうでなければfalse
     bool IsPointerSet() const {
         if (!is_pointer_set_) return false;
-        return std::visit([](const auto& ptr) {
+        // MSVCでは、キャプチャなしのジェネリックラムダ内で外側のテンプレート引数を
+        // `if constexpr`で参照するとコンパイルエラーになるため、`[&]`とする.
+        return std::visit([&](const auto& ptr) {
             if constexpr (UseWeakPtr) {
                 return !ptr.expired();
             } else {
@@ -169,7 +171,7 @@ class PointerContainer {
             throw igesio::ReferenceError("Pointer is not set or has expired.");
         }
         return std::visit(
-            [](const auto& ptr) -> std::variant<std::shared_ptr<const DerivedTypes>...> {
+            [&](const auto& ptr) -> std::variant<std::shared_ptr<const DerivedTypes>...> {
                 if constexpr (UseWeakPtr) {
                     return ptr.lock();
                 } else {
