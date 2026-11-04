@@ -3,6 +3,7 @@ name: CD
 on:
   push:
     tags: [ 'v*' ]
+    branches: [ feature/add-machine-definition-CD-verification ]   # TEMP: 検証用
   workflow_dispatch:
 
 jobs:
