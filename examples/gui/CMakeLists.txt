@@ -71,9 +71,11 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
         animation_viewer_gui.cpp
     )
 
-    target_link_options(${EXAMPLE_NAME} PRIVATE
-        "-mconsole"
-    )
+    if(MINGW)
+        target_link_options(${EXAMPLE_NAME} PRIVATE
+            "-mconsole"
+        )
+    endif()
 
     target_include_directories(${EXAMPLE_NAME} PRIVATE
         ${INCLUDE_DIR}
@@ -89,6 +91,7 @@ foreach(EXAMPLE_SOURCE ${GUI_EXAMPLE_SOURCES})
         OpenGL::GL
         imgui_lib
     )
+    install(TARGETS ${EXAMPLE_NAME} RUNTIME DESTINATION . COMPONENT samples)
 endforeach()
 
 # Machining viewer (machines extension example). Built separately from the
@@ -101,9 +104,11 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
         machining_view_pane.cpp
     )
 
-    target_link_options(machining_viewer PRIVATE
-        "-mconsole"
-    )
+    if(MINGW)
+        target_link_options(machining_viewer PRIVATE
+            "-mconsole"
+        )
+    endif()
 
     target_include_directories(machining_viewer PRIVATE
         ${INCLUDE_DIR}
@@ -123,4 +128,5 @@ if(IGESIO_ENABLE_MACHINES_EXTENSION)
     target_compile_definitions(machining_viewer PRIVATE
         MACHINING_VIEWER_DATA_DIR="${PROJECT_SOURCE_DIR}/examples/data"
     )
+    install(TARGETS machining_viewer RUNTIME DESTINATION . COMPONENT samples)
 endif()

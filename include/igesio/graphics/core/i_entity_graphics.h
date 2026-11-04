@@ -122,7 +122,7 @@ class IEntityGraphics {
     bool is_color_overridden_ = false;
 
     /// @brief (IGESで管理されない) 描画プロパティ
-    MaterialProperty material_property_;
+    graphics::MaterialProperty material_property_;
 
     /// @brief グローバル座標系への変換行列
     /// @note 頂点シェーダーの`model`変数に対応する.
@@ -314,7 +314,7 @@ class IEntityGraphics {
     virtual double GetLineWidth() const = 0;
 
     /// @brief 描画属性を取得する (const版)
-    const MaterialProperty& MaterialProperty() const {
+    const graphics::MaterialProperty& MaterialProperty() const {
         return material_property_;
     }
     /// @brief 描画属性を取得する (非const版)
