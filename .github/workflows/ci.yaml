@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: [ main, dev ]
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   test:
@@ -103,14 +104,20 @@ jobs:
     - name: Configure CMake
       shell: bash
       run: |
-        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DIGESIO_BUILD_TESTING=ON
+        if [ "${{ matrix.compiler }}" = "msvc" ]; then
+          # cl.exe is not on PATH without vcvars, so Ninja would pick another
+          # compiler; the Visual Studio generator locates MSVC by itself.
+          cmake -B build -A x64 -DIGESIO_BUILD_TESTING=ON
+        else
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DIGESIO_BUILD_TESTING=ON
+        fi
 
     - name: Build
       run: cmake --build build --config Release
 
     - name: Test
       working-directory: build
-      run: ctest --output-on-failure
+      run: ctest -C Release --output-on-failure
 
   coverage:
     runs-on: ubuntu-latest

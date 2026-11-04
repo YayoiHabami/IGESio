@@ -105,6 +105,15 @@ if(IGESIO_ENABLE_COVERAGE)
     endif()
 endif()
 
+# MSVC-specific compile options
+if(MSVC)
+    # /utf-8: the sources are UTF-8 without BOM and contain non-ASCII string
+    # literals, so do not depend on the system code page.
+    # /bigobj: the toml11 template instantiations exceed the default COFF section
+    # limit (the same reason as -Wa,-mbig-obj on MinGW).
+    add_compile_options(/utf-8 /bigobj)
+endif()
+
 # Set the build type if not specified (top-level builds only; when consumed
 # via FetchContent/add_subdirectory, follow the consumer's configuration)
 if(NOT CMAKE_BUILD_TYPE AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

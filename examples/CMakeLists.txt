@@ -21,7 +21,17 @@ foreach(EXAMPLE_SOURCE ${EXAMPLE_SOURCES})
             ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     target_link_libraries(${EXAMPLE_NAME} igesio)
+    install(TARGETS ${EXAMPLE_NAME} RUNTIME DESTINATION . COMPONENT samples)
 endforeach()
+
+# Files distributed with the sample executables (`samples` component)
+install(DIRECTORY data/ DESTINATION data COMPONENT samples)
+install(FILES
+    ${PROJECT_SOURCE_DIR}/LICENSE
+    ${PROJECT_SOURCE_DIR}/THIRD_PARTY_LICENSES.md
+    DESTINATION .
+    COMPONENT samples
+)
 
 # Add subdirectory
 add_subdirectory(gui)
