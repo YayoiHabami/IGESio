@@ -443,7 +443,7 @@ class EntityRenderer {
 
     /// @brief カメラの参照を取得する (const)
     /// @return カメラの参照
-    const Camera& Camera() const { return camera_; }
+    const graphics::Camera& Camera() const { return camera_; }
     /// @brief カメラの参照を取得する (非const)
     /// @return カメラの参照
     /// @note カメラの各変数などはこの参照を通じて設定する
